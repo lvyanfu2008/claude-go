@@ -71,14 +71,45 @@ func GetCommands(ctx context.Context, cwd string, opts LoadOptions, auth GetComm
 	return GetCommandsWithDynamicSkills(base, GetDynamicSkills(), auth), nil
 }
 
-// BuiltinCommandNameSet returns names and aliases from the handwritten COMMANDS() assembly
-// (TS: builtInCommandNames memo uses flatMap name + aliases). Invalidates when [featuregates.GatesFingerprint] changes.
-var builtinNameSetCache sync.Map // string (fingerprint) -> map[string]struct{}
+// GetCommandsWithDefaults matches the TS call shape getCommands(cwd) when the host’s implicit runtime
+// matches [DefaultLoadOptions] and [DefaultConsoleAPIAuth]: direct 1P API, non-remote, interactive, etc.
+// TS still reads auth and isEnabled gates from global bootstrap state; any deviation (claude.ai subscriber,
+// Bedrock/Vertex, remote mode, policy blocks, overage billing) requires the full [GetCommands] signature
+// with an explicit [GetCommandsAuth] and, if needed, non-default [LoadOptions].
+func GetCommandsWithDefaults(ctx context.Context, cwd string) ([]types.Command, error) {
+	return GetCommands(ctx, cwd, DefaultLoadOptions(), DefaultConsoleAPIAuth())
+}
+
+// Built-in name caches invalidate when [featuregates.GatesFingerprint] changes.
+var (
+	builtinNameSetCache        sync.Map // fingerprint -> map[string]struct{} (name + aliases)
+	builtinPrimaryNameSetCache sync.Map // fingerprint -> map[string]struct{} (primary names only)
+)
 
 func clearBuiltinNameSetCache() {
 	builtinNameSetCache = sync.Map{}
+	builtinPrimaryNameSetCache = sync.Map{}
 }
 
+// BuiltinCommandPrimaryNameSet returns only primary names from the handwritten COMMANDS() assembly.
+// Matches src/commands.ts getCommands: builtInNames = new Set(COMMANDS().map(c => c.name)) (aliases excluded).
+func BuiltinCommandPrimaryNameSet() map[string]struct{} {
+	fp := featuregates.GatesFingerprint()
+	if v, ok := builtinPrimaryNameSetCache.Load(fp); ok {
+		return v.(map[string]struct{})
+	}
+	cmds := loadBuiltinCommands()
+	m := make(map[string]struct{}, len(cmds))
+	for _, c := range cmds {
+		if c.Name != "" {
+			m[c.Name] = struct{}{}
+		}
+	}
+	builtinPrimaryNameSetCache.Store(fp, m)
+	return m
+}
+
+// BuiltinCommandNameSet returns names and aliases (TS builtInCommandNames memo: flatMap name + aliases).
 func BuiltinCommandNameSet() map[string]struct{} {
 	fp := featuregates.GatesFingerprint()
 	if v, ok := builtinNameSetCache.Load(fp); ok {
@@ -152,7 +183,7 @@ func indexFirstBuiltinCommandInLoadAllOrder(base []types.Command, builtinNames m
 }
 
 // InsertDynamicSkillsBeforeBuiltins inserts uniqueDynamic immediately before the first command whose
-// name appears in builtinNames (TS: insert after plugin skills, before COMMANDS() block).
+// primary name appears in builtinNames (TS getCommands: builtInNames from COMMANDS().map(c => c.name) only).
 // If no such command exists, appends at the end (TS: [...base, ...unique]).
 func InsertDynamicSkillsBeforeBuiltins(base []types.Command, uniqueDynamic []types.Command, builtinNames map[string]struct{}) []types.Command {
 	if len(uniqueDynamic) == 0 {
@@ -178,7 +209,7 @@ func GetCommandsWithDynamicSkills(baseFiltered []types.Command, dynamic []types.
 	if len(uniq) == 0 {
 		return baseFiltered
 	}
-	return InsertDynamicSkillsBeforeBuiltins(baseFiltered, uniq, BuiltinCommandNameSet())
+	return InsertDynamicSkillsBeforeBuiltins(baseFiltered, uniq, BuiltinCommandPrimaryNameSet())
 }
 
 // LoadAndGetCommandsWithDynamic runs LoadAndFilterCommands then GetCommandsWithDynamicSkills.

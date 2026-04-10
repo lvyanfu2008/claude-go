@@ -46,7 +46,7 @@ var fingerprintExtraKeys = []string{
 }
 
 // GatesFingerprint serializes env inputs that affect handwritten builtin/bundled assembly.
-// Used for LoadAllCommands cache keys and BuiltinCommandNameSet invalidation.
+// Used for LoadAllCommands cache keys and invalidation of built-in name set caches in package commands.
 func GatesFingerprint() string {
 	env := os.Environ()
 	pairs := make([]string, 0, len(env))

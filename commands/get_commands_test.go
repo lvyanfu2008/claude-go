@@ -170,6 +170,22 @@ func TestUniqueDynamicSkillsForGetCommands_SkipsNamePresentInBase(t *testing.T) 
 	}
 }
 
+func TestGetCommandsWithDefaults_sameAsExplicitDefaults(t *testing.T) {
+	repo := t.TempDir()
+	ctx := context.Background()
+	a, errA := GetCommandsWithDefaults(ctx, repo)
+	if errA != nil {
+		t.Fatal(errA)
+	}
+	b, errB := GetCommands(ctx, repo, DefaultLoadOptions(), DefaultConsoleAPIAuth())
+	if errB != nil {
+		t.Fatal(errB)
+	}
+	if len(a) != len(b) {
+		t.Fatalf("len %d vs %d", len(a), len(b))
+	}
+}
+
 func TestGetCommands_includesSessionDynamicSkills(t *testing.T) {
 	ClearLoadAllCommandsCache()
 	tmp := t.TempDir()
@@ -216,7 +232,7 @@ func TestGetCommandsWithDynamicSkills_UsesBuiltinBoundaryFromEmbed(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	idx := indexFirstBuiltinCommandInLoadAllOrder(base, BuiltinCommandNameSet())
+	idx := indexFirstBuiltinCommandInLoadAllOrder(base, BuiltinCommandPrimaryNameSet())
 	if idx < 0 {
 		t.Fatal("no builtin boundary in filtered list")
 	}

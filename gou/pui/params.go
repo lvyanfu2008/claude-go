@@ -106,9 +106,15 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		if errWd != nil {
 			cwd = "."
 		}
-		auth := commands.DefaultConsoleAPIAuth()
-		auth.IsRemoteMode = cfg.IsRemoteMode
-		lc, errLC := commands.GetCommands(context.Background(), cwd, commands.DefaultLoadOptions(), auth)
+		var lc []types.Command
+		var errLC error
+		if cfg.IsRemoteMode {
+			auth := commands.DefaultConsoleAPIAuth()
+			auth.IsRemoteMode = true
+			lc, errLC = commands.GetCommands(context.Background(), cwd, commands.DefaultLoadOptions(), auth)
+		} else {
+			lc, errLC = commands.GetCommandsWithDefaults(context.Background(), cwd)
+		}
 		if errLC == nil {
 			loaded = lc
 		}

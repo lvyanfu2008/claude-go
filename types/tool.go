@@ -71,6 +71,29 @@ func EmptyToolPermissionContextData() ToolPermissionContextData {
 	}
 }
 
+// jsonEmptyObject is the JSON `{}` blob for normalized Map-shaped permission fields.
+var jsonEmptyObject = json.RawMessage(`{}`)
+
+// NormalizeToolPermissionContextData fills omitted Map-shaped fields after json.Unmarshal
+// (TS getEmptyToolPermissionContext uses empty Maps for these keys).
+func NormalizeToolPermissionContextData(d *ToolPermissionContextData) {
+	if d == nil {
+		return
+	}
+	if len(d.AdditionalWorkingDirectories) == 0 {
+		d.AdditionalWorkingDirectories = jsonEmptyObject
+	}
+	if len(d.AlwaysAllowRules) == 0 {
+		d.AlwaysAllowRules = jsonEmptyObject
+	}
+	if len(d.AlwaysDenyRules) == 0 {
+		d.AlwaysDenyRules = jsonEmptyObject
+	}
+	if len(d.AlwaysAskRules) == 0 {
+		d.AlwaysAskRules = jsonEmptyObject
+	}
+}
+
 // InterruptBehavior mirrors Tool.interruptBehavior() in src/Tool.ts.
 type InterruptBehavior string
 
