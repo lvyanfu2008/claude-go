@@ -56,9 +56,23 @@ func (r DemoToolRunner) Run(ctx context.Context, name, toolUseID string, input j
 	if strings.TrimSpace(sid) == "" {
 		sid = "gou-demo"
 	}
+	cwd := "."
+	if wd, err := os.Getwd(); err == nil {
+		cwd = wd
+	}
 
 	if found.SkillRoot != nil && strings.TrimSpace(*found.SkillRoot) != "" {
 		res, err := slashresolve.ResolveDiskSkill(*found, in.Args, sid)
+		if err != nil {
+			return err.Error(), true, nil
+		}
+		return res.UserText, false, nil
+	}
+
+	if slashresolve.IsBundledPrompt(*found) {
+		res, err := slashresolve.ResolveBundledSkill(*found, in.Args, sid, &slashresolve.BundledResolveOptions{
+			Cwd: cwd,
+		})
 		if err != nil {
 			return err.Error(), true, nil
 		}
@@ -71,10 +85,6 @@ func (r DemoToolRunner) Run(ctx context.Context, name, toolUseID string, input j
 	cmdJSON, err := json.Marshal(found)
 	if err != nil {
 		return err.Error(), true, nil
-	}
-	cwd := "."
-	if wd, err := os.Getwd(); err == nil {
-		cwd = wd
 	}
 	res, err := slashresolve.ResolveViaBridge(r.RepoRoot, slashresolve.BridgeRequest{
 		CommandName: found.Name,

@@ -98,7 +98,7 @@ func IsCommandEnabledData(cmd types.Command, auth GetCommandsAuth) bool {
 		return goKeybindingCustomizationEnabled()
 	case "keybindings-help":
 		return goKeybindingCustomizationEnabled()
-	case "dream":
+	case "dream", "remember":
 		if cmd.Type != "prompt" {
 			return true
 		}

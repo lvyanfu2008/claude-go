@@ -32,7 +32,7 @@ func skillHunter() types.Command {
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:                        "hunter",
-			Description:                 "Artifact / review hunter skill (REVIEW_ARTIFACT; metadata only in Go listing)",
+			Description:                 "Artifact / review hunter (REVIEW_ARTIFACT; full workflow in TypeScript CLI).",
 			HasUserSpecifiedDescription: ptrBool(true),
 			IsHidden:                    ptrBool(false),
 			LoadedFrom:                  ptrStr(src),
@@ -60,6 +60,7 @@ func skillSchedule() types.Command {
 			UserInvocable:               ptrBool(true),
 		},
 		Type:            "prompt",
+		AllowedTools:    strSlice("RemoteTrigger", "AskUserQuestion"),
 		ContentLength:   ptrInt(0),
 		Source:          ptrStr(src),
 		ProgressMessage: &pm,
@@ -117,7 +118,7 @@ func skillRunSkillGenerator() types.Command {
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:                        "run-skill-generator",
-			Description:                 "Run skill generator (RUN_SKILL_GENERATOR; metadata only in Go listing)",
+			Description:                 "Run skill generator (RUN_SKILL_GENERATOR; full workflow in TypeScript CLI).",
 			HasUserSpecifiedDescription: ptrBool(true),
 			IsHidden:                    ptrBool(false),
 			LoadedFrom:                  ptrStr(src),
@@ -129,10 +130,16 @@ func skillRunSkillGenerator() types.Command {
 	}
 }
 
-// AssembleBundledSkills matches getBundledSkills() registration order: unconditional block then feature-gated skills.
+// AssembleBundledSkills matches src/skills/bundled/index.ts initBundledSkills order, then feature-gated skills.
 func AssembleBundledSkills() []types.Command {
-	out := make([]types.Command, 0, 16)
-	out = append(out, bundledCoreSkills()...)
+	out := make([]types.Command, 0, 24)
+	out = append(out, bundledCorePrefix()...)
+	out = append(out, bundledAntBlock1()...)
+	out = append(out, skillDebug())
+	out = append(out, bundledAntBlock2()...)
+	out = append(out, bundledSimplifyBatch()...)
+	out = append(out, bundledAntStuck()...)
+	out = append(out, bundledLoopDream()...)
 	out = append(out, bundledOptionalSkills()...)
 	return out
 }

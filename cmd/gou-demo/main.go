@@ -23,7 +23,7 @@
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt.
-// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled via Bun scripts/slash-resolve-bridge.ts when repo root is found (walk upward from cwd).
+// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled skills via [goc/slashresolve.ResolveBundledSkill] (embedded TS-expanded prompts under slashresolve/bundleddata). Optional Bun scripts/slash-resolve-bridge.ts remains for commands not covered by the Go embed.
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //

@@ -125,7 +125,19 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			return slashResultToBase(res, attachmentMessages, uuid, p), nil
 		}
 
-		// Bundled / metadata-only: optional TS bridge
+		if slashresolve.IsBundledPrompt(*cmd) {
+			cwd, _ := os.Getwd()
+			res, err := slashresolve.ResolveBundledSkill(*cmd, parsed.Args, sid, &slashresolve.BundledResolveOptions{Cwd: cwd})
+			if err != nil {
+				return &processuserinput.ProcessUserInputBaseResult{
+					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (bundled): %v", err))},
+					ShouldQuery: false,
+				}, nil
+			}
+			return slashResultToBase(res, attachmentMessages, uuid, p), nil
+		}
+
+		// Optional TS bridge for non-embedded commands
 		if repoRoot != "" {
 			cmdJSON, err := json.Marshal(cmd)
 			if err != nil {
@@ -152,7 +164,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		return &processuserinput.ProcessUserInputBaseResult{
 			Messages: []types.Message{SystemNotice(fmt.Sprintf(
-				"gou-demo: /%s has no on-disk skill root; set cwd so repo root is found (scripts/slash-resolve-bridge.ts) for bundled skills, or use a project skill under .claude/skills.",
+				"gou-demo: /%s could not be resolved (not disk, not bundled); set cwd so repo root contains scripts/slash-resolve-bridge.ts, or add a project skill under .claude/skills.",
 				cmd.Name))},
 			ShouldQuery: false,
 		}, nil
