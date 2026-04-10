@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/lvyanfu/Work/claude/claude-code/src/*.ts)",
+      "Bash(find /Users/lvyanfu/Work/claude/claude-code/src -name \"*.ts\" -type f -exec grep -l \"type UserMessage\\\\|interface UserMessage\" {})",
+      "Bash(find /Users/lvyanfu/Work/claude/claude-code/src -name \"*.ts\" -type f -exec grep -l \"HOOK_EVENTS\\\\|HookEvent\" {})",
+      "Bash(find /Users/lvyanfu/Work/claude/claude-code -name *.ts -type f -exec grep -l export.*HOOK_EVENTS.*= {})",
+      "Bash(2)",
+      "Bash(find . -path ./node_modules -prune -o -name \"*.ts\" -o -name \"*.js\" -exec grep -l \"fetchSystemPromptParts\" {})",
+      "Bash(grep -r fetchSystemPromptParts --include=*.ts --include=*.js src/)",
+      "Bash(go version:*)",
+      "Bash(go env:*)",
+      "Bash(find ./go/ccb-engine/ -type f -name *.go)",
+      "Bash(grep -r \"deepseek\\\\|DeepSeek\" --include=*.go --include=*.ts --include=*.js --include=*.tsx --include=*.jsx --include=*.json .)",
+      "Bash(grep -r ANTHROPIC_BASE_URL . --include=*.js --include=*.ts --include=*.tsx --include=*.jsx --include=*.json --include=*.env* --include=*.md --exclude-dir=dist)",
+      "Bash(grep -r ANTHROPIC_BASE_URL . --include=*.ts --include=*.js --include=*.tsx --include=*.jsx --exclude-dir=node_modules --exclude-dir=dist)",
+      "Bash(grep -r ANTHROPIC_AUTH_TOKEN . --include=*.js --include=*.jsx --include=*.ts --include=*.tsx --include=*.json --include=*.env* --include=*.md --include=*.py --include=*.go)",
+      "Bash(grep -r ANTHROPIC_AUTH_TOKEN ./src ./scripts ./packages ./tests --include=*.js --include=*.ts --include=*.jsx --include=*.tsx --include=*.json)",
+      "Bash(grep -r OPENAI_BASE_URL . --include=*.js --include=*.ts --include=*.json --include=*.env --include=*.env*)"
+    ]
+  }
+}

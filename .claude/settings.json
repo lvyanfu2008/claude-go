@@ -1,0 +1,31 @@
+{
+  "env": {
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-chat",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-chat",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-chat",
+    "CLAUDE_CODE_INTRANET_MODE": "1",
+    "CLAUDE_CODE_USE_OPENAI": "1",
+    "OPENAI_API_KEY": "sk-dbbd5e38eb7d433c9039e4c11f32214b",
+    "OPENAI_BASE_URL": "https://api.deepseek.com/v1",
+    "CLAUDE_CODE_DISABLE_FAST_MODE": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_LOG_API_REQUEST_BODY": "0",
+    "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "0",
+    "DISABLE_AUTOUPDATER": "1",
+    "CLAUDE_CODE_SIMPLE": "0",
+    "CLAUDE_DEBUG_PROCESS_USER_INPUT": "0"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'china lives long'"
+          }
+        ]
+      }
+    ]
+  }
+}

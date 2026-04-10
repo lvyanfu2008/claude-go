@@ -1,0 +1,43 @@
+{
+  "env": {
+    "CLAUDE_CODE_CCB_ENGINE": "1",
+    "FEATURE_WORKFLOW_SCRIPTS": "0",
+    "GOU_DEMO_SCROLL_STATS": "1",
+    "GOU_DEMO_NO_SEED": "1",
+    "CLAUDE_CODE_DEBUG_LOGS_DIR": "debug/goc",
+    "CLAUDE_CODE_LOG_API_REQUEST_BODY": "0",
+    "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "0",
+    "GOU_DEMO_LOG": "1",
+    "CLAUDE_CODE_APILOG_DIAG": "1",
+    "GOU_DEMO_USE_EMBEDDED_TOOLS_API": "1",
+    "CCB_GO_BRIDGE_THIN_TOOL_EXECUTION": "1",
+    "CCB_GO_BRIDGE_SKIP_TOOL_INPUT_ZOD": "0",
+    "CCB_GO_BRIDGE_TRUST_GO_GATE": "0",
+    "FEATURE_MCP_SKILLS": "1",
+    "CLAUDE_CODE_LOG_TOOL_USE_CONTEXT": "full",
+    "GOU_DEMO_RECORD_TRANSCRIPT":"1",
+    "CLAUDE_CODE_CCB_ENGINE_TURN_TIMEOUT_MS":"120000",
+    "CLAUDE_CODE_CCB_ENGINE_CONNECT_TIMEOUT_MS":"15000",
+    "CCB_ENGINE_SOCKET": "/tmp/ccb.sock",
+    "GOU_DEMO_CCB_SOCKET":"1",
+    "GOU_DEMO_CCB_PERSIST_WORKER":"1",
+    "GOU_DEMO_TS_CONTEXT_BRIDGE":"0",
+    "GOU_DEMO_GO_INIT":"1",
+    "CCB_ENGINE_LOCAL_BASH":"1",
+    "FEATURE_BUDDY":"1",
+    "SLASH_RESOLVE_BRIDGE_ROOT": "/Users/lvyanfu/Work/claude/claude-code"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'china lives long'"
+          }
+        ]
+      }
+    ]
+  }
+}
