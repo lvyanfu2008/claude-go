@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"goc/types"
@@ -165,6 +167,44 @@ func TestUniqueDynamicSkillsForGetCommands_SkipsNamePresentInBase(t *testing.T) 
 	out := UniqueDynamicSkillsForGetCommands(dynamic, base, auth)
 	if len(out) != 1 || out[0].Name != "new" {
 		t.Fatalf("got %#v", out)
+	}
+}
+
+func TestGetCommands_includesSessionDynamicSkills(t *testing.T) {
+	ClearLoadAllCommandsCache()
+	tmp := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(tmp, "cfg"))
+	if err := os.MkdirAll(filepath.Join(tmp, "cfg", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(tmp, "repo")
+	pkg := filepath.Join(repo, "src", "pkg")
+	skillsRoot := filepath.Join(pkg, ".claude", "skills")
+	skillDir := filepath.Join(skillsRoot, "sessdyn")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\ndescription: from session\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := false
+	opts := LoadOptions{BareMode: &f}
+	if err := AddSkillDirectories([]string{skillsRoot}, opts); err != nil {
+		t.Fatal(err)
+	}
+	out, err := GetCommands(context.Background(), repo, opts, DefaultConsoleAPIAuth())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, c := range out {
+		if c.Name == "sessdyn" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected GetCommands to merge session dynamic skills (TS getDynamicSkills + getCommands)")
 	}
 }
 

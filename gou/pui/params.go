@@ -44,7 +44,7 @@ type DemoConfig struct {
 	MainLoopModel   string  `json:"mainLoopModel,omitempty"`
 	UserMessageUUID *string `json:"uuid,omitempty"`
 	// SkipCommands when true leaves Commands empty (unit tests). When false, fills from
-	// commands.LoadAndFilterCommands (TS getCommands-style list for slash FindCommand).
+	// commands.GetCommands (TS getCommands: includes session dynamic skills).
 	SkipCommands bool `json:"-"`
 	// RepoRoot is the monorepo root (contains scripts/slash-resolve-bridge.ts). Used for bundled slash via bridge; disk skills do not require it.
 	RepoRoot string `json:"-"`
@@ -67,7 +67,7 @@ type DemoConfig struct {
 	// TSContextBridge optional snapshot from scripts/go-context-bridge (startup cache). When set, commands
 	// and tools are taken from the snapshot (then MCP file/env merged for commands) unless SkipCommands / embedded tools override.
 	TSContextBridge *tscontext.Snapshot `json:"-"`
-	// IsRemoteMode when true includes /session in LoadAndFilterCommands output (matches src/bootstrap getIsRemoteMode).
+	// IsRemoteMode when true includes /session in GetCommands output (matches src/bootstrap getIsRemoteMode).
 	IsRemoteMode bool `json:"-"`
 }
 
@@ -108,7 +108,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		}
 		auth := commands.DefaultConsoleAPIAuth()
 		auth.IsRemoteMode = cfg.IsRemoteMode
-		lc, errLC := commands.LoadAndFilterCommands(context.Background(), cwd, commands.DefaultLoadOptions(), auth)
+		lc, errLC := commands.GetCommands(context.Background(), cwd, commands.DefaultLoadOptions(), auth)
 		if errLC == nil {
 			loaded = lc
 		}

@@ -3,6 +3,7 @@
 // Use the same env as gou-demo; also reads project .claude/settings*.json for language/outputStyle when -cwd is set (user home skipped for stable hashes). CLAUDE_CODE_* overrides. Built-in outputStyle keys: Explanatory, Learning.
 // Other env: CLAUDE_CODE_LANGUAGE, CLAUDE_CODE_OUTPUT_STYLE_*, CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME,
 // GOU_DEMO_NON_INTERACTIVE, FEATURE_MCP_SKILLS — compare against TS captures (see docs/plans/go-ts-phase-3-and-gou-demo-runtime.md § 验收).
+// With -load-commands, command list matches TS getCommands (disk load + filter + session dynamic skills); hashes vary with repo and process session state.
 //
 // Run: cd goc && go run ./cmd/gou-api-parity-snapshot [flags]
 package main
@@ -23,7 +24,7 @@ func main() {
 	deterministic := flag.Bool("deterministic-env", false, "use linux/amd64 in # Environment information for stable hashes")
 	cwdFlag := flag.String("cwd", "", "primary working directory (default: os.Getwd)")
 	modelFlag := flag.String("model", "", "main loop model id (default: claude-sonnet-4-20250514)")
-	loadCommands := flag.Bool("load-commands", false, "merge disk skills via commands.LoadAndFilterCommands (non-deterministic across repos)")
+	loadCommands := flag.Bool("load-commands", false, "merge commands via commands.GetCommands (TS getCommands: disk + filter + session dynamic skills; non-deterministic across repos and session)")
 	mcpPath := flag.String("mcp-commands-json", "", "optional JSON array of types.Command for MCP merge (tests / bridge)")
 	compact := flag.Bool("compact", false, "single-line JSON")
 	flag.Parse()
@@ -62,7 +63,7 @@ func main() {
 			}
 			in.Cwd = cwd
 		}
-		loaded, err := commands.LoadAndFilterCommands(context.Background(), cwd, commands.DefaultLoadOptions(), commands.DefaultConsoleAPIAuth())
+		loaded, err := commands.GetCommands(context.Background(), cwd, commands.DefaultLoadOptions(), commands.DefaultConsoleAPIAuth())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "load commands: %v\n", err)
 			os.Exit(1)

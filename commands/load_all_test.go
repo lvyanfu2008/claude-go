@@ -35,11 +35,15 @@ func indexStartOfBuiltinTail(out []types.Command) int {
 
 // lenEmbeddedStaticTail: bundled + builtin plugin skills + COMMANDS() when skill-dir / workflow / plugin sources are empty.
 func lenEmbeddedStaticTail() int {
-	return len(loadBundledSkills()) + len(loadBuiltinPluginSkills()) + len(loadBuiltinCommands())
+	bp, _ := loadBuiltinPluginSkills(".")
+	return len(loadBundledSkills()) + len(bp) + len(loadBuiltinCommands())
 }
 
 func TestLoadBuiltinPluginSkills_handwritten(t *testing.T) {
-	cmds := loadBuiltinPluginSkills()
+	cmds, err := loadBuiltinPluginSkills(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cmds == nil {
 		t.Fatal("expected non-nil slice (may be empty)")
 	}

@@ -10,8 +10,8 @@ import (
 	"goc/types"
 )
 
-// Session state mirrors src/skills/loadSkillsDir.ts conditionalSkills / dynamicSkills for
-// activated path-filtered skills (TS: activateConditionalSkillsForPaths → dynamicSkills.set).
+// Session state mirrors src/skills/loadSkillsDir.ts conditionalSkills (pending + activated names).
+// Activated skills are merged into the shared dynamic map via [dynamicSkillsSessionSet] (TS dynamicSkills.set).
 
 var (
 	condMu sync.RWMutex
@@ -21,20 +21,15 @@ var (
 
 	// activatedConditionalNames: names activated this session (TS activatedConditionalSkillNames).
 	activatedConditionalNames map[string]struct{}
-
-	// dynamicConditional: activated skills merged into getCommands like TS getDynamicSkills (subset of map).
-	dynamicConditional map[string]types.Command
 )
 
-// ClearConditionalSkillRuntime clears pending, activation tracking, and dynamic conditional
-// mirrors (TS clearSkillCaches / clearDynamicSkills relevant pieces). Tests call this; production
-// should use [ClearLoadAllCommandsCache] which includes it.
-func ClearConditionalSkillRuntime() {
+// clearConditionalRuntimeMaps clears conditional pending and activation tracking (TS conditionalSkills +
+// activatedConditionalSkillNames). Used by [ClearDynamicSkills] and tests via [ClearLoadAllCommandsCache].
+func clearConditionalRuntimeMaps() {
 	condMu.Lock()
 	defer condMu.Unlock()
 	conditionalPending = nil
 	activatedConditionalNames = nil
-	dynamicConditional = nil
 }
 
 // ConditionalPendingCount returns len(conditionalPending) (for tests).
@@ -93,12 +88,11 @@ func ActivateConditionalSkillsForPaths(filePaths []string, cwd string) []string 
 	cwdAbs = filepath.Clean(cwdAbs)
 
 	condMu.Lock()
-	defer condMu.Unlock()
 	if len(conditionalPending) == 0 {
+		condMu.Unlock()
 		return nil
 	}
 
-	var activated []string
 	toActivate := make([]string, 0)
 
 	for name, skill := range conditionalPending {
@@ -121,6 +115,12 @@ func ActivateConditionalSkillsForPaths(filePaths []string, cwd string) []string 
 		}
 	}
 
+	type activatedPair struct {
+		name  string
+		skill types.Command
+	}
+	var batch []activatedPair
+	var activated []string
 	for _, name := range toActivate {
 		skill, ok := conditionalPending[name]
 		if !ok {
@@ -131,28 +131,18 @@ func ActivateConditionalSkillsForPaths(filePaths []string, cwd string) []string 
 			activatedConditionalNames = make(map[string]struct{})
 		}
 		activatedConditionalNames[name] = struct{}{}
-		if dynamicConditional == nil {
-			dynamicConditional = make(map[string]types.Command)
-		}
-		dynamicConditional[name] = skill
+		batch = append(batch, activatedPair{name: name, skill: skill})
 		activated = append(activated, name)
 	}
-	return activated
-}
+	condMu.Unlock()
 
-// SnapshotDynamicConditionalSkillsForMerge returns a copy of skills activated from conditional
-// paths (for merging with directory-discovered dynamic skills).
-func SnapshotDynamicConditionalSkillsForMerge() []types.Command {
-	condMu.RLock()
-	defer condMu.RUnlock()
-	if len(dynamicConditional) == 0 {
-		return nil
+	for _, p := range batch {
+		dynamicSkillsSessionSet(p.name, p.skill)
 	}
-	out := make([]types.Command, 0, len(dynamicConditional))
-	for _, c := range dynamicConditional {
-		out = append(out, c)
+	if len(batch) > 0 {
+		ClearCommandMemoizationCaches()
 	}
-	return out
+	return activated
 }
 
 func compileSkillPathsIgnore(patterns []string) *gitignore.GitIgnore {
@@ -201,26 +191,4 @@ func relativePathForConditionalMatch(filePath string, cwdAbs string) string {
 		return ""
 	}
 	return filepath.ToSlash(rel)
-}
-
-func mergeDynamicByNameFirstWins(a, b []types.Command) []types.Command {
-	seen := make(map[string]struct{})
-	var out []types.Command
-	for _, xs := range [][]types.Command{a, b} {
-		for _, c := range xs {
-			n := strings.TrimSpace(c.Name)
-			if n == "" {
-				continue
-			}
-			if _, ok := seen[n]; ok {
-				continue
-			}
-			seen[n] = struct{}{}
-			out = append(out, c)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }

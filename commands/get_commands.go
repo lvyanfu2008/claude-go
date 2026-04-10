@@ -49,15 +49,26 @@ func FilterGetCommands(all []types.Command, auth GetCommandsAuth) []types.Comman
 	return out
 }
 
-// LoadAndFilterCommands runs LoadAllCommands then FilterGetCommands (TS getCommands disk + filter path).
+// LoadAndFilterCommands runs [LoadAllCommandsAsync] then FilterGetCommands (TS getCommands: loadAllCommands + filter only, no dynamic merge).
 func LoadAndFilterCommands(ctx context.Context, cwd string, opts LoadOptions, auth GetCommandsAuth) ([]types.Command, error) {
-	all, err := LoadAllCommands(ctx, cwd, opts)
-	if err != nil {
-		return nil, err
+	res := <-LoadAllCommandsAsync(ctx, cwd, opts)
+	if res.Err != nil {
+		return nil, res.Err
 	}
+	all := res.Commands
 	out := FilterGetCommands(all, auth)
 	logLoadAndFilterCommands(len(all), len(out))
 	return out, nil
+}
+
+// GetCommands mirrors src/commands.ts export async function getCommands(cwd): loadAllCommands → filter →
+// getDynamicSkills → dedupe → insert before first builtin.
+func GetCommands(ctx context.Context, cwd string, opts LoadOptions, auth GetCommandsAuth) ([]types.Command, error) {
+	base, err := LoadAndFilterCommands(ctx, cwd, opts, auth)
+	if err != nil {
+		return nil, err
+	}
+	return GetCommandsWithDynamicSkills(base, GetDynamicSkills(), auth), nil
 }
 
 // BuiltinCommandNameSet returns names and aliases from the handwritten COMMANDS() assembly

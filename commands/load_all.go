@@ -3,16 +3,17 @@ package commands
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"goc/commands/featuregates"
 	"goc/types"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 )
 
 // LoadOptions configures LoadAllCommands. Zero value is safe: mirrors conservative defaults where noted.
-// Parity: src/commands.ts loadAllCommands + getSkills / getSkillDirCommands gates (subset in Go until later phases).
+// Parity: src/commands.ts loadAllCommands (Promise.all of getSkills, getPluginCommands, getWorkflowCommands) + getSkillDirCommands gates.
 type LoadOptions struct {
 	// WorkflowScripts enables workflow command listing (Phase P6). Product path: **deferred** — default [DefaultLoadOptions] keeps this false; set true to use [loadWorkflowCommands]. TS historically gated WORKFLOW_SCRIPTS.
 	WorkflowScripts bool
@@ -109,45 +110,62 @@ var (
 	loadAllCache map[string][]types.Command
 )
 
-// ClearLoadAllCommandsCache drops the cwd/options memoization (tests and config reload).
-func ClearLoadAllCommandsCache() {
+// ClearCommandMemoizationCaches mirrors src/commands.ts clearCommandMemoizationCaches: invalidates
+// [loadAllCommands] memo only (does not clear dynamic skill session state).
+func ClearCommandMemoizationCaches() {
 	loadAllMu.Lock()
 	defer loadAllMu.Unlock()
 	loadAllCache = nil
-	clearBuiltinNameSetCache()
-	ClearConditionalSkillRuntime()
 }
 
-// LoadAllCommands mirrors src/commands.ts loadAllCommands concat order:
-//
-//	bundled → builtin-plugin → skillDir → workflow → pluginCommands → pluginSkills → COMMANDS()
-//
-// Filtering (meetsAvailabilityRequirement, isEnabled) is not applied here — same as TS.
-// Unimplemented sources return empty until Phase P3–P7.
-func LoadAllCommands(ctx context.Context, cwd string, opts LoadOptions) ([]types.Command, error) {
-	_ = ctx
-	key := opts.cacheKey(cwd)
-	loadAllMu.Lock()
-	if loadAllCache == nil {
-		loadAllCache = make(map[string][]types.Command)
-	}
-	if v, ok := loadAllCache[key]; ok {
-		out := append([]types.Command(nil), v...)
-		loadAllMu.Unlock()
-		logLoadAllCommands(cwd, true, loadAllCounts{}, len(out))
-		return out, nil
-	}
-	loadAllMu.Unlock()
+// ClearLoadAllCommandsCache drops cwd/options memoization, builtin name cache, and full dynamic skill
+// session (tests and hard reset). For TS parity when only new dynamics load, use [ClearCommandMemoizationCaches].
+func ClearLoadAllCommandsCache() {
+	ClearCommandMemoizationCaches()
+	clearBuiltinNameSetCache()
+	ClearDynamicSkills()
+}
 
-	bundled := loadBundledSkills()
-	builtinPlugin := loadBuiltinPluginSkills()
-	skillDir, err := loadSkillDirCommands(cwd, opts)
-	if err != nil {
-		return nil, err
+// LoadAllCommandsAsyncResult is the Promise-like outcome of [LoadAllCommandsAsync].
+type LoadAllCommandsAsyncResult struct {
+	Commands []types.Command
+	Err      error
+}
+
+// loadAllCommandsBody mirrors TS loadAllCommands after Promise.all resolves: concat in order.
+// getSkills runs as [GetSkillsAsync] in parallel with getPluginCommands and getWorkflowCommands.
+func loadAllCommandsBody(ctx context.Context, cwd string, opts LoadOptions) ([]types.Command, loadAllCounts, error) {
+	skillsCh := GetSkillsAsync(ctx, cwd, opts)
+	var workflow []types.Command
+	var pluginCmd []types.Command
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		pluginCmd = loadPluginCommands()
+		if pluginCmd == nil {
+			pluginCmd = make([]types.Command, 0)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		workflow = loadWorkflowCommands(cwd, opts)
+		if workflow == nil {
+			workflow = make([]types.Command, 0)
+		}
+	}()
+	wg.Wait()
+
+	skillsRes := <-skillsCh
+	if skillsRes.Err != nil {
+		return nil, loadAllCounts{}, skillsRes.Err
 	}
-	workflow := loadWorkflowCommands(cwd, opts)
-	pluginCmd := loadPluginCommands()
-	pluginSkills := loadPluginSkills()
+	skillsBatch := skillsRes.Batch
+
+	bundled := skillsBatch.BundledSkills
+	builtinPlugin := skillsBatch.BuiltinPluginSkills
+	skillDir := skillsBatch.SkillDirCommands
+	pluginSkills := skillsBatch.PluginSkills
 	builtins := loadBuiltinCommands()
 
 	counts := loadAllCounts{
@@ -169,6 +187,28 @@ func LoadAllCommands(ctx context.Context, cwd string, opts LoadOptions) ([]types
 	out = append(out, pluginSkills...)
 	out = append(out, builtins...)
 
+	return out, counts, nil
+}
+
+func loadAllCommandsResolve(ctx context.Context, cwd string, opts LoadOptions) ([]types.Command, error) {
+	key := opts.cacheKey(cwd)
+	loadAllMu.Lock()
+	if loadAllCache == nil {
+		loadAllCache = make(map[string][]types.Command)
+	}
+	if v, ok := loadAllCache[key]; ok {
+		out := append([]types.Command(nil), v...)
+		loadAllMu.Unlock()
+		logLoadAllCommands(cwd, true, loadAllCounts{}, len(out))
+		return out, nil
+	}
+	loadAllMu.Unlock()
+
+	out, counts, err := loadAllCommandsBody(ctx, cwd, opts)
+	if err != nil {
+		return nil, err
+	}
+
 	logLoadAllCommands(cwd, false, counts, len(out))
 
 	copyOut := append([]types.Command(nil), out...)
@@ -182,9 +222,30 @@ func LoadAllCommands(ctx context.Context, cwd string, opts LoadOptions) ([]types
 	return out, nil
 }
 
+// LoadAllCommands mirrors src/commands.ts loadAllCommands concat order:
+//
+//	bundled → builtin-plugin → skillDir → workflow → pluginCommands → pluginSkills → COMMANDS()
+//
+// Filtering (meetsAvailabilityRequirement, isEnabled) is not applied here — same as TS.
+// Internally uses the same async-shaped loading as [LoadAllCommandsAsync]; this call blocks until complete.
+func LoadAllCommands(ctx context.Context, cwd string, opts LoadOptions) ([]types.Command, error) {
+	return loadAllCommandsResolve(ctx, cwd, opts)
+}
+
+// LoadAllCommandsAsync runs [loadAllCommandsResolve] in a goroutine and sends one [LoadAllCommandsAsyncResult] (TS async loadAllCommands / Promise).
+func LoadAllCommandsAsync(ctx context.Context, cwd string, opts LoadOptions) <-chan LoadAllCommandsAsyncResult {
+	ch := make(chan LoadAllCommandsAsyncResult, 1)
+	go func() {
+		defer close(ch)
+		cmds, err := loadAllCommandsResolve(ctx, cwd, opts)
+		ch <- LoadAllCommandsAsyncResult{Commands: cmds, Err: err}
+	}()
+	return ch
+}
+
 // --- Phase P3: bundled skills — handwritten.AssembleBundledSkills, see handwritten/bundled_*.go ---
 
-// --- Phase P4: builtin plugin skills — handwritten.AssembleBuiltinPluginSkills ---
+// --- Phase P4: builtin plugin skills — [BuiltinPluginSkillCommands] / getBuiltinPlugins parity ---
 
 // --- Phase P6: workflows — see workflow_load.go (TS createWorkflowCommand / WORKFLOW_SCRIPTS stub; Go lists YAML/JSON on disk) ---
 
@@ -198,4 +259,4 @@ func loadPluginSkills() []types.Command {
 	return nil
 }
 
-// --- Phase P7: COMMANDS() (src/commands.ts) — handwritten.AssembleBuiltinCommands + testdata/gencode ---
+// --- Phase P7: COMMANDS() (src/commands.ts) — handwritten.AssembleBuiltinCommands + z_builtin_table_gen.go ---

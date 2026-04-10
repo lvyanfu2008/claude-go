@@ -1,8 +1,4 @@
 package handwritten
 
-import "goc/types"
-
-// AssembleBuiltinPluginSkills mirrors getBuiltinPluginSkillCommands() listing metadata (often empty).
-func AssembleBuiltinPluginSkills() []types.Command {
-	return []types.Command{}
-}
+// Built-in plugin skills are assembled in package commands ([commands.BuiltinPluginSkillCommands]),
+// mirroring src/plugins/builtinPlugins.ts getBuiltinPluginSkillCommands + registry.

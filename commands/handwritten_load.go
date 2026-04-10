@@ -23,6 +23,6 @@ func loadBundledSkills() []types.Command {
 	return handwritten.AssembleBundledSkills()
 }
 
-func loadBuiltinPluginSkills() []types.Command {
-	return handwritten.AssembleBuiltinPluginSkills()
+func loadBuiltinPluginSkills(cwd string) ([]types.Command, error) {
+	return BuiltinPluginSkillCommands(cwd)
 }

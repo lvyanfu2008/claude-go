@@ -5,9 +5,22 @@ import (
 	"goc/types"
 )
 
+func cloneCommands(in []types.Command) []types.Command {
+	return append([]types.Command(nil), in...)
+}
+
+func indexFirstName(cmds []types.Command, name string) int {
+	for i, c := range cmds {
+		if c.Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
 // AssembleBuiltinCommands mirrors src/commands.ts COMMANDS() membership order for listing metadata.
 func AssembleBuiltinCommands() []types.Command {
-	def := builtinDefaultParsed
+	def := builtinDefaultCommandsTable
 	iThink := indexFirstName(def, "think-back")
 	iLogout := indexFirstName(def, "logout")
 	if iThink < 0 || iLogout < 0 || iLogout+2 > len(def) {
@@ -36,7 +49,7 @@ func AssembleBuiltinCommands() []types.Command {
 	out = append(out, optionalBuiltinWorkflows()...)
 	out = append(out, optionalBuiltinTorch()...)
 	if featuregates.UserTypeAnt() && !featuregates.IsDemo() {
-		out = append(out, cloneCommands(internalOnlyParsed)...)
+		out = append(out, cloneCommands(internalOnlyCommandsTable)...)
 	}
 	return out
 }

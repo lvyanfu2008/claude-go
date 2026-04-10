@@ -1,6 +1,6 @@
 # Golden / drift JSON for `goc/commands`
 
-- **`builtin_commands_default.json`** — TS `getBuiltinCommandsTable()` with plain `bun` (no dev feature flags). After changing `src/commands.ts` `COMMANDS()`, run `bun run export:builtin-commands`, then `cd goc && go run ./cmd/gencode-handwritten` to refresh `handwritten/z_jsondata.go`.
+- **`builtin_commands_default.json`** — TS `getBuiltinCommandsTable()` with plain `bun` (no dev feature flags). After changing `src/commands.ts` `COMMANDS()`, run `bun run export:builtin-commands`, then `cd goc && go run ./cmd/gencode-handwritten` to refresh `handwritten/z_builtin_table_gen.go` (Go literals, not embedded JSON).
 - **`internal_only_commands.json`** — `INTERNAL_ONLY_COMMANDS` data-only dump with `USER_TYPE=ant` (stubs preserved). Refresh with:
 
   ```bash

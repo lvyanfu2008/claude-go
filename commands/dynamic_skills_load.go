@@ -61,20 +61,14 @@ func LoadDynamicSkillCommandsForPaths(filePaths []string, cwd string, opts LoadO
 	return filterUnconditionalSkills(cmds, opts), nil
 }
 
-// LoadAndGetCommandsWithFilePathsDynamic runs [LoadAndFilterCommands] then merges dynamic skills from
-// touched file paths (TS getCommands = loadAllCommands filter + getDynamicSkills + insert before builtins).
-// Runs [LoadAndFilterCommands] first so [syncConditionalSkillsFromLoaded] fills pending skills, then
-// [ActivateConditionalSkillsForPaths] (TS: activate before getDynamicSkills, after getSkillDirCommands data exists).
+// LoadAndGetCommandsWithFilePathsDynamic primes conditional state, applies file-path dynamic side effects
+// (TS activateConditionalSkillsForPaths + addSkillDirectories), then [GetCommands] (load + filter + getDynamicSkills merge).
 func LoadAndGetCommandsWithFilePathsDynamic(ctx context.Context, cwd string, opts LoadOptions, auth GetCommandsAuth, touchedFiles []string, discoverSeen map[string]struct{}) ([]types.Command, error) {
-	base, err := LoadAndFilterCommands(ctx, cwd, opts, auth)
-	if err != nil {
+	if _, err := LoadAndFilterCommands(ctx, cwd, opts, auth); err != nil {
 		return nil, err
 	}
-	ActivateConditionalSkillsForPaths(touchedFiles, cwd)
-	dynDirs, err := LoadDynamicSkillCommandsForPaths(touchedFiles, cwd, opts, discoverSeen)
-	if err != nil {
+	if err := ProcessFilePathsForDynamicSkills(touchedFiles, cwd, opts, discoverSeen); err != nil {
 		return nil, err
 	}
-	dyn := mergeDynamicByNameFirstWins(dynDirs, SnapshotDynamicConditionalSkillsForMerge())
-	return GetCommandsWithDynamicSkills(base, dyn, auth), nil
+	return GetCommands(ctx, cwd, opts, auth)
 }

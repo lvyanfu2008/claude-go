@@ -1,6 +1,6 @@
 # Builtin command overlay (Go)
 
-Place extra slash/skill definitions alongside the **handwritten** builtin table (`goc/commands/handwritten` + `z_jsondata.go`).
+Place extra slash/skill definitions alongside the **handwritten** builtin table (`goc/commands/handwritten` + `z_builtin_table_gen.go`).
 
 - This directory name **must** start with `builtin` (it is under `goc/commands/`).
 - Supported files (recursive):

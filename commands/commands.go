@@ -1,5 +1,5 @@
-// Package commands mirrors helpers from src/commands.ts: find/filter/availability, and (Go) LoadAllCommands
-// for the same concat order as loadAllCommands (bundled → builtin-plugin → skill dirs → workflow → plugins → COMMANDS).
+// Package commands mirrors helpers from src/commands.ts: find/filter/availability, [GetSkills]/[GetSkillsAsync],
+// and [LoadAllCommands]/[LoadAllCommandsAsync] for the same concat order as loadAllCommands (bundled → builtin-plugin → skill dirs → workflow → plugins → COMMANDS).
 // getCommands-level filtering: use [FilterGetCommands] + [GetCommandsAuth] after [LoadAllCommands] (see get_commands.go).
 // TS parity: load-all-commands-ts-parity.md; full roadmap: docs/plans/goc-load-all-commands.md; git stop / worktree: git_boundary.go.
 package commands
