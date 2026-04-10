@@ -1,0 +1,9 @@
+[
+  {
+    "type": "prompt",
+    "name": "mcp__demo__hello",
+    "description": "Demo MCP prompt for gou-demo R1 snapshot tests",
+    "hasUserSpecifiedDescription": true,
+    "loadedFrom": "mcp"
+  }
+]

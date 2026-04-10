@@ -1,0 +1,13 @@
+[
+  {
+    "serverName": "fixture",
+    "toolName": "ping",
+    "description": "Fixture MCP tool for tests.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "msg": { "type": "string" }
+      }
+    }
+  }
+]

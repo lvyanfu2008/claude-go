@@ -1,0 +1,138 @@
+[
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "type": "prompt",
+    "name": "commit",
+    "description": "Create a git commit",
+    "allowedTools": [
+      "Bash(git add:*)",
+      "Bash(git status:*)",
+      "Bash(git commit:*)"
+    ],
+    "contentLength": 0,
+    "progressMessage": "creating commit",
+    "source": "builtin"
+  },
+  {
+    "type": "prompt",
+    "name": "commit-push-pr",
+    "description": "Commit, push, and open a PR",
+    "allowedTools": [
+      "Bash(git checkout --branch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git add:*)",
+      "Bash(git status:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr merge:*)",
+      "ToolSearch",
+      "mcp__slack__send_message",
+      "mcp__claude_ai_Slack__slack_send_message"
+    ],
+    "contentLength": 3360,
+    "progressMessage": "creating commit and PR",
+    "source": "builtin"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "type": "prompt",
+    "name": "init-verifiers",
+    "description": "Create verifier skill(s) for automated verification of code changes",
+    "contentLength": 0,
+    "progressMessage": "analyzing your project and creating verifier skills",
+    "source": "builtin"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "type": "local",
+    "name": "bridge-kick",
+    "description": "Inject bridge failure states for manual recovery testing",
+    "supportsNonInteractive": false
+  },
+  {
+    "type": "local",
+    "name": "version",
+    "description": "Print the version this session is running (not what autoupdate downloaded)",
+    "supportsNonInteractive": true
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  },
+  {
+    "name": "agents-platform",
+    "type": "local"
+  },
+  {
+    "isHidden": true,
+    "name": "stub"
+  }
+]

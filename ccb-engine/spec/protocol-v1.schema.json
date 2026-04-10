@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lvyanfu2008/claude-code/goc/ccb-engine/spec/protocol-v1.schema.json",
+  "title": "ccb-engine protocol v1 fragments",
+  "definitions": {
+    "ProtocolVersion": {
+      "type": "string",
+      "const": "ccb-engine-v1"
+    },
+    "SubmitUserTurnPayload": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "tools": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "system": { "type": "string" },
+        "client_state_rev": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["text"] },
+        { "required": ["messages"] }
+      ]
+    },
+    "ToolResultInbound": {
+      "type": "object",
+      "required": ["call_id", "tool_use_id", "content"],
+      "properties": {
+        "call_id": { "type": "string" },
+        "tool_use_id": { "type": "string" },
+        "content": { "type": "string" },
+        "is_error": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "CancelTurnLine": {
+      "type": "object",
+      "required": ["method"],
+      "properties": {
+        "method": { "const": "CancelTurn" },
+        "id": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "StreamEvent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": { "const": "assistant_delta" },
+            "text": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "id", "name", "input"],
+          "properties": {
+            "type": { "const": "tool_use" },
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "input": { "type": "object" }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": ["type", "tool_use_id", "content"],
+          "properties": {
+            "type": { "const": "tool_result" },
+            "tool_use_id": { "type": "string" },
+            "content": { "type": "string" },
+            "is_error": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "call_id", "tool_use_id", "name", "input"],
+          "properties": {
+            "type": { "const": "execute_tool" },
+            "call_id": { "type": "string" },
+            "tool_use_id": { "type": "string" },
+            "name": { "type": "string" },
+            "input": { "type": "object" },
+            "state_rev": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "state_rev", "stop_reason"],
+          "properties": {
+            "type": { "const": "turn_complete" },
+            "state_rev": { "type": "integer", "minimum": 0 },
+            "stop_reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "id"],
+          "properties": {
+            "type": { "const": "response_end" },
+            "id": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "usage" },
+            "input_tokens": { "type": "integer" },
+            "output_tokens": { "type": "integer" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "code", "message"],
+          "properties": {
+            "type": { "const": "error" },
+            "code": { "type": "string" },
+            "message": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PromptRequest": {
+      "type": "object",
+      "required": ["prompt", "message", "options"],
+      "properties": {
+        "prompt": { "type": "string" },
+        "message": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "label"],
+            "properties": {
+              "key": { "type": "string" },
+              "label": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PromptResponse": {
+      "type": "object",
+      "required": ["prompt_response", "selected"],
+      "properties": {
+        "prompt_response": { "type": "string" },
+        "selected": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
