@@ -47,3 +47,76 @@ func TestCheckRuleBasedPermissions_usesTcxToolPermission(t *testing.T) {
 		t.Fatalf("got %#v", d)
 	}
 }
+
+type stubRuleCheckTool struct {
+	stubNamedTool
+	fn func(context.Context, json.RawMessage, *ToolUseContext) *PermissionDecision
+}
+
+func (s stubRuleCheckTool) CheckPermissionsFromRules(ctx context.Context, input json.RawMessage, tcx *ToolUseContext) *PermissionDecision {
+	if s.fn != nil {
+		return s.fn(ctx, input, tcx)
+	}
+	return nil
+}
+
+func TestRuleBasedDecisionForTool_nilPermNoRules(t *testing.T) {
+	if d := RuleBasedDecisionForTool("Bash", nil); d != nil {
+		t.Fatalf("expected nil, got %#v", d)
+	}
+}
+
+func TestCheckRuleBasedPermissions_toolDeny1c(t *testing.T) {
+	tool := stubRuleCheckTool{
+		stubNamedTool: stubNamedTool{n: "Bash"},
+		fn: func(context.Context, json.RawMessage, *ToolUseContext) *PermissionDecision {
+			d := DenyDecision("blocked by tool check")
+			return &d
+		},
+	}
+	d := CheckRuleBasedPermissions(context.Background(), tool, json.RawMessage(`{}`), &ToolUseContext{})
+	if d == nil || d.Behavior != PermissionDeny || d.Message != "blocked by tool check" {
+		t.Fatalf("got %#v", d)
+	}
+}
+
+func TestCheckRuleBasedPermissions_toolAskWithoutKindDropped(t *testing.T) {
+	tool := stubRuleCheckTool{
+		stubNamedTool: stubNamedTool{n: "Bash"},
+		fn: func(context.Context, json.RawMessage, *ToolUseContext) *PermissionDecision {
+			a := AskDecision("generic ask")
+			return &a
+		},
+	}
+	if d := CheckRuleBasedPermissions(context.Background(), tool, nil, &ToolUseContext{}); d != nil {
+		t.Fatalf("expected nil (TS null), got %#v", d)
+	}
+}
+
+func TestCheckRuleBasedPermissions_toolAskRuleContent1f(t *testing.T) {
+	tool := stubRuleCheckTool{
+		stubNamedTool: stubNamedTool{n: "Bash"},
+		fn: func(context.Context, json.RawMessage, *ToolUseContext) *PermissionDecision {
+			a := AskRuleContentDecision("npm publish")
+			return &a
+		},
+	}
+	d := CheckRuleBasedPermissions(context.Background(), tool, nil, &ToolUseContext{})
+	if d == nil || d.Behavior != PermissionAsk || d.AskKind != PermissionAskKindRuleContent {
+		t.Fatalf("got %#v", d)
+	}
+}
+
+func TestCheckRuleBasedPermissions_toolAskSafety1g(t *testing.T) {
+	tool := stubRuleCheckTool{
+		stubNamedTool: stubNamedTool{n: "Write"},
+		fn: func(context.Context, json.RawMessage, *ToolUseContext) *PermissionDecision {
+			a := AskSafetyCheckDecision(".git is protected")
+			return &a
+		},
+	}
+	d := CheckRuleBasedPermissions(context.Background(), tool, nil, &ToolUseContext{})
+	if d == nil || d.Behavior != PermissionAsk || d.AskKind != PermissionAskKindSafetyCheck {
+		t.Fatalf("got %#v", d)
+	}
+}

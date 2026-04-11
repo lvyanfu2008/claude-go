@@ -41,7 +41,8 @@ type MessageUpdate struct {
 type CanUseToolFn func(toolName string, input json.RawMessage, tcx *ToolUseContext) error
 
 // Tool is the executable tool surface used after findToolByName (src/Tool.ts + tool.call).
-// TODO(toolExecution.ts): add inputSchema, isMcp, validateInput, checkPermissions, …
+// Optional: [RuleBasedToolPermissionsChecker] for permissions.ts 1c–1g in [CheckRuleBasedPermissions].
+// TODO(toolExecution.ts): inputSchema, isMcp, MCP branches, …
 type Tool interface {
 	Name() string
 	// Aliases returns deprecated names that still resolve to this tool (toolExecution.ts L351–356).

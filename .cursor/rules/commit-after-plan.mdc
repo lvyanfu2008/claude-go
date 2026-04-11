@@ -1,0 +1,12 @@
+---
+description: After finishing each agreed plan, commit and push once
+alwaysApply: true
+---
+
+# Commit and push after each plan
+
+When an execution plan (or a clearly scoped batch of work from a plan) is **done** — implementation finished and tests you ran are green — **end the turn by committing and pushing** unless the user explicitly says not to.
+
+- Use a clear conventional-style message that states what changed and why in one line (optional body for detail).
+- If there is nothing to commit, say so briefly instead of forcing an empty commit.
+- If push fails (no `origin`, auth, or network), report the error and leave the commit local; do not skip the commit step.

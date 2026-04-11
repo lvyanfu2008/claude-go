@@ -14,10 +14,21 @@ const (
 	PermissionAsk   PermissionBehavior = "ask"
 )
 
+// PermissionAskKind marks ask outcomes that propagate from checkRuleBasedPermissions after tool.checkPermissions (permissions.ts 1f–1g). Empty means the ask does not block the rule-only layer (TS returns null).
+type PermissionAskKind string
+
+const (
+	PermissionAskKindNone        PermissionAskKind = ""
+	PermissionAskKindRuleContent PermissionAskKind = "rule_content" // 1f: content-specific ask rules
+	PermissionAskKindSafetyCheck PermissionAskKind = "safety_check" // 1g: path/safety prompts
+)
+
 // PermissionDecision is the headless subset of TS PermissionDecision / PermissionResult used before tool execution.
 type PermissionDecision struct {
 	Behavior PermissionBehavior `json:"behavior"`
 	Message  string             `json:"message,omitempty"`
+	// AskKind is set for [PermissionAsk] when the decision must surface through [CheckRuleBasedPermissions] (1f–1g). Ignored for deny/allow.
+	AskKind PermissionAskKind `json:"ask_kind,omitempty"`
 }
 
 // AllowDecision returns an allow decision (TS allow).
@@ -33,6 +44,16 @@ func DenyDecision(message string) PermissionDecision {
 // AskDecision returns ask (host or [ExecutionDeps.AskResolver] must resolve).
 func AskDecision(message string) PermissionDecision {
 	return PermissionDecision{Behavior: PermissionAsk, Message: message}
+}
+
+// AskRuleContentDecision is an ask that checkRuleBasedPermissions propagates (permissions.ts 1f).
+func AskRuleContentDecision(message string) PermissionDecision {
+	return PermissionDecision{Behavior: PermissionAsk, Message: message, AskKind: PermissionAskKindRuleContent}
+}
+
+// AskSafetyCheckDecision is an ask that checkRuleBasedPermissions propagates (permissions.ts 1g).
+func AskSafetyCheckDecision(message string) PermissionDecision {
+	return PermissionDecision{Behavior: PermissionAsk, Message: message, AskKind: PermissionAskKindSafetyCheck}
 }
 
 // QueryCanUseToolFn mirrors query.ts CanUseToolFn outcome shape for headless Go (tool name + ids + raw JSON input).

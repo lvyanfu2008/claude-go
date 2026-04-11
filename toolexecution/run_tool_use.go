@@ -136,7 +136,16 @@ func applyRuleBasedDecisionInRun(
 	assistantUUID string,
 	ch chan<- streamingtool.ToolRunUpdate,
 ) bool {
-	rd := RuleBasedDecisionForTool(toolName, deps.ToolPermission)
+	tcx := &ToolUseContext{ToolPermission: deps.ToolPermission}
+	var rd *PermissionDecision
+	if deps.Registry != nil {
+		if tool, ok := deps.Registry.FindToolByName(toolName); ok {
+			rd = CheckRuleBasedPermissions(ctx, tool, input, tcx)
+		}
+	}
+	if rd == nil {
+		rd = RuleBasedDecisionForTool(toolName, deps.ToolPermission)
+	}
 	if rd == nil {
 		return false
 	}
