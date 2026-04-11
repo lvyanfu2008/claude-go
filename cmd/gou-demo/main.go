@@ -8,6 +8,10 @@
 // -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
 // By default gou-demo calls the real model in-process (goc/ccb-engine/localturn). Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1)
 // for a UI-only simulated stream with no HTTP (no apilog bodies on send).
+// Direct Anthropic SSE parity ([goc/conversation-runtime/query.Query] + toolexecution) when ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN)
+// is set and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]): that path takes
+// precedence over localturn for the same turn; otherwise localturn is used when ccb-inline is on.
+// When a tool gate returns ask, GOU_QUERY_ASK_STRATEGY=allow auto-allows for headless demo (maps to [toolexecution.ExecutionDeps.AskResolver]).
 // Go-side init port (subset of TS init.ts): GOU_DEMO_GO_INIT=1 runs [goc/claudeinit.Init] instead of only [settingsfile.EnsureProjectClaudeEnvOnce] (Init includes Ensure). See docs/plans/go-init-port.md.
 // Go local tool parity (embedded localturn): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
 //
@@ -52,6 +56,7 @@ import (
 	"goc/ccb-engine/skilltools"
 	"goc/claudeinit"
 	"goc/commands"
+	"goc/conversation-runtime/query"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
@@ -67,6 +72,7 @@ import (
 	"goc/modelenv"
 	"goc/querycontext"
 	"goc/sessiontranscript"
+	"goc/toolexecution"
 	"goc/tscontext"
 	"goc/types"
 )
@@ -278,6 +284,57 @@ func runLocalTurnProgram(programSend func(tea.Msg), p localturn.Params) {
 				programSend(ccbstream.Msg(c))
 			}
 		})
+	}()
+}
+
+// gouQueryYieldMsg carries one assistant or user row from [query.Query] streaming parity (non-ccbstream protocol).
+type gouQueryYieldMsg struct {
+	Message types.Message
+}
+
+// gouQueryDoneMsg marks completion of a query streaming parity turn (Err set on failure).
+type gouQueryDoneMsg struct {
+	Err error
+}
+
+func gouDemoAnthropicAPIKey() string {
+	k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+	if k != "" {
+		return k
+	}
+	return strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
+}
+
+// gouDemoPreferQueryStreamingParity is true when env gates parity and an Anthropic key is present (HTTP path usable).
+func gouDemoPreferQueryStreamingParity() bool {
+	if gouDemoAnthropicAPIKey() == "" {
+		return false
+	}
+	cfg := query.BuildQueryConfig()
+	return query.StreamingParityPathEnabled(cfg)
+}
+
+// runQueryStreamingParityTurn runs [query.Query] in a goroutine and forwards whole messages to the Bubble Tea program.
+func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams) {
+	go func() {
+		ctx := context.Background()
+		for y, err := range query.Query(ctx, qp) {
+			if err != nil {
+				if programSend != nil {
+					programSend(gouQueryDoneMsg{Err: err})
+				}
+				return
+			}
+			if y.Message != nil && programSend != nil {
+				programSend(gouQueryYieldMsg{Message: *y.Message})
+			}
+			if y.Terminal != nil {
+				if programSend != nil {
+					programSend(gouQueryDoneMsg{Err: nil})
+				}
+				return
+			}
+		}
 	}()
 }
 
@@ -833,16 +890,57 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
 							}
 							skillExpand := !gouDemoEnvTruthy("GOU_DEMO_NO_SKILL_EXPAND_USER_MSG")
-							runLocalTurnProgram(m.ccbSend, localturn.Params{
-								RequestID:               reqID,
-								Messages:                msgsJSON,
-								Tools:                   toolsJSON,
-								System:                  guidance,
-								ModelID:                 mainLoopModel,
-								SkillExpandUserFollowUp: skillExpand,
-								Runner:                  runner,
-							})
-							usedCCB = true
+							if gouDemoPreferQueryStreamingParity() {
+								var userCtx map[string]string
+								if strings.TrimSpace(userCtxReminder) != "" {
+									userCtx = map[string]string{"user_context_reminder": userCtxReminder}
+								}
+								tcx := types.ToolUseContext{}
+								if params.RuntimeContext != nil {
+									tcx = params.RuntimeContext.ToolUseContext
+								}
+								qdeps := query.ProductionDeps()
+								te := toolexecution.ExecutionDeps{InvokeTool: runner.Run}
+								switch strings.TrimSpace(strings.ToLower(os.Getenv("GOU_QUERY_ASK_STRATEGY"))) {
+								case "allow":
+									te.AskResolver = func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {
+										return toolexecution.AllowDecision(), nil
+									}
+								}
+								qdeps.ToolexecutionDeps = te
+								msgsForQ := slices.Clone(m.store.Messages)
+								qp := query.QueryParams{
+									Messages:        msgsForQ,
+									SystemPrompt:    query.AsSystemPrompt([]string{guidance}),
+									UserContext:     userCtx,
+									ToolUseContext:  tcx,
+									QuerySource:     params.QuerySource,
+									StreamingParity: true,
+									Deps:            &qdeps,
+								}
+								if params.RuntimeContext != nil && params.RuntimeContext.ToolPermissionContext != nil {
+									pc := *params.RuntimeContext.ToolPermissionContext
+									types.NormalizeToolPermissionContextData(&pc)
+									qp.ToolPermissionContext = &pc
+								}
+								processuserinput.ApplyQueryHostEnvGates(&qp)
+								processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
+								gouDemoTracef("query streaming parity turn (preempts localturn) requestID=%s storeMsgs=%d toolsBytes=%d",
+									reqID, len(m.store.Messages), len(toolsJSON))
+								runQueryStreamingParityTurn(m.ccbSend, qp)
+								usedCCB = true
+							} else {
+								runLocalTurnProgram(m.ccbSend, localturn.Params{
+									RequestID:               reqID,
+									Messages:                msgsJSON,
+									Tools:                   toolsJSON,
+									System:                  guidance,
+									ModelID:                 mainLoopModel,
+									SkillExpandUserFollowUp: skillExpand,
+									Runner:                  runner,
+								})
+								usedCCB = true
+							}
 						}
 					}
 				}
@@ -879,6 +977,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.ti, cmd = m.ti.Update(msg)
 		return m, cmd
+
+	case gouQueryYieldMsg:
+		m.store.AppendMessage(msg.Message)
+		m.rebuildHeightCache()
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return m, nil
+
+	case gouQueryDoneMsg:
+		if msg.Err != nil {
+			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
+			m.rebuildHeightCache()
+		}
+		gouDemoLogStoreMessages("after_query_stream", m.store)
+		if m.transcript != nil {
+			m.maybeRecordTranscript()
+		}
+		m.rebuildHeightCache()
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return m, nil
 
 	case streamTick:
 		if len(m.streamChunks) == 0 || m.streamIdx >= len(m.streamChunks) {

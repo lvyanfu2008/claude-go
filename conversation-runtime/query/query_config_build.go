@@ -15,6 +15,7 @@ func BuildQueryConfig() QueryConfig {
 	return QueryConfig{
 		SessionID: sessionID,
 		Gates: QueryConfigGates{
+			StreamingParityPath:    envTruthy("GOU_QUERY_STREAMING_PARITY"),
 			StreamingToolExecution: envTruthy("GOU_DEMO_STREAMING_TOOL_EXECUTION"),
 			EmitToolUseSummaries:   envTruthy("GOU_DEMO_EMIT_TOOL_USE_SUMMARIES"),
 			IsAnt:                  envTruthy("ANT_ONLY") || strings.EqualFold(os.Getenv("CLAUDE_CODE_VENDOR"), "ant"),
@@ -26,4 +27,9 @@ func BuildQueryConfig() QueryConfig {
 func envTruthy(name string) bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+// StreamingParityPathEnabled is true when env gates allow the Anthropic SSE parity path together with [QueryParams.StreamingParity].
+func StreamingParityPathEnabled(cfg QueryConfig) bool {
+	return cfg.Gates.StreamingParityPath || cfg.Gates.StreamingToolExecution
 }

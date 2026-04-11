@@ -24,7 +24,8 @@
     "GOU_DEMO_LOG_STORE_MESSAGES": "0",
     "SLASH_RESOLVE_BRIDGE_ROOT": "/Users/lvyanfu/Work/claude/claude-code",
     "CLAUDE_CODE_GO_TOOL_SEARCH_CONTEXT":"0",
-    "CCB_ENGINE_DIAG_TO_STDERR":"0"
+    "CCB_ENGINE_DIAG_TO_STDERR":"0",
+    "GOU_DEMO_STREAMING_TOOL_EXECUTION":"1"
   },
   "hooks": {
     "UserPromptSubmit": [

@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"iter"
 	"os"
 	"strings"
@@ -34,7 +35,6 @@ func Query(ctx context.Context, params QueryParams) iter.Seq2[QueryYield, error]
 // The yield callback receives stream/messages only; [Terminal] is returned, not yielded here.
 func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]string, yield func(QueryYield, error) bool) (Terminal, error) {
 	_ = consumedCommandUUIDs
-	_ = BuildQueryConfig()
 	deps := params.Deps
 	if deps == nil {
 		d := ProductionDeps()
@@ -44,7 +44,10 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 	state := NewStateFromParams(params)
 	_ = state
 
-	if deps.CallModel != nil {
+	cfg := BuildQueryConfig()
+	// When params.StreamingParity is true, prefer HTTP SSE + streamingtool over CallModel (including [LocalTurnCallModel]).
+	useStream := params.StreamingParity && StreamingParityPathEnabled(cfg)
+	if deps.CallModel != nil || useStream {
 		// TS order before callModel: compact slice ([MessagesForQuery]), applyToolResultBudget ([runApplyToolResultBudget]),
 		// snip (may yield boundary), microcompact, collapse (N/A here), autocompact,
 		// then prependUserContext(messagesForQuery, userContext).
@@ -131,15 +134,24 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			Cwd:            cwd,
 			ModelID:        strings.TrimSpace(params.ToolUseContext.Options.MainLoopModel),
 		}
-		if err := deps.CallModel(ctx, in, func(y QueryYield) bool {
-			if y.Terminal != nil {
-				return false
+		if useStream {
+			if err := runStreamingParityModelLoop(ctx, params, msgs, in, deps, yield); err != nil {
+				return Terminal{Reason: TerminalReasonModelError, Error: err}, nil
 			}
-			return yield(y, nil)
-		}); err != nil {
-			return Terminal{Reason: TerminalReasonModelError, Error: err}, nil
+			return Terminal{Reason: TerminalReasonCompleted}, nil
 		}
-		return Terminal{Reason: TerminalReasonCompleted}, nil
+		if deps.CallModel != nil {
+			if err := deps.CallModel(ctx, in, func(y QueryYield) bool {
+				if y.Terminal != nil {
+					return false
+				}
+				return yield(y, nil)
+			}); err != nil {
+				return Terminal{Reason: TerminalReasonModelError, Error: err}, nil
+			}
+			return Terminal{Reason: TerminalReasonCompleted}, nil
+		}
+		return Terminal{Reason: TerminalReasonModelError, Error: fmt.Errorf("query: CallModel is nil")}, nil
 	}
 
 	return Terminal{Reason: TerminalReasonCompleted}, nil

@@ -3,12 +3,15 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
+	"goc/anthropicmessages"
+	"goc/toolexecution"
 	"goc/types"
 )
 
-// CanUseToolFn mirrors src/hooks/useCanUseTool.ts usage from query.ts (permission gate).
-type CanUseToolFn func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (allowed bool, err error)
+// CanUseToolFn mirrors src/hooks/useCanUseTool.ts usage from query.ts (PermissionDecision gate).
+type CanUseToolFn = toolexecution.QueryCanUseToolFn
 
 // TaskBudget mirrors query.ts QueryParams.taskBudget (API task_budget).
 type TaskBudget struct {
@@ -30,8 +33,14 @@ type QueryParams struct {
 	SkipCacheWrite          *bool
 	TaskBudget              *TaskBudget
 	Deps                    *QueryDeps
+	// StreamingParity, together with [StreamingParityPathEnabled] on [BuildQueryConfig], selects Anthropic SSE
+	// + streamingtool instead of [QueryDeps.CallModel] (see [runStreamingParityModelLoop]). When both this and
+	// CallModel are configured, the streaming path wins inside [queryLoop].
+	StreamingParity bool
 	// AutoCompactTracking optional seed for [State.AutoCompactTracking] (first queryLoop iteration).
 	AutoCompactTracking json.RawMessage `json:"-"`
+	// ToolPermissionContext optional merged deny/ask rules for [toolexecution.ExecutionDeps.ToolPermission] on streaming parity.
+	ToolPermissionContext *types.ToolPermissionContextData `json:"-"`
 }
 
 // CallModelInput groups arguments passed to QueryDeps.CallModel (mirrors deps.callModel({...}) in query.ts).
@@ -58,6 +67,12 @@ type QueryDeps struct {
 	Microcompact func(ctx context.Context, in *MicrocompactInput) (*MicrocompactResult, error)
 	Autocompact  func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error)
 	NewUUID      func() string
+	// HTTPClient optional HTTP client for streaming parity (defaults to http.DefaultClient).
+	HTTPClient *http.Client
+	// StreamPost when set overrides [anthropicmessages.PostStream] (tests inject httptest).
+	StreamPost func(ctx context.Context, p anthropicmessages.PostStreamParams) error
+	// ToolexecutionDeps is passed to [RunToolUseToolRunner] during streaming parity (InvokeTool optional).
+	ToolexecutionDeps toolexecution.ExecutionDeps
 }
 
 // ToolResultBudgetInput is passed to [QueryDeps.ApplyToolResultBudget] (query.ts applyToolResultBudget).

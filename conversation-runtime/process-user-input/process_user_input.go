@@ -11,6 +11,11 @@
 //   - Non-nil [ProcessBashCommand] / [ProcessSlashCommand] run before bashprepare/slashprepare execution_request paths (mirrors dynamic import of processBashCommand / processSlashCommand).
 //   - Prompt path does not emit attachments_plan / hooks_plan / query execution_request (attachments merge into [ProcessTextPrompt]; hooks run in [ProcessUserInput] via [ExecuteUserPromptSubmitHooks] or [ExecuteUserPromptSubmitHooksIter]).
 //
+// Host query streaming: after [ProcessUserInput] returns [ProcessUserInputBaseResult] with ShouldQuery, callers that
+// use [goc/conversation-runtime/query.Query] may call [ApplyQueryHostEnvGates] and [WireToolexecutionFromProcessUserInput]
+// so merged settings env (GOU_QUERY_STREAMING_PARITY / GOU_DEMO_STREAMING_TOOL_EXECUTION) and [ProcessUserInputParams.CanUseTool]
+// feed [QueryParams.StreamingParity] and [toolexecution.ExecutionDeps] (see gou-demo: parity path prefers HTTP SSE over localturn when configured).
+//
 // Inject bash/slash/attachment/hook handlers via [ProcessUserInputParams]; nil bash/slash handlers use bashprepare/slashprepare execution_request stubs.
 // TS parity: [ProcessBashCommand] / [ProcessSlashCommand] receive *ProcessUserInputParams for context,
 // [SetToolJSX], [CanUseTool]; [ExecuteUserPromptSubmitHooks] receives *ProcessUserInputParams for

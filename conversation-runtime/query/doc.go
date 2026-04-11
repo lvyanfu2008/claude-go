@@ -11,9 +11,17 @@
 //     [PrependUserContext], then CallModel.
 //   - [LocalTurnCallModel] + [ProductionDepsWithLocalTurn] wire [localturn.QueryBridgeRun] so
 //     each protocol [localturn.StreamEvent] is JSON-marshaled into [QueryYield.StreamEvent].
+//   - TS-parity streaming (Anthropic SSE + [streamingtool.StreamingToolExecutor] + [toolexecution.RunToolUseChan]):
+//     when [QueryParams.StreamingParity] and [StreamingParityPathEnabled]([BuildQueryConfig]) (env
+//     GOU_QUERY_STREAMING_PARITY or GOU_DEMO_STREAMING_TOOL_EXECUTION) are true, [queryLoop] calls
+//     [runStreamingParityModelLoop] instead of [QueryDeps.CallModel], using [goc/anthropicmessages.PostStream]
+//     (or [QueryDeps.StreamPost] for tests), optional [goc/anthropicmessages.BetasForToolsJSON] on the request,
+//     and [RunToolUseToolRunner] with [QueryDeps.ToolexecutionDeps].
+//   - [QueryParams.CanUseTool] is [toolexecution.QueryCanUseToolFn] ([toolexecution.PermissionDecision] + error); [NewStreamingToolExecutor]
+//     receives it so [streamingtool.StreamingToolExecutor]'s canUseTool path matches TS wiring.
 //   - After [runAutocompact], [applyAutocompactSideEffects] applies [AutocompactResult.UpdatedTracking] /
 //     [AutocompactResult.UpdatedContentReplacementState] onto [State] (in-memory; [QueryParams] is not mutated).
 //
-// The full agentic while-loop (compaction, snip, tool orchestration, max_turns between
-// recursions, …) is still in TypeScript query.ts / goc/ccb-engine/localturn.
+// Non-streaming agentic multi-round tool loops remain in goc/ccb-engine/localturn ([engine.Session.RunTurn]);
+// the streaming parity path runs its own multi-round loop over [anthropicmessages.PostStream].
 package query
