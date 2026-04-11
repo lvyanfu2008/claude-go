@@ -8,7 +8,7 @@ go run ./cmd/gen-tool-parity
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
 - **Go anchor:** [ccb-engine/skilltools/parity_runner.go](ccb-engine/skilltools/parity_runner.go) — ParityToolRunner.Run + paritytools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-11T15:28:59Z
+- **Generated:** 2026-04-11T16:03:41Z
 
 ## Status legend
 
@@ -42,10 +42,10 @@ go run ./cmd/gen-tool-parity
 | Tungsten | — | ant_only | — | none | — |
 | SuggestBackgroundPR | — | ant_feature | — | none | — |
 | WebBrowser | — | conditional_import | — | none | — |
-| TaskCreate | — | todo_v2 | — | none | — |
-| TaskGet | — | todo_v2 | — | none | — |
-| TaskUpdate | — | todo_v2 | — | none | — |
-| TaskList | — | todo_v2 | — | none | — |
+| TaskCreate | — | todo_v2 | — | partial | paritytools.TaskCreateFromJSON |
+| TaskGet | — | todo_v2 | — | partial | paritytools.TaskGetFromJSON |
+| TaskUpdate | — | todo_v2 | — | partial | paritytools.TaskUpdateFromJSON |
+| TaskList | — | todo_v2 | — | partial | paritytools.TaskListFromJSON |
 | OverflowTest | — | feature_flag | — | none | — |
 | CtxInspect | — | feature_flag | — | none | — |
 | TerminalCapture | — | feature_flag | — | none | — |
@@ -81,6 +81,6 @@ go run ./cmd/gen-tool-parity
 
 | Go status | Count |
 |-----------|------:|
-| partial | 22 |
+| partial | 26 |
 | stub | 4 |
-| none | 29 |
+| none | 25 |

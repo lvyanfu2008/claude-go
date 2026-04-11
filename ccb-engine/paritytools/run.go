@@ -15,6 +15,14 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return TodoWriteFromJSON(raw, cfg)
 	case "TaskOutput":
 		return TaskOutputFromJSON(ctx, raw, cfg)
+	case "TaskCreate":
+		return TaskCreateFromJSON(ctx, raw, cfg)
+	case "TaskGet":
+		return TaskGetFromJSON(ctx, raw, cfg)
+	case "TaskList":
+		return TaskListFromJSON(ctx, raw, cfg)
+	case "TaskUpdate":
+		return TaskUpdateFromJSON(ctx, raw, cfg)
 	case "TaskStop", "KillShell":
 		return TaskStopFromJSON(raw, cfg)
 	case "WebFetch":
