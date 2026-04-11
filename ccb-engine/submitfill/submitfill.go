@@ -12,7 +12,8 @@
 // Environment (opt-in default when payload flag absent):
 //   - CCB_ENGINE_FETCH_SYSTEM_PROMPT_IF_EMPTY=1|true: same as fetch_system_prompt_if_empty=true.
 //
-// When a user-context reminder is produced, it is prepended as an extra user message (see [goc/gou/ccbhydrate.PrependUserMessageJSON]).
+// When a user-context reminder is produced, it is prepended then merged with the following user
+// message via a second [messagesapi.NormalizeMessagesForAPI] pass (see [goc/gou/ccbhydrate.PrependUserMessageJSON]).
 package submitfill
 
 import (
@@ -25,6 +26,7 @@ import (
 	"goc/ccb-engine/settingsfile"
 	"goc/commands"
 	"goc/gou/ccbhydrate"
+	"goc/modelenv"
 	"goc/querycontext"
 )
 
@@ -38,7 +40,8 @@ type Options struct {
 	ExtraClaudeMdRoots []string
 	CustomSystemPrompt string
 	AppendSystemPrompt string
-	// ModelID when empty defaults to env ANTHROPIC_MODEL or a built-in demo default.
+	// ModelID when empty defaults to the same model env chain as HTTP ([modelenv.FirstNonEmpty])
+	// or a built-in demo default.
 	ModelID string
 }
 
@@ -82,7 +85,7 @@ func mergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) {
 }
 
 func defaultModelID(fallback string) string {
-	if m := strings.TrimSpace(os.Getenv("ANTHROPIC_MODEL")); m != "" {
+	if m := modelenv.FirstNonEmpty(); m != "" {
 		return m
 	}
 	if strings.TrimSpace(fallback) != "" {
@@ -119,6 +122,7 @@ func ApplyIfEmpty(system string, messages json.RawMessage, opts Options) (outSys
 		OutputStyleName:        outName,
 		OutputStylePrompt:      outPrompt,
 	}
+	commands.ApplyGouDemoRuntimeEnv(&gouOpts)
 	customSys := strings.TrimSpace(opts.CustomSystemPrompt)
 	appendSys := strings.TrimSpace(opts.AppendSystemPrompt)
 	extra := slices.Clone(opts.ExtraClaudeMdRoots)

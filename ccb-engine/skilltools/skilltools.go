@@ -25,7 +25,7 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 	return anthropic.GouDemoDefaultToolsJSON()
 }
 
-// GouDemoParityToolsJSON marshals TS-shaped core tools + Skill + echo_stub (phase 2).
+// GouDemoParityToolsJSON returns tools[] from embedded tools_api.json (TS export) + echo_stub, same as GOU_DEMO_USE_EMBEDDED_TOOLS_API=1.
 func GouDemoParityToolsJSON() (json.RawMessage, error) {
 	return anthropic.GouParityToolsJSON()
 }

@@ -2,10 +2,12 @@ package querycontext
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 
 	"goc/commands"
+	"goc/modelenv"
 	"goc/tscontext"
 )
 
@@ -23,7 +25,7 @@ type FetchOpts struct {
 	// SystemPromptInjection optional override; nil falls back to CLAUDE_CODE_SYSTEM_PROMPT_INJECTION env.
 	SystemPromptInjection *string
 
-	// TSSnapshot when non-nil uses TS go-context-bridge output for default/user/system prompt parts
+	// TSSnapshot when non-nil uses that snapshot for default/user/system prompt parts
 	// (mirrors fetchSystemPromptParts) instead of building them in Go.
 	TSSnapshot *tscontext.Snapshot
 }
@@ -33,6 +35,16 @@ type FetchResult struct {
 	DefaultSystemPrompt []string
 	UserContext         map[string]string
 	SystemContext       map[string]string
+}
+
+func useGoDefaultSystemInsteadOfTSSnapshot(opts FetchOpts) bool {
+	if strings.TrimSpace(opts.Gou.EnvReportModelID) != "" {
+		return true
+	}
+	if strings.TrimSpace(os.Getenv("CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID")) != "" {
+		return true
+	}
+	return modelenv.FirstNonEmpty() != ""
 }
 
 func cloneStringSlice(s []string) []string {
@@ -60,6 +72,18 @@ func FetchSystemPromptParts(ctx context.Context, opts FetchOpts) (FetchResult, e
 
 	if snap := opts.TSSnapshot; snap != nil {
 		if !useCustom {
+			// Bun snapshot freezes # Environment for whatever model TS saw at bridge time.
+			// When the process sets ANTHROPIC_MODEL / CCB_ENGINE_MODEL / ANTHROPIC_DEFAULT_* or
+			// CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID (or Gou.EnvReportModelID), rebuild default system in Go
+			// so the model line matches live env; keep TS userContext + systemContext slices.
+			if useGoDefaultSystemInsteadOfTSSnapshot(opts) {
+				s := strings.TrimSpace(commands.BuildGouDemoSystemPrompt(opts.Gou))
+				return FetchResult{
+					DefaultSystemPrompt: []string{s},
+					UserContext:         cloneStringMap(snap.UserContext),
+					SystemContext:       cloneStringMap(snap.SystemContext),
+				}, nil
+			}
 			return FetchResult{
 				DefaultSystemPrompt: cloneStringSlice(snap.DefaultSystemPrompt),
 				UserContext:         cloneStringMap(snap.UserContext),

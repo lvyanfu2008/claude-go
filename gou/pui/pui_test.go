@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	processuserinput "goc/conversation-runtime/process-user-input"
@@ -12,6 +13,19 @@ import (
 	"goc/tscontext"
 	"goc/types"
 )
+
+func clearModelEnvForPuiTest(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"CCB_ENGINE_MODEL",
+		"ANTHROPIC_MODEL",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL",
+	} {
+		t.Setenv(k, "")
+	}
+}
 
 func TestSlashGated(t *testing.T) {
 	if !SlashGated(" /foo") {
@@ -56,6 +70,44 @@ func TestApplyBaseResult_executionStub(t *testing.T) {
 	}
 	if len(st.Messages) != 1 {
 		t.Fatalf("messages=%d", len(st.Messages))
+	}
+}
+
+func TestBuildDemoParams_anthropicModelOverridesTSBridgeMainLoopModel(t *testing.T) {
+	clearModelEnvForPuiTest(t)
+	t.Setenv("ANTHROPIC_MODEL", "deepseek-chat")
+	st := &conversation.Store{ConversationID: "t"}
+	p, err := BuildDemoParams("hi", st, DemoConfig{
+		SkipCommands:    true,
+		TSContextBridge: &tscontext.Snapshot{MainLoopModel: "claude-sonnet-4-20250514"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.RuntimeContext == nil {
+		t.Fatal("nil RuntimeContext")
+	}
+	got := strings.TrimSpace(p.RuntimeContext.ToolUseContext.Options.MainLoopModel)
+	if got != "deepseek-chat" {
+		t.Fatalf("MainLoopModel=%q want deepseek-chat", got)
+	}
+}
+
+func TestBuildDemoParams_explicitMainLoopModelBeatsAnthropicEnv(t *testing.T) {
+	clearModelEnvForPuiTest(t)
+	t.Setenv("ANTHROPIC_MODEL", "deepseek-chat")
+	st := &conversation.Store{ConversationID: "t"}
+	p, err := BuildDemoParams("hi", st, DemoConfig{
+		SkipCommands:    true,
+		MainLoopModel:   "custom-from-config",
+		TSContextBridge: &tscontext.Snapshot{MainLoopModel: "claude-sonnet-4-20250514"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(p.RuntimeContext.ToolUseContext.Options.MainLoopModel)
+	if got != "custom-from-config" {
+		t.Fatalf("MainLoopModel=%q want custom-from-config", got)
 	}
 }
 
@@ -254,6 +306,7 @@ func TestBuildDemoParams_TSContextBridge_skillListingFromSnapshot(t *testing.T) 
 }
 
 func TestBuildDemoParams_TSContextBridge_toolsAndCommands(t *testing.T) {
+	clearModelEnvForPuiTest(t)
 	st := &conversation.Store{}
 	cmds := `[{"type":"prompt","name":"from_ts","description":"d"}]`
 	tools := `[{"name":"echo_stub","description":"x","input_schema":{"type":"object","properties":{}}}]`

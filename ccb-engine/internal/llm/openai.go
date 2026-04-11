@@ -10,8 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"goc/ccb-engine/internal/anthropic"
 	"goc/ccb-engine/apilog"
+	"goc/ccb-engine/internal/anthropic"
+	"goc/modelenv"
 )
 
 // OpenAICompat calls POST {base}/chat/completions (Bearer auth). Works with DeepSeek and other OpenAI-style APIs.
@@ -27,13 +28,7 @@ func newOpenAICompatFromEnv() *OpenAICompat {
 	if base == "" {
 		base = "https://api.openai.com/v1"
 	}
-	model := os.Getenv("CCB_ENGINE_MODEL")
-	if model == "" {
-		model = os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")
-	}
-	if model == "" {
-		model = "deepseek-chat"
-	}
+	model := modelenv.ResolveWithFallback("deepseek-chat")
 	key := os.Getenv("ANTHROPIC_API_KEY")
 	if key == "" {
 		key = os.Getenv("ANTHROPIC_AUTH_TOKEN")

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/apilog"
+	"goc/modelenv"
 )
 
 const (
@@ -31,13 +32,7 @@ func NewClient() *Client {
 	if base == "" {
 		base = defaultBaseURL
 	}
-	model := os.Getenv("CCB_ENGINE_MODEL")
-	if model == "" {
-		model = os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")
-	}
-	if model == "" {
-		model = "claude-3-5-haiku-20241022"
-	}
+	model := modelenv.ResolveWithFallback("claude-sonnet-4-20250514")
 	key := os.Getenv("ANTHROPIC_API_KEY")
 	if key == "" {
 		key = os.Getenv("ANTHROPIC_AUTH_TOKEN")

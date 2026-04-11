@@ -5,6 +5,9 @@ import "fmt"
 // ExploreMinQueries mirrors EXPLORE_AGENT_MIN_QUERIES in exploreAgent.ts.
 const ExploreMinQueries = 3
 
+// exploreSystemPrompt / planSystemPrompt: templates match exploreAgent.ts getExploreSystemPrompt()
+// and planAgent.ts getPlanV2SystemPrompt() (including embedded-search branches).
+
 func exploreSystemPrompt(embeddedSearch bool) string {
 	globGuidance := fmt.Sprintf("- Use %s for broad file pattern matching", ToolGlob)
 	grepGuidance := fmt.Sprintf("- Use %s for searching file contents with regex", ToolGrep)

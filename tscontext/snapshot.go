@@ -1,12 +1,12 @@
-// Package tscontext loads a one-shot Bun bridge snapshot (system prompt parts, commands, tools)
-// for gou-demo parity with src/utils/queryContext.ts + TS tool definitions.
+// Package tscontext holds the JSON snapshot shape for optional in-process prompt/commands/tools
+// injection (tests and parity helpers; no external Bun bridge).
 package tscontext
 
 import (
 	"encoding/json"
 )
 
-// Snapshot is the JSON body emitted by scripts/go-context-bridge.ts on success.
+// Snapshot is the JSON shape for default/user/system prompt parts plus commands and tools metadata.
 type Snapshot struct {
 	DefaultSystemPrompt []string          `json:"defaultSystemPrompt"`
 	UserContext         map[string]string `json:"userContext"`

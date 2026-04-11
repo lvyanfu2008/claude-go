@@ -20,7 +20,7 @@
 | `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result` |
 | `goc/gou/transcript` | 从 JSON 加载消息：UI 形 `[]Message`（含 `type`）或 API 形 `[{role,content}]` |
 | `goc/gou/ccbstream` | 将 ccb-engine 风格 NDJSON `StreamEvent` 应用到 `conversation.Store`（`Apply` / `Feed` / `ReplayFile`） |
-| `goc/ccb-engine/localturn` | 同进程跑一轮 turn（`Session` + `llm.NewFromEnv` + `StubRunner`），事件形状与 **socketserve** 一致；**gou-demo 默认**走 `localturn`；`-fake-stream` 才纯模拟；**`GOU_DEMO_CCB_SOCKET=1`** 时 gou-demo 内嵌 **socketserve** + Bun worker，而非独立 `ccb-engine` 子命令 |
+| `goc/ccb-engine/localturn` | 同进程跑一轮 turn（`Session` + `llm.NewFromEnv` + `skilltools.ParityToolRunner`），事件形状与 **socketserve** NDJSON 一致；**gou-demo 默认**走 `localturn`；`-fake-stream` 才纯模拟 |
 | `goc/gou/ccbhydrate` | `types.Message[]` → `payload.messages` JSON（`HydrateFromMessages` 形状） |
 | `goc/gou/pui` | 进程内 `processuserinput.ProcessUserInput`：`BuildDemoParams`、`ApplyProcessUserInputBaseResult`、`ProcessUserInputBaseResultHandoff`（标量字段与 TS `ProcessUserInputBaseResult` 同名 + `json` camelCase） |
 
@@ -36,7 +36,7 @@
 | 载入 transcript JSON（UI / API 形） | — / `goc/gou/transcript` | **已做** |
 | 回放 / 管道 NDJSON → `ccbstream.Apply` | `goEngine` / `goc/gou/ccbstream` | **已做** |
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
-| 真实 LLM（gou-demo） | `goc/ccb-engine/localturn` | **已做**：默认同进程真实 turn（环境变量与 `ccb-engine` 冒烟 CLI 相同）；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；失败时 **降级** 假 `streamTick`。**`GOU_DEMO_CCB_SOCKET=1`**：内嵌 **socketserve** + **`ccb-engine-tool-worker`**。单测 / 自动化仍可用 `src/goEngine/client.ts` 连 **gou-demo / ccb-socket-host** 暴露的 Unix socket |
+| 真实 LLM（gou-demo） | `goc/ccb-engine/localturn` | **已做**：默认同进程真实 turn（环境变量与 `ccb-engine` 冒烟 CLI 相同）；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；失败时 **降级** 假 `streamTick`。Unix **socketserve** + 外部 TS 客户端见 `goc/ccb-engine/README.md`（**ccb-socket-host**，**不再**由 gou-demo 拉起 `ccb-engine-tool-worker`） |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `execution_request`（bash/slash 的 prepare 桩） | `bashprepare` / `slashprepare` 仍可能返回 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **未做** |
@@ -98,19 +98,12 @@ cd goc && go run ./cmd/gou-demo -fake-stream
 
 ### Go `init.ts` 对齐（进行中）
 
-**`GOU_DEMO_GO_INIT=1`**：gou-demo 入口使用 [`goc/claudeinit`](../claudeinit) 的 **`Init`**（内含 `settingsfile.EnsureProjectClaudeEnvOnce`），替代「仅 Ensure」路径。矩阵与缺口见 **[`docs/plans/go-init-port.md`](../../docs/plans/go-init-port.md)**。与 **`GOU_DEMO_TS_CONTEXT_BRIDGE`** 可并存（先 Go init，再可选 Bun 快照）。
+**`GOU_DEMO_GO_INIT=1`**：gou-demo 入口使用 [`goc/claudeinit`](../claudeinit) 的 **`Init`**（内含 `settingsfile.EnsureProjectClaudeEnvOnce`），替代「仅 Ensure」路径。矩阵与缺口见 **[`docs/plans/go-init-port.md`](../../docs/plans/go-init-port.md)**。
 
 对照工具：`bun run dump-init-state`、`goc/cmd/claude-init-dump`、`scripts/compare-init-dumps.sh`。
 
-### TS 全量 system prompt / commands / tools（启动时一次 Bun）
+### 全量 TS system prompt / commands / tools（已移除 Bun 启动快照）
 
-当 **`GOU_DEMO_TS_CONTEXT_BRIDGE=1`** 时，gou-demo 在启动时（`flag.Parse` 之后、`tea.NewProgram` 之前）在仓库根执行一次 **`bun run go-context-bridge`**（`package.json` 脚本，实现为 `scripts/go-context-bridge.ts`），通过 stdin 一行 JSON 把 **当前工作目录** 传给 TS，使 `getCommands` / `fetchSystemPromptParts` 与用户项目一致。stdout 首行为 JSON，除 **`defaultSystemPrompt` / `userContext` / `systemContext` / `commands` / `tools` / `mainLoopModel`** 外还包括 **`skillToolCommands`**（TS `getSkillToolCommands`）、**`slashCommandToolSkills`**（TS `getSlashCommandToolSkills`）、**`agents`**（可序列化的 agent 定义）。结果缓存在进程内；**每一轮对话复用缓存，不再 exec Bun**。
-
-- **依赖**：`bun` 在 `PATH` 中；cwd 的祖先目录需能解析出 **`scripts/slash-resolve-bridge.ts`**（与现有 slash bridge 相同的 repo root 探测）。
-- **超时**：默认 **5 分钟**（`tscontext.DefaultBridgeExecTimeout`）；可用 **`GOU_DEMO_TS_BRIDGE_TIMEOUT_SEC`**（秒，≥30）加长。Bun 子进程的 **stderr 会实时打到当前终端**，便于确认 TS `init` 仍在推进；若仍嫌慢可 **`unset GOU_DEMO_TS_CONTEXT_BRIDGE`** 跳过全量 TS 上下文。
-- **失败**：默认 **fail-fast**（`log.Fatalf`），不静默回退到纯 Go 子集。
-- **陈旧缓存**：会话中途 MCP 连接、磁盘 settings、动态 skill 等变化**不会**自动反映；需 **重启 gou-demo**（或日后可选刷新机制）。
-
-实现细节：`goc/tscontext` 拉取快照；`querycontext.FetchSystemPromptParts` 在传入 `TSSnapshot` 时不再用 Go 拼装默认 prompt 块；`pui.BuildDemoParams` 从快照注入 **commands** 与 **tools**（仍可与 `-mcp-commands-json` / MCP 工具文件合并）。开启 TS bridge 时 **`SkillListingCommands`** 优先用快照里的 **`skillToolCommands`** 再与 MCP skill 合并（[`commands.SkillListingFromTSPresliced`](../commands/merge_commands.go)），避免与 TS `getSkillToolCommands` 过滤漂移。
+原先的 **`GOU_DEMO_TS_CONTEXT_BRIDGE`** + **`bun run go-context-bridge`**（`claude-code/scripts/go-context-bridge.ts`）已删除。gou-demo 默认使用 **Go 侧** `querycontext` / `commands` 拼装与 **`GOU_DEMO_USE_EMBEDDED_TOOLS_API`**（或 MCP JSON）对齐工具元数据；单元测试仍可向 `pui.DemoConfig.TSContextBridge` / `querycontext.FetchOpts.TSSnapshot` 注入内存中的 [`tscontext.Snapshot`](../tscontext/snapshot.go)。
 
 **Bundled / 无磁盘 `SkillRoot` 的 `/` 命令**：gou-demo 在 [`pui/slash_resolve_demo.go`](pui/slash_resolve_demo.go) 中通过 **`bun run scripts/slash-resolve-bridge.ts`** 解析（[`goc/slashresolve`](../slashresolve)）。该路径**每次 slash 执行一次 Bun**（`bootstrapGoContext` + 按名查找 `Command` + **`getPromptForCommand`**），与启动快照分离；`commandJson` 仅回显，不参与解析。

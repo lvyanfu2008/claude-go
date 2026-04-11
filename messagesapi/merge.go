@@ -471,3 +471,9 @@ func createUserMessageString(text string, uuid string, timestamp string, isMeta 
 	raw, _ := json.Marshal(text)
 	return createUserMessageFromContent(raw, uuid, timestamp, isMeta)
 }
+
+// ReminderUserMessage returns a user message with JSON-string content (plain text) for prependUserContext
+// or skill_listing reminders. Pass non-empty text (callers should trim); isMeta true matches TS meta rows.
+func ReminderUserMessage(text string, isMeta bool) types.Message {
+	return createUserMessageString(text, randomUUID(), "", isMeta)
+}

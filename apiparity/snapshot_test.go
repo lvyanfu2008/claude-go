@@ -2,14 +2,16 @@ package apiparity
 
 import (
 	"testing"
+
+	"goc/modelenv"
 )
 
 // Golden digests for the default gou-demo API slice (no DiscoverSkills, no MCP merge, empty skill listing).
 // System is built via [querycontext.FetchSystemPromptParts] (same as gou-demo); user_context_reminder is the prepend-only block.
 // When tools or system assembly intentionally changes, update these constants and document in the PR.
 const (
-	goldenToolsSHA256Default        = "42639e2db923ed5c66ee4bfbbbb60d05833f5bc72a25f3168dc5cb2bfe4c3353"
-	goldenSystemSHA256Default       = "c3b08e0cd428cfc09570de38fe0405ac0055a165bb3ef0d95656a6d701757467"
+	goldenToolsSHA256Default        = "1cd0dcb20e74af77c302948ee110c1705ac2dd4cf5c9f2f6a344212f7b84cb83"
+	goldenSystemSHA256Default       = "7903db1d8d7930f8c14f7b303a79339503ca5c8b49d003f40ad82917042f0e05"
 	goldenUserContextReminderSHA256 = "83ae35d35803cc9ec3e35280018a91b78af1e71190e68001e395c5bb7ca15f7a"
 )
 
@@ -22,6 +24,12 @@ func TestGouDemo_snapshotGolden_defaultSlice(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_OUTPUT_STYLE_PROMPT", "")
 	t.Setenv("CLAUDE_CODE_REMOTE", "1")
 	t.Setenv("CLAUDE_CODE_OVERRIDE_DATE", "2030-06-15")
+	t.Setenv("CLAUDE_CODE_GO_OS_VERSION", "Linux test")
+	t.Setenv("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", "1")
+	t.Setenv("CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID", "")
+	for _, k := range modelenv.LookupKeys {
+		t.Setenv(k, "")
+	}
 
 	out, err := GouDemo(SnapshotInput{
 		Cwd:            "/tmp/gou-parity-golden",
@@ -54,6 +62,12 @@ func TestGouDemo_discoverSkills_changesToolsDigest(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_OUTPUT_STYLE_PROMPT", "")
 	t.Setenv("CLAUDE_CODE_REMOTE", "1")
 	t.Setenv("CLAUDE_CODE_OVERRIDE_DATE", "2030-06-15")
+	t.Setenv("CLAUDE_CODE_GO_OS_VERSION", "Linux test")
+	t.Setenv("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS", "1")
+	t.Setenv("CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID", "")
+	for _, k := range modelenv.LookupKeys {
+		t.Setenv(k, "")
+	}
 
 	out, err := GouDemo(SnapshotInput{
 		Cwd:           "/tmp/gou-parity-golden",

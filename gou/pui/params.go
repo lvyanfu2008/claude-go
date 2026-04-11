@@ -12,6 +12,7 @@ import (
 	"goc/ccb-engine/skilltools"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
+	"goc/modelenv"
 	"goc/gou/conversation"
 	"goc/mcpcommands"
 	"goc/toolpool"
@@ -21,7 +22,8 @@ import (
 
 const defaultMainLoopModel = "claude-sonnet-4-20250514"
 
-// DefaultMainLoopModelForDemo returns the model id used when DemoConfig.MainLoopModel is empty.
+// DefaultMainLoopModelForDemo returns the model id used when DemoConfig.MainLoopModel is empty
+// and neither TS bridge nor ANTHROPIC_MODEL supplies one (see [BuildDemoParams]).
 func DefaultMainLoopModelForDemo() string {
 	return defaultMainLoopModel
 }
@@ -64,7 +66,7 @@ type DemoConfig struct {
 	// MCPToolsJSONPath optional path to JSON array of MCP tool defs (see mcpcommands.LoadToolsFromPath).
 	// Merged after env GOU_DEMO_MCP_TOOLS_JSON when both set (cfg path tried first).
 	MCPToolsJSONPath string `json:"-"`
-	// TSContextBridge optional snapshot from scripts/go-context-bridge (startup cache). When set, commands
+	// TSContextBridge optional in-process snapshot. When set, commands
 	// and tools are taken from the snapshot (then MCP file/env merged for commands) unless SkipCommands / embedded tools override.
 	TSContextBridge *tscontext.Snapshot `json:"-"`
 	// IsRemoteMode when true includes /session in GetCommands output (matches src/bootstrap getIsRemoteMode).
@@ -79,12 +81,20 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		return nil, err
 	}
 	msgs := append([]types.Message(nil), store.Messages...)
-	model := cfg.MainLoopModel
-	if model == "" && cfg.TSContextBridge != nil {
-		model = strings.TrimSpace(cfg.TSContextBridge.MainLoopModel)
-	}
-	if model == "" {
-		model = defaultMainLoopModel
+	var model string
+	if m := strings.TrimSpace(cfg.MainLoopModel); m != "" {
+		model = m
+	} else {
+		// Live process env (including values merged from ~/.claude/settings.json and project
+		// .claude/settings.go.json by settingsfile) beats TS bridge snapshot for API/model line parity.
+		if envModel := modelenv.FirstNonEmpty(); envModel != "" {
+			model = envModel
+		} else if cfg.TSContextBridge != nil {
+			model = strings.TrimSpace(cfg.TSContextBridge.MainLoopModel)
+		}
+		if model == "" {
+			model = defaultMainLoopModel
+		}
 	}
 	var uuidPtr *string
 	if cfg.UserMessageUUID != nil && strings.TrimSpace(*cfg.UserMessageUUID) != "" {

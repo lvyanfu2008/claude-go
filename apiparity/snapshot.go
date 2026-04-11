@@ -122,6 +122,8 @@ func GouDemo(in SnapshotInput) (SnapshotOutput, error) {
 		NonInteractiveSession:  envTruthy("GOU_DEMO_NON_INTERACTIVE"),
 		ParityGOOS:             in.ParityGOOS,
 		ParityGOARCH:           in.ParityGOARCH,
+		AdditionalWorkingDirs:  slices.Clone(in.ExtraClaudeMdRoots),
+		SkipPromptGitDetect:    true,
 	}
 	extraRoots := slices.Clone(in.ExtraClaudeMdRoots)
 	partsRes, errFetch := querycontext.FetchSystemPromptParts(context.Background(), querycontext.FetchOpts{

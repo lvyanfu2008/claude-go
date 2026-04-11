@@ -6,12 +6,15 @@ import (
 )
 
 // GouParityToolList is gou-demo / localturn tools[] aligned with the unconditional slice in TS getAllBaseTools()
+//
+// Tool descriptions here are short stubs for tests and ParityToolRunner; API-facing tools[] for gou-demo
+// uses [GouParityToolsJSON] (embedded commands/data/tools_api.json + echo_stub). See TestGouParityToolsIntersectToolsAPIExport.
 // (fixed array entries only; no feature spreads). Order follows that slice: Agent…MCP resource tools, then echo_stub.
 // Glob/Grep are always included here even when TS omits them under hasEmbeddedSearchTools.
 func GouParityToolList() []ToolDefinition {
 	out := make([]ToolDefinition, 0, 40)
 	if name := discoverSkillsToolName(); name != "" {
-		out = append(out, discoverSkillsToolDefinition(name))
+		out = append(out, DiscoverSkillsToolDefinition(name))
 	}
 	out = append(out,
 		agentToolDefinition(),
@@ -58,7 +61,8 @@ func discoverSkillsToolName() string {
 	return strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME"))
 }
 
-func discoverSkillsToolDefinition(name string) ToolDefinition {
+// DiscoverSkillsToolDefinition returns the optional DiscoverSkills tool row when env enables it.
+func DiscoverSkillsToolDefinition(name string) ToolDefinition {
 	return ToolDefinition{
 		Name:        name,
 		Description: "Search and discover skills relevant to the current task when surfaced skills are insufficient.",

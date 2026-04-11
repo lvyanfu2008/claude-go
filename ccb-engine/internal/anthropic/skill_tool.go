@@ -1,6 +1,13 @@
 package anthropic
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"os"
+	"strings"
+
+	"goc/toolpool"
+	"goc/types"
+)
 
 // SkillToolName matches src/tools/SkillTool/constants.ts SKILL_TOOL_NAME.
 const SkillToolName = "Skill"
@@ -64,7 +71,41 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 	return json.Marshal(GouDemoDefaultTools())
 }
 
-// GouParityToolsJSON marshals [GouParityToolList] (extended TS-shaped tool registry for gou-demo).
+// GouParityToolsJSON returns the same tools[] shape as gou-demo with GOU_DEMO_USE_EMBEDDED_TOOLS_API=1:
+// embedded commands/data/tools_api.json (TS export) + deny/REPL filtering + echo_stub for localturn wiring.
+// Use [GouParityToolList] only for name/schema stubs in tests and ParityToolRunner dispatch — not for API descriptions.
 func GouParityToolsJSON() (json.RawMessage, error) {
-	return json.Marshal(GouParityToolList())
+	assembled, err := toolpool.AssembleToolPoolFromEmbedded(types.EmptyToolPermissionContextData(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if n := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME")); n != "" {
+		ds, errD := toolDefinitionsToSpecs([]ToolDefinition{DiscoverSkillsToolDefinition(n)})
+		if errD != nil {
+			return nil, errD
+		}
+		assembled = toolpool.UniqByName(append(ds, assembled...))
+	}
+	stubs, err := toolDefinitionsToSpecs(DefaultStubTools())
+	if err != nil {
+		return nil, err
+	}
+	assembled = toolpool.UniqByName(append(assembled, stubs...))
+	return toolpool.MarshalToolsAPIDocumentDefinitions(assembled)
+}
+
+func toolDefinitionsToSpecs(defs []ToolDefinition) ([]types.ToolSpec, error) {
+	out := make([]types.ToolSpec, 0, len(defs))
+	for _, d := range defs {
+		raw, err := json.Marshal(d.InputSchema)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, types.ToolSpec{
+			Name:            d.Name,
+			Description:     d.Description,
+			InputJSONSchema: raw,
+		})
+	}
+	return out, nil
 }

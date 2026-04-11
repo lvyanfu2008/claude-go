@@ -36,6 +36,7 @@ func TestFetchSystemPromptParts_CustomSkipsDefaultAndSystemCtx(t *testing.T) {
 }
 
 func TestFetchSystemPromptParts_TSSnapshot_skipsGoBuild(t *testing.T) {
+	clearModelEnvForFetchTest(t)
 	ctx := context.Background()
 	snap := &tscontext.Snapshot{
 		DefaultSystemPrompt: []string{"from-bridge"},
@@ -56,6 +57,68 @@ func TestFetchSystemPromptParts_TSSnapshot_skipsGoBuild(t *testing.T) {
 	}
 	if res.UserContext["k"] != "v" || res.SystemContext["git"] != "clean" {
 		t.Fatalf("ctx user=%#v sys=%#v", res.UserContext, res.SystemContext)
+	}
+}
+
+func clearModelEnvForFetchTest(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"CCB_ENGINE_MODEL",
+		"ANTHROPIC_MODEL",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL",
+		"CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
+func TestFetchSystemPromptParts_TSSnapshot_rebuildsDefaultWhenAnthropicModelSet(t *testing.T) {
+	clearModelEnvForFetchTest(t)
+	t.Setenv("ANTHROPIC_MODEL", "deepseek-chat")
+	t.Setenv("CLAUDE_CODE_REMOTE", "1")
+	ctx := context.Background()
+	snap := &tscontext.Snapshot{
+		DefaultSystemPrompt: []string{"from-bridge-frozen-sonnet"},
+		UserContext:         map[string]string{"k": "v"},
+		SystemContext:       map[string]string{"git": "clean"},
+	}
+	dir := t.TempDir()
+	gou := commands.GouDemoSystemOpts{
+		Cwd:               dir,
+		ModelID:           "claude-sonnet-4-20250514",
+		EnabledToolNames:  map[string]struct{}{},
+		SkillToolCommands: nil,
+	}
+	commands.ApplyGouDemoRuntimeEnv(&gou)
+	res, err := FetchSystemPromptParts(ctx, FetchOpts{
+		Gou:        gou,
+		TSSnapshot: snap,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.DefaultSystemPrompt) != 1 {
+		t.Fatalf("default parts: %#v", res.DefaultSystemPrompt)
+	}
+	body := res.DefaultSystemPrompt[0]
+	if strings.Contains(body, "from-bridge-frozen-sonnet") {
+		prev := body
+		if len(prev) > 120 {
+			prev = prev[:120]
+		}
+		t.Fatalf("still using TS snapshot default system: %q", prev)
+	}
+	if !strings.Contains(body, "You are powered by the model deepseek-chat.") {
+		prev := body
+		if len(prev) > 800 {
+			prev = prev[:800]
+		}
+		t.Fatalf("expected ANTHROPIC_MODEL in # Environment, got preview: %q", prev)
+	}
+	if res.UserContext["k"] != "v" || res.SystemContext["git"] != "clean" {
+		t.Fatalf("expected TS user/system context preserved: user=%#v sys=%#v", res.UserContext, res.SystemContext)
 	}
 }
 

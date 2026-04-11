@@ -8,13 +8,8 @@
 // -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
 // By default gou-demo calls the real model in-process (goc/ccb-engine/localturn). Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1)
 // for a UI-only simulated stream with no HTTP (no apilog bodies on send).
-// Go-side init port (subset of TS init.ts): GOU_DEMO_GO_INIT=1 runs [goc/claudeinit.Init] instead of only [settingsfile.EnsureProjectClaudeEnvOnce] (Init includes Ensure). See docs/plans/go-init-port.md. Compatible with GOU_DEMO_TS_CONTEXT_BRIDGE (Bun snapshot runs after this block).
-// Full TS system prompt + commands + tools (startup only): GOU_DEMO_TS_CONTEXT_BRIDGE=1 runs `bun run go-context-bridge` once at startup (default 5m timeout, override GOU_DEMO_TS_BRIDGE_TIMEOUT_SEC); Bun stderr streams to the terminal. Snapshot is cached in-process for all turns (no per-turn Bun). Requires repo root (ancestor with scripts/slash-resolve-bridge.ts). MCP/settings changes mid-session are not reflected until restart.
-// Go local tool parity (embedded localturn, no socket): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1 (then use TS socket worker for real prompts). WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
-// Real TS tools: GOU_DEMO_CCB_SOCKET=1 and CCB_ENGINE_SOCKET=/path/to.sock. gou-demo embeds the socket protocol (goc/ccb-engine/socketserve) when nothing is already listening on that path; if the socket is already accepting connections (e.g. another gou-demo or ccb-socket-host), this process does not remove it. Repo needs package.json (bun run ccb-engine-tool-worker). Override root with CLAUDE_CODE_REPO_ROOT.
-// Optional GOU_DEMO_CCB_PERSIST_WORKER=1: one long-lived `bun ccb-engine-tool-worker` with CCB_WORKER_STDIN_LOOP (faster than spawning each turn; serializes turns on one stdin).
-// Persist turns must not block [tea.Model.Update]: waiting on response_end while the same goroutine should drain programSend would deadlock the TUI; submit runs in a background goroutine with [ccbPersistTurnGate].
-// Bun worker stderr does not go to the TUI terminal by default (would garble Bubble Tea). Default log: next to gou-demo trace — dirname(defaultGouDemoTracePath)/ccb-engine-tool-worker.stderr.log. Override with GOU_DEMO_CCB_WORKER_LOG_FILE=...; set GOU_DEMO_CCB_WORKER_STDERR=1 to inherit os.Stderr (debug only).
+// Go-side init port (subset of TS init.ts): GOU_DEMO_GO_INIT=1 runs [goc/claudeinit.Init] instead of only [settingsfile.EnsureProjectClaudeEnvOnce] (Init includes Ensure). See docs/plans/go-init-port.md.
+// Go local tool parity (embedded localturn): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
 //
 // System # Language / # Output Style: merged from ~/.claude/settings.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
 // Extra CLAUDE.md roots: optional runtimeContext.toolPermissionContext.additionalWorkingDirectories (JSON) and/or GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS / CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS (comma or PATH-style list); with CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 they are scanned like TS add-dir (see [querycontext.ExtraClaudeMdRootsForFetch]).
@@ -31,21 +26,16 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -56,15 +46,13 @@ import (
 	"goc/ccb-engine/apilog"
 	"goc/ccb-engine/debugpath"
 	"goc/ccb-engine/localturn"
-	"goc/ccb-engine/socketserve"
 	"goc/ccb-engine/settingsfile"
-	"goc/claudeinit"
 	"goc/ccb-engine/skilltools"
+	"goc/claudeinit"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
-	"goc/messagesapi"
 	"goc/gou/conversation"
 	"goc/gou/layout"
 	"goc/gou/markdown"
@@ -73,6 +61,8 @@ import (
 	"goc/gou/transcript"
 	"goc/gou/virtualscroll"
 	"goc/mcpcommands"
+	"goc/messagesapi"
+	"goc/modelenv"
 	"goc/querycontext"
 	"goc/sessiontranscript"
 	"goc/tscontext"
@@ -161,40 +151,6 @@ func gouDemoTracef(format string, args ...any) {
 	if gouDemoTrace != nil {
 		gouDemoTrace.Printf(format, args...)
 	}
-}
-
-// Bun ccb-engine-tool-worker stderr must not default to os.Stderr: full-screen TUI + child stderr interleave and look like "the shell ran bun".
-var (
-	ccbWorkerStderrOnce sync.Once
-	ccbWorkerStderrSink io.Writer = io.Discard
-)
-
-func resolveCcbWorkerStderrLogPath() string {
-	if p := strings.TrimSpace(os.Getenv("GOU_DEMO_CCB_WORKER_LOG_FILE")); p != "" {
-		return p
-	}
-	return filepath.Join(filepath.Dir(defaultGouDemoTracePath()), "ccb-engine-tool-worker.stderr.log")
-}
-
-func initCcbWorkerStderrSink() {
-	p := resolveCcbWorkerStderrLogPath()
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return
-	}
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	ccbWorkerStderrSink = f
-	gouDemoTracef("ccb-engine-tool-worker stderr -> %s", p)
-}
-
-func gouDemoCcbWorkerStderr() io.Writer {
-	if gouDemoEnvTruthy("GOU_DEMO_CCB_WORKER_STDERR") {
-		return os.Stderr
-	}
-	ccbWorkerStderrOnce.Do(initCcbWorkerStderrSink)
-	return ccbWorkerStderrSink
 }
 
 // gouDemoLogToolUseContext dumps ProcessUserInputContext / ToolUseContext JSON when CLAUDE_CODE_LOG_TOOL_USE_CONTEXT
@@ -298,325 +254,6 @@ func runLocalTurnProgram(programSend func(tea.Msg), p localturn.Params) {
 	}()
 }
 
-// gouDemoUseCcbSocketWorker is true when GOU_DEMO_CCB_SOCKET=1 and CCB_ENGINE_SOCKET is set (engine socket for the Bun worker).
-func gouDemoUseCcbSocketWorker() bool {
-	return gouDemoEnvTruthy("GOU_DEMO_CCB_SOCKET") && strings.TrimSpace(os.Getenv("CCB_ENGINE_SOCKET")) != ""
-}
-
-// unixSocketAlreadyListening returns true if a process accepts connections on the Unix socket path.
-func unixSocketAlreadyListening(path string) bool {
-	if strings.TrimSpace(path) == "" {
-		return false
-	}
-	c, err := net.DialTimeout("unix", path, 150*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	_ = c.Close()
-	return true
-}
-
-func waitUnixSocketListening(path string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if unixSocketAlreadyListening(path) {
-			return nil
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return fmt.Errorf("timeout after %v", timeout)
-}
-
-func gouDemoEmbeddedSocketserveLogf(format string, args ...any) {
-	gouDemoTracef(format, args...)
-	if strings.HasPrefix(format, "socketserve listening") || strings.HasPrefix(format, "socketserve accept:") {
-		fmt.Fprintf(os.Stderr, "[gou-demo] "+format+"\n", args...)
-	}
-}
-
-// gouDemoWarnMissingCcbSocket prints stderr if socket mode is on but the Bun worker cannot reach the engine (dial fails).
-func gouDemoWarnMissingCcbSocket() {
-	if !gouDemoUseCcbSocketWorker() {
-		return
-	}
-	p := strings.TrimSpace(os.Getenv("CCB_ENGINE_SOCKET"))
-	if p == "" {
-		return
-	}
-	if unixSocketAlreadyListening(p) {
-		return
-	}
-	fmt.Fprintf(os.Stderr,
-		"gou-demo: warning: cannot connect to CCB_ENGINE_SOCKET %q (embedded listener failed or another process holds the socket). Fix the path or run `cd goc && go run ./cmd/ccb-socket-host -socket %q` for a headless host.\n",
-		p, p)
-}
-
-// gouDemoCcbPersistWorker uses one bun worker process with stdin loop instead of spawning per turn.
-func gouDemoCcbPersistWorker() bool {
-	return gouDemoEnvTruthy("GOU_DEMO_CCB_PERSIST_WORKER")
-}
-
-// ccbSocketPersist holds a single long-lived ccb-engine-tool-worker (CCB_WORKER_STDIN_LOOP=1).
-var ccbSocketPersist struct {
-	mu          sync.Mutex
-	started     bool
-	stdin       io.WriteCloser
-	cmd         *exec.Cmd
-	repoRoot    string
-	socketPath  string
-	responseEnd chan string
-}
-
-// ccbPersistTurnGate serializes persist-worker turns when submit runs off the UI thread (see file header).
-var ccbPersistTurnGate sync.Mutex
-
-func drainCcbPersistResponseEnds() {
-	for {
-		select {
-		case <-ccbSocketPersist.responseEnd:
-		default:
-			return
-		}
-	}
-}
-
-func stopCcbSocketPersistWorkerLocked() {
-	if ccbSocketPersist.stdin != nil {
-		_ = ccbSocketPersist.stdin.Close()
-	}
-	if ccbSocketPersist.cmd != nil && ccbSocketPersist.cmd.Process != nil {
-		_ = ccbSocketPersist.cmd.Process.Kill()
-	}
-	ccbSocketPersist.stdin = nil
-	ccbSocketPersist.cmd = nil
-	ccbSocketPersist.started = false
-	drainCcbPersistResponseEnds()
-}
-
-func markCcbSocketPersistWorkerDead() {
-	ccbSocketPersist.mu.Lock()
-	defer ccbSocketPersist.mu.Unlock()
-	stopCcbSocketPersistWorkerLocked()
-}
-
-// runCcbPersistWorkerStdoutScanner forwards NDJSON lines to the TUI; signals response_end ids on ccbSocketPersist.responseEnd.
-func runCcbPersistWorkerStdoutScanner(stdout io.ReadCloser, programSend func(tea.Msg)) {
-	defer stdout.Close()
-	defer markCcbSocketPersistWorkerDead()
-
-	s := bufio.NewScanner(stdout)
-	const max = 1024 * 1024
-	buf := make([]byte, 0, 64*1024)
-	s.Buffer(buf, max)
-	for s.Scan() {
-		var ev ccbstream.StreamEvent
-		if json.Unmarshal(s.Bytes(), &ev) != nil || ev.Type == "" {
-			continue
-		}
-		if programSend != nil {
-			programSend(ccbstream.Msg(ev))
-		}
-		if ev.Type == "response_end" {
-			select {
-			case ccbSocketPersist.responseEnd <- ev.ID:
-			default:
-			}
-		}
-	}
-}
-
-func ensureCcbSocketPersistWorker(programSend func(tea.Msg), repoRoot, socketPath string) error {
-	ccbSocketPersist.mu.Lock()
-	defer ccbSocketPersist.mu.Unlock()
-
-	if ccbSocketPersist.started && ccbSocketPersist.repoRoot == repoRoot && ccbSocketPersist.socketPath == socketPath {
-		return nil
-	}
-	stopCcbSocketPersistWorkerLocked()
-
-	cmd := exec.Command("bun", "run", "ccb-engine-tool-worker", socketPath)
-	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(),
-		"CCB_WORKER_CWD="+repoRoot,
-		"CCB_WORKER_STDIN_LOOP=1",
-	)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		return err
-	}
-	cmd.Stderr = gouDemoCcbWorkerStderr()
-	if err := cmd.Start(); err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		return err
-	}
-	ccbSocketPersist.stdin = stdin
-	ccbSocketPersist.cmd = cmd
-	ccbSocketPersist.repoRoot = repoRoot
-	ccbSocketPersist.socketPath = socketPath
-	ccbSocketPersist.responseEnd = make(chan string, 32)
-	ccbSocketPersist.started = true
-	gouDemoTracef("ccb persist worker: started pid=%d repo=%s socket=%s", cmd.Process.Pid, repoRoot, socketPath)
-	go runCcbPersistWorkerStdoutScanner(stdout, programSend)
-	return nil
-}
-
-// submitCcbSocketPersistTurn writes one SubmitUserTurn line and waits for response_end (matching id or empty id on worker error).
-// Must not hold ccbSocketPersist.mu while waiting so stdout scanner can mark the worker dead on EOF.
-func submitCcbSocketPersistTurn(programSend func(tea.Msg), repoRoot, socketPath string, line []byte, reqID string) error {
-	if err := ensureCcbSocketPersistWorker(programSend, repoRoot, socketPath); err != nil {
-		return err
-	}
-
-	var endCh <-chan string
-	var werr error
-	func() {
-		ccbSocketPersist.mu.Lock()
-		defer ccbSocketPersist.mu.Unlock()
-		if !ccbSocketPersist.started || ccbSocketPersist.stdin == nil {
-			werr = fmt.Errorf("ccb persist worker: not running")
-			return
-		}
-		drainCcbPersistResponseEnds()
-		if _, err := ccbSocketPersist.stdin.Write(line); err != nil {
-			werr = err
-			return
-		}
-		endCh = ccbSocketPersist.responseEnd
-	}()
-	if werr != nil {
-		return werr
-	}
-	if endCh == nil {
-		return fmt.Errorf("ccb persist worker: not running")
-	}
-
-	deadline := time.After(35 * time.Minute)
-	for {
-		select {
-		case id := <-endCh:
-			if id == reqID || id == "" {
-				return nil
-			}
-		case <-deadline:
-			return fmt.Errorf("ccb persist worker: timeout waiting response_end for %s", reqID)
-		}
-	}
-}
-
-func findClaudeCodeRepoRoot(start string) (string, error) {
-	if r := strings.TrimSpace(os.Getenv("CLAUDE_CODE_REPO_ROOT")); r != "" {
-		return r, nil
-	}
-	dir := start
-	for range 32 {
-		pkg := filepath.Join(dir, "package.json")
-		st, err := os.Stat(pkg)
-		if err == nil && !st.IsDir() {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "", fmt.Errorf("find package.json above %s", start)
-}
-
-// runCcbSocketWorkerProgram spawns `bun run ccb-engine-tool-worker` (repo root) to drive the Go socket bridge with real TS tool execution.
-func runCcbSocketWorkerProgram(programSend func(tea.Msg), reqID string, msgsJSON, toolsJSON json.RawMessage, guidance string) {
-	socketPath := strings.TrimSpace(os.Getenv("CCB_ENGINE_SOCKET"))
-	if socketPath == "" || programSend == nil {
-		return
-	}
-	cwd, errWd := os.Getwd()
-	if errWd != nil {
-		cwd = "."
-	}
-	repoRoot, err := findClaudeCodeRepoRoot(cwd)
-	if err != nil {
-		gouDemoTracef("ccb socket worker: repo root: %v", err)
-		return
-	}
-	type payload struct {
-		Messages json.RawMessage `json:"messages,omitempty"`
-		Tools    json.RawMessage `json:"tools,omitempty"`
-		System   string          `json:"system,omitempty"`
-	}
-	type envelope struct {
-		Method  string  `json:"method"`
-		ID      string  `json:"id"`
-		Payload payload `json:"payload"`
-	}
-	env := envelope{
-		Method: "SubmitUserTurn",
-		ID:     reqID,
-		Payload: payload{
-			Messages: msgsJSON,
-			Tools:    toolsJSON,
-			System:   guidance,
-		},
-	}
-	line, err := json.Marshal(env)
-	if err != nil {
-		gouDemoTracef("ccb socket worker: marshal: %v", err)
-		return
-	}
-	line = append(line, '\n')
-
-	if gouDemoCcbPersistWorker() {
-		lineCopy := bytes.Clone(line)
-		repo := repoRoot
-		sock := socketPath
-		rid := reqID
-		ps := programSend
-		go func() {
-			ccbPersistTurnGate.Lock()
-			defer ccbPersistTurnGate.Unlock()
-			if err := submitCcbSocketPersistTurn(ps, repo, sock, lineCopy, rid); err != nil {
-				gouDemoTracef("ccb persist worker: %v", err)
-			}
-		}()
-		return
-	}
-
-	cmd := exec.Command("bun", "run", "ccb-engine-tool-worker", socketPath)
-	cmd.Dir = repoRoot
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "CCB_WORKER_CWD="+repoRoot)
-	cmd.Stdin = bytes.NewReader(line)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		gouDemoTracef("ccb socket worker: stdout pipe: %v", err)
-		return
-	}
-	cmd.Stderr = gouDemoCcbWorkerStderr()
-	if err := cmd.Start(); err != nil {
-		gouDemoTracef("ccb socket worker: start: %v", err)
-		return
-	}
-	go func() {
-		defer func() { _ = cmd.Wait() }()
-		s := bufio.NewScanner(stdout)
-		const max = 1024 * 1024
-		buf := make([]byte, 0, 64*1024)
-		s.Buffer(buf, max)
-		for s.Scan() {
-			var ev ccbstream.StreamEvent
-			if json.Unmarshal(s.Bytes(), &ev) != nil || ev.Type == "" {
-				continue
-			}
-			programSend(ccbstream.Msg(ev))
-		}
-	}()
-}
-
 type streamTick struct{}
 
 type model struct {
@@ -657,7 +294,7 @@ type model struct {
 	// mcpToolsJSONPath is -mcp-tools-json (overrides GOU_DEMO_MCP_TOOLS_JSON when set).
 	mcpToolsJSONPath string
 
-	// tsBridge when non-nil (GOU_DEMO_TS_CONTEXT_BRIDGE=1) supplies TS fetchSystemPromptParts + commands + tools from startup Bun bridge.
+	// tsBridge when non-nil supplies in-process snapshot for commands/tools/prompt parts (tests; former TS bridge removed).
 	tsBridge *tscontext.Snapshot
 
 	// transcript when non-nil (GOU_DEMO_RECORD_TRANSCRIPT=1) appends messages after each completed turn.
@@ -681,29 +318,6 @@ func main() {
 	apilog.MaybePrintDiag()
 	traceCleanup := setupGouDemoTrace()
 	defer traceCleanup()
-
-	serveCtx, stopEmbeddedCcbServe := context.WithCancel(context.Background())
-	defer stopEmbeddedCcbServe()
-	if gouDemoUseCcbSocketWorker() {
-		sp := strings.TrimSpace(os.Getenv("CCB_ENGINE_SOCKET"))
-		fmt.Fprintf(os.Stderr, "[gou-demo] CCB socket mode: GOU_DEMO_CCB_SOCKET=1, CCB_ENGINE_SOCKET=%q\n", sp)
-		if unixSocketAlreadyListening(sp) {
-			gouDemoTracef("CCB_ENGINE_SOCKET already accepting at %s (embedded socketserve skipped)", sp)
-			fmt.Fprintf(os.Stderr, "[gou-demo] using existing listener on %s (embedded socketserve skipped)\n", sp)
-		} else {
-			fmt.Fprintf(os.Stderr, "[gou-demo] starting embedded socketserve on %s …\n", sp)
-			go func() {
-				_ = socketserve.Run(serveCtx, sp, gouDemoEmbeddedSocketserveLogf)
-			}()
-			if err := waitUnixSocketListening(sp, 30*time.Second); err != nil {
-				log.Fatalf("gou-demo: wait for embedded ccb socket %q: %v", sp, err)
-			}
-			gouDemoTracef("embedded socketserve ready on %s", sp)
-			fmt.Fprintf(os.Stderr, "[gou-demo] embedded listener ready on %s (valid while this process runs; exit gou-demo closes it)\n", sp)
-		}
-	} else if gouDemoEnvTruthy("GOU_DEMO_CCB_SOCKET") && strings.TrimSpace(os.Getenv("CCB_ENGINE_SOCKET")) == "" {
-		fmt.Fprintf(os.Stderr, "[gou-demo] GOU_DEMO_CCB_SOCKET is set but CCB_ENGINE_SOCKET is empty — socket bridge disabled. Set CCB_ENGINE_SOCKET in shell or .claude/settings.go.json env.\n")
-	}
 
 	transcriptPath := flag.String("transcript", "", "load messages from JSON file (UI []Message or API [{role,content}]); skips built-in seed")
 	noSeed := flag.Bool("no-seed", false, "start with an empty transcript (no 45 demo seed messages); avoids sending fake history to localturn. Same as GOU_DEMO_NO_SEED=1")
@@ -748,28 +362,11 @@ func main() {
 		}
 	}
 
-	var tsBridge *tscontext.Snapshot
 	if gouDemoEnvTruthy("GOU_DEMO_TS_CONTEXT_BRIDGE") {
-		cwd, _ := os.Getwd()
-		repoRoot := pui.FindRepoRootForBridge(cwd)
-		if strings.TrimSpace(repoRoot) == "" {
-			log.Fatalf("gou-demo: GOU_DEMO_TS_CONTEXT_BRIDGE=1 but repo root not found (walk upward from cwd=%q for scripts/slash-resolve-bridge.ts)", cwd)
-		}
-		fmt.Fprintf(os.Stderr,
-			"[gou-demo] TS context bridge: running `bun run go-context-bridge` in %q (cwd=%q) — Bun stderr streams below until TS init finishes (cold start often 1–5 min; timeout %v, override GOU_DEMO_TS_BRIDGE_TIMEOUT_SEC=seconds). To skip: unset GOU_DEMO_TS_CONTEXT_BRIDGE.\n",
-			repoRoot, cwd, tscontext.EffectiveBridgeExecTimeout())
-		var err error
-		extraRoots := querycontext.ExtraClaudeMdRootsForFetch(nil)
-		tsBridge, err = tscontext.LoadSnapshotOnce(context.Background(), repoRoot, cwd, extraRoots)
-		if err != nil {
-			log.Fatalf("gou-demo: TS context bridge: %v", err)
-		}
-		gouDemoTracef("TS context bridge: loaded snapshot commandsBytes=%d toolsBytes=%d model=%q",
-			len(tsBridge.Commands), len(tsBridge.Tools), tsBridge.MainLoopModel)
-		fmt.Fprintf(os.Stderr, "[gou-demo] TS context bridge: cached system prompt + commands + tools from Bun (restart to refresh)\n")
+		log.Fatalf("gou-demo: GOU_DEMO_TS_CONTEXT_BRIDGE is no longer supported (scripts/go-context-bridge.ts removed). Use Go prompt assembly and GOU_DEMO_USE_EMBEDDED_TOOLS_API / MCP JSON; unset GOU_DEMO_TS_CONTEXT_BRIDGE.")
 	}
 
-	m := newModel(st, strings.TrimSpace(*mcpCommandsJSON), strings.TrimSpace(*mcpToolsJSON), tsBridge)
+	m := newModel(st, strings.TrimSpace(*mcpCommandsJSON), strings.TrimSpace(*mcpToolsJSON), nil)
 
 	opts := []tea.ProgramOption{}
 	if !noAltScreen {
@@ -796,7 +393,6 @@ func main() {
 	p := tea.NewProgram(m, opts...)
 	m.BindCCB(p.Send, inlineCCB)
 	gouDemoWarnApilogExpectations(inlineCCB)
-	gouDemoWarnMissingCcbSocket()
 	gouDemoTracef("startup messages=%d ccbInline=%v", len(st.Messages), inlineCCB)
 	if *streamStdin {
 		ccbstream.Feed(os.Stdin, p)
@@ -1055,7 +651,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				for _, t := range normToolDefs {
 					toolSpecs = append(toolSpecs, messagesapi.ToolSpec{Name: t.Name})
 				}
-				normOpts := messagesapi.DefaultOptions()
+				normOpts := messagesapi.OptionsFromEnv()
 				if gouDemoEnvTruthy("GOU_DEMO_NON_INTERACTIVE") {
 					normOpts.NonInteractive = true
 				}
@@ -1098,9 +694,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							skillListing = commands.SkillToolCommands(params.Commands)
 						}
 						discoverNm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME"))
+						// Prefer ToolUseContext (from [pui.BuildDemoParams]); live model env chain (incl. settings merge) vs default.
 						mainLoopModel := pui.DefaultMainLoopModelForDemo()
 						if params.RuntimeContext != nil && strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel) != "" {
 							mainLoopModel = strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel)
+						} else if m := modelenv.FirstNonEmpty(); m != "" {
+							mainLoopModel = m
 						}
 						gouOpts := commands.GouDemoSystemOpts{
 							EnabledToolNames:       commands.EnabledToolNames(names),
@@ -1113,6 +712,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							OutputStyleName:        mergedOutName,
 							OutputStylePrompt:      mergedOutPrompt,
 						}
+						commands.ApplyGouDemoRuntimeEnv(&gouOpts)
 						var customSys, appendSys string
 						if params.RuntimeContext != nil {
 							if p := params.RuntimeContext.ToolUseContext.Options.CustomSystemPrompt; p != nil {
@@ -1160,12 +760,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								listing = s
 							}
 						}
-						msgsJSON, errL := ccbhydrate.MessagesJSONWithSkillListing(m.store.Messages, listing, toolSpecs, normOpts)
-						if errL == nil && strings.TrimSpace(userCtxReminder) != "" {
-							msgsJSON, errL = ccbhydrate.PrependUserMessageJSON(msgsJSON, userCtxReminder)
-						}
+						msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.store.Messages, userCtxReminder, listing, toolSpecs, normOpts)
 						if errL != nil {
-							gouDemoTracef("localturn: MessagesJSONWithSkillListing error: %v", errL)
+							gouDemoTracef("localturn: MessagesJSONWithLeadingMeta error: %v", errL)
 							m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
 							m.rebuildHeightCache()
 						} else {
@@ -1173,44 +770,38 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.store.ClearStreaming()
 							gouDemoTracef("localturn.RunSubmitUserTurn start requestID=%s msgsJSONBytes=%d toolsBytes=%d systemBytes=%d",
 								reqID, len(msgsJSON), len(toolsJSON), len(guidance))
-							if gouDemoUseCcbSocketWorker() {
-								gouDemoTracef("ccb socket worker: bun ccb-engine-tool-worker repoRoot=%s socket=%s", repoRoot, strings.TrimSpace(os.Getenv("CCB_ENGINE_SOCKET")))
-								runCcbSocketWorkerProgram(m.ccbSend, reqID, msgsJSON, toolsJSON, guidance)
-								usedCCB = true
-							} else {
-								cwdAbs, errAbs := filepath.Abs(cwd)
-								if errAbs != nil {
-									cwdAbs = cwd
-								}
-								var extraRoots []string
-								if rr := strings.TrimSpace(repoRoot); rr != "" {
-									if ra, e := filepath.Abs(rr); e == nil {
-										extraRoots = append(extraRoots, ra)
-									}
-								}
-								runner := skilltools.ParityToolRunner{
-									DemoToolRunner: skilltools.DemoToolRunner{
-										Commands:  params.Commands,
-										RepoRoot:  repoRoot,
-										SessionID: m.store.ConversationID,
-									},
-									WorkDir:          cwdAbs,
-									ExtraRoots:       extraRoots,
-									ProjectRoot:      repoRoot,
-									LocalBashDefault: true,
-									AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
-								}
-								skillExpand := !gouDemoEnvTruthy("GOU_DEMO_NO_SKILL_EXPAND_USER_MSG")
-								runLocalTurnProgram(m.ccbSend, localturn.Params{
-									RequestID:               reqID,
-									Messages:                msgsJSON,
-									Tools:                   toolsJSON,
-									System:                  guidance,
-									SkillExpandUserFollowUp: skillExpand,
-									Runner:                  runner,
-								})
-								usedCCB = true
+							cwdAbs, errAbs := filepath.Abs(cwd)
+							if errAbs != nil {
+								cwdAbs = cwd
 							}
+							var extraRoots []string
+							if rr := strings.TrimSpace(repoRoot); rr != "" {
+								if ra, e := filepath.Abs(rr); e == nil {
+									extraRoots = append(extraRoots, ra)
+								}
+							}
+							runner := skilltools.ParityToolRunner{
+								DemoToolRunner: skilltools.DemoToolRunner{
+									Commands:  params.Commands,
+									RepoRoot:  repoRoot,
+									SessionID: m.store.ConversationID,
+								},
+								WorkDir:          cwdAbs,
+								ExtraRoots:       extraRoots,
+								ProjectRoot:      repoRoot,
+								LocalBashDefault: true,
+								AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
+							}
+							skillExpand := !gouDemoEnvTruthy("GOU_DEMO_NO_SKILL_EXPAND_USER_MSG")
+							runLocalTurnProgram(m.ccbSend, localturn.Params{
+								RequestID:               reqID,
+								Messages:                msgsJSON,
+								Tools:                   toolsJSON,
+								System:                  guidance,
+								SkillExpandUserFollowUp: skillExpand,
+								Runner:                  runner,
+							})
+							usedCCB = true
 						}
 					}
 				}

@@ -82,6 +82,22 @@ func coworkMemoryOverrideDir() string {
 	return filepath.Dir(p)
 }
 
+// EnsureMemoryDirExists mirrors ensureMemoryDirExists (memdir.ts): recursive mkdir so the model can write without checking.
+func EnsureMemoryDirExists(dir string) error {
+	d := strings.TrimSpace(dir)
+	if d == "" {
+		return nil
+	}
+	d = filepath.Clean(d)
+	return os.MkdirAll(d, 0o700)
+}
+
+// GetTeamMemPath mirrors teamMemPaths getTeamMemPath: <autoMemPath>team/ with trailing separator.
+func GetTeamMemPath(originalCwd string) string {
+	auto := strings.TrimSuffix(GetAutoMemPath(originalCwd), string(filepath.Separator))
+	return filepath.Join(auto, "team") + string(filepath.Separator)
+}
+
 func expandTildeMemoryDir(raw string) string {
 	s := strings.TrimSpace(raw)
 	if strings.HasPrefix(s, "~/") || strings.HasPrefix(s, `~\`) {

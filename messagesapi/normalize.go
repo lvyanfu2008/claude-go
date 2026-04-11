@@ -2,13 +2,19 @@ package messagesapi
 
 import (
 	"encoding/json"
-
 	"goc/gou/messagerow"
 	"goc/types"
 )
 
 // NormalizeMessagesForAPI mirrors src/utils/messages.ts normalizeMessagesForAPI.
 func NormalizeMessagesForAPI(messages []types.Message, tools []ToolSpec, opts Options) ([]types.Message, error) {
+	//b, err1 := json.MarshalIndent(messages, "", "  ")
+	//if err1 != nil {
+	//	diaglog.Line("[messagesapi] reorderAttachmentsForAPI Before: json.MarshalIndent: %v (len=%d)", err1, len(b))
+	//} else {
+	//	diaglog.Line("[messagesapi] reorderAttachmentsForAPI Before (%d msgs):\n%s", len(b), string(b))
+	//}
+
 	prep := make([]types.Message, len(messages))
 	for i := range messages {
 		m := messagerow.NormalizeMessageJSON(messages[i])

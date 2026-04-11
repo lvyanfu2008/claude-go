@@ -10,8 +10,8 @@ import (
 type LoadOptions struct {
 	OriginalCwd string
 	// AdditionalWorkingDirs used when CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD is set.
-	AdditionalWorkingDirs []string
-	ForceIncludeExternal bool
+	AdditionalWorkingDirs               []string
+	ForceIncludeExternal                bool
 	HasClaudeMdExternalIncludesApproved bool
 	// ClaudeMdExcludesOverride when non-nil replaces MergedClaudeMdExcludes (tests).
 	ClaudeMdExcludesOverride *[]string
@@ -126,6 +126,12 @@ func LoadMemoryFiles(opts LoadOptions) []MemoryFileInfo {
 	}
 
 	return result
+}
+
+// IsTeamMemoryPromptActive mirrors loadMemoryPrompt's isTeamMemoryEnabled gate inside the TEAMMEM branch
+// (FEATURE_TEAMMEM + auto memory + teamMemoryEnabled).
+func IsTeamMemoryPromptActive() bool {
+	return featureTeamMem() && IsAutoMemoryEnabled() && teamMemoryEnabled()
 }
 
 func teamMemoryEnabled() bool {
