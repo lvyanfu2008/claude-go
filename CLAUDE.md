@@ -4,6 +4,7 @@ This file orients contributors and automation when working in **`claude-go/`** (
 
 ## Layout
 
+- **`toolparity/`** — Curated TS built-in list vs Go parity: edit **`catalog.json`**, then run **`go run ./cmd/gen-tool-parity`** (or **`go generate ./toolparity`**) to refresh **`TS_GO_TOOL_PARITY.md`**.
 - **`anthropicmessages/`** — HTTP SSE client for Anthropic Messages (`PostStream`, stream parsing). **`BetasForToolsJSON`** mirrors the ToolSearch `anthropic-beta` gate from TS / `ccb-engine/internal/toolsearch` without importing engine internals.
 - **`conversation-runtime/query/`** — Port of `src/conversation-runtime/query.ts`: compaction, `Query`, optional **`LocalTurnCallModel`** (ccb-engine), and optional **streaming parity** (`runStreamingParityModelLoop`: Anthropic SSE + `streamingtool` + `toolexecution`).
 - **`conversation-runtime/process-user-input/`** — `processUserInput` port; **`ApplyQueryHostEnvGates`** / **`WireToolexecutionFromProcessUserInput`** hook hosts that call `query.Query` after `ShouldQuery`.
