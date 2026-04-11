@@ -144,6 +144,52 @@ func TestCheckPermissionsAndCallTool_queryGateDeny(t *testing.T) {
 	}
 }
 
+func TestCheckPermissionsAndCallTool_allowUsesInvokeTool(t *testing.T) {
+	ctx := WithExecutionDeps(context.Background(), ExecutionDeps{
+		RandomUUID: func() string { return "uuid-invoke" },
+		InvokeTool: func(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
+			if name != "Read" {
+				t.Fatalf("name=%q", name)
+			}
+			return `{"from":"invoke"}`, false, nil
+		},
+	})
+	msgs, err := CheckPermissionsAndCallTool(ctx, stubNamedTool{n: "Read"}, "tu-1", json.RawMessage(`{}`), nil, nil, AssistantMeta{UUID: "asst-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("len=%d", len(msgs))
+	}
+	if !strings.Contains(string(msgs[0].Message), "from") || !strings.Contains(string(msgs[0].Message), "invoke") {
+		t.Fatalf("body %s", msgs[0].Message)
+	}
+}
+
+func TestCheckPermissionsAndCallTool_allowRunsRegistryEcho(t *testing.T) {
+	raw := json.RawMessage(`[{"name":"echo_stub","input_schema":{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}}]`)
+	reg, err := NewJSONToolRegistry(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, ok := reg.FindToolByName("echo_stub")
+	if !ok {
+		t.Fatal("missing tool")
+	}
+	ctx := WithExecutionDeps(context.Background(), ExecutionDeps{RandomUUID: func() string { return "uuid-echo" }})
+	in := json.RawMessage(`{"message":"hello-perm"}`)
+	msgs, err := CheckPermissionsAndCallTool(ctx, tool, "tu-e", in, nil, nil, AssistantMeta{UUID: "asst-e"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("len=%d", len(msgs))
+	}
+	if !strings.Contains(string(msgs[0].Message), "hello-perm") {
+		t.Fatalf("body %s", msgs[0].Message)
+	}
+}
+
 func TestRunPreToolUseHooks_delegates(t *testing.T) {
 	var saw string
 	deps := ExecutionDeps{

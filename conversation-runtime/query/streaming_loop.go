@@ -17,6 +17,16 @@ import (
 	"goc/types"
 )
 
+func yieldStreamingParity(ctx context.Context, deps *QueryDeps, qy QueryYield, yield func(QueryYield, error) bool) bool {
+	if !yield(qy, nil) {
+		return false
+	}
+	if deps != nil && deps.OnQueryYield != nil {
+		_ = deps.OnQueryYield(ctx, qy)
+	}
+	return true
+}
+
 // runStreamingParityModelLoop mirrors query.ts streaming path: Anthropic SSE + [streamingtool.StreamingToolExecutor].
 func runStreamingParityModelLoop(
 	ctx context.Context,
@@ -145,7 +155,7 @@ func runStreamingParityModelLoop(
 			UUID:    asstUUID,
 			Message: inner,
 		}
-		if !yield(QueryYield{Message: &asst}, nil) {
+		if !yieldStreamingParity(ctx, deps, QueryYield{Message: &asst}, yield) {
 			ex.Discard()
 			return context.Canceled
 		}
@@ -161,7 +171,7 @@ func runStreamingParityModelLoop(
 				return err
 			}
 			if upd.Message != nil {
-				if !yield(QueryYield{Message: upd.Message}, nil) {
+				if !yieldStreamingParity(ctx, deps, QueryYield{Message: upd.Message}, yield) {
 					ex.Discard()
 					return context.Canceled
 				}

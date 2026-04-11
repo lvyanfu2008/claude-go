@@ -18,8 +18,8 @@ type ExecutionDeps struct {
 	AskResolver func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (PermissionDecision, error)
 	// Registry optional JSON-derived tools ([NewJSONToolRegistry]); used when [InvokeTool] is nil or tool not handled by InvokeTool.
 	Registry ToolRegistry
-	// InvokeTool runs a host-registered tool; when non-nil it takes precedence over [Registry] for execution.
-	InvokeTool func(ctx context.Context, name, toolUseID string, input json.RawMessage) (content string, isError bool, err error)
+	// InvokeTool runs a host-registered tool; when non-nil it takes precedence over [Registry] for execution (see [InvokeToolFunc]).
+	InvokeTool InvokeToolFunc
 	// PreToolUseHook mirrors executePreToolHooks deny path: non-nil return blocks the tool with a synthetic tool_result.
 	PreToolUseHook func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) error
 	// PreToolHookPermission optional hook-phase decision (toolHooks.ts hookPermissionResult) before resolve.

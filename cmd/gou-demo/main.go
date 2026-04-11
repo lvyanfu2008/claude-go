@@ -27,7 +27,7 @@
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
-// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists turns via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
+// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). Streaming parity also wires [query.QueryDeps.OnQueryYield] so each assistant/tool_result yield is logged incrementally (deduped by message UUID); turn end still calls maybeRecordTranscript for a full-store sync. Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
 // Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
@@ -56,8 +56,8 @@ import (
 	"goc/ccb-engine/skilltools"
 	"goc/claudeinit"
 	"goc/commands"
-	"goc/conversation-runtime/query"
 	processuserinput "goc/conversation-runtime/process-user-input"
+	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
@@ -908,6 +908,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									}
 								}
 								qdeps.ToolexecutionDeps = te
+								if m.transcript != nil && gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
+									tr := m.transcript
+									store := m.store
+									qdeps.OnQueryYield = func(ctx context.Context, y query.QueryYield) error {
+										if y.Message == nil {
+											return nil
+										}
+										all := slices.Clone(store.Messages)
+										all = append(all, *y.Message)
+										_, err := tr.RecordTranscript(ctx, []types.Message{*y.Message}, sessiontranscript.RecordOpts{AllMessages: all})
+										return err
+									}
+								}
 								msgsForQ := slices.Clone(m.store.Messages)
 								qp := query.QueryParams{
 									Messages:        msgsForQ,

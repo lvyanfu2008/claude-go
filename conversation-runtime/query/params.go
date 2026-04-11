@@ -73,6 +73,8 @@ type QueryDeps struct {
 	StreamPost func(ctx context.Context, p anthropicmessages.PostStreamParams) error
 	// ToolexecutionDeps is passed to [RunToolUseToolRunner] during streaming parity (InvokeTool optional).
 	ToolexecutionDeps toolexecution.ExecutionDeps
+	// OnQueryYield optional; invoked after each successful streaming-parity yield (assistant and tool_result rows) so hosts can persist incrementally (e.g. [sessiontranscript.RecordTranscript]).
+	OnQueryYield func(ctx context.Context, y QueryYield) error
 }
 
 // ToolResultBudgetInput is passed to [QueryDeps.ApplyToolResultBudget] (query.ts applyToolResultBudget).

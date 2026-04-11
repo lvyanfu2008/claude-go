@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"goc/anthropicmessages"
-	"goc/types"
 	"goc/toolexecution"
+	"goc/types"
 )
 
 // textOnlySSE is a minimal Anthropic-style stream (one text block, end_turn, message_stop).
@@ -45,7 +45,7 @@ func TestStreamingParity_textOnly(t *testing.T) {
 				"role": "user", "content": "hi",
 			}),
 		}},
-		SystemPrompt:    AsSystemPrompt([]string{"sys"}),
+		SystemPrompt: AsSystemPrompt([]string{"sys"}),
 		ToolUseContext: types.ToolUseContext{
 			Options: types.ToolUseContextOptionsData{
 				Tools:         tools,
@@ -70,6 +70,55 @@ func TestStreamingParity_textOnly(t *testing.T) {
 	}
 	if len(got) < 1 || got[0] != types.MessageTypeAssistant {
 		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestStreamingParity_OnQueryYield(t *testing.T) {
+	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
+	tools, _ := json.Marshal([]map[string]any{{"name": "echo_stub", "input_schema": map[string]any{"type": "object"}}})
+
+	var hookCalls int
+	deps := ProductionDeps()
+	deps.StreamPost = func(ctx context.Context, p anthropicmessages.PostStreamParams) error {
+		return anthropicmessages.ReadSSE(strings.NewReader(textOnlySSE()), func(data []byte) error {
+			return anthropicmessages.ProcessStreamPayloads(data, p.Emit)
+		})
+	}
+	deps.OnQueryYield = func(ctx context.Context, y QueryYield) error {
+		if y.Message != nil {
+			hookCalls++
+		}
+		return nil
+	}
+
+	ctx := context.Background()
+	for y, err := range Query(ctx, QueryParams{
+		Messages: []types.Message{{
+			Type: types.MessageTypeUser,
+			UUID: "u1",
+			Message: mustJSON(t, map[string]any{
+				"role": "user", "content": "hi",
+			}),
+		}},
+		SystemPrompt: AsSystemPrompt([]string{"sys"}),
+		ToolUseContext: types.ToolUseContext{
+			Options: types.ToolUseContextOptionsData{
+				Tools:         tools,
+				MainLoopModel: "claude-3-5-haiku-20241022",
+			},
+		},
+		StreamingParity: true,
+		Deps:            &deps,
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if y.Terminal != nil {
+			break
+		}
+	}
+	if hookCalls < 1 {
+		t.Fatalf("OnQueryYield calls=%d", hookCalls)
 	}
 }
 

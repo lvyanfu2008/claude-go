@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"iter"
 
 	"goc/types"
 )
 
 // StreamedCheckPermissionsAndCallTool mirrors streamedCheckPermissionsAndCallTool (toolExecution.ts L495–573).
-// Today it drains [CheckPermissionsAndCallTool]; on [ErrPipelineNotImplemented] it yields one explicit skeleton tool_result.
+// It drains [CheckPermissionsAndCallTool]; on [ErrPipelineNotImplemented] it yields one explicit skeleton tool_result (reserved for partial parity paths).
 func StreamedCheckPermissionsAndCallTool(
 	ctx context.Context,
 	tool Tool,
@@ -41,10 +42,10 @@ func StreamedCheckPermissionsAndCallTool(
 	}
 }
 
-// CheckPermissionsAndCallTool mirrors checkPermissionsAndCallTool (toolExecution.ts L602+).
+// CheckPermissionsAndCallTool mirrors checkPermissionsAndCallTool (toolExecution.ts L602+) for the headless subset:
+// pre-tool hook, optional JSON schema validation, hook permission resolution, then [InvokeToolFunc] or [Tool.Call] and a synthetic user row with tool_result.
 //
-// TODO(toolExecution.ts L617+): zod/inputSchema validation, full runPreToolUseHooks parity, tool.call,
-// progress stream, MCP branches, post-tool hooks, telemetry spans, …
+// TODO(toolExecution.ts): full hook parity, progress stream, MCP branches, post-tool hooks, telemetry spans, …
 func CheckPermissionsAndCallTool(
 	ctx context.Context,
 	tool Tool,
@@ -90,9 +91,10 @@ func CheckPermissionsAndCallTool(
 	if err != nil {
 		return nil, err
 	}
+	allowProceed := false
 	switch dec.Behavior {
 	case PermissionAllow:
-		return nil, ErrPipelineNotImplemented
+		allowProceed = true
 	case PermissionDeny:
 		msg := dec.Message
 		if msg == "" {
@@ -113,8 +115,50 @@ func CheckPermissionsAndCallTool(
 			um := syntheticPreToolHookDenied(deps, toolUseID, assistant.UUID, msg)
 			return []types.Message{um}, nil
 		}
-		return nil, ErrPipelineNotImplemented
+		allowProceed = true
 	default:
-		return nil, ErrPipelineNotImplemented
+		return nil, fmt.Errorf("toolexecution: unknown permission behavior %q", dec.Behavior)
 	}
+	if !allowProceed {
+		return nil, fmt.Errorf("toolexecution: internal permission state")
+	}
+	return finishCheckPermissionsWithToolCall(ctx, deps, tool, toolUseID, input, tcxUse, canUseTool, assistant)
+}
+
+// finishCheckPermissionsWithToolCall runs [ExecutionDeps.InvokeTool] when set (same order as [RunToolUseChan]), else [Tool.Call], then one user row with tool_result.
+func finishCheckPermissionsWithToolCall(
+	ctx context.Context,
+	deps ExecutionDeps,
+	tool Tool,
+	toolUseID string,
+	input json.RawMessage,
+	tcxUse *ToolUseContext,
+	canUseTool CanUseToolFn,
+	assistant AssistantMeta,
+) ([]types.Message, error) {
+	if deps.InvokeTool != nil {
+		content, isErr, ierr := deps.InvokeTool(ctx, tool.Name(), toolUseID, input)
+		if ctx.Err() != nil {
+			um := syntheticAborted(deps, toolUseID, assistant.UUID)
+			return []types.Message{um}, nil
+		}
+		if ierr != nil {
+			um := syntheticToolResult(deps, toolUseID, ierr.Error(), true, assistant.UUID)
+			return []types.Message{um}, nil
+		}
+		um := syntheticToolResult(deps, toolUseID, content, isErr, assistant.UUID)
+		return []types.Message{um}, nil
+	}
+	res, err := tool.Call(ctx, toolUseID, input, tcxUse, canUseTool, assistant, nil)
+	if ctx.Err() != nil {
+		um := syntheticAborted(deps, toolUseID, assistant.UUID)
+		return []types.Message{um}, nil
+	}
+	if err != nil {
+		um := syntheticToolResult(deps, toolUseID, err.Error(), true, assistant.UUID)
+		return []types.Message{um}, nil
+	}
+	body, isErr := toolRunResultString(res)
+	um := syntheticToolResult(deps, toolUseID, body, isErr, assistant.UUID)
+	return []types.Message{um}, nil
 }
