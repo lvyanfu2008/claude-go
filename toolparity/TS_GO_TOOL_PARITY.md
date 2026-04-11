@@ -8,7 +8,7 @@ go run ./cmd/gen-tool-parity
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
 - **Go anchor:** [ccb-engine/skilltools/parity_runner.go](ccb-engine/skilltools/parity_runner.go) — ParityToolRunner.Run + paritytools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-11T16:03:41Z
+- **Generated:** 2026-04-11T23:51:10Z
 
 ## Status legend
 
@@ -24,12 +24,12 @@ go run ./cmd/gen-tool-parity
 | Agent | Task | core | — | stub | paritytools.Run |
 | TaskOutput | — | core | — | partial | paritytools.Run |
 | Bash | — | core | — | partial | localtools.BashFromJSON |
-| Glob | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | partial | localtools.GlobFromJSON |
-| Grep | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | partial | localtools.GrepFromJSON |
-| ExitPlanMode | — | core | ExitPlanModeV2Tool | partial | paritytools.Run |
-| Read | — | core | — | partial | localtools.ReadFromJSON |
-| Edit | — | core | — | partial | localtools.EditFromJSON |
-| Write | — | core | — | partial | localtools.WriteFromJSON |
+| Glob | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GlobFromJSON |
+| Grep | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GrepFromJSON |
+| ExitPlanMode | — | core | ExitPlanModeV2Tool | full | paritytools.ExitPlanModeFromJSON |
+| Read | — | core | — | full | localtools.ReadFromJSON |
+| Edit | — | core | — | full | localtools.EditFromJSON |
+| Write | — | core | — | full | localtools.WriteFromJSON |
 | NotebookEdit | — | core | — | partial | paritytools.NotebookEditFromJSON |
 | WebFetch | — | core | — | partial | paritytools.WebFetchFromJSON |
 | TodoWrite | — | core | — | partial | paritytools.TodoWriteFromJSON |
@@ -81,6 +81,7 @@ go run ./cmd/gen-tool-parity
 
 | Go status | Count |
 |-----------|------:|
-| partial | 26 |
+| full | 6 |
+| partial | 20 |
 | stub | 4 |
 | none | 25 |
