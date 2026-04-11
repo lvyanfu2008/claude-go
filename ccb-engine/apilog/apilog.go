@@ -27,6 +27,16 @@ func ApiBodyLoggingEnabled() bool {
 	return envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") || envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
 }
 
+// RequestBodyLoggingEnabled is true when CLAUDE_CODE_LOG_API_REQUEST_BODY is truthy.
+func RequestBodyLoggingEnabled() bool {
+	return envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY")
+}
+
+// ResponseBodyLoggingEnabled is true when CLAUDE_CODE_LOG_API_RESPONSE_BODY is truthy.
+func ResponseBodyLoggingEnabled() bool {
+	return envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
+}
+
 // ResolvedLogPath returns the file path apilog would use — same as
 // goc/ccb-engine/debugpath.ResolveLogPath (mirrors src/utils/debug.ts getDebugLogPath).
 func ResolvedLogPath() string {
