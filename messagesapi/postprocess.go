@@ -163,6 +163,56 @@ func ensureSystemReminderWrap(msg types.Message) types.Message {
 	return m
 }
 
+// collapseAllTextUserContentBlocks merges consecutive-user text into a single text block per user row
+// when that row's content is only "text" blocks (no tool_result / images). Adjacent-user bytes are
+// already correct from joinTextAtSeam; this pass only reduces block count on the wire.
+func collapseAllTextUserContentBlocks(messages []types.Message) ([]types.Message, error) {
+	for i := range messages {
+		if messages[i].Type != types.MessageTypeUser {
+			continue
+		}
+		m := messages[i]
+		inner, err := getInner(&m)
+		if err != nil {
+			return nil, err
+		}
+		blocks, err := parseContentArrayOrString(inner.Content)
+		if err != nil {
+			return nil, err
+		}
+		if len(blocks) <= 1 {
+			continue
+		}
+		allText := true
+		for _, b := range blocks {
+			if t, _ := b["type"].(string); t != "text" {
+				allText = false
+				break
+			}
+		}
+		if !allText {
+			continue
+		}
+		var sb strings.Builder
+		for _, b := range blocks {
+			tx, _ := b["text"].(string)
+			sb.WriteString(tx)
+		}
+		one := []map[string]any{{"type": "text", "text": sb.String()}}
+		raw, err := marshalContentBlocks(one)
+		if err != nil {
+			return nil, err
+		}
+		inner.Content = raw
+		if err := setInner(&m, inner); err != nil {
+			return nil, err
+		}
+		m.Content = raw
+		messages[i] = m
+	}
+	return messages, nil
+}
+
 func smooshSystemReminderSiblings(messages []types.Message) ([]types.Message, error) {
 	out := make([]types.Message, 0, len(messages))
 	for _, msg := range messages {

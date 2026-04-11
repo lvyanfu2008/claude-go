@@ -25,8 +25,8 @@ type FetchOpts struct {
 	// SystemPromptInjection optional override; nil falls back to CLAUDE_CODE_SYSTEM_PROMPT_INJECTION env.
 	SystemPromptInjection *string
 
-	// TSSnapshot when non-nil uses that snapshot for default/user/system prompt parts
-	// (mirrors fetchSystemPromptParts) instead of building them in Go.
+	// TSSnapshot when non-nil uses the snapshot for default/system prompt slices (Go harness only).
+	// UserContext always comes from [BuildUserContext] like TS getUserContext() in fetchSystemPromptParts — never from snap.UserContext.
 	TSSnapshot *tscontext.Snapshot
 }
 
@@ -65,34 +65,45 @@ func cloneStringMap(m map[string]string) map[string]string {
 	return out
 }
 
+// userContextLikeTS is the Go equivalent of TS getUserContext() in src/utils/queryContext.ts
+// fetchSystemPromptParts: always live from cwd/CLAUDE.md, never merged from tscontext.Snapshot.
+func userContextLikeTS(opts FetchOpts) (map[string]string, error) {
+	return BuildUserContext(opts.Gou.Cwd, opts.ExtraClaudeMdRoots)
+}
+
 // FetchSystemPromptParts mirrors src/utils/queryContext.ts fetchSystemPromptParts (parallel fan-in).
 func FetchSystemPromptParts(ctx context.Context, opts FetchOpts) (FetchResult, error) {
 	custom := strings.TrimSpace(opts.CustomSystemPrompt)
 	useCustom := custom != ""
 
 	if snap := opts.TSSnapshot; snap != nil {
+		uc, errUC := userContextLikeTS(opts)
+		if errUC != nil {
+			return FetchResult{}, errUC
+		}
 		if !useCustom {
 			// Bun snapshot freezes # Environment for whatever model TS saw at bridge time.
 			// When the process sets ANTHROPIC_MODEL / CCB_ENGINE_MODEL / ANTHROPIC_DEFAULT_* or
 			// CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID (or Gou.EnvReportModelID), rebuild default system in Go
-			// so the model line matches live env; keep TS userContext + systemContext slices.
+			// so the model line matches live env. UserContext is always live (getUserContext parity).
 			if useGoDefaultSystemInsteadOfTSSnapshot(opts) {
 				s := strings.TrimSpace(commands.BuildGouDemoSystemPrompt(opts.Gou))
 				return FetchResult{
 					DefaultSystemPrompt: []string{s},
-					UserContext:         cloneStringMap(snap.UserContext),
+					UserContext:         uc,
 					SystemContext:       cloneStringMap(snap.SystemContext),
 				}, nil
 			}
 			return FetchResult{
 				DefaultSystemPrompt: cloneStringSlice(snap.DefaultSystemPrompt),
-				UserContext:         cloneStringMap(snap.UserContext),
+				UserContext:         uc,
 				SystemContext:       cloneStringMap(snap.SystemContext),
 			}, nil
 		}
+		// TS: customSystemPrompt skips default system + getSystemContext, but getUserContext() still runs.
 		return FetchResult{
 			DefaultSystemPrompt: []string{},
-			UserContext:         cloneStringMap(snap.UserContext),
+			UserContext:         uc,
 			SystemContext:       map[string]string{},
 		}, nil
 	}

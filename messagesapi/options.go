@@ -38,6 +38,11 @@ type Options struct {
 	ExplorePlanAgentsEnabled bool
 	// PlanModeEmbeddedSearchTools mirrors hasEmbeddedSearchTools() for interview read-only tool list.
 	PlanModeEmbeddedSearchTools bool
+
+	// CompactAllTextUserContent when true, collapses every all-text user row (see collapseAllTextUserContentBlocks).
+	// Default false matches TS normalizeMessagesForAPI: joinTextAtSeam keeps sibling text blocks (newline on the text-text seam only);
+	// mergeUserContentBlocks appends attachment blocks without folding all text into one block.
+	CompactAllTextUserContent bool
 }
 
 // DefaultOptions matches typical CLI defaults (most gates off).

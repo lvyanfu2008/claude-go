@@ -6,17 +6,40 @@ import (
 	"goc/types"
 )
 
-// ensureInnerFromContent builds nested `message` from top-level Content when Message is empty
-// (rows that only have role implied by Type + Content).
+// ensureInnerFromContent syncs nested `message` from top-level Content when needed:
+// - Message empty: build inner from Type + Content (hydrate / transcript rows).
+// - Message present but inner content parses to no blocks while top-level Content is set: copy Content
+//   into inner so normalizeUserTextContent / syncTopLevelContent do not wipe top-level Content.
 func ensureInnerFromContent(m *types.Message) error {
-	if len(m.Message) > 0 || len(m.Content) == 0 {
+	if len(m.Content) == 0 {
 		return nil
 	}
-	role := "user"
-	if m.Type == types.MessageTypeAssistant {
-		role = "assistant"
+	if len(m.Message) == 0 {
+		role := "user"
+		if m.Type == types.MessageTypeAssistant {
+			role = "assistant"
+		}
+		inner := userOrAssistantInner{Role: role, Content: m.Content}
+		return setInner(m, inner)
 	}
-	inner := userOrAssistantInner{Role: role, Content: m.Content}
+	var inner userOrAssistantInner
+	if err := json.Unmarshal(m.Message, &inner); err != nil {
+		return err
+	}
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil {
+		return err
+	}
+	if len(blocks) > 0 {
+		return nil
+	}
+	if inner.Role == "" {
+		inner.Role = "user"
+		if m.Type == types.MessageTypeAssistant {
+			inner.Role = "assistant"
+		}
+	}
+	inner.Content = m.Content
 	return setInner(m, inner)
 }
 

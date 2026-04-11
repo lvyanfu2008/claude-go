@@ -12,9 +12,10 @@
 // Go local tool parity (embedded localturn): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
 //
 // System # Language / # Output Style: merged from ~/.claude/settings.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
-// Extra CLAUDE.md roots: optional runtimeContext.toolPermissionContext.additionalWorkingDirectories (JSON) and/or GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS / CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS (comma or PATH-style list); with CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 they are scanned like TS add-dir (see [querycontext.ExtraClaudeMdRootsForFetch]).
+// Extra CLAUDE.md roots: optional runtimeContext.toolPermissionContext.additionalWorkingDirectories (JSON) and/or GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS / CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS (comma or PATH-style list). Paths from runtime/env are always scanned when passed (see [querycontext.ExtraClaudeMdRootsForFetch]); CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 is only needed for env-only flows in claudemd that do not pass explicit roots.
 // Debug log (optional): GOU_DEMO_LOG_FILE=/path/to.log, or GOU_DEMO_LOG=1 (default file path matches TS getDebugLogPath via goc/ccb-engine/debugpath when stderr is TTY). GOU_DEMO_LOG_STDERR=1 forces stderr (may corrupt TUI). Lines are prefixed [gou-demo].
 // ToolUseContext dump: CLAUDE_CODE_LOG_TOOL_USE_CONTEXT or GOU_DEMO_LOG_TOOL_USE_CONTEXT = 1|summary|full (with logging enabled) prints JSON after each BuildDemoParams; full includes the entire commands[] snapshot.
+// Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt.
@@ -23,6 +24,7 @@
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
 // Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists turns via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
+// Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
 import (
@@ -151,6 +153,31 @@ func gouDemoTracef(format string, args ...any) {
 	if gouDemoTrace != nil {
 		gouDemoTrace.Printf(format, args...)
 	}
+}
+
+const gouDemoLogStoreMessagesMaxBytes = 512 * 1024
+
+// gouDemoLogStoreMessages dumps store.Messages when GOU_DEMO_LOG_STORE_MESSAGES=1 and trace logging is on.
+func gouDemoLogStoreMessages(tag string, s *conversation.Store) {
+	if s == nil || !gouDemoEnvTruthy("GOU_DEMO_LOG_STORE_MESSAGES") {
+		return
+	}
+	if gouDemoTrace == nil {
+		return
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(s.Messages); err != nil {
+		gouDemoTracef("store.Messages %s: json encode: %v", tag, err)
+		return
+	}
+	out := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
+	if len(out) > gouDemoLogStoreMessagesMaxBytes {
+		out = append(out[:gouDemoLogStoreMessagesMaxBytes], []byte("\n…(truncated)")...)
+	}
+	gouDemoTrace.Printf("store.Messages %s count=%d streamingTextLen=%d\n%s\n", tag, len(s.Messages), len(s.StreamingText), string(out))
 }
 
 // gouDemoLogToolUseContext dumps ProcessUserInputContext / ToolUseContext JSON when CLAUDE_CODE_LOG_TOOL_USE_CONTEXT
@@ -629,6 +656,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			out := pui.ApplyBaseResult(m.store, r, &m.processUserInputBaseResultHandoff)
+			gouDemoLogStoreMessages("after_apply_user_input", m.store)
 			gouDemoTracef("after ApplyBaseResult shouldQuery=%v effectiveShouldQuery=%v hadExecutionRequest=%v messagesAppended=%d",
 				r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(r.Messages))
 			if out.NextInput != "" {
@@ -756,10 +784,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						listing := ""
 						if !gouDemoEnvTruthy("GOU_DEMO_SKIP_SKILL_LISTING") {
-							if s, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, m.skillListingSent, nil); ok {
+							listingSent := m.skillListingSent
+							if gouDemoEnvTruthy("GOU_DEMO_SKILL_LISTING_EVERY_TURN") {
+								listingSent = make(map[string]struct{})
+							}
+							if s, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, listingSent, nil); ok {
 								listing = s
 							}
 						}
+						gouDemoLogStoreMessages("before_ccbhydrate", m.store)
 						msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.store.Messages, userCtxReminder, listing, toolSpecs, normOpts)
 						if errL != nil {
 							gouDemoTracef("localturn: MessagesJSONWithLeadingMeta error: %v", errL)
@@ -768,6 +801,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else {
 							reqID := fmt.Sprintf("turn-%d", time.Now().UnixNano())
 							m.store.ClearStreaming()
+							// TS: skill_listing attachment is pushed to mutableMessages before callModel (QueryEngine attachment case).
+							if strings.TrimSpace(listing) != "" {
+								if att, ok := ccbhydrate.SkillListingStoreMessage(listing); ok {
+									m.store.AppendMessage(att)
+									m.rebuildHeightCache()
+								}
+							}
 							gouDemoTracef("localturn.RunSubmitUserTurn start requestID=%s msgsJSONBytes=%d toolsBytes=%d systemBytes=%d",
 								reqID, len(msgsJSON), len(toolsJSON), len(guidance))
 							cwdAbs, errAbs := filepath.Abs(cwd)
@@ -877,6 +917,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		ccbstream.Apply(m.store, ev)
+		if ev.Type == "turn_complete" || ev.Type == "response_end" {
+			gouDemoLogStoreMessages("after_stream_"+ev.Type, m.store)
+		}
 		m.rebuildHeightCache()
 		if m.transcript != nil && (ev.Type == "turn_complete" || ev.Type == "response_end") {
 			m.maybeRecordTranscript()

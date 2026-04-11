@@ -3,10 +3,16 @@
 package ccbhydrate
 
 import (
+	"bytes"
 	"encoding/json"
-	"slices"
+	"fmt"
 	"strings"
+	"time"
 
+	"goc/ccb-engine/diaglog"
+	"slices"
+
+	"goc/commands"
 	"goc/gou/messagerow"
 	"goc/messagesapi"
 	"goc/types"
@@ -50,47 +56,158 @@ func messagesJSONFromNormalized(msgs []types.Message) (json.RawMessage, error) {
 			continue
 		}
 		role := string(m.Type)
-		out = append(out, apiMessage{Role: role, Content: m.Content})
+		content := m.Content
+		if m.Type == types.MessageTypeUser {
+			if c, ok := messagesapi.UserAllTextContentAsJSONString(m.Content); ok {
+				content = c
+			}
+		}
+		out = append(out, apiMessage{Role: role, Content: content})
 	}
 	if len(out) == 0 {
 		return json.RawMessage("[]"), nil
 	}
-	return json.Marshal(out)
+	return marshalJSONNoEscapeHTML(out)
 }
 
-// MessagesJSONWithLeadingMeta runs [messagesapi.NormalizeMessagesForAPI], then injects reminders and
-// merges again with [messagesapi.NormalizeMessagesForAPI]:
-//   - skill_listing: append a reminder user immediately **after** the last user in the normalized transcript,
-//     matching TS [processTextPrompt] order `[userMessage, ...attachmentMessages]` so [normalizeMessagesForAPI]
-//     merges attachment-style text **after** the client user blocks (same seam as mergeUserMessagesAndToolResults).
-//   - prependUserContext: prepend a meta user (TS [prependUserContext] before normalize).
-func MessagesJSONWithLeadingMeta(msgs []types.Message, userContextReminder, skillListingText string, tools []messagesapi.ToolSpec, opts messagesapi.Options) (json.RawMessage, error) {
-	if strings.TrimSpace(skillListingText) == "" && strings.TrimSpace(userContextReminder) == "" {
-		return MessagesJSONNormalized(msgs, tools, opts)
-	}
-	norm, err := messagesapi.NormalizeMessagesForAPI(msgs, tools, opts)
-	if err != nil {
+// marshalJSONNoEscapeHTML matches JSON.stringify: do not escape < > & in strings (Go's json.Marshal does by default).
+func marshalJSONNoEscapeHTML(v any) (json.RawMessage, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
 		return nil, err
 	}
-	stage := norm
-	if s := strings.TrimSpace(skillListingText); s != "" {
-		stage = appendReminderUserAfterLastUserOrAppendIfNoUser(stage, s)
-	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+}
 
-	if s := strings.TrimSpace(userContextReminder); s != "" {
-		stage = prependReminderUser(stage, s)
+// MessagesJSONWithLeadingMeta mirrors TS [query.ts] prependUserContext + [processTextPrompt] attachment
+// order, then [messagesapi.NormalizeMessagesForAPI]: skill_listing is appended after the **last** transcript
+// user (same turn as TS processTextPrompt: [userMessage, ...attachmentMessages]), then prependUserContext
+// prepends the meta user at the front (TS query callModel). [messagesapi.NormalizeMessagesForAPI] merges
+// consecutive users with joinTextAtSeam and attachments with mergeUserContentBlocks (sibling text blocks
+// preserved like TS). [messagesJSONFromNormalized] then encodes all-text-only user `content` as a JSON
+// string (concatenated text blocks) when building the API array, matching common Claude Code / Anthropic
+// wire dumps. Set [messagesapi.Options.CompactAllTextUserContent] true to collapse each all-text user row
+// before projection.
+//
+// Diagnostic: set CLAUDE_CODE_GO_MESSAGESJSON_STAGE_LOG=1 to append the pre-normalize [stage] JSON to the diag log
+// (see [diaglog.Line]; same path as other Claude debug lines, truncated at 32KiB).
+func MessagesJSONWithLeadingMeta(msgs []types.Message, userContextReminder, skillListingText string, tools []messagesapi.ToolSpec, opts messagesapi.Options) (json.RawMessage, error) {
+	skill := strings.TrimSpace(skillListingText)
+	ctx := strings.TrimSpace(userContextReminder)
+	if skill == "" && ctx == "" {
+		return MessagesJSONNormalized(msgs, tools, opts)
+	}
+	stage := slices.Clone(msgs)
+	switch {
+	case skill != "" && ctx != "":
+		stage = appendSkillListingAttachmentAfterLastUser(stage, skillListingText)
+		stage = prependReminderUser(stage, userContextReminder)
+	case skill != "":
+		stage = appendSkillListingAttachmentAfterLastUser(stage, skillListingText)
+	default:
+		stage = prependReminderUser(stage, userContextReminder)
 	}
 
 	fin, err := messagesapi.NormalizeMessagesForAPI(stage, tools, opts)
-
 	if err != nil {
 		return nil, err
 	}
 	return messagesJSONFromNormalized(fin)
 }
 
+const messagesJSONStageLogMaxBytes = 32 * 1024
+
+// logMessagesJSONWithLeadingMetaStage appends the pre-normalize [stage] slice to the diag log when
+// CLAUDE_CODE_GO_MESSAGESJSON_STAGE_LOG is truthy (1/true/yes/on). JSON is truncated after 32KiB.
+func logMessagesJSONWithLeadingMetaStage(stage []types.Message) {
+	raw, err := json.Marshal(stage)
+	if err != nil {
+		diaglog.Line("[goc/ccbhydrate] MessagesJSONWithLeadingMeta stage: json.Marshal err=%v len=%d", err, len(stage))
+		return
+	}
+	s := string(raw)
+	if len(s) > messagesJSONStageLogMaxBytes {
+		s = s[:messagesJSONStageLogMaxBytes] + "…(truncated)"
+	}
+	diaglog.Line("[goc/ccbhydrate] MessagesJSONWithLeadingMeta stage len=%d json=%s", len(stage), s)
+}
+
 func prependReminderUser(msgs []types.Message, text string) []types.Message {
 	return append([]types.Message{messagesapi.ReminderUserMessage(text, true)}, msgs...)
+}
+
+func skillListingAttachmentMessage(listingAPIUserText string) (types.Message, bool) {
+	inner := skillListingAttachmentInner(listingAPIUserText)
+	if strings.TrimSpace(inner) == "" {
+		return types.Message{}, false
+	}
+	att, err := json.Marshal(map[string]string{
+		"type":    "skill_listing",
+		"content": inner,
+	})
+	if err != nil {
+		return types.Message{}, false
+	}
+	return types.Message{Type: types.MessageTypeAttachment, Attachment: att}, true
+}
+
+// SkillListingStoreMessage builds an attachment row for [conversation.Store].Messages, matching TS
+// QueryEngine push of type attachment + skill_listing before the assistant reply for that turn.
+// Use the same string as [commands.AppendSkillListingForAPI]. Persist only after [MessagesJSONWithLeadingMeta]
+// succeeds so hydrate does not see a duplicate listing in the same stage.
+func SkillListingStoreMessage(listingAPIUserText string) (types.Message, bool) {
+	m, ok := skillListingAttachmentMessage(listingAPIUserText)
+	if !ok {
+		return types.Message{}, false
+	}
+	if strings.TrimSpace(m.UUID) == "" {
+		m.UUID = fmt.Sprintf("sl-%d", time.Now().UnixNano())
+	}
+	return m, true
+}
+
+// skillListingAttachmentInner strips the API reminder wrapper from [commands.AppendSkillListingForAPI] output
+// (or equivalent) to recover the `content` field for a `skill_listing` attachment.
+func skillListingAttachmentInner(apiUserText string) string {
+	s := strings.TrimSpace(apiUserText)
+	const open = "<system-reminder>\n"
+	const close = "\n</system-reminder>"
+	if strings.HasPrefix(s, open) && strings.HasSuffix(s, close) {
+		s = strings.TrimSpace(s[len(open) : len(s)-len(close)])
+	}
+	if strings.HasPrefix(s, commands.SkillListingBodyPrefix) {
+		return strings.TrimPrefix(s, commands.SkillListingBodyPrefix)
+	}
+	return s
+}
+
+// appendSkillListingAttachmentAfterLastUser appends a skill_listing attachment row immediately after the last
+// [types.MessageTypeUser] row (TS processTextPrompt: attachments after the current user message).
+func appendSkillListingAttachmentAfterLastUser(msgs []types.Message, listingAPIUserText string) []types.Message {
+	attMsg, ok := skillListingAttachmentMessage(listingAPIUserText)
+	if !ok {
+		return msgs
+	}
+	i := lastUserMessageIndex(msgs)
+	if i < 0 {
+		return append(slices.Clone(msgs), attMsg)
+	}
+	out := slices.Clone(msgs[:i+1])
+	out = append(out, attMsg)
+	out = append(out, slices.Clone(msgs[i+1:])...)
+	return out
+}
+
+// lastUserMessageIndex returns the index of the last [types.MessageTypeUser] row, or -1 if none.
+func lastUserMessageIndex(msgs []types.Message) int {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Type == types.MessageTypeUser {
+			return i
+		}
+	}
+	return -1
 }
 
 // appendReminderUserAfterLastUserOrAppendIfNoUser inserts a reminder user immediately after the last

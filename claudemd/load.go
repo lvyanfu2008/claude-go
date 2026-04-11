@@ -86,7 +86,10 @@ func LoadMemoryFiles(opts LoadOptions) []MemoryFileInfo {
 		}
 	}
 
-	if truthy(os.Getenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD")) {
+	// TS gates env-only extra dirs on CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD; when callers pass
+	// [LoadOptions.AdditionalWorkingDirs] explicitly (e.g. gou-demo [querycontext.ExtraClaudeMdRootsForFetch]),
+	// always scan them so userContext includes those CLAUDE.md files without an extra env toggle.
+	if truthy(os.Getenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD")) || len(opts.AdditionalWorkingDirs) > 0 {
 		for _, d := range opts.AdditionalWorkingDirs {
 			ad, err := filepath.Abs(strings.TrimSpace(d))
 			if err != nil || ad == "" {

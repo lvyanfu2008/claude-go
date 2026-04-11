@@ -12,8 +12,9 @@ type AnthropicAdapter struct {
 }
 
 func (a *AnthropicAdapter) Complete(ctx context.Context, messages []anthropic.Message, tools []anthropic.ToolDefinition, system string) (*TurnResult, error) {
+	msgs := anthropic.CanonicalizeMessages(messages)
 	resp, err := a.Client.CreateMessage(ctx, anthropic.CreateMessageRequest{
-		Messages: messages,
+		Messages: msgs,
 		Tools:    tools,
 		System:   system,
 	})

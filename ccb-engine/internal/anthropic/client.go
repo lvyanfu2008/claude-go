@@ -88,7 +88,7 @@ func (c *Client) CreateMessage(ctx context.Context, req CreateMessageRequest) (*
 	}
 	req.Stream = false
 
-	body, err := json.Marshal(req)
+	body, err := marshalJSONNoEscapeHTML(req)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +129,17 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// marshalJSONNoEscapeHTML matches JSON.stringify / TS request logging: keep literal < in strings.
+func marshalJSONNoEscapeHTML(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 // ParseContentBlocks decodes assistant content JSON array into blocks.

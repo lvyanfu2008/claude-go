@@ -104,3 +104,29 @@ func TestMessagesToOpenAI_userTextBlocksNotDropped(t *testing.T) {
 		t.Fatalf("content=%#v", oa[0].Content)
 	}
 }
+
+func TestMessagesToOpenAI_userMultipleTextBlocksUsesContentArray(t *testing.T) {
+	msgs := []anthropic.Message{
+		{
+			Role: "user",
+			Content: []anthropic.ContentBlock{
+				{Type: "text", Text: "<system-reminder>\nctx\n</system-reminder>\n\nhi"},
+				{Type: "text", Text: "<system-reminder>\nskills\n</system-reminder>"},
+			},
+		},
+	}
+	oa, err := messagesToOpenAI(msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(oa) != 1 {
+		t.Fatalf("len=%d %+v", len(oa), oa)
+	}
+	parts, ok := oa[0].Content.([]oaTextPart)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("want []oaTextPart len 2, got %#v", oa[0].Content)
+	}
+	if parts[0].Type != "text" || parts[1].Type != "text" {
+		t.Fatalf("%+v", parts)
+	}
+}

@@ -8,6 +8,113 @@ import (
 	"goc/types"
 )
 
+func TestNormalizeMessagesForAPI_compactAllTextUserContent_defaultOffTSBlocks(t *testing.T) {
+	t.Parallel()
+	// Default off: no collapseAllTextUserContentBlocks; a later user row after assistant keeps multiple text siblings.
+	u1 := mustJSON(t, map[string]any{"role": "user", "content": "lead"})
+	u2 := mustJSON(t, map[string]any{
+		"role": "user",
+		"content": []map[string]any{
+			{"type": "text", "text": "x"},
+			{"type": "text", "text": "y"},
+		},
+	})
+	asst := mustJSON(t, map[string]any{"role": "assistant", "content": []map[string]any{{"type": "text", "text": "ok"}}})
+	msgs := []types.Message{
+		{Type: types.MessageTypeUser, UUID: "1", Message: u1},
+		{Type: types.MessageTypeAssistant, UUID: "a", Message: asst},
+		{Type: types.MessageTypeUser, UUID: "2", Message: u2},
+	}
+	out, err := NormalizeMessagesForAPI(msgs, nil, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 3 {
+		t.Fatalf("len=%d", len(out))
+	}
+	inner2, _ := getInner(&out[2])
+	blocks, err := parseContentArrayOrString(inner2.Content)
+	if err != nil || len(blocks) != 2 {
+		t.Fatalf("second user blocks=%v err=%v", blocks, err)
+	}
+}
+
+func TestNormalizeMessagesForAPI_singleUser_allTextSiblingsPreservedTS(t *testing.T) {
+	t.Parallel()
+	a := mustJSON(t, map[string]any{
+		"role": "user",
+		"content": []map[string]any{
+			{"type": "text", "text": "x"},
+			{"type": "text", "text": "y"},
+		},
+	})
+	msgs := []types.Message{{Type: types.MessageTypeUser, UUID: "1", Message: a}}
+	out, err := NormalizeMessagesForAPI(msgs, nil, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner, _ := getInner(&out[0])
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil || len(blocks) != 2 {
+		t.Fatalf("TS leaves sibling text blocks on one user row; blocks=%v err=%v", blocks, err)
+	}
+	if blocks[0]["text"] != "x" || blocks[1]["text"] != "y" {
+		t.Fatalf("blocks=%v", blocks)
+	}
+}
+
+// Hydrate/import can set top-level Content while Message omits content; ensureInnerFromContent must
+// backfill inner so syncTopLevelContent does not wipe blocks (no TS collapse of siblings by default).
+func TestNormalizeMessagesForAPI_ensureInner_topLevelContentThreeBlocks(t *testing.T) {
+	t.Parallel()
+	rawBlocks, err := json.Marshal([]map[string]any{
+		{"type": "text", "text": "<system-reminder>\nctx\n</system-reminder>\n\n"},
+		{"type": "text", "text": "hi"},
+		{"type": "text", "text": "<system-reminder>\nskills\n</system-reminder>"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	badInner := mustJSON(t, map[string]any{"role": "user"})
+	msgs := []types.Message{
+		{Type: types.MessageTypeUser, UUID: "1", Message: badInner, Content: json.RawMessage(rawBlocks)},
+	}
+	out, err := NormalizeMessagesForAPI(msgs, nil, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner, _ := getInner(&out[0])
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil || len(blocks) != 3 {
+		t.Fatalf("want 3 text blocks (TS-style siblings), got blocks=%v err=%v", blocks, err)
+	}
+}
+
+func TestNormalizeMessagesForAPI_compactAllTextUserContent_optInCollapses(t *testing.T) {
+	t.Parallel()
+	a := mustJSON(t, map[string]any{
+		"role": "user",
+		"content": []map[string]any{
+			{"type": "text", "text": "x"},
+			{"type": "text", "text": "y"},
+		},
+	})
+	msgs := []types.Message{{Type: types.MessageTypeUser, UUID: "1", Message: a}}
+	out, err := NormalizeMessagesForAPI(msgs, nil, Options{CompactAllTextUserContent: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner, _ := getInner(&out[0])
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil || len(blocks) != 1 {
+		t.Fatalf("blocks=%v err=%v", blocks, err)
+	}
+	tx, _ := blocks[0]["text"].(string)
+	if tx != "xy" {
+		t.Fatalf("got %q", tx)
+	}
+}
+
 func TestNormalizeMessagesForAPI_dropsVirtualUser(t *testing.T) {
 	t.Parallel()
 	raw, _ := json.Marshal("hi")

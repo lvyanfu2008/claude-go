@@ -5,9 +5,17 @@ import (
 )
 
 // reorderAttachmentsForAPI mirrors src/utils/messages.ts reorderAttachmentsForAPI.
+//
+// Trailing attachments after the last user must not be flushed at the next assistant when scanning
+// backward (e.g. […, assistant, user, attachment] should keep attachment after that user). We flush
+// pending attachments immediately before a plain user when that user is directly followed by an
+// attachment in the original slice and either there is no assistant earlier than that user or the
+// transcript has at least two user rows (multi-turn); otherwise pending continues to bubble to the
+// stopping assistant as before.
 func reorderAttachmentsForAPI(messages []types.Message) []types.Message {
 	var result []types.Message
 	var pendingAttachments []types.Message
+	userCount := countUserMessagesIn(messages)
 
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
@@ -24,6 +32,15 @@ func reorderAttachmentsForAPI(messages []types.Message) []types.Message {
 				result = append(result, message)
 				pendingAttachments = pendingAttachments[:0]
 			} else {
+				if message.Type == types.MessageTypeUser && !isStoppingPoint &&
+					len(pendingAttachments) > 0 &&
+					i+1 < len(messages) && messages[i+1].Type == types.MessageTypeAttachment &&
+					(!hasAssistantBefore(messages, i) || userCount >= 2) {
+					for j := 0; j < len(pendingAttachments); j++ {
+						result = append(result, pendingAttachments[j])
+					}
+					pendingAttachments = pendingAttachments[:0]
+				}
 				result = append(result, message)
 			}
 		}
@@ -37,6 +54,25 @@ func reorderAttachmentsForAPI(messages []types.Message) []types.Message {
 		result[i], result[j] = result[j], result[i]
 	}
 	return result
+}
+
+func countUserMessagesIn(messages []types.Message) int {
+	n := 0
+	for _, m := range messages {
+		if m.Type == types.MessageTypeUser {
+			n++
+		}
+	}
+	return n
+}
+
+func hasAssistantBefore(messages []types.Message, i int) bool {
+	for j := 0; j < i; j++ {
+		if messages[j].Type == types.MessageTypeAssistant {
+			return true
+		}
+	}
+	return false
 }
 
 func firstBlockIsToolResult(m *types.Message) bool {

@@ -49,7 +49,8 @@ func TestExtraClaudeMdRootsForFetch_RuntimeAndEnv(t *testing.T) {
 }
 
 func TestFetchSystemPromptParts_ExtraClaudeMdRoots(t *testing.T) {
-	t.Setenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1")
+	// Explicit ExtraClaudeMdRoots must work without CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1
+	// (callers already opted in by passing paths).
 	t.Setenv("CLAUDE_CODE_OVERRIDE_DATE", "2026-04-08")
 	primary := t.TempDir()
 	extra := t.TempDir()

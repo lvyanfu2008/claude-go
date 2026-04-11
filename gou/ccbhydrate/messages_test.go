@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"goc/commands"
 	"goc/messagesapi"
 	"goc/types"
 )
@@ -27,7 +28,8 @@ func userAPIContentPlainText(t *testing.T, raw json.RawMessage) string {
 			parts = append(parts, stringFromAny(b["text"]))
 		}
 	}
-	return strings.Join(parts, "\n")
+	// Adjacent API text blocks are concatenated without an extra separator; joinTextAtSeam only adds "\n" on a's tail.
+	return strings.Join(parts, "")
 }
 
 func stringFromAny(v any) string {
@@ -73,19 +75,18 @@ func TestMessagesJSONWithLeadingMeta_preservesAssistantBetweenUsers(t *testing.T
 		t.Fatalf("roles: %+v", arr)
 	}
 	u0 := userAPIContentPlainText(t, arr[0].Content)
-	if !strings.Contains(u0, "first") || !strings.Contains(u0, "CTX") {
-		t.Fatalf("first user: %q", u0)
+	if !strings.Contains(u0, "first") || !strings.Contains(u0, "CTX") || strings.Contains(u0, "SKILL") {
+		t.Fatalf("first user should be prepend+first transcript user only (TS prepend merges with first user), got %q", u0)
 	}
 	if userAPIContentPlainText(t, arr[1].Content) != "asst" {
 		t.Fatalf("assistant body")
 	}
 	u2t := userAPIContentPlainText(t, arr[2].Content)
 	if !strings.Contains(u2t, "second") || !strings.Contains(u2t, "SKILL") {
-		t.Fatalf("last user: %q", u2t)
+		t.Fatalf("last user should include this turn text + skill_listing (TS: attachments after current user), got %q", u2t)
 	}
-	// TS processTextPrompt + normalize: client text blocks precede merged attachment (skill) text.
 	if strings.Index(u2t, "second") >= strings.Index(u2t, "SKILL") {
-		t.Fatalf("want skill listing after client text (TS attachment order), got %q", u2t)
+		t.Fatalf("want skill listing after client text, got %q", u2t)
 	}
 }
 
@@ -110,13 +111,14 @@ func TestMessagesJSONWithSkillListing_insertsAfterLastUser(t *testing.T) {
 		t.Fatalf("want 1 merged user message, got %+v", arr)
 	}
 	got := userAPIContentPlainText(t, arr[0].Content)
-	want := "hi\n" + listing
+	// skill_listing after user: mergeUserContentBlocks appends blocks; no extra \n between adjacent text blocks.
+	want := "hi<system-reminder>\nThe following skills are available for use with the Skill tool:\n\nx\n</system-reminder>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
-func TestMessagesJSONWithLeadingMeta_tsOrder_contextThenUserThenSkill(t *testing.T) {
+func TestMessagesJSONWithLeadingMeta_singleUser_TSPrependThenHiThenSkillListing(t *testing.T) {
 	rawText, _ := json.Marshal("hi")
 	msgs := []types.Message{
 		{Type: types.MessageTypeUser, UUID: "1", Content: rawText},
@@ -138,7 +140,42 @@ func TestMessagesJSONWithLeadingMeta_tsOrder_contextThenUserThenSkill(t *testing
 		t.Fatalf("want 1 merged user (TS normalizeMessagesForAPI), got len=%d", len(arr))
 	}
 	got := userAPIContentPlainText(t, arr[0].Content)
-	want := ctx + "\n" + "hi\n" + listing
+	// joinTextAtSeam (TS): context block ends with \n; "hi" is a separate text block; skills appended without extra seam \n.
+	want := "<system-reminder>\nctx\n</system-reminder>\nhi<system-reminder>\nThe following skills are available for use with the Skill tool:\n\nskills\n</system-reminder>"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+// TS/claude.ts wire: normalize keeps sibling blocks internally; API JSON often uses string `content`
+// for all-text user turns (concatenated via [messagesapi.UserAllTextContentAsJSONString] in projection).
+func TestMessagesJSONWithLeadingMeta_singleUser_threeTextBlocksLikeTS(t *testing.T) {
+	rawText, _ := json.Marshal("hi")
+	msgs := []types.Message{
+		{Type: types.MessageTypeUser, UUID: "1", Content: rawText},
+	}
+	ctx := "<system-reminder>\nctx\n</system-reminder>"
+	listing := "<system-reminder>\nskills\n</system-reminder>"
+	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, messagesapi.DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var arr []struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(out, &arr); err != nil {
+		t.Fatal(err)
+	}
+	if len(arr) != 1 || arr[0].Role != "user" {
+		t.Fatalf("want 1 merged user, got %+v", arr)
+	}
+	raw := arr[0].Content
+	if len(raw) == 0 || raw[0] != '"' {
+		t.Fatalf("want JSON string user content (TS-style wire), got prefix %q", string(raw))
+	}
+	got := userAPIContentPlainText(t, arr[0].Content)
+	want := "<system-reminder>\nctx\n</system-reminder>\nhi<system-reminder>\nThe following skills are available for use with the Skill tool:\n\nskills\n</system-reminder>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -264,6 +301,30 @@ func TestMergeConsecutiveUserMessagesJSON_skipsNonStringPair(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Fatalf("len=%d", len(got))
+	}
+}
+
+func TestSkillListingStoreMessage(t *testing.T) {
+	api := commands.SkillListingAPIUserText("- `demo-skill`: short")
+	m, ok := SkillListingStoreMessage(api)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if m.Type != types.MessageTypeAttachment {
+		t.Fatalf("type=%s", m.Type)
+	}
+	if m.UUID == "" || !strings.HasPrefix(m.UUID, "sl-") {
+		t.Fatalf("uuid=%q", m.UUID)
+	}
+	var att map[string]string
+	if err := json.Unmarshal(m.Attachment, &att); err != nil {
+		t.Fatal(err)
+	}
+	if att["type"] != "skill_listing" {
+		t.Fatalf("attachment type=%q", att["type"])
+	}
+	if !strings.Contains(att["content"], "demo-skill") {
+		t.Fatalf("content=%q", att["content"])
 	}
 }
 

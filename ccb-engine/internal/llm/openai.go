@@ -52,6 +52,12 @@ type oaChatMessage struct {
 	Name       string       `json:"name,omitempty"`
 }
 
+// oaTextPart is OpenAI chat/completions multi-part user content (mirrors multiple Anthropic text blocks).
+type oaTextPart struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
 type oaToolCall struct {
 	ID       string `json:"id"`
 	Type     string `json:"type"`
@@ -178,7 +184,17 @@ func userBlocksToOA(blocks []anthropic.ContentBlock) []oaChatMessage {
 		if len(pendingText) == 0 {
 			return
 		}
-		out = append(out, oaChatMessage{Role: "user", Content: strings.Join(pendingText, "\n")})
+		// Do not join multiple Anthropic text blocks into one string — that reproduces the "hi sandwiched
+		// between two <system-reminder> blobs" flat-string shape. OpenAI accepts an array of {type,text} parts.
+		if len(pendingText) == 1 {
+			out = append(out, oaChatMessage{Role: "user", Content: pendingText[0]})
+		} else {
+			parts := make([]oaTextPart, len(pendingText))
+			for i, t := range pendingText {
+				parts[i] = oaTextPart{Type: "text", Text: t}
+			}
+			out = append(out, oaChatMessage{Role: "user", Content: parts})
+		}
 		pendingText = nil
 	}
 	for _, b := range blocks {
@@ -288,10 +304,13 @@ func (o *OpenAICompat) Complete(ctx context.Context, messages []anthropic.Messag
 	if len(tools) > 0 {
 		req.Tools = toolsToOpenAI(tools)
 	}
-	body, err := json.Marshal(req)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(req); err != nil {
 		return nil, err
 	}
+	body := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
 	url := o.BaseURL + "/chat/completions"
 	apilog.LogRequestBody("POST "+url, body)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))

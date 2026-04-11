@@ -45,15 +45,16 @@ func joinTextAtSeam(a, b []map[string]any) []map[string]any {
 	ft, _ := firstB["type"].(string)
 	if lt == "text" && ft == "text" {
 		la, _ := lastA["text"].(string)
-		fb, _ := firstB["text"].(string)
-		mergedLast := map[string]any{
-			"type": "text",
-			"text": la + "\n" + fb,
-		}
-		out := make([]map[string]any, 0, len(a)+len(b)-1)
+		// Match TS joinTextAtSeam (messages.ts): append "\n" only to a's last text block, then append all of b
+		// unchanged — do not merge a's and b's text into one block (preserves startsWith('<system-reminder>') on
+		// sibling boundaries; literal user text stays its own text block after prepend meta).
+		out := make([]map[string]any, 0, len(a)+len(b))
 		out = append(out, a[:len(a)-1]...)
-		out = append(out, mergedLast)
-		out = append(out, b[1:]...)
+		out = append(out, map[string]any{
+			"type": "text",
+			"text": la + "\n",
+		})
+		out = append(out, b...)
 		return out
 	}
 	out := make([]map[string]any, 0, len(a)+len(b))
