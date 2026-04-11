@@ -838,6 +838,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								Messages:                msgsJSON,
 								Tools:                   toolsJSON,
 								System:                  guidance,
+								ModelID:                 mainLoopModel,
 								SkillExpandUserFollowUp: skillExpand,
 								Runner:                  runner,
 							})

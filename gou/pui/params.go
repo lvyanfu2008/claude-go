@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"goc/agents/builtin"
 	"goc/ccb-engine/skilltools"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
-	"goc/modelenv"
 	"goc/gou/conversation"
 	"goc/mcpcommands"
+	"goc/modelenv"
 	"goc/toolpool"
 	"goc/tscontext"
 	"goc/types"
@@ -176,6 +177,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		if errA != nil {
 			return nil, errA
 		}
+		assembled = toolpool.PatchAgentToolDescriptionWithBuiltins(assembled, builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}))
 		toolsRaw, errTools = toolpool.MarshalToolsAPIDocumentDefinitions(assembled)
 	} else {
 		toolsRaw, errTools = skilltools.GouDemoParityToolsJSON()

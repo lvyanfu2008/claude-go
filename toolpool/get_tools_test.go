@@ -37,6 +37,38 @@ func TestGetTools_removesSpecialIfPresent(t *testing.T) {
 	}
 }
 
+func TestGetTools_kairosChannelsStripsAskUserQuestion(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SIMPLE", "")
+	t.Setenv("CLAUDE_CODE_REPL", "0")
+	t.Setenv("CLAUDE_REPL_MODE", "")
+	t.Setenv("USER_TYPE", "")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	t.Setenv("FEATURE_KAIROS", "1")
+	t.Setenv("CLAUDE_CODE_GO_ALLOWED_CHANNELS", "discord")
+	base := []types.ToolSpec{
+		{Name: "Read"},
+		{Name: "AskUserQuestion"},
+		{Name: "Bash"},
+	}
+	ctx := types.EmptyToolPermissionContextData()
+	out := GetTools(ctx, base)
+	for _, spec := range out {
+		if spec.Name == "AskUserQuestion" {
+			t.Fatalf("expected AskUserQuestion filtered under KAIROS + channels, got %#v", out)
+		}
+	}
+	if len(out) != 2 {
+		t.Fatalf("want 2 tools got %#v", out)
+	}
+	t.Setenv("FEATURE_KAIROS", "")
+	t.Setenv("FEATURE_KAIROS_CHANNELS", "")
+	t.Setenv("CLAUDE_CODE_GO_ALLOWED_CHANNELS", "")
+	out2 := GetTools(ctx, base)
+	if len(out2) != 3 {
+		t.Fatalf("want 3 tools got %#v", out2)
+	}
+}
+
 func TestGetTools_simpleMode(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SIMPLE", "1")
 	t.Setenv("CLAUDE_CODE_REPL", "0")

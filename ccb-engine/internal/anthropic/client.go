@@ -47,9 +47,10 @@ func NewClient() *Client {
 
 // ToolDefinition is the tools[] entry for the Messages API.
 type ToolDefinition struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	InputSchema any    `json:"input_schema"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	InputSchema    any    `json:"input_schema"`
+	DeferLoading   *bool  `json:"defer_loading,omitempty"`
 }
 
 // CreateMessageRequest is POST /v1/messages body.
@@ -60,6 +61,8 @@ type CreateMessageRequest struct {
 	System    string           `json:"system,omitempty"`
 	Tools     []ToolDefinition `json:"tools,omitempty"`
 	Stream    bool             `json:"stream,omitempty"`
+	// AnthropicBeta is sent as the anthropic-beta HTTP header (comma-separated), not JSON body.
+	AnthropicBeta []string `json:"-"`
 }
 
 // CreateMessageResponse is a subset of the API response.
@@ -101,6 +104,9 @@ func (c *Client) CreateMessage(ctx context.Context, req CreateMessageRequest) (*
 	httpReq.Header.Set("x-api-key", c.APIKey)
 	httpReq.Header.Set("anthropic-version", apiVersion)
 	httpReq.Header.Set("content-type", "application/json")
+	if len(req.AnthropicBeta) > 0 {
+		httpReq.Header.Set("anthropic-beta", strings.Join(req.AnthropicBeta, ","))
+	}
 
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {

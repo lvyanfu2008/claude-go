@@ -223,7 +223,8 @@ func HandleConn(conn net.Conn, completer llm.TurnCompleter, defaultTools []anthr
 		runErr := make(chan error, 1)
 		go func() {
 			runErr <- sess.RunTurn(turnCtx, completer, tools, systemStr, bridge, false,
-				engine.WithPermissionContext(req.Payload.PermissionContext))
+				engine.WithPermissionContext(req.Payload.PermissionContext),
+				engine.WithModelID(req.Payload.ModelID))
 		}()
 
 	turnLoop:

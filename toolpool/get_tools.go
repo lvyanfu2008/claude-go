@@ -59,11 +59,11 @@ var specialToolNamesForGetTools = map[string]struct{}{
 }
 
 // GetTools mirrors getTools in src/tools.ts (lines 269–324) for logic that does not require live
-// Tool.isEnabled() or dynamic getAllBaseTools. Pass exportedBase from ParseToolsAPIDocumentJSON
+// Tool instances. Pass exportedBase from ParseToolsAPIDocumentJSON
 // (same snapshot as getTools + toolToAPISchema export for a given export-time environment).
 //
 // TS order: simple branch → remove special → filterToolsByDenyRules → REPL hide → isEnabled().
-// isEnabled is omitted here; re-export tools JSON if you need a different enabled set.
+// Per-tool isEnabled is implemented in [FilterToolsByPerToolEnabled] (wired at the end of this function).
 func GetTools(permissionContext types.ToolPermissionContextData, exportedBase []types.ToolSpec) []types.ToolSpec {
 	if IsEnvTruthyClaudeCodeSimple() {
 		return getToolsSimpleMode(permissionContext, exportedBase)
@@ -95,7 +95,7 @@ func GetTools(permissionContext types.ToolPermissionContextData, exportedBase []
 			out = filtered
 		}
 	}
-	return out
+	return FilterToolsByPerToolEnabled(out)
 }
 
 func getToolsSimpleMode(permissionContext types.ToolPermissionContextData, exportedBase []types.ToolSpec) []types.ToolSpec {

@@ -27,6 +27,12 @@ func canonicalizeOneMessage(m Message) Message {
 		if err := json.Unmarshal(raw, &blocks); err != nil {
 			return m
 		}
-		return Message{Role: m.Role, Content: blocks}
+		return Message{
+			Role:            m.Role,
+			Content:         blocks,
+			Type:            m.Type,
+			Subtype:         m.Subtype,
+			CompactMetadata: m.CompactMetadata,
+		}
 	}
 }

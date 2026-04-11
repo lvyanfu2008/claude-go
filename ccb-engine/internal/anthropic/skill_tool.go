@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"goc/agents/builtin"
 	"goc/toolpool"
 	"goc/types"
 )
@@ -79,6 +80,7 @@ func GouParityToolsJSON() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	assembled = toolpool.PatchAgentToolDescriptionWithBuiltins(assembled, builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}))
 	if n := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME")); n != "" {
 		ds, errD := toolDefinitionsToSpecs([]ToolDefinition{DiscoverSkillsToolDefinition(n)})
 		if errD != nil {

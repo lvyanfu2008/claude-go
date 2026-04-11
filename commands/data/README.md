@@ -6,7 +6,7 @@ Additional prompt/skill rows can live under **`../builtin_*/`** (see [`../builti
 
 ## Embedded
 
-- **`tools_api.json`** — embedded via [`../tools_api_embed.go`](../tools_api_embed.go) (`//go:embed`). Regenerate with `bun run export:tools-registry` from the repo root.
+- **`tools_api.json`** — embedded via [`../tools_api_embed.go`](../tools_api_embed.go) (`//go:embed`). Regenerate with `bun run export:tools-registry` from the repo root. For TS parity when channel relay is active, set **`CLAUDE_CODE_GO_ALLOWED_CHANNELS`** (non-empty, comma-separated) together with **`FEATURE_KAIROS`** or **`FEATURE_KAIROS_CHANNELS`** so `toolpool.GetTools` omits **AskUserQuestion**, matching `AskUserQuestionTool.isEnabled()` in TS.
 
 ## MCP JSON (optional, any path)
 

@@ -22,7 +22,9 @@
     "CCB_ENGINE_LOCAL_BASH":"1",
     "FEATURE_BUDDY":"1",
     "GOU_DEMO_LOG_STORE_MESSAGES": "0",
-    "SLASH_RESOLVE_BRIDGE_ROOT": "/Users/lvyanfu/Work/claude/claude-code"
+    "SLASH_RESOLVE_BRIDGE_ROOT": "/Users/lvyanfu/Work/claude/claude-code",
+    "CLAUDE_CODE_GO_TOOL_SEARCH_CONTEXT":"0",
+    "CCB_ENGINE_DIAG_TO_STDERR":"0"
   },
   "hooks": {
     "UserPromptSubmit": [

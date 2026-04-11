@@ -156,7 +156,8 @@ func RunSubmitUserTurn(ctx context.Context, p Params, emit func(StreamEvent)) er
 		sess.AppendUserText(p.Text)
 	}
 
-	err := sess.RunTurn(ctx, completer, tools, systemStr, runner, p.SkillExpandUserFollowUp)
+	err := sess.RunTurn(ctx, completer, tools, systemStr, runner, p.SkillExpandUserFollowUp,
+		engine.WithModelID(p.ModelID))
 	send(protocol.ResponseEnd(p.RequestID))
 	return err
 }

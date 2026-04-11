@@ -9,9 +9,9 @@ func TestGouParityToolList_namesGolden(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME", "")
 	got := GouParityToolNames()
 	want := []string{
-		"Agent", "TaskOutput", "Bash", "Glob", "Grep", "ExitPlanMode",
+		"Agent", "AskUserQuestion", "TaskOutput", "Bash", "Glob", "Grep", "ExitPlanMode",
 		"Read", "Write", "Edit", "NotebookEdit", "WebFetch", "TodoWrite", "WebSearch", "TaskStop",
-		"AskUserQuestion", "Skill", "EnterPlanMode", "SendMessage",
+		"Skill", "EnterPlanMode", "SendMessage",
 		"CronCreate", "CronDelete", "CronList", "SendUserMessage", "Brief",
 		"ListMcpResourcesTool", "ReadMcpResourceTool", "echo_stub",
 	}

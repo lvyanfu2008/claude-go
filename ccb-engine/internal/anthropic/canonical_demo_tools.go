@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-// GouParityToolList is gou-demo / localturn tools[] aligned with the unconditional slice in TS getAllBaseTools()
+// GouParityToolList is gou-demo / localturn tools[] aligned with the embedded tools_api.json export (plus echo_stub).
 //
 // Tool descriptions here are short stubs for tests and ParityToolRunner; API-facing tools[] for gou-demo
 // uses [GouParityToolsJSON] (embedded commands/data/tools_api.json + echo_stub). See TestGouParityToolsIntersectToolsAPIExport.
-// (fixed array entries only; no feature spreads). Order follows that slice: Agent…MCP resource tools, then echo_stub.
+// AskUserQuestion appears in the export; toolpool.GetTools omits it when TS AskUserQuestionTool.isEnabled is false (Kairos + channels).
 // Glob/Grep are always included here even when TS omits them under hasEmbeddedSearchTools.
 func GouParityToolList() []ToolDefinition {
 	out := make([]ToolDefinition, 0, 40)
@@ -18,6 +18,7 @@ func GouParityToolList() []ToolDefinition {
 	}
 	out = append(out,
 		agentToolDefinition(),
+		askUserQuestionToolDefinition(),
 		taskOutputToolDefinition(),
 		bashToolDefinition(),
 		globToolDefinition(),
@@ -31,7 +32,6 @@ func GouParityToolList() []ToolDefinition {
 		todoWriteToolDefinition(),
 		webSearchToolDefinition(),
 		taskStopToolDefinition(),
-		askUserQuestionToolDefinition(),
 		SkillToolDefinition(),
 		enterPlanModeToolDefinition(),
 		sendMessageToolDefinition(),

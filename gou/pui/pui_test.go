@@ -231,7 +231,8 @@ func TestBuildDemoParams_useEmbeddedToolsAPI(t *testing.T) {
 	}
 	raw := p.RuntimeContext.ToolUseContext.Options.Tools
 	var defs []struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}
 	if err := json.Unmarshal(raw, &defs); err != nil {
 		t.Fatal(err)
@@ -243,6 +244,9 @@ func TestBuildDemoParams_useEmbeddedToolsAPI(t *testing.T) {
 	for _, d := range defs {
 		if d.Name == "Agent" {
 			seenAgent = true
+			if !strings.Contains(d.Description, "not confident") || !strings.Contains(d.Description, "- general-purpose:") {
+				t.Fatalf("Agent tool should include built-in whenToUse lines from PatchAgentToolDescriptionWithBuiltins; desc len=%d", len(d.Description))
+			}
 			break
 		}
 	}

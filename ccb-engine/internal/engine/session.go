@@ -13,6 +13,8 @@ import (
 	"goc/ccb-engine/internal/protocol"
 	"goc/ccb-engine/internal/toolinput"
 	"goc/ccb-engine/internal/toolpolicy"
+	"goc/ccb-engine/internal/toolsearch"
+	"goc/modelenv"
 )
 
 const maxToolRounds = 24
@@ -74,13 +76,41 @@ func (s *Session) HydrateFromMessages(msgs []anthropic.Message) uint64 {
 type RunTurnOption func(*runTurnOptions)
 
 type runTurnOptions struct {
-	permissionContext json.RawMessage
+	permissionContext     json.RawMessage
+	modelID               string
+	hasPendingMcpServers  bool
+	pendingMcpServerNames []string
 }
 
 // WithPermissionContext passes TS-provided JSON for Go-side allowlisting (see toolpolicy).
 func WithPermissionContext(raw json.RawMessage) RunTurnOption {
 	return func(o *runTurnOptions) {
 		o.permissionContext = raw
+	}
+}
+
+// WithModelID passes the request model id for tool-search gating (mirrors TS modelSupportsToolReference / isToolSearchEnabled model checks).
+func WithModelID(id string) RunTurnOption {
+	return func(o *runTurnOptions) {
+		o.modelID = strings.TrimSpace(id)
+	}
+}
+
+// WithPendingMcpServers mirrors options.hasPendingMcpServers in src/services/api/claude.ts (keeps ToolSearch when MCP still connecting).
+func WithPendingMcpServers(pending bool) RunTurnOption {
+	return func(o *runTurnOptions) {
+		o.hasPendingMcpServers = pending
+	}
+}
+
+// WithPendingMcpServerNames optional display names for connecting MCP servers (TS ToolSearch empty-result copy).
+func WithPendingMcpServerNames(names []string) RunTurnOption {
+	return func(o *runTurnOptions) {
+		if len(names) == 0 {
+			o.pendingMcpServerNames = nil
+			return
+		}
+		o.pendingMcpServerNames = append([]string(nil), names...)
 	}
 }
 
@@ -96,6 +126,11 @@ func (s *Session) RunTurn(ctx context.Context, completer llm.TurnCompleter, tool
 		fn(&rtOpts)
 	}
 
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx = ContextWithToolTurn(ctx, tools, rtOpts.hasPendingMcpServers, rtOpts.pendingMcpServerNames)
+
 	for round := 0; round < maxToolRounds; round++ {
 		msgs := func() []anthropic.Message {
 			s.mu.Lock()
@@ -103,7 +138,17 @@ func (s *Session) RunTurn(ctx context.Context, completer llm.TurnCompleter, tool
 			return s.cloneMessagesLocked()
 		}()
 
-		result, err := completer.Complete(ctx, msgs, tools, system)
+		modelID := rtOpts.modelID
+		if modelID == "" {
+			modelID = modelenv.ResolveWithFallback("")
+		}
+		openAI := llm.UseOpenAICompat()
+		wireCfg := toolsearch.BuildWireConfig(modelID, tools, rtOpts.hasPendingMcpServers, openAI)
+		wiredTools := toolsearch.ApplyWire(tools, msgs, wireCfg)
+		apiMsgs := toolsearch.PrepareAnthropicMessages(msgs, tools, wireCfg)
+		toolsearch.LogWireRound(round, modelID, msgs, wireCfg, openAI, tools, wiredTools)
+
+		result, err := completer.Complete(ctx, apiMsgs, wiredTools, system)
 		if err != nil {
 			s.emit(protocol.ErrEvent("api_error", err.Error()))
 			return err

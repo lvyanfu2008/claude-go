@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"goc/commands/featuregates"
+	"goc/tstenv"
 )
 
 func envTruthyMsg(k string) bool {
@@ -60,6 +61,11 @@ func OptionsFromEnv() Options {
 	}
 	o.ExperimentalSkillSearch = featuregates.Feature("EXPERIMENTAL_SKILL_SEARCH") || strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME")) != ""
 	o.VerifyPlanToolEnabled = envTruthyMsg("CLAUDE_CODE_VERIFY_PLAN")
-	o.ToolSearchEnabled = envTruthyMsg("CLAUDE_CODE_GO_TOOL_SEARCH")
+	// Mirrors isToolSearchEnabledOptimistic (src/utils/toolSearch.ts); CLAUDE_CODE_GO_TOOL_SEARCH=1 still forces optimistic on.
+	if envTruthyMsg("CLAUDE_CODE_GO_TOOL_SEARCH") {
+		o.ToolSearchEnabled = true
+	} else {
+		o.ToolSearchEnabled = tstenv.ToolSearchEnabledOptimistic()
+	}
 	return o
 }

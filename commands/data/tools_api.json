@@ -1,11 +1,11 @@
 {
   "meta": {
-    "source": "src/tools.ts getTools(getEmptyToolPermissionContext()) + toolToAPISchema",
+    "source": "src/tools.ts getTools(getEmptyToolPermissionContext()) + toolToAPISchema → data/exports",
     "script": "scripts/export-tools-registry-json.ts",
     "modelUsedForSchema": "claude-sonnet-4-20250514",
-    "exportedAt": "2026-04-09T00:38:19.650Z",
+    "exportedAt": "2026-04-11T10:13:44.366Z",
     "toolCount": 23,
-    "note": "Compare with Go GouParityToolList / GouDemoParityToolsJSON. MCP tools not included. Membership depends on export-time env (FEATURE_*, USER_TYPE, ENABLE_LSP_TOOL, etc.)."
+    "note": "Compare with Go GouParityToolList / GouDemoParityToolsJSON. MCP tools not included. Membership depends on export-time env (FEATURE_*, USER_TYPE, ENABLE_LSP_TOOL, etc.). Go toolpool.GetTools mirrors AskUserQuestionTool.isEnabled: omit AskUserQuestion when (FEATURE_KAIROS or FEATURE_KAIROS_CHANNELS) and CLAUDE_CODE_GO_ALLOWED_CHANNELS is non-empty (comma-separated channel ids), matching TS getAllowedChannels().length > 0."
   },
   "tools": [
     {
