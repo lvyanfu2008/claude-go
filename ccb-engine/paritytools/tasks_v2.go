@@ -30,21 +30,6 @@ const (
 
 var v2PathSanitize = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
 
-// TodoV2Enabled mirrors isTodoV2Enabled (tasks.ts): CLAUDE_CODE_ENABLE_TASKS forces on;
-// otherwise off when the session is treated as non-interactive.
-//
-// Go uses CLAUDE_CODE_NON_INTERACTIVE or GOU_DEMO_NON_INTERACTIVE as non-interactive signals
-// (TS uses in-app session state). Set CLAUDE_CODE_ENABLE_TASKS=1 for tools in non-interactive runs.
-func TodoV2Enabled() bool {
-	if commands.IsEnvTruthy("CLAUDE_CODE_ENABLE_TASKS") {
-		return true
-	}
-	if commands.IsEnvTruthy("CLAUDE_CODE_NON_INTERACTIVE") || commands.IsEnvTruthy("GOU_DEMO_NON_INTERACTIVE") {
-		return false
-	}
-	return true
-}
-
 func sanitizePathComponentV2(s string) string {
 	return v2PathSanitize.ReplaceAllString(s, "-")
 }
@@ -496,7 +481,7 @@ func errTodoV2Disabled(tool string) error {
 // TaskCreateFromJSON implements TaskCreate (TS TaskCreateTool); skips executeTaskCreatedHooks.
 func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
-	if !TodoV2Enabled() {
+	if !commands.TodoV2Enabled() {
 		return "", true, errTodoV2Disabled("TaskCreate")
 	}
 	var in struct {
@@ -528,7 +513,7 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 // TaskGetFromJSON implements TaskGet (TS TaskGetTool).
 func TaskGetFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
-	if !TodoV2Enabled() {
+	if !commands.TodoV2Enabled() {
 		return "", true, errTodoV2Disabled("TaskGet")
 	}
 	var in struct {
@@ -566,7 +551,7 @@ func TaskGetFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 func TaskListFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
 	_ = raw
-	if !TodoV2Enabled() {
+	if !commands.TodoV2Enabled() {
 		return "", true, errTodoV2Disabled("TaskList")
 	}
 	all, err := v2ListTasks(taskListID(cfg))
@@ -618,7 +603,7 @@ func TaskListFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool
 // TaskUpdateFromJSON implements TaskUpdate (TS TaskUpdateTool) without hooks, mailbox, or verification nudge.
 func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
-	if !TodoV2Enabled() {
+	if !commands.TodoV2Enabled() {
 		return "", true, errTodoV2Disabled("TaskUpdate")
 	}
 	var in struct {

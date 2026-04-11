@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"goc/commands"
 	"goc/commands/featuregates"
 	"goc/types"
 )
@@ -40,6 +41,11 @@ func toolSpecPerToolEnabled(t types.ToolSpec) bool {
 	switch t.Name {
 	case "AskUserQuestion":
 		return AskUserQuestionToolEnabled()
+	case "TodoWrite":
+		// Mirrors TodoWriteTool.isEnabled (TS): hidden when Todo v2 is on.
+		return !commands.TodoV2Enabled()
+	case "TaskCreate", "TaskGet", "TaskList", "TaskUpdate":
+		return commands.TodoV2Enabled()
 	default:
 		return true
 	}
