@@ -12,6 +12,7 @@
 // is set and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]): that path takes
 // precedence over localturn for the same turn; otherwise localturn is used when ccb-inline is on.
 // When a tool gate returns ask, GOU_QUERY_ASK_STRATEGY=allow auto-allows for headless demo (maps to [toolexecution.ExecutionDeps.AskResolver]).
+// GOU_TOOLEXEC_BASH_SANDBOX_1B=1 enables permissions.ts whole-tool ask bypass on Bash when the tool input carries a non-empty command without dangerously_disable_sandbox (see toolexecution.WholeToolAskSkippedForBash1b).
 // Go-side init port (subset of TS init.ts): GOU_DEMO_GO_INIT=1 runs [goc/claudeinit.Init] instead of only [settingsfile.EnsureProjectClaudeEnvOnce] (Init includes Ensure). See docs/plans/go-init-port.md.
 // Go local tool parity (embedded localturn): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
 //
@@ -901,6 +902,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								qdeps := query.ProductionDeps()
 								te := toolexecution.ExecutionDeps{InvokeTool: runner.Run}
+								// Opt-in TS permissions.ts 1b: whole-tool alwaysAsk on Bash skipped when input looks sandboxed (see toolexecution.BashSandboxRule1b).
+								if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
+									te.SandboxingEnabled = true
+									te.AutoAllowBashWholeToolAskWhenSandboxed = true
+								}
 								switch strings.TrimSpace(strings.ToLower(os.Getenv("GOU_QUERY_ASK_STRATEGY"))) {
 								case "allow":
 									te.AskResolver = func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {

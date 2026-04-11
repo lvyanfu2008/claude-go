@@ -26,6 +26,10 @@ type ExecutionDeps struct {
 	PreToolHookPermission *PermissionDecision
 	// ToolPermission optional deny/ask rules for [RuleBasedDecisionForTool] after the query gate.
 	ToolPermission *types.ToolPermissionContextData
+	// SandboxingEnabled and AutoAllowBashWholeToolAskWhenSandboxed together enable permissions.ts 1b:
+	// whole-tool alwaysAsk on [BashToolName] is skipped when [BashInputUsesSandboxForRule1b] is true (see [WholeToolAskSkippedForBash1b]).
+	SandboxingEnabled                      bool
+	AutoAllowBashWholeToolAskWhenSandboxed bool
 }
 
 // WithExecutionDeps attaches deps for [DepsFromContext] (used by check_permissions path).

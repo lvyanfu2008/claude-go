@@ -107,6 +107,36 @@ func TestCheckRuleBasedPermissions_toolAskRuleContent1f(t *testing.T) {
 	}
 }
 
+func TestCheckRuleBasedPermissions_bashWholeToolAskBypass1b(t *testing.T) {
+	perm := types.EmptyToolPermissionContextData()
+	b, err := json.Marshal(map[string][]string{"localSettings": {"Bash"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	perm.AlwaysAskRules = b
+	types.NormalizeToolPermissionContextData(&perm)
+	b1b := &BashSandboxRule1b{SandboxingEnabled: true, AutoAllowWholeToolAskWhenSandboxed: true}
+	tcx := &ToolUseContext{ToolPermission: &perm, BashSandboxRule1b: b1b}
+	tool := stubNamedTool{n: BashToolName}
+	d := CheckRuleBasedPermissions(context.Background(), tool, json.RawMessage(`{"command":"ls -la"}`), tcx)
+	if d != nil {
+		t.Fatalf("expected nil (1b bypass), got %#v", d)
+	}
+}
+
+func TestCheckRuleBasedPermissions_bashWholeToolAskNoBypassWithoutSandboxFlags(t *testing.T) {
+	perm := types.EmptyToolPermissionContextData()
+	b, _ := json.Marshal(map[string][]string{"localSettings": {"Bash"}})
+	perm.AlwaysAskRules = b
+	types.NormalizeToolPermissionContextData(&perm)
+	tcx := &ToolUseContext{ToolPermission: &perm}
+	tool := stubNamedTool{n: BashToolName}
+	d := CheckRuleBasedPermissions(context.Background(), tool, json.RawMessage(`{"command":"ls"}`), tcx)
+	if d == nil || d.Behavior != PermissionAsk {
+		t.Fatalf("got %#v", d)
+	}
+}
+
 func TestCheckRuleBasedPermissions_toolAskSafety1g(t *testing.T) {
 	tool := stubRuleCheckTool{
 		stubNamedTool: stubNamedTool{n: "Write"},

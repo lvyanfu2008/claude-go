@@ -101,7 +101,10 @@ func RunToolUseChan(
 				ch <- streamingtool.ToolRunUpdate{Message: &m}
 				return
 			}
-			tcx := &ToolUseContext{ToolPermission: deps.ToolPermission}
+			tcx := &ToolUseContext{
+				ToolPermission:    deps.ToolPermission,
+				BashSandboxRule1b: bashSandboxRule1bFromExecutionDeps(deps),
+			}
 			res, err := tool.Call(ctx, block.ID, block.Input, tcx, nil, AssistantMeta{UUID: assistant.UUID}, nil)
 			if ctx.Err() != nil {
 				m := syntheticAborted(deps, block.ID, assistant.UUID)
@@ -126,7 +129,7 @@ func RunToolUseChan(
 	return ch
 }
 
-// applyRuleBasedDecisionInRun enforces permissions.ts 1a–1b after the query gate ([RuleBasedDecisionForTool]).
+// applyRuleBasedDecisionInRun enforces permissions.ts 1a–1b (incl. Bash 1b sandbox whole-tool ask bypass) after the query gate.
 // Returns true when a terminal tool_result was sent on ch.
 func applyRuleBasedDecisionInRun(
 	ctx context.Context,
@@ -136,7 +139,10 @@ func applyRuleBasedDecisionInRun(
 	assistantUUID string,
 	ch chan<- streamingtool.ToolRunUpdate,
 ) bool {
-	tcx := &ToolUseContext{ToolPermission: deps.ToolPermission}
+	tcx := &ToolUseContext{
+		ToolPermission:    deps.ToolPermission,
+		BashSandboxRule1b: bashSandboxRule1bFromExecutionDeps(deps),
+	}
 	var rd *PermissionDecision
 	if deps.Registry != nil {
 		if tool, ok := deps.Registry.FindToolByName(toolName); ok {
@@ -144,7 +150,7 @@ func applyRuleBasedDecisionInRun(
 		}
 	}
 	if rd == nil {
-		rd = RuleBasedDecisionForTool(toolName, deps.ToolPermission)
+		rd = wholeToolAlwaysDenyAsk(toolName, input, deps.ToolPermission, bashSandboxRule1bFromExecutionDeps(deps))
 	}
 	if rd == nil {
 		return false

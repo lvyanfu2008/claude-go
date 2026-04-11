@@ -77,6 +77,13 @@ func CheckPermissionsAndCallTool(
 		}
 		tcxUse = &merged
 	}
+	if tcxUse.BashSandboxRule1b == nil {
+		if b := bashSandboxRule1bFromExecutionDeps(deps); b != nil {
+			merged := *tcxUse
+			merged.BashSandboxRule1b = b
+			tcxUse = &merged
+		}
+	}
 	hookPerm := deps.PreToolHookPermission
 	dec, _, err := ResolveHookPermissionDecision(ctx, ResolveHookPermissionInput{
 		HookPermission: hookPerm,

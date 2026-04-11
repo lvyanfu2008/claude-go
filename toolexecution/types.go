@@ -29,6 +29,8 @@ type ToolUseContext struct {
 	RequireCanUseTool bool
 	// ToolPermission optional merged settings (alwaysDeny / alwaysAsk); see [CheckRuleBasedPermissions].
 	ToolPermission *types.ToolPermissionContextData
+	// BashSandboxRule1b optional; when set with both flags true, whole-tool alwaysAsk on Bash may be skipped (permissions.ts 1b). Usually copied from [ExecutionDeps].
+	BashSandboxRule1b *BashSandboxRule1b
 }
 
 // MessageUpdate mirrors MessageUpdateLazy from toolExecution.ts (message + optional context modifier).
