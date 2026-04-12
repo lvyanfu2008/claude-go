@@ -36,3 +36,17 @@ func TestSegments_toolResult(t *testing.T) {
 		t.Fatalf("%+v", segs)
 	}
 }
+
+func TestSegments_assistantEmptyTextBlocksShowsPlaceholder(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]any{
+		{"type": "text", "text": ""},
+	})
+	msg := types.Message{Type: types.MessageTypeAssistant, Content: raw}
+	segs := SegmentsFromMessage(msg)
+	if len(segs) != 1 || segs[0].Kind != SegTextMarkdown {
+		t.Fatalf("%+v", segs)
+	}
+	if !strings.Contains(segs[0].Text, "no visible text") {
+		t.Fatal(segs[0].Text)
+	}
+}

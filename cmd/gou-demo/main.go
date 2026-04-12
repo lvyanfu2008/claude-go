@@ -330,8 +330,13 @@ func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams
 				programSend(gouQueryYieldMsg{Message: *y.Message})
 			}
 			if y.Terminal != nil {
+				// Query encodes model/stream failures on Terminal.Error (second iter return is always nil err).
+				var doneErr error
+				if y.Terminal.Error != nil {
+					doneErr = y.Terminal.Error
+				}
 				if programSend != nil {
-					programSend(gouQueryDoneMsg{Err: nil})
+					programSend(gouQueryDoneMsg{Err: doneErr})
 				}
 				return
 			}

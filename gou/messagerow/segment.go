@@ -124,6 +124,10 @@ func segmentsFromContentArray(msg types.Message) []Segment {
 	for _, b := range blocks {
 		out = append(out, segmentFromBlock(b)...)
 	}
+	if len(out) == 0 && (msg.Type == types.MessageTypeAssistant || msg.Type == types.MessageTypeUser) {
+		// e.g. content: [{type:"text",text:""}] or only unrecognized blocks — avoid a blank body under the role header.
+		return []Segment{{Kind: SegTextMarkdown, Text: "[" + string(msg.Type) + " · no visible text in content blocks]"}}
+	}
 	return out
 }
 
