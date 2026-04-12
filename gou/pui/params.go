@@ -72,6 +72,8 @@ type DemoConfig struct {
 	TSContextBridge *tscontext.Snapshot `json:"-"`
 	// IsRemoteMode when true includes /session in GetCommands output (matches src/bootstrap getIsRemoteMode).
 	IsRemoteMode bool `json:"-"`
+	// PreExpansionInput optional; when non-nil, copied to [processuserinput.ProcessUserInputParams.PreExpansionInput] (TS preExpansionInput).
+	PreExpansionInput *string `json:"-"`
 }
 
 // BuildDemoParams builds params for gou-demo: prompt mode, skip attachments, minimal ToolUseContext.
@@ -195,7 +197,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 			Messages: msgs,
 		},
 	}
-	return &processuserinput.ProcessUserInputParams{
+	out := &processuserinput.ProcessUserInputParams{
 		Input:                raw,
 		Mode:                 types.PromptInputModePrompt,
 		Messages:             msgs,
@@ -205,5 +207,10 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		SkillListingCommands: listing,
 		RuntimeContext:       rc,
 		SkipAttachments:      &skipAtt,
-	}, nil
+	}
+	if cfg.PreExpansionInput != nil {
+		s := *cfg.PreExpansionInput
+		out.PreExpansionInput = &s
+	}
+	return out, nil
 }

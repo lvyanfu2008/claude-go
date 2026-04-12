@@ -5,6 +5,7 @@ package messagerow
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"goc/types"
@@ -29,6 +30,8 @@ const (
 type Segment struct {
 	Kind SegmentKind
 	Text string
+	// IsToolError is set for tool_result / advisor blocks when TS is_error is true (OutputLine error styling).
+	IsToolError bool
 }
 
 const maxDisplayNest = 8
@@ -151,7 +154,8 @@ func segmentFromBlock(b types.MessageContentBlock) []Segment {
 		}
 		sb.WriteByte('\n')
 		sb.WriteString(toolResultContentPreview(b.Content))
-		return []Segment{{Kind: SegAdvisorToolResult, Text: strings.TrimSpace(sb.String())}}
+		isErr := b.IsError != nil && *b.IsError
+		return []Segment{{Kind: SegAdvisorToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr}}
 	case "tool_result":
 		var sb strings.Builder
 		sb.WriteString("tool_result")
@@ -159,12 +163,13 @@ func segmentFromBlock(b types.MessageContentBlock) []Segment {
 			sb.WriteString(" tool_use_id=")
 			sb.WriteString(b.ToolUseID)
 		}
-		if b.IsError != nil && *b.IsError {
+		isErr := b.IsError != nil && *b.IsError
+		if isErr {
 			sb.WriteString(" [error]")
 		}
 		sb.WriteByte('\n')
 		sb.WriteString(toolResultContentPreview(b.Content))
-		return []Segment{{Kind: SegToolResult, Text: strings.TrimSpace(sb.String())}}
+		return []Segment{{Kind: SegToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr}}
 	case "thinking", "redacted_thinking":
 		t := b.Thinking
 		if t == "" {
@@ -207,15 +212,24 @@ func formatNamedTool(kind, name, id string, input json.RawMessage) string {
 	return strings.TrimSpace(sb.String())
 }
 
+func toolResultPreviewMax() int {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_VERBOSE_TOOL_OUTPUT")))
+	if v == "1" || v == "true" || v == "yes" || v == "on" {
+		return 24000
+	}
+	return 1200
+}
+
 func toolResultPreview(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
 	}
+	max := toolResultPreviewMax()
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
-		return compactJSON(s, 1200)
+		return compactJSON(s, max)
 	}
-	return compactJSON(string(raw), 1200)
+	return compactJSON(string(raw), max)
 }
 
 func toolResultContentPreview(raw json.RawMessage) string {

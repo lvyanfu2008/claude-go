@@ -21,7 +21,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt.
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line in prompt). F2 toggles slash-command picker. When GOU_QUERY_ASK_STRATEGY is unset, tool permission asks use a modal (Y/N).
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled skills via [goc/slashresolve.ResolveBundledSkill] (embedded TS-expanded prompts under slashresolve/bundleddata). Optional Bun scripts/slash-resolve-bridge.ts remains for commands not covered by the Go embed.
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
@@ -43,7 +43,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
@@ -62,7 +61,9 @@ import (
 	"goc/gou/layout"
 	"goc/gou/markdown"
 	"goc/gou/messagerow"
+	"goc/gou/prompt"
 	"goc/gou/pui"
+	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/gou/virtualscroll"
 	"goc/mcpcommands"
@@ -345,10 +346,15 @@ type streamTick struct{}
 
 type model struct {
 	store  *conversation.Store
-	ti     textinput.Model
+	pr     prompt.Model
 	width  int
 	height int
 	cols   int // content width for wrap + virtual scroll
+
+	permAsk           *permissionAskOverlay
+	slashPick         *slashPickerOverlay
+	slashCommands     []types.Command
+	slashCommandsOnce bool
 
 	scrollTop    int
 	pendingDelta int
@@ -367,7 +373,6 @@ type model struct {
 	// layout
 	titleH  int
 	streamH int // reserved lines for streaming strip inside message pane
-	inputH  int
 
 	// ccbSend / ccbInline set by BindCCB after tea.NewProgram (real model path when ccbInline and streaming parity gates + key).
 	ccbSend   func(tea.Msg)
@@ -491,11 +496,7 @@ func main() {
 }
 
 func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot) *model {
-	ti := textinput.New()
-	ti.Placeholder = "message — Enter to send, q quit"
-	ti.Focus()
-	ti.CharLimit = 4000
-	ti.Width = 60
+	pr := prompt.New()
 
 	var tr *sessiontranscript.Store
 	if gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
@@ -509,13 +510,12 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 
 	return &model{
 		store:               st,
-		ti:                  ti,
+		pr:                  pr,
 		sticky:              true,
 		heightCache:         make(map[string]int),
 		skillListingSent:    make(map[string]struct{}),
 		titleH:              1,
 		streamH:             4,
-		inputH:              3,
 		mcpCommandsJSONPath: mcpCommandsJSONPath,
 		mcpToolsJSONPath:    mcpToolsJSONPath,
 		tsBridge:            tsBridge,
@@ -625,7 +625,18 @@ func seedDemo(s *conversation.Store) {
 }
 
 func (m *model) Init() tea.Cmd {
-	return textinput.Blink
+	return nil
+}
+
+func (m *model) inputAreaHeight() int {
+	n := m.pr.LineCount() + 2
+	if n < 4 {
+		n = 4
+	}
+	if n > 16 {
+		n = 16
+	}
+	return n
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -635,23 +646,54 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.cols = max(12, msg.Width-4)
-		m.ti.Width = m.cols
+		_ = m.pr.Update(msg)
 		if oldCols > 0 && oldCols != m.cols && len(m.heightCache) > 0 {
 			virtualscroll.ScaleHeightCache(m.heightCache, oldCols, m.cols)
 		} else {
 			m.rebuildHeightCache()
 		}
-		return m, textinput.Blink
+		return m, nil
+
+	case gouPermissionAskMsg:
+		m.permAsk = &permissionAskOverlay{
+			toolName:  msg.toolName,
+			toolUseID: msg.toolUseID,
+			input:     msg.input,
+			prompt:    msg.prompt,
+			replyCh:   msg.replyCh,
+		}
+		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q", "esc":
+		if m.permAsk != nil && msg.String() == "ctrl+c" {
+			m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
 			return m, tea.Quit
-		case "up", "k":
+		}
+		if m.handlePermissionKey(msg) {
+			return m, nil
+		}
+		if m.slashPick != nil {
+			if m.handleSlashPickerKey(msg) {
+				return m, nil
+			}
+		}
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		case "esc":
+			if m.slashPick != nil {
+				m.slashPick = nil
+				return m, nil
+			}
+			return m, tea.Quit
+		case "f2":
+			m.toggleSlashPicker()
+			return m, nil
+		case "up":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-1)
 			return m, nil
-		case "down", "j":
+		case "down":
 			m.sticky = false
 			m.scrollTop += 1
 			return m, nil
@@ -668,23 +710,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.scrollTop = 1 << 30
 			return m, nil
 		}
-		if msg.Type == tea.KeyEnter {
-			line := strings.TrimSpace(m.ti.Value())
-			var cmd tea.Cmd
-			m.ti, cmd = m.ti.Update(msg)
+		m.pr.Update(msg)
+		if m.pr.Submitted() {
+			fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
+			m.pr.SetValue("")
+			line := strings.TrimSpace(fullPrompt)
 			if line == "" {
-				return m, cmd
+				return m, nil
 			}
+			var cmd tea.Cmd
 			gouDemoTracef("enter input=%q", previewForTrace(line, 120))
 			cwd, _ := os.Getwd()
 			repoRoot := pui.FindRepoRootForBridge(cwd)
 			mergedLang, mergedOutName, mergedOutPrompt := gouDemoMergedSystemLocale()
+			preExp := fullPrompt
 			demoCfg := pui.DemoConfig{
 				RepoRoot:            repoRoot,
 				SessionID:           m.store.ConversationID,
 				Language:            mergedLang,
 				MCPCommandsJSONPath: m.mcpCommandsJSONPath,
 				MCPToolsJSONPath:    m.mcpToolsJSONPath,
+				PreExpansionInput:   &preExp,
 			}
 			if m.tsBridge != nil {
 				demoCfg.TSContextBridge = m.tsBridge
@@ -720,7 +766,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			gouDemoTracef("after ApplyBaseResult shouldQuery=%v effectiveShouldQuery=%v hadExecutionRequest=%v messagesAppended=%d",
 				r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(r.Messages))
 			if out.NextInput != "" {
-				m.ti.SetValue(out.NextInput)
+				m.pr.SetValue(out.NextInput)
 			}
 			m.rebuildHeightCache()
 			m.sticky = true
@@ -908,12 +954,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									te.SandboxingEnabled = true
 									te.AutoAllowBashWholeToolAskWhenSandboxed = true
 								}
-								switch strings.TrimSpace(strings.ToLower(os.Getenv("GOU_QUERY_ASK_STRATEGY"))) {
-								case "allow":
-									te.AskResolver = func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {
-										return toolexecution.AllowDecision(), nil
-									}
-								}
+								m.installAskResolver(&te)
 								qdeps.ToolexecutionDeps = te
 								if m.transcript != nil && gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
 									tr := m.transcript
@@ -988,9 +1029,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
-		var cmd tea.Cmd
-		m.ti, cmd = m.ti.Update(msg)
-		return m, cmd
+		return m, nil
 
 	case gouQueryYieldMsg:
 		m.store.AppendMessage(msg.Message)
@@ -1003,6 +1042,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
 			m.rebuildHeightCache()
+		} else if gouDemoEnvTruthy("GOU_DEMO_BELL") {
+			fmt.Print("\a")
 		}
 		gouDemoLogStoreMessages("after_query_stream", m.store)
 		if m.transcript != nil {
@@ -1067,13 +1108,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
-	m.ti, cmd = m.ti.Update(msg)
-	return m, cmd
+	m.pr.Update(msg)
+	return m, nil
 }
 
 func listViewportH(m *model) int {
-	h := m.height - m.titleH - m.streamH - m.inputH - 2
+	h := m.height - m.titleH - m.streamH - m.inputAreaHeight() - 2
 	if h < 3 {
 		h = 3
 	}
@@ -1094,7 +1134,7 @@ func (m *model) rebuildHeightCache() {
 
 // measureMessageRows matches final View styling (ANSI + wrap) for VirtualMessageList heightCache parity.
 func (m *model) measureMessageRows(msg types.Message, cols int) int {
-	header := lipgloss.NewStyle().Bold(true).Foreground(roleColor(msg.Type)).Render(string(msg.Type))
+	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	body := formatMessageSegments(messagerow.SegmentsFromMessage(msg), cols)
 	block := header + "\n" + body
 	return max(1, layout.WrappedRowCount(block, cols))
@@ -1148,7 +1188,7 @@ func (m *model) View() string {
 	m.prevRange.Start, m.prevRange.End = vr.Start, vr.End
 
 	var b strings.Builder
-	title := lipgloss.NewStyle().Bold(true).Render("gou-demo — grouped + collapsed + server blocks  ↑↓ PgUp/Dn  End  q")
+	title := lipgloss.NewStyle().Bold(true).Render("gou-demo — ↑↓ scroll  F2 slash  Enter send  Ctrl+J newline  q quit")
 	b.WriteString(title)
 	b.WriteByte('\n')
 
@@ -1174,7 +1214,7 @@ func (m *model) View() string {
 	// Same transcript as TS: show in-flight assistant text in the main pane, not only the small stream: strip.
 	if strings.TrimSpace(m.store.StreamingText) != "" {
 		msgPane.WriteByte('\n')
-		head := lipgloss.NewStyle().Bold(true).Foreground(roleColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 		msgPane.WriteString(head)
 		msgPane.WriteByte('\n')
 		msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), cols))
@@ -1215,12 +1255,25 @@ func (m *model) View() string {
 	b.WriteString(strings.Join(streamRows, "\n"))
 	b.WriteByte('\n')
 
-	b.WriteString(m.ti.View())
-	return lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
+	promptView := m.pr.View()
+	hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render("Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands")
+	b.WriteString(promptView)
+	b.WriteByte('\n')
+	b.WriteString(hint)
+	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
+	if m.permAsk != nil {
+		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.width))
+		out = lipgloss.JoinVertical(lipgloss.Left, out, mod)
+	}
+	if m.slashPick != nil {
+		overlay := m.renderSlashPicker(m.width, min(14, m.height/3))
+		out = lipgloss.JoinVertical(lipgloss.Left, out, overlay)
+	}
+	return out
 }
 
 func renderMessageRow(m types.Message, cols, maxRows int) string {
-	header := lipgloss.NewStyle().Bold(true).Foreground(roleColor(m.Type)).Render(string(m.Type))
+	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(m.Type)).Render(string(m.Type))
 	body := formatMessageSegments(messagerow.SegmentsFromMessage(m), cols)
 	block := header + "\n" + body
 	wrapped := layout.WrapForViewport(block, cols)
@@ -1241,13 +1294,21 @@ func formatMessageSegments(segs []messagerow.Segment, cols int) string {
 		case messagerow.SegToolUse:
 			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true).Render("⚙ "+seg.Text))
 		case messagerow.SegToolResult:
-			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render("↩ "+seg.Text))
+			st := lipgloss.NewStyle().Foreground(theme.DimMuted())
+			if seg.IsToolError {
+				st = lipgloss.NewStyle().Foreground(theme.ToolError())
+			}
+			parts = append(parts, st.Render("↩ "+seg.Text))
 		case messagerow.SegThinking:
 			parts = append(parts, lipgloss.NewStyle().Faint(true).Italic(true).Render(seg.Text))
 		case messagerow.SegServerToolUse:
 			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Render("⎈ "+seg.Text))
 		case messagerow.SegAdvisorToolResult:
-			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Render("✧ "+seg.Text))
+			st := lipgloss.NewStyle().Foreground(lipgloss.Color("183"))
+			if seg.IsToolError {
+				st = lipgloss.NewStyle().Foreground(theme.ToolError())
+			}
+			parts = append(parts, st.Render("✧ "+seg.Text))
 		case messagerow.SegGroupedToolUse:
 			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("▦ "+seg.Text))
 		case messagerow.SegCollapsedReadSearch:
@@ -1289,15 +1350,4 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))
-}
-
-func roleColor(t types.MessageType) lipgloss.Color {
-	switch t {
-	case types.MessageTypeUser:
-		return lipgloss.Color("39")
-	case types.MessageTypeAssistant:
-		return lipgloss.Color("141")
-	default:
-		return lipgloss.Color("245")
-	}
 }

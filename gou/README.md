@@ -55,7 +55,7 @@
 其它约定：
 
 - **`Enter`**：`BuildDemoParams` 组装 `ProcessUserInputParams`（**`uuid`**、`PromptInputModePrompt`、`SkipAttachments`、最小 `ProcessUserInputContextData`）。普通 prompt 与 TS 一样走 **`ProcessTextPrompt`**；**`ExecuteUserPromptSubmitHooks`** 未注入时不在 base 内发 `query` execution。可选：`LogEvent` → **`tengu_input_prompt`**；**`CLAUDE_DEBUG_PROCESS_USER_INPUT`** → stderr **`[processUserInput:…]`**；**`FindCommand`** 用 **`commands` / `runtimeContext.options.commands`**；注入 **`ProcessBashCommand` / `ProcessSlashCommand`** 可替代 bash/slash 的 prepare **`execution_request`**；注入 **`ExecuteUserPromptSubmitHooksIter`**（`iter.Seq2`）可按件应用 hook 结果（对齐 TS `for await`）；若与 **`ExecuteUserPromptSubmitHooks`** 同时设置，**优先** Iter。
-- **斜杠**：输入以 `/` 开头时 **不调用** `ProcessUserInput`，直接 `SlashSkippedMessage`（避免未注入的 slash 执行器与 TS 分叉）。
+- **斜杠**：gou-demo 在 `Enter` 提交时调用 `ProcessUserInput` 并注入 **`ProcessSlashCommand`**（`NewSlashResolveProcessSlashCommand`）。**`F2`** 打开本地 slash 名称列表（来自 `GetCommands`）；仍不执行 bash/slash 的 **`execution_request`** 桩（见上表）。历史 **`SlashSkippedMessage`** 路径已不在 demo 主流程使用。
 - **命名**：包内对外类型与 TS 对齐优先：`ProcessUserInputBaseResultHandoff`（持久化标量子集）、`ApplyProcessUserInputBaseResult` / `ApplyBaseResult`；详见 [`goc/gou/pui/doc.go`](pui/doc.go)。
 
 ## 测试
@@ -72,7 +72,7 @@ Bubble Tea 最小界面：虚拟列表区间 + `conversation.Store` + 模拟 `St
 cd goc && go run ./cmd/gou-demo
 ```
 
-操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送，`q` / `Esc` 退出。
+操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表，`q` / `Esc` 退出。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
 
 **调试日志**：`GOU_DEMO_LOG_FILE=/path/to.log` 追加写入；或 `GOU_DEMO_LOG=1` 在 **stderr 为 TTY** 时默认写入 `~/.claude/debug/gou-demo-trace.txt`（全屏 TUI 与 stderr 混用会错位，故不用 stderr）；`GOU_DEMO_LOG_STDERR=1` 强制 stderr。行前缀 `[gou-demo]`。
 
