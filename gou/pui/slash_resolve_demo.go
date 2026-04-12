@@ -65,10 +65,13 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		cmd := processuserinput.FindCommand(parsed.CommandName, p.Commands)
 		if cmd == nil {
-			return &processuserinput.ProcessUserInputBaseResult{
-				Messages: []types.Message{SystemNotice(fmt.Sprintf("Unknown command: /%s", parsed.CommandName))},
-				ShouldQuery: false,
-			}, nil
+			// TS processSlashCommand: unknown names that do not "look like" commands fall through to a
+			// normal user prompt with shouldQuery. Gou-demo additionally treats unknown short names as
+			// plain prompts so `/ask …` and `/res …` reach the model instead of a dead "Unknown command".
+			return slashResultToBase(types.SlashResolveResult{
+				UserText: strings.TrimSpace(inputString),
+				Source:   types.SlashResolveUnknown,
+			}, attachmentMessages, uuid, p), nil
 		}
 
 		switch cmd.Type {

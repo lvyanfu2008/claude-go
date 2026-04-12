@@ -346,3 +346,19 @@ func TestBuildDemoParams_TSContextBridge_toolsAndCommands(t *testing.T) {
 		t.Fatalf("tools: %#v", toolDefs)
 	}
 }
+
+func TestSlashResolve_unknownSlashBecomesPrompt(t *testing.T) {
+	st := &conversation.Store{ConversationID: "t"}
+	p, err := BuildDemoParams("/ask what is 2+2", st, DemoConfig{SkipCommands: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ProcessSlashCommand = NewSlashResolveProcessSlashCommand(SlashResolveHandlerOptions{SessionID: "t"})
+	r, err := processuserinput.ProcessUserInput(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.ShouldQuery {
+		t.Fatalf("unknown slash should fall through to prompt: shouldQuery=%v messages=%d", r.ShouldQuery, len(r.Messages))
+	}
+}
