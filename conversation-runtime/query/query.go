@@ -45,7 +45,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 	_ = state
 
 	cfg := BuildQueryConfig()
-	// When params.StreamingParity is true, prefer HTTP SSE + streamingtool over CallModel (including [LocalTurnCallModel]).
+	// When params.StreamingParity is true, prefer HTTP SSE + streamingtool over CallModel.
 	useStream := params.StreamingParity && StreamingParityPathEnabled(cfg)
 	if deps.CallModel != nil || useStream {
 		// TS order before callModel: compact slice ([MessagesForQuery]), applyToolResultBudget ([runApplyToolResultBudget]),
@@ -121,6 +121,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		}
 		applyAutocompactSideEffects(&state, autoRes)
 
+		LogQueryUserContextIfEnabled("before_prepend", params.UserContext)
 		msgs := PrependUserContext(work, params.UserContext)
 
 		fullSystem := AppendSystemContext(params.SystemPrompt, params.SystemContext)
@@ -135,8 +136,14 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			ModelID:        strings.TrimSpace(params.ToolUseContext.Options.MainLoopModel),
 		}
 		if useStream {
-			if err := runStreamingParityModelLoop(ctx, params, msgs, in, deps, yield); err != nil {
-				return Terminal{Reason: TerminalReasonModelError, Error: err}, nil
+			var streamErr error
+			if StreamingUsesOpenAIChat() {
+				streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+			} else {
+				streamErr = runStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+			}
+			if streamErr != nil {
+				return Terminal{Reason: TerminalReasonModelError, Error: streamErr}, nil
 			}
 			return Terminal{Reason: TerminalReasonCompleted}, nil
 		}

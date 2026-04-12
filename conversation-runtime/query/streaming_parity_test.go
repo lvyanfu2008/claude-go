@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -10,6 +11,12 @@ import (
 	"goc/toolexecution"
 	"goc/types"
 )
+
+func TestMain(m *testing.M) {
+	// Default tests inject Anthropic StreamPost; user ~/.claude/settings.json may set modelType openai.
+	_ = os.Setenv("GOU_QUERY_STREAMING_FORCE_ANTHROPIC", "1")
+	os.Exit(m.Run())
+}
 
 // textOnlySSE is a minimal Anthropic-style stream (one text block, end_turn, message_stop).
 func textOnlySSE() string {

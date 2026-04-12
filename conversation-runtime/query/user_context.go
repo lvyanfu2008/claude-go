@@ -3,6 +3,7 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -42,11 +43,39 @@ func AppendSystemContext(system SystemPrompt, context map[string]string) SystemP
 	return AsSystemPrompt(out)
 }
 
+// LogQueryUserContextIfEnabled writes [QueryParams.UserContext] as JSON to stderr when
+// GOU_QUERY_LOG_USER_CONTEXT is truthy (1/true/yes/on). Large payloads are truncated after 64KiB.
+// Use to compare hosts vs TS: same env gate pattern as [BuildQueryConfig] gates.
+func LogQueryUserContextIfEnabled(tag string, context map[string]string) {
+	if !envTruthy("GOU_QUERY_LOG_USER_CONTEXT") {
+		return
+	}
+	const maxJSON = 64 << 10
+	n := 0
+	if context != nil {
+		n = len(context)
+	}
+	raw, err := json.Marshal(context)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "[query UserContext %s] marshal error: %v\n", tag, err)
+		return
+	}
+	s := string(raw)
+	trunc := ""
+	if len(s) > maxJSON {
+		s = s[:maxJSON]
+		trunc = fmt.Sprintf(" [truncated from %d bytes]", len(raw))
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "[query UserContext %s] keyCount=%d json=%s%s\n", tag, n, s, trunc)
+}
+
 // PrependUserContext mirrors src/utils/api.ts prependUserContext (production path).
 // TS skips prepending when NODE_ENV === 'test'; use [SkipUserContextInTest] for the same in Go tests.
 var SkipUserContextInTest bool
 
-// PrependUserContext prepends a meta user message when context is non-empty.
+// PrependUserContext prepends a meta user message when context is non-empty (same slice order as TS).
+// For [meta, …, assistant, …, plain user], [messagesapi.NormalizeMessagesForAPI] folds that meta into the
+// trailing plain user using the same mergeUserMessages/joinTextAtSeam behavior as TS.
 func PrependUserContext(messages []types.Message, context map[string]string) []types.Message {
 	if SkipUserContextInTest {
 		out := make([]types.Message, len(messages))

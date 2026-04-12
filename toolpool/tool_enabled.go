@@ -6,6 +6,7 @@ import (
 
 	"goc/commands"
 	"goc/commands/featuregates"
+	"goc/tstenv"
 	"goc/types"
 )
 
@@ -37,21 +38,45 @@ func AskUserQuestionToolEnabled() bool {
 	return false
 }
 
+func kairosCronEnabled() bool {
+	return !commands.IsEnvTruthy("CLAUDE_CODE_DISABLE_CRON")
+}
+
+func planModeToolsEnabled() bool {
+	if !(featuregates.Feature("KAIROS") || featuregates.Feature("KAIROS_CHANNELS")) {
+		return true
+	}
+	if !GoAllowedChannelsConfigured() {
+		return true
+	}
+	return false
+}
+
 func toolSpecPerToolEnabled(t types.ToolSpec) bool {
 	switch t.Name {
 	case "AskUserQuestion":
 		return AskUserQuestionToolEnabled()
 	case "TodoWrite":
-		// Mirrors TodoWriteTool.isEnabled (TS): hidden when Todo v2 is on.
 		return !commands.TodoV2Enabled()
 	case "TaskCreate", "TaskGet", "TaskList", "TaskUpdate":
 		return commands.TodoV2Enabled()
+	case "CronCreate", "CronDelete", "CronList":
+		return kairosCronEnabled()
+	case "EnterPlanMode", "ExitPlanMode":
+		return planModeToolsEnabled()
+	case "TaskOutput":
+		return !featuregates.UserTypeAnt()
+	case "ToolSearch":
+		return tstenv.ToolSearchEnabledOptimistic()
+	case "SendMessage", "TeamCreate", "TeamDelete":
+		return commands.AgentSwarmsEnabled()
 	default:
 		return true
 	}
 }
 
 // FilterToolsByPerToolEnabled mirrors the final isEnabled() pass in src/tools.ts getTools (lines 323–324).
+// Also covers tools gated only in getAllBaseTools via structural rules — see [EmbeddedSearchToolsActive] + [GetTools] for Glob/Grep.
 func FilterToolsByPerToolEnabled(tools []types.ToolSpec) []types.ToolSpec {
 	if len(tools) == 0 {
 		return tools

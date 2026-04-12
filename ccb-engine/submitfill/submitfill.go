@@ -3,7 +3,7 @@
 //
 // Contract (payload fields on SubmitUserTurn, optional):
 //   - fetch_system_prompt_if_empty (bool): when true, and system is empty after trim, run
-//     [querycontext.FetchSystemPromptParts] like gou-demo localturn.
+//     [querycontext.FetchSystemPromptParts] like gou-demo streaming parity / socket hosts.
 //   - cwd (string): working directory for context discovery; default os.Getwd().
 //   - extra_claude_md_roots ([]string): passed as [querycontext.FetchOpts.ExtraClaudeMdRoots]
 //     (still requires CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 for extra roots in claudemd).

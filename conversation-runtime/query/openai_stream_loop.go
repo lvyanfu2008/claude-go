@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,23 +12,21 @@ import (
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"
-	"goc/modelenv"
 	"goc/toolexecution"
 	"goc/types"
 )
 
-func yieldStreamingParity(ctx context.Context, deps *QueryDeps, qy QueryYield, yield func(QueryYield, error) bool) bool {
-	if !yield(qy, nil) {
-		return false
+func openAIBaseURLFromEnv() string {
+	b := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+	if b == "" {
+		return "https://api.openai.com/v1"
 	}
-	if deps != nil && deps.OnQueryYield != nil {
-		_ = deps.OnQueryYield(ctx, qy)
-	}
-	return true
+	return strings.TrimSuffix(b, "/")
 }
 
-// runStreamingParityModelLoop mirrors query.ts streaming path: Anthropic SSE + [streamingtool.StreamingToolExecutor].
-func runStreamingParityModelLoop(
+// runOpenAIStreamingParityModelLoop mirrors TS [queryModelOpenAI] + [adaptOpenAIStreamToAnthropic]:
+// POST /v1/chat/completions with stream:true, system as first role:system message, same tool runner as Anthropic parity.
+func runOpenAIStreamingParityModelLoop(
 	ctx context.Context,
 	params QueryParams,
 	work []types.Message,
@@ -40,32 +37,23 @@ func runStreamingParityModelLoop(
 	if deps == nil {
 		return fmt.Errorf("query: nil deps")
 	}
-	apiKey := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if apiKey == "" && deps.OpenAIPostStream != nil {
+		apiKey = "test-key"
+	}
 	if apiKey == "" {
-		apiKey = strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
+		return fmt.Errorf("query openai streaming: set OPENAI_API_KEY or inject QueryDeps.OpenAIPostStream")
 	}
-	base := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
-	if base == "" {
-		base = "https://api.anthropic.com"
-	}
-	model := strings.TrimSpace(in.ModelID)
-	if model == "" {
-		model = modelenv.ResolveWithFallback("")
-	}
+	base := openAIBaseURLFromEnv()
+	model := ResolveOpenAIModel(strings.TrimSpace(in.ModelID))
 
 	httpClient := http.DefaultClient
 	if deps.HTTPClient != nil {
 		httpClient = deps.HTTPClient
 	}
-	streamPost := deps.StreamPost
-	if streamPost == nil {
-		streamPost = anthropicmessages.PostStream
-	}
-	if apiKey == "" && deps.StreamPost != nil {
-		apiKey = "test-key"
-	}
-	if apiKey == "" {
-		return fmt.Errorf("query streaming parity: set ANTHROPIC_API_KEY or inject QueryDeps.StreamPost")
+	openAIPost := deps.OpenAIPostStream
+	if openAIPost == nil {
+		openAIPost = PostOpenAIChatStream
 	}
 
 	const maxRounds = 24
@@ -76,32 +64,31 @@ func runStreamingParityModelLoop(
 		if err != nil {
 			return err
 		}
-		var msgsWire any
-		if err := json.Unmarshal(msgsJSON, &msgsWire); err != nil {
-			return fmt.Errorf("messages wire: %w", err)
+		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(in.SystemPrompt))
+		if err != nil {
+			return err
 		}
-
 		toolsForWire := in.Tools
 		if len(in.Tools) > 0 {
-			if wired, errW := toolsearchwire.WireToolsJSON(in.Tools, model, false, false, msgsJSON); errW == nil {
+			if wired, errW := toolsearchwire.WireToolsJSON(in.Tools, model, false, true, msgsJSON); errW == nil {
 				toolsForWire = wired
 			}
 		}
+		toolsOA, err := anthropicToolsWireToOpenAI(toolsForWire)
+		if err != nil {
+			return err
+		}
 
 		req := map[string]any{
-			"model":      model,
-			"max_tokens": 4096,
-			"messages":   msgsWire,
-			"stream":     true,
+			"model":    model,
+			"messages": openaiMsgs,
+			"stream":   true,
+			"stream_options": map[string]any{
+				"include_usage": true,
+			},
 		}
-		if sys := strings.TrimSpace(strings.Join([]string(in.SystemPrompt), "\n\n")); sys != "" {
-			req["system"] = sys
-		}
-		if len(toolsForWire) > 0 {
-			var toolsWire any
-			if err := json.Unmarshal(toolsForWire, &toolsWire); err == nil {
-				req["tools"] = toolsWire
-			}
+		if len(toolsOA) > 0 {
+			req["tools"] = toolsOA
 		}
 		body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
 		if err != nil {
@@ -136,13 +123,11 @@ func runStreamingParityModelLoop(
 		}
 		ex := streamingtool.NewStreamingToolExecutor(makeFindToolBehavior(in.Tools), execCanUse, port, runner)
 
-		betas := anthropicmessages.BetasForToolsJSON(toolsForWire)
-		if err := streamPost(ctx, anthropicmessages.PostStreamParams{
+		if err := openAIPost(ctx, OpenAIPostStreamParams{
 			BaseURL: base,
 			APIKey:  apiKey,
 			Body:    body,
 			HTTP:    httpClient,
-			Beta:    betas,
 			Emit: func(ev anthropicmessages.MessageStreamEvent) error {
 				return acc.OnEvent(ev)
 			},
@@ -193,5 +178,5 @@ func runStreamingParityModelLoop(
 		cur = append(cur, asst)
 		cur = append(cur, toolMsgs...)
 	}
-	return fmt.Errorf("streaming parity: max rounds %d exceeded", maxRounds)
+	return fmt.Errorf("openai streaming parity: max rounds %d exceeded", maxRounds)
 }

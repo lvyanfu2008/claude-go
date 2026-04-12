@@ -8,6 +8,46 @@ import (
 	"goc/types"
 )
 
+func TestNormalizeMessagesForAPI_foldsLeadingPrependedUserContextMetaIntoTrailingPlainUser(t *testing.T) {
+	t.Parallel()
+	meta := true
+	sr := "<system-reminder>\n# cwd\n/proj\n\nIMPORTANT: ignore unless relevant.\n</system-reminder>\n"
+	metaMsg := mustJSON(t, map[string]any{"role": "user", "content": sr})
+	asst := mustJSON(t, map[string]any{"role": "assistant", "content": []map[string]any{{"type": "text", "text": "ok"}}})
+	tail := mustJSON(t, map[string]any{"role": "user", "content": "hi"})
+	msgs := []types.Message{
+		{Type: types.MessageTypeUser, UUID: "meta1", Message: metaMsg, IsMeta: &meta},
+		{Type: types.MessageTypeAssistant, UUID: "a1", Message: asst},
+		{Type: types.MessageTypeUser, UUID: "u1", Message: tail},
+	}
+	out, err := NormalizeMessagesForAPI(msgs, nil, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("want meta folded into tail user (2 API rows), got len=%d", len(out))
+	}
+	if out[0].Type != types.MessageTypeAssistant {
+		t.Fatalf("first row want assistant, got %v", out[0].Type)
+	}
+	if out[1].Type != types.MessageTypeUser || out[1].UUID != "u1" {
+		t.Fatalf("tail user %#v", out[1])
+	}
+	inner, _ := getInner(&out[1])
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil || len(blocks) < 2 {
+		t.Fatalf("merged user should have SR + hi as separate text blocks; blocks=%v err=%v", blocks, err)
+	}
+	t0, _ := blocks[0]["text"].(string)
+	if !strings.Contains(t0, "<system-reminder>") {
+		t.Fatalf("first block should carry SR, got %q", t0)
+	}
+	t1, _ := blocks[len(blocks)-1]["text"].(string)
+	if t1 != "hi" && !strings.Contains(t1, "hi") {
+		t.Fatalf("want tail text hi, last block=%q", t1)
+	}
+}
+
 func TestNormalizeMessagesForAPI_compactAllTextUserContent_defaultOffTSBlocks(t *testing.T) {
 	t.Parallel()
 	// Default off: no collapseAllTextUserContentBlocks; a later user row after assistant keeps multiple text siblings.

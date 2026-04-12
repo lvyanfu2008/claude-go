@@ -62,10 +62,9 @@ func (a *assistantStreamAccumulator) OnEvent(ev anthropicmessages.MessageStreamE
 			return nil
 		}
 		var d struct {
-			Type         string `json:"type"`
-			Text         string `json:"text"`
-			PartialJSON  string `json:"partial_json"`
-			PartialJSON2 string `json:"partial_json,omitempty"`
+			Type        string `json:"type"`
+			Text        string `json:"text"`
+			PartialJSON string `json:"partial_json"`
 		}
 		_ = json.Unmarshal(wrap.Delta, &d)
 		switch d.Type {

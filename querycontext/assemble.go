@@ -50,7 +50,9 @@ func formatSystemContextLines(context map[string]string) string {
 	return strings.Join(parts, "\n")
 }
 
-// FormatUserContextReminder mirrors prependUserContext meta text in src/utils/api.ts (without createUserMessage wrapper).
+// FormatUserContextReminder returns one standalone <system-reminder>…</system-reminder> blob (for ccbhydrate
+// lead-in, snapshots, submitfill). Do not use this as a value inside [query.PrependUserContext] — that helper
+// already wraps raw #key/value lines once, like TS prependUserContext.
 func FormatUserContextReminder(context map[string]string) string {
 	if len(context) == 0 {
 		return ""

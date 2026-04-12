@@ -73,7 +73,7 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 }
 
 // GouParityToolsJSON returns the same tools[] shape as gou-demo with GOU_DEMO_USE_EMBEDDED_TOOLS_API=1:
-// embedded commands/data/tools_api.json (TS export) + deny/REPL filtering + echo_stub for localturn wiring.
+// embedded commands/data/tools_api.json (TS export) + deny/REPL filtering + echo_stub for gou-demo / parity wiring.
 // Use [GouParityToolList] only for name/schema stubs in tests and ParityToolRunner dispatch — not for API descriptions.
 func GouParityToolsJSON() (json.RawMessage, error) {
 	assembled, err := toolpool.AssembleToolPoolFromEmbedded(types.EmptyToolPermissionContextData(), nil)

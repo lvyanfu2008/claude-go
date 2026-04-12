@@ -1,5 +1,5 @@
 // Command gou-api-parity-snapshot prints JSON: tools[], system, user_context_reminder (prepend-only), and sha256 digests
-// for the gou-demo / localturn API slice (system via [querycontext.FetchSystemPromptParts]).
+// for the gou-demo API slice (system via [querycontext.FetchSystemPromptParts]).
 // Use the same env as gou-demo; also reads project .claude/settings*.json for language/outputStyle when -cwd is set (user home skipped for stable hashes). CLAUDE_CODE_* overrides. Built-in outputStyle keys: Explanatory, Learning.
 // Other env: CLAUDE_CODE_LANGUAGE, CLAUDE_CODE_OUTPUT_STYLE_*, CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME,
 // GOU_DEMO_NON_INTERACTIVE, FEATURE_MCP_SKILLS — compare against TS captures (see docs/plans/go-ts-phase-3-and-gou-demo-runtime.md § 验收).

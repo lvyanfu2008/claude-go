@@ -8,7 +8,7 @@ go run ./cmd/gen-tool-parity
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
 - **Go anchor:** [ccb-engine/skilltools/parity_runner.go](ccb-engine/skilltools/parity_runner.go) — ParityToolRunner.Run + paritytools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-11T23:51:10Z
+- **Generated:** 2026-04-11T23:52:05Z
 
 ## Status legend
 

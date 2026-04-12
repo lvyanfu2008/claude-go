@@ -1,4 +1,4 @@
-// Package apiparity builds deterministic snapshots of gou-demo / localturn API fields (tools[], system)
+// Package apiparity builds deterministic snapshots of gou-demo API fields (tools[], system)
 // without importing goc/commands from goc/ccb-engine/skilltools (avoids an import cycle).
 package apiparity
 
@@ -21,7 +21,7 @@ import (
 // DefaultMainLoopModel matches [pui.DefaultMainLoopModelForDemo] / gou-demo default.
 const DefaultMainLoopModel = "claude-sonnet-4-20250514"
 
-// SnapshotInput mirrors gou-demo localturn inputs used to build system + tools[] (phase 2 slice).
+// SnapshotInput mirrors gou-demo inputs used to build system + tools[] (phase 2 slice).
 type SnapshotInput struct {
 	Cwd            string
 	MainLoopModel  string

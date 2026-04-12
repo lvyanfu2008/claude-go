@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// GouParityToolList is gou-demo / localturn tools[] aligned with the embedded tools_api.json export (plus echo_stub).
+// GouParityToolList is gou-demo tools[] aligned with the embedded tools_api.json export (plus echo_stub).
 //
 // Tool descriptions here are short stubs for tests and ParityToolRunner; API-facing tools[] for gou-demo
 // uses [GouParityToolsJSON] (embedded commands/data/tools_api.json + echo_stub). See TestGouParityToolsIntersectToolsAPIExport.

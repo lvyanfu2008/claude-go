@@ -4,17 +4,15 @@
 //
 // Run from repo: cd goc && go run ./cmd/gou-demo
 //
-// Flags: -transcript=file.json (UI or API messages), -no-seed (or GOU_DEMO_NO_SEED=1) to skip the 45 demo rows so localturn does not send fake history,
+// Flags: -transcript=file.json (UI or API messages), -no-seed (or GOU_DEMO_NO_SEED=1) to skip the 45 demo seed rows,
 // -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
-// By default gou-demo calls the real model in-process (goc/ccb-engine/localturn). Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1)
-// for a UI-only simulated stream with no HTTP (no apilog bodies on send).
-// Direct Anthropic SSE parity ([goc/conversation-runtime/query.Query] + toolexecution) when ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN)
-// is set and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]): that path takes
-// precedence over localturn for the same turn; otherwise localturn is used when ccb-inline is on.
+// Real model: [goc/conversation-runtime/query.Query] HTTP streaming parity when ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) is set
+// and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]).
+// Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1) for a UI-only simulated stream with no HTTP (no apilog bodies on send).
 // When a tool gate returns ask, GOU_QUERY_ASK_STRATEGY=allow auto-allows for headless demo (maps to [toolexecution.ExecutionDeps.AskResolver]).
 // GOU_TOOLEXEC_BASH_SANDBOX_1B=1 enables permissions.ts whole-tool ask bypass on Bash when the tool input carries a non-empty command without dangerously_disable_sandbox (see toolexecution.WholeToolAskSkippedForBash1b).
 // Go-side init port (subset of TS init.ts): GOU_DEMO_GO_INIT=1 runs [goc/claudeinit.Init] instead of only [settingsfile.EnsureProjectClaudeEnvOnce] (Init includes Ensure). See docs/plans/go-init-port.md.
-// Go local tool parity (embedded localturn): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
+// Go local tool parity (streaming parity + [skilltools.ParityToolRunner]): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch needs CCB_ENGINE_WEB_FETCH=1 or GOU_DEMO_WEB_FETCH=1. See docs/plans/go-tools-parity.md.
 //
 // System # Language / # Output Style: merged from ~/.claude/settings.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
 // Extra CLAUDE.md roots: optional runtimeContext.toolPermissionContext.additionalWorkingDirectories (JSON) and/or GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS / CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS (comma or PATH-style list). Paths from runtime/env are always scanned when passed (see [querycontext.ExtraClaudeMdRootsForFetch]); CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 is only needed for env-only flows in claudemd that do not pass explicit roots.
@@ -52,7 +50,6 @@ import (
 
 	"goc/ccb-engine/apilog"
 	"goc/ccb-engine/debugpath"
-	"goc/ccb-engine/localturn"
 	"goc/ccb-engine/settingsfile"
 	"goc/ccb-engine/skilltools"
 	"goc/claudeinit"
@@ -247,7 +244,7 @@ func gouDemoWarnApilogExpectations(ccbInline bool) {
 	if !ccbInline {
 		fmt.Fprintf(os.Stderr,
 			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but this run uses -fake-stream (or GOU_DEMO_USE_FAKE_STREAM / GOU_DEMO_CCB_INLINE=0).\n"+
-				"           No HTTP → apilog will not append request/response lines. Omit -fake-stream for real localturn + logs.\n")
+				"           No HTTP → apilog will not append request/response lines. For real HTTP logs, omit -fake-stream and set ANTHROPIC_API_KEY plus GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1.\n")
 		return
 	}
 	if !gouDemoHasLLMKeys() {
@@ -266,26 +263,6 @@ func previewForTrace(s string, max int) string {
 		return s
 	}
 	return string(r[:max]) + fmt.Sprintf("…(%d runes)", len(r))
-}
-
-// runLocalTurnProgram runs goc/ccb-engine/localturn in a goroutine and forwards events to the Bubble Tea program.
-func runLocalTurnProgram(programSend func(tea.Msg), p localturn.Params) {
-	go func() {
-		ctx := context.Background()
-		_ = localturn.RunSubmitUserTurn(ctx, p, func(ev localturn.StreamEvent) {
-			b, err := json.Marshal(ev)
-			if err != nil {
-				return
-			}
-			var c ccbstream.StreamEvent
-			if json.Unmarshal(b, &c) != nil {
-				return
-			}
-			if programSend != nil {
-				programSend(ccbstream.Msg(c))
-			}
-		})
-	}()
 }
 
 // gouQueryYieldMsg carries one assistant or user row from [query.Query] streaming parity (non-ccbstream protocol).
@@ -313,6 +290,26 @@ func gouDemoPreferQueryStreamingParity() bool {
 	}
 	cfg := query.BuildQueryConfig()
 	return query.StreamingParityPathEnabled(cfg)
+}
+
+// gouDemoUserContextMapForQuery copies live user context for [query.PrependUserContext].
+// Values must be raw (no <system-reminder> wrapper): TS prependUserContext wraps once per #key/value.
+// Do not pass [querycontext.FormatUserContextReminder] here — that string is already wrapped for ccbhydrate lead-in only.
+func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string {
+	if len(uc) == 0 {
+		return nil
+	}
+	out := make(map[string]string)
+	for k, v := range uc {
+		if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
+			continue
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // runQueryStreamingParityTurn runs [query.Query] in a goroutine and forwards whole messages to the Bubble Tea program.
@@ -372,7 +369,7 @@ type model struct {
 	streamH int // reserved lines for streaming strip inside message pane
 	inputH  int
 
-	// ccbSend / ccbInline set by BindCCB after tea.NewProgram (localturn in-process when ccbInline).
+	// ccbSend / ccbInline set by BindCCB after tea.NewProgram (real model path when ccbInline and streaming parity gates + key).
 	ccbSend   func(tea.Msg)
 	ccbInline bool
 
@@ -410,7 +407,7 @@ func main() {
 	defer traceCleanup()
 
 	transcriptPath := flag.String("transcript", "", "load messages from JSON file (UI []Message or API [{role,content}]); skips built-in seed")
-	noSeed := flag.Bool("no-seed", false, "start with an empty transcript (no 45 demo seed messages); avoids sending fake history to localturn. Same as GOU_DEMO_NO_SEED=1")
+	noSeed := flag.Bool("no-seed", false, "start with an empty transcript (no 45 demo seed messages). Same as GOU_DEMO_NO_SEED=1")
 	replayCC := flag.String("replay-cc", "", "apply ccb-engine NDJSON stream events from file (protocol-v1 StreamEvent lines), then open TUI")
 	streamStdin := flag.Bool("stream-stdin", false, "read NDJSON stream events from stdin (pipe from ccb-engine); open /dev/tty for keys when available")
 	fakeStreamFlag := flag.Bool("fake-stream", false, "do not call the model: simulated stream only (no HTTP; no apilog bodies)")
@@ -537,7 +534,7 @@ func (m *model) maybeRecordTranscript() {
 	}
 }
 
-// BindCCB wires Bubble Tea Send and whether to use localturn for real model turns.
+// BindCCB wires Bubble Tea Send and whether real HTTP streaming parity is allowed (vs simulated stream only).
 func (m *model) BindCCB(send func(tea.Msg), inline bool) {
 	m.ccbSend = send
 	m.ccbInline = inline
@@ -752,12 +749,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.ccbInline && m.ccbSend != nil {
 					baseMsgs, err := tryMsgs()
 					if err != nil {
-						gouDemoTracef("localturn: ccbhydrate.MessagesJSON error: %v (fake stream)", err)
+						gouDemoTracef("gou-demo: ccbhydrate.MessagesJSON error: %v (fallback fake stream)", err)
 						m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: ccb messages JSON: %v (fallback fake stream)", err)))
 						m.rebuildHeightCache()
 					} else if len(bytes.TrimSpace(baseMsgs)) < 3 || bytes.Equal(bytes.TrimSpace(baseMsgs), []byte("[]")) {
-						gouDemoTracef("localturn: empty messages JSON bytes=%d (fake stream)", len(baseMsgs))
-						m.store.AppendMessage(pui.SystemNotice("gou-demo: empty chat transcript for localturn (fallback fake stream)"))
+						gouDemoTracef("gou-demo: empty messages JSON bytes=%d (fake stream)", len(baseMsgs))
+						m.store.AppendMessage(pui.SystemNotice("gou-demo: empty chat transcript (fallback fake stream)"))
 						m.rebuildHeightCache()
 					} else {
 						var toolsJSON json.RawMessage
@@ -858,7 +855,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						gouDemoLogStoreMessages("before_ccbhydrate", m.store)
 						msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.store.Messages, userCtxReminder, listing, toolSpecs, normOpts)
 						if errL != nil {
-							gouDemoTracef("localturn: MessagesJSONWithLeadingMeta error: %v", errL)
+							gouDemoTracef("gou-demo: MessagesJSONWithLeadingMeta error: %v", errL)
 							m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
 							m.rebuildHeightCache()
 						} else {
@@ -871,7 +868,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									m.rebuildHeightCache()
 								}
 							}
-							gouDemoTracef("localturn.RunSubmitUserTurn start requestID=%s msgsJSONBytes=%d toolsBytes=%d systemBytes=%d",
+							gouDemoTracef("gou-demo model turn start requestID=%s msgsJSONBytes=%d toolsBytes=%d systemBytes=%d",
 								reqID, len(msgsJSON), len(toolsJSON), len(guidance))
 							cwdAbs, errAbs := filepath.Abs(cwd)
 							if errAbs != nil {
@@ -895,11 +892,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								LocalBashDefault: true,
 								AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
 							}
-							skillExpand := !gouDemoEnvTruthy("GOU_DEMO_NO_SKILL_EXPAND_USER_MSG")
 							if gouDemoPreferQueryStreamingParity() {
 								var userCtx map[string]string
-								if strings.TrimSpace(userCtxReminder) != "" {
-									userCtx = map[string]string{"user_context_reminder": userCtxReminder}
+								if errParts == nil {
+									userCtx = gouDemoUserContextMapForQuery(partsRes.UserContext)
 								}
 								tcx := types.ToolUseContext{}
 								if params.RuntimeContext != nil {
@@ -949,21 +945,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								processuserinput.ApplyQueryHostEnvGates(&qp)
 								processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
-								gouDemoTracef("query streaming parity turn (preempts localturn) requestID=%s storeMsgs=%d toolsBytes=%d",
+								gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
 									reqID, len(m.store.Messages), len(toolsJSON))
 								runQueryStreamingParityTurn(m.ccbSend, qp)
 								usedCCB = true
 							} else {
-								runLocalTurnProgram(m.ccbSend, localturn.Params{
-									RequestID:               reqID,
-									Messages:                msgsJSON,
-									Tools:                   toolsJSON,
-									System:                  guidance,
-									ModelID:                 mainLoopModel,
-									SkillExpandUserFollowUp: skillExpand,
-									Runner:                  runner,
-								})
-								usedCCB = true
+								m.store.AppendMessage(pui.SystemNotice(
+									"gou-demo: ccb-engine/localturn was removed. For a real model reply, set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1. Or use -fake-stream for a simulated reply only.",
+								))
+								m.rebuildHeightCache()
 							}
 						}
 					}

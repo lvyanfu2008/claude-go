@@ -33,9 +33,10 @@ type QueryParams struct {
 	SkipCacheWrite          *bool
 	TaskBudget              *TaskBudget
 	Deps                    *QueryDeps
-	// StreamingParity, together with [StreamingParityPathEnabled] on [BuildQueryConfig], selects Anthropic SSE
-	// + streamingtool instead of [QueryDeps.CallModel] (see [runStreamingParityModelLoop]). When both this and
-	// CallModel are configured, the streaming path wins inside [queryLoop].
+	// StreamingParity, together with [StreamingParityPathEnabled] on [BuildQueryConfig], selects HTTP streaming
+	// + streamingtool instead of [QueryDeps.CallModel]: Anthropic [runStreamingParityModelLoop] or OpenAI
+	// [runOpenAIStreamingParityModelLoop] when [StreamingUsesOpenAIChat] is true. When both this and CallModel
+	// are configured, the streaming path wins inside [queryLoop].
 	StreamingParity bool
 	// AutoCompactTracking optional seed for [State.AutoCompactTracking] (first queryLoop iteration).
 	AutoCompactTracking json.RawMessage `json:"-"`
@@ -50,7 +51,7 @@ type CallModelInput struct {
 	ThinkingConfig types.ThinkingConfig
 	Tools          json.RawMessage
 	SignalDone     <-chan struct{} // TS AbortSignal — caller closes to abort
-	// Cwd and ModelID are used by [LocalTurnCallModel] / [localturn.Params] (optional).
+	// Cwd and ModelID are optional hints for hosts that implement [QueryDeps.CallModel].
 	Cwd     string
 	ModelID string
 	// Options bag grows with parity; keep JSON for uncommon fields during migration.
@@ -71,6 +72,8 @@ type QueryDeps struct {
 	HTTPClient *http.Client
 	// StreamPost when set overrides [anthropicmessages.PostStream] (tests inject httptest).
 	StreamPost func(ctx context.Context, p anthropicmessages.PostStreamParams) error
+	// OpenAIPostStream when set overrides [PostOpenAIChatStream] for OpenAI-compatible streaming parity tests.
+	OpenAIPostStream func(ctx context.Context, p OpenAIPostStreamParams) error
 	// ToolexecutionDeps is passed to [RunToolUseToolRunner] during streaming parity (InvokeTool optional).
 	ToolexecutionDeps toolexecution.ExecutionDeps
 	// OnQueryYield optional; invoked after each successful streaming-parity yield (assistant and tool_result rows) so hosts can persist incrementally (e.g. [sessiontranscript.RecordTranscript]).

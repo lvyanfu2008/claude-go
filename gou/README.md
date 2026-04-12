@@ -20,7 +20,7 @@
 | `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result` |
 | `goc/gou/transcript` | 从 JSON 加载消息：UI 形 `[]Message`（含 `type`）或 API 形 `[{role,content}]` |
 | `goc/gou/ccbstream` | 将 ccb-engine 风格 NDJSON `StreamEvent` 应用到 `conversation.Store`（`Apply` / `Feed` / `ReplayFile`） |
-| `goc/ccb-engine/localturn` | 同进程跑一轮 turn（`Session` + `llm.NewFromEnv` + `skilltools.ParityToolRunner`），事件形状与 **socketserve** NDJSON 一致；**gou-demo 默认**走 `localturn`；`-fake-stream` 才纯模拟 |
+| `goc/conversation-runtime/query` | gou-demo **真实模型**：HTTP 流式 parity（`StreamingParity` + env 门控 + 密钥）；`-fake-stream` 为纯模拟 |
 | `goc/gou/ccbhydrate` | `types.Message[]` → `payload.messages` JSON（`HydrateFromMessages` 形状） |
 | `goc/gou/pui` | 进程内 `processuserinput.ProcessUserInput`：`BuildDemoParams`、`ApplyProcessUserInputBaseResult`、`ProcessUserInputBaseResultHandoff`（标量字段与 TS `ProcessUserInputBaseResult` 同名 + `json` camelCase） |
 
@@ -36,7 +36,7 @@
 | 载入 transcript JSON（UI / API 形） | — / `goc/gou/transcript` | **已做** |
 | 回放 / 管道 NDJSON → `ccbstream.Apply` | `goEngine` / `goc/gou/ccbstream` | **已做** |
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
-| 真实 LLM（gou-demo） | `goc/ccb-engine/localturn` | **已做**：默认同进程真实 turn（环境变量与 `ccb-engine` 冒烟 CLI 相同）；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；失败时 **降级** 假 `streamTick`。Unix **socketserve** + 外部 TS 客户端见 `goc/ccb-engine/README.md`（**ccb-socket-host**，**不再**由 gou-demo 拉起 `ccb-engine-tool-worker`） |
+| 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ `GOU_QUERY_STREAMING_PARITY=1` 或 `GOU_DEMO_STREAMING_TOOL_EXECUTION=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。Unix **socketserve** + 外部 TS 客户端见 `goc/ccb-engine/README.md`（**ccb-socket-host**） |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `execution_request`（bash/slash 的 prepare 桩） | `bashprepare` / `slashprepare` 仍可能返回 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **未做** |
@@ -88,13 +88,13 @@ cd goc && go run ./cmd/gou-demo -replay-cc=/path/to/stream.ndjson
 # 管道读 stdin 上的 NDJSON（Unix 下会尝试打开 /dev/tty 供键盘）
 cd goc && cat /path/to/stream.ndjson | go run ./cmd/gou-demo -stream-stdin
 
-# 同进程调 LLM（默认；API key 等可与 ccb-engine 相同，可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json）
+# 真实 LLM：API key + GOU_QUERY_STREAMING_PARITY=1（或 GOU_DEMO_STREAMING_TOOL_EXECUTION=1）；密钥可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json
 cd goc && go run ./cmd/gou-demo
 # 仅 UI 模拟流、不调模型：
 cd goc && go run ./cmd/gou-demo -fake-stream
 ```
 
-`ccbstream.Apply` 不绘制 **`execute_tool`** 行。`localturn` 使用 **`StubRunner`**，工具在进程内 stub，不产生 socket 上的 `execute_tool`。纯管道回放 NDJSON 时若事件里含需客户端回写的 `execute_tool`，录制流仍可能不完整。
+`ccbstream.Apply` 不绘制 **`execute_tool`** 行。纯管道回放 NDJSON 时若事件里含需客户端回写的 `execute_tool`，录制流仍可能不完整。
 
 ### Go `init.ts` 对齐（进行中）
 

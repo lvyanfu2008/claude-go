@@ -7,7 +7,7 @@ import (
 )
 
 // LogToolsLoaded appends one line to the diagnostic log (see [diaglog.Line]): tool count and names.
-// contextTag identifies the load site (e.g. "localturn", "socketserve", "ccb-engine-cli").
+// contextTag identifies the load site (e.g. "gou-demo", "socketserve", "ccb-engine-cli").
 // requestID may be empty when not applicable.
 func LogToolsLoaded(contextTag, requestID string, source string, tools []ToolDefinition) {
 	names := make([]string, 0, len(tools))

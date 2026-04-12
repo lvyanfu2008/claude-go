@@ -11,7 +11,7 @@ Headless conversation engine for **Go-hosted** orchestration (迁移期). Lives 
 **Socket 协议与宿主**
 
 1. **无 TUI 自动化**（listener）：`go build -o ccb-socket-host ./cmd/ccb-socket-host`，然后 `ccb-socket-host -socket $CCB_ENGINE_SOCKET`（或只设 `CCB_ENGINE_SOCKET`）。见仓库根 [`scripts/ccb-worker-daemon.sh`](../../scripts/ccb-worker-daemon.sh)（`start` = socket-host + worker；**`start-worker`** = 仅 TS worker，须 socket 已由 **ccb-socket-host** 等监听；**`stop-worker`** 只停 worker）。
-2. **gou-demo** 不再内嵌 socketserve、不 spawn **`ccb-engine-tool-worker`**；TUI 对话仅 **`localturn`** 同进程。
+2. **gou-demo** 不再内嵌 socketserve、不 spawn **`ccb-engine-tool-worker`**；TUI 真实模型走 **`conversation-runtime/query` 流式 parity**（Anthropic SSE 等），或 `-fake-stream` 纯模拟。
 3. 遗留 **`CLAUDE_CODE_CCB_ENGINE`** 门控已从 **Ink/Bun REPL** 移除。若自定义 TS 进程调用 `submitTurn`，可自行读环境变量；连接超时见下。
 
 Optional timeouts (TS `submitTurn` client): `CLAUDE_CODE_CCB_ENGINE_CONNECT_TIMEOUT_MS` (default 15000).（历史名 `CLAUDE_CODE_CCB_ENGINE_TURN_TIMEOUT_MS` 曾用于已删除的 REPL 整轮超时，现无 TS 消费方。）
@@ -52,7 +52,7 @@ go test -tags=integration ./ccb-engine/internal/engine/ -count=1
 
 ### Project `.claude/settings.go.json` (`env`)
 
-On startup, **`ccb-engine`**, **`gou-demo`**, and **`localturn`** call [`settingsfile.EnsureProjectClaudeEnvOnce()`](settingsfile/ensure.go), which merges `env` from (later wins on duplicate keys; **Go never reads project `.claude/settings.json`** — that file is **TypeScript CLI only**):
+On startup, **`ccb-engine`** and **`gou-demo`** call [`settingsfile.EnsureProjectClaudeEnvOnce()`](settingsfile/ensure.go), which merges `env` from (later wins on duplicate keys; **Go never reads project `.claude/settings.json`** — that file is **TypeScript CLI only**):
 
 1. **User:** `$CLAUDE_CONFIG_DIR/settings.json` if **`CLAUDE_CONFIG_DIR`** is set, else **`~/.claude/settings.json`** (matches TS `getClaudeConfigHomeDir` + `settings.json`).
 2. **Project root for Go:** **`CCB_ENGINE_PROJECT_ROOT`** if set; otherwise the **nearest ancestor of the current working directory** whose `.claude/` contains **`settings.go.json`** or **`settings.local.json`**. If neither marker exists, **`projectRoot`** is the **abs path of the starting cwd** (no upward walk to a TS-only `.claude/settings.json`).
@@ -107,7 +107,7 @@ Format: `timestamp [API_REQUEST_BODY|API_RESPONSE_BODY] <label>\n<compact JSON>\
 
 **Output file** (first match): `CLAUDE_CODE_DEBUG_LOG_FILE`; else `CLAUDE_CODE_DEBUG_LOGS_DIR/ccb-engine-llm-api.txt`; else `$HOME/.claude/debug/ccb-engine-llm-api.txt`. **`ccb-engine` and `gou-demo` call `apilog.PrepareIfEnabled()` after loading project settings**, which creates `$HOME/.claude/debug/` (and an empty log file) as soon as either `CLAUDE_CODE_LOG_API_*` flag is on—so the directory exists even before the first HTTP call. The first prepare or append prints `[ccb-engine apilog] writing LLM API bodies to …` on stderr. These variables can be set in project `.claude/settings.go.json` `env` (merged on startup for Go; see above). To append next to the Bun session log, set `CLAUDE_CODE_DEBUG_LOG_FILE` to the same path TS uses.
 
-**`gou-demo` caveat:** use **`-fake-stream`** (or **`GOU_DEMO_USE_FAKE_STREAM=1`**, or **`GOU_DEMO_CCB_INLINE=0`**) only when you want a simulated stream with **no** LLM. By default gou-demo runs **real** `localturn` (same as `ccb-engine` for HTTP / apilog).
+**`gou-demo` caveat:** use **`-fake-stream`** (or **`GOU_DEMO_USE_FAKE_STREAM=1`**, or **`GOU_DEMO_CCB_INLINE=0`**) only when you want a simulated stream with **no** LLM. For real HTTP + apilog bodies, set **Anthropic** (or configured provider) keys and **`GOU_QUERY_STREAMING_PARITY=1`** or **`GOU_DEMO_STREAMING_TOOL_EXECUTION=1`**.
 
 **Empty `~/.claude/debug/`:** if **`CLAUDE_CODE_LOG_API_REQUEST_BODY`** / **`CLAUDE_CODE_LOG_API_RESPONSE_BODY`** are not set, **`PrepareIfEnabled` does not create** `ccb-engine-llm-api.txt` (the directory may exist from another tool or be empty). Set one or both flags in the shell or in **project** `.claude/settings.go.json` `env`. Run with **`CLAUDE_CODE_APILOG_DIAG=1`** to print the resolved path and flag state to stderr.
 

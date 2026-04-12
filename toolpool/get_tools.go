@@ -8,6 +8,33 @@ import (
 	"goc/types"
 )
 
+// EmbeddedSearchToolsActive mirrors hasEmbeddedSearchTools in src/utils/embeddedTools.ts.
+func EmbeddedSearchToolsActive() bool {
+	if !envTruthy(os.Getenv("EMBEDDED_SEARCH_TOOLS")) {
+		return false
+	}
+	switch strings.TrimSpace(os.Getenv("CLAUDE_CODE_ENTRYPOINT")) {
+	case "sdk-ts", "sdk-py", "sdk-cli", "local-agent":
+		return false
+	default:
+		return true
+	}
+}
+
+func filterGlobGrepWhenEmbeddedSearch(tools []types.ToolSpec) []types.ToolSpec {
+	if !EmbeddedSearchToolsActive() {
+		return tools
+	}
+	out := make([]types.ToolSpec, 0, len(tools))
+	for _, t := range tools {
+		if t.Name == "Glob" || t.Name == "Grep" {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
 // Special tool names excluded from the model-facing list (src/tools.ts getTools, lines 299–303).
 const (
 	ListMcpResourcesToolName = "ListMcpResourcesTool"
@@ -75,6 +102,7 @@ func GetTools(permissionContext types.ToolPermissionContextData, exportedBase []
 		}
 		out = append(out, t)
 	}
+	out = filterGlobGrepWhenEmbeddedSearch(out)
 	out = permissionrules.FilterToolsByDenyRules(out, permissionContext)
 	if IsReplModeEnabled() {
 		replPresent := false

@@ -268,8 +268,13 @@ func NormalizeMessagesForAPI(messages []types.Message, tools []ToolSpec, opts Op
 		}
 	}
 
-	var relocated []types.Message
 	var err error
+	result, err = foldLeadingPrependedUserContextMetaIntoTrailingPlainUser(result, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	var relocated []types.Message
 	if opts.ToolrefDeferJ8m {
 		relocated, err = relocateToolReferenceSiblings(result)
 		if err != nil {

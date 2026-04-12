@@ -2,6 +2,7 @@
   "env": {
     "CLAUDE_CODE_CCB_ENGINE": "1",
     "FEATURE_WORKFLOW_SCRIPTS": "0",
+    "CLAUDE_CODE_USE_OPENAI": "1",
     "GOU_DEMO_SCROLL_STATS": "1",
     "GOU_DEMO_NO_SEED": "1",
     "CLAUDE_CODE_DEBUG_LOGS_DIR": "debug/goc",
@@ -25,7 +26,9 @@
     "SLASH_RESOLVE_BRIDGE_ROOT": "/Users/lvyanfu/Work/claude/claude-code",
     "CLAUDE_CODE_GO_TOOL_SEARCH_CONTEXT":"0",
     "CCB_ENGINE_DIAG_TO_STDERR":"0",
-    "GOU_DEMO_STREAMING_TOOL_EXECUTION":"1"
+    "GOU_DEMO_STREAMING_TOOL_EXECUTION":"1",
+    "GOU_TOOLEXEC_BASH_SANDBOX_1B":"1",
+    "GOU_QUERY_LOG_USER_CONTEXT":"0"
   },
   "hooks": {
     "UserPromptSubmit": [
