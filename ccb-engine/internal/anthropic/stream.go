@@ -32,7 +32,7 @@ func (c *Client) CreateMessageStream(ctx context.Context, req CreateMessageReque
 	if err != nil {
 		return err
 	}
-	apilog.LogRequestBody("POST "+c.BaseURL+"/v1/messages (stream)", body)
+	apilog.LogRequestBody("POST "+anthropicmessages.MessagesAPIURL(c.BaseURL)+" (stream)", body)
 
 	return anthropicmessages.PostStream(ctx, anthropicmessages.PostStreamParams{
 		BaseURL: c.BaseURL,

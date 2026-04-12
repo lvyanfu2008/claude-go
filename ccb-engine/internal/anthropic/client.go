@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"goc/anthropicmessages"
 	"goc/ccb-engine/apilog"
 	"goc/modelenv"
 )
@@ -95,9 +96,10 @@ func (c *Client) CreateMessage(ctx context.Context, req CreateMessageRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	apilog.LogRequestBody("POST "+c.BaseURL+"/v1/messages", body)
+	msgURL := anthropicmessages.MessagesAPIURL(c.BaseURL)
+	apilog.LogRequestBody("POST "+msgURL, body)
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/messages", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, msgURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +120,7 @@ func (c *Client) CreateMessage(ctx context.Context, req CreateMessageRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	apilog.LogResponseBody("POST "+c.BaseURL+"/v1/messages", respBody)
+	apilog.LogResponseBody("POST "+msgURL, respBody)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("anthropic API %s: %s", resp.Status, truncate(string(respBody), 800))
 	}

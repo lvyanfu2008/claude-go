@@ -32,8 +32,8 @@ func PostStream(ctx context.Context, p PostStreamParams) error {
 	if strings.TrimSpace(p.APIKey) == "" {
 		return fmt.Errorf("anthropicmessages: missing API key")
 	}
-	base := strings.TrimSuffix(strings.TrimSpace(p.BaseURL), "/")
-	if base == "" {
+	base := strings.TrimSpace(p.BaseURL)
+	if strings.TrimSuffix(base, "/") == "" {
 		return fmt.Errorf("anthropicmessages: missing base URL")
 	}
 	if p.HTTP == nil {
@@ -47,7 +47,10 @@ func PostStream(ctx context.Context, p PostStreamParams) error {
 		apilog.PrepareIfEnabled()
 	}
 
-	url := base + "/v1/messages"
+	url := MessagesAPIURL(base)
+	if url == "" {
+		return fmt.Errorf("anthropicmessages: missing base URL")
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(p.Body))
 	if err != nil {
 		return err
@@ -71,7 +74,7 @@ func PostStream(ctx context.Context, p PostStreamParams) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		apilog.LogResponseBody("POST "+url+" (stream error "+resp.Status+")", b)
-		return fmt.Errorf("anthropic stream API %s: %s", resp.Status, truncate(string(b), 800))
+		return fmt.Errorf("anthropic stream API %s (POST %s): %s", resp.Status, url, truncate(string(b), 800))
 	}
 
 	streamRd := io.ReadCloser(resp.Body)
