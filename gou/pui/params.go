@@ -49,8 +49,6 @@ type DemoConfig struct {
 	// SkipCommands when true leaves Commands empty (unit tests). When false, fills from
 	// commands.GetCommands (TS getCommands: includes session dynamic skills).
 	SkipCommands bool `json:"-"`
-	// RepoRoot is the monorepo root (contains scripts/slash-resolve-bridge.ts). Used for bundled slash via bridge; disk skills do not require it.
-	RepoRoot string `json:"-"`
 	// SessionID substitutes ${CLAUDE_SESSION_ID} in disk skills; empty defaults to "gou-demo".
 	SessionID string `json:"-"`
 	// MCPCommands optional appState.mcp.commands slice (prompt tools with loadedFrom mcp for merge tests / future bridge).

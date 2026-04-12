@@ -11,7 +11,7 @@ import (
 	"goc/ccb-engine/paritytools"
 )
 
-// ParityToolRunner runs core filesystem/search tools in Go, then delegates Skill (and bundled bridge)
+// ParityToolRunner runs core filesystem/search tools in Go, then delegates Skill (disk + embedded bundled)
 // to [DemoToolRunner]; other names fall through to stub via Demo.
 type ParityToolRunner struct {
 	DemoToolRunner

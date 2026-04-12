@@ -13,11 +13,10 @@ import (
 	"goc/types"
 )
 
-// DemoToolRunner handles Skill tool calls like TS SkillTool (validate + disk/bridge expand); other tools delegate to [engine.StubRunner].
+// DemoToolRunner handles Skill tool calls like TS SkillTool (validate + disk/bundled expand); other tools delegate to [engine.StubRunner].
 // Deviation vs TS: expanded skill text is returned as a tool_result string; TS often inserts follow-up user/assistant messages in the transcript.
 type DemoToolRunner struct {
 	Commands  []types.Command
-	RepoRoot  string
 	SessionID string
 }
 
@@ -79,21 +78,5 @@ func (r DemoToolRunner) Run(ctx context.Context, name, toolUseID string, input j
 		return res.UserText, false, nil
 	}
 
-	if strings.TrimSpace(r.RepoRoot) == "" {
-		return "Bundled/plugin skills require repo root (bridge) or a disk skill with SkillRoot", true, nil
-	}
-	cmdJSON, err := json.Marshal(found)
-	if err != nil {
-		return err.Error(), true, nil
-	}
-	res, err := slashresolve.ResolveViaBridge(r.RepoRoot, slashresolve.BridgeRequest{
-		CommandName: found.Name,
-		Cwd:         cwd,
-		Args:        in.Args,
-		CommandJSON: cmdJSON,
-	})
-	if err != nil {
-		return err.Error(), true, nil
-	}
-	return res.UserText, false, nil
+	return fmt.Sprintf("Skill %s is not a disk skill (SkillRoot) or embedded bundled prompt", normalized), true, nil
 }
