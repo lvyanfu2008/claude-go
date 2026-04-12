@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -37,8 +39,52 @@ type gouPermissionAskMsg struct {
 }
 
 type slashPickerOverlay struct {
-	names []string
-	idx   int
+	allNames []string
+	filter   string
+	idx      int
+}
+
+func slashFilterFromPrompt(prompt string) string {
+	line := prompt
+	if i := strings.IndexByte(prompt, '\n'); i >= 0 {
+		line = prompt[:i]
+	}
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "/") {
+		return ""
+	}
+	return strings.TrimPrefix(line, "/")
+}
+
+func (o *slashPickerOverlay) filtered() []string {
+	if o == nil {
+		return nil
+	}
+	f := strings.ToLower(strings.TrimSpace(o.filter))
+	if f == "" {
+		return slices.Clone(o.allNames)
+	}
+	var out []string
+	for _, n := range o.allNames {
+		if strings.Contains(strings.ToLower(n), f) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func (o *slashPickerOverlay) clampIdx() {
+	vis := o.filtered()
+	if len(vis) == 0 {
+		o.idx = 0
+		return
+	}
+	if o.idx >= len(vis) {
+		o.idx = len(vis) - 1
+	}
+	if o.idx < 0 {
+		o.idx = 0
+	}
 }
 
 func (m *model) installAskResolver(te *toolexecution.ExecutionDeps) {
@@ -136,7 +182,12 @@ func (m *model) toggleSlashPicker() {
 	if len(names) > 200 {
 		names = names[:200]
 	}
-	m.slashPick = &slashPickerOverlay{names: names, idx: 0}
+	m.slashPick = &slashPickerOverlay{
+		allNames: names,
+		filter:   slashFilterFromPrompt(m.pr.Value()),
+		idx:      0,
+	}
+	m.slashPick.clampIdx()
 }
 
 // handleSlashPickerKey returns true when consumed by the slash picker.
@@ -154,18 +205,35 @@ func (m *model) handleSlashPickerKey(msg tea.KeyMsg) bool {
 		}
 		return true
 	case "down":
-		if m.slashPick.idx+1 < len(m.slashPick.names) {
+		vis := m.slashPick.filtered()
+		if m.slashPick.idx+1 < len(vis) {
 			m.slashPick.idx++
 		}
 		return true
 	case "enter":
-		if len(m.slashPick.names) == 0 {
+		vis := m.slashPick.filtered()
+		if len(vis) == 0 {
 			m.slashPick = nil
 			return true
 		}
-		sel := m.slashPick.names[m.slashPick.idx]
+		sel := vis[m.slashPick.idx]
 		m.pr.SetValue(sel + " ")
 		m.slashPick = nil
+		return true
+	case "backspace":
+		if m.slashPick.filter == "" {
+			return true
+		}
+		_, size := utf8.DecodeLastRuneInString(m.slashPick.filter)
+		if size > 0 {
+			m.slashPick.filter = m.slashPick.filter[:len(m.slashPick.filter)-size]
+		}
+		m.slashPick.clampIdx()
+		return true
+	}
+	if msg.Type == tea.KeyRunes && !msg.Paste && len(msg.Runes) > 0 {
+		m.slashPick.filter += string(msg.Runes)
+		m.slashPick.clampIdx()
 		return true
 	}
 	return false
@@ -203,8 +271,10 @@ func (m *model) renderSlashPicker(width, maxH int) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render("Slash commands (F2 close)"))
+	b.WriteString(lipgloss.NewStyle().Bold(true).Render("Slash (F2) filter: "))
+	b.WriteString(lipgloss.NewStyle().Faint(true).Render("/" + m.slashPick.filter))
 	b.WriteByte('\n')
+	vis := m.slashPick.filtered()
 	start := 0
 	if m.slashPick.idx >= maxH-2 {
 		start = m.slashPick.idx - (maxH - 3)
@@ -212,8 +282,8 @@ func (m *model) renderSlashPicker(width, maxH int) string {
 			start = 0
 		}
 	}
-	for i := start; i < len(m.slashPick.names) && i < start+maxH-2; i++ {
-		line := m.slashPick.names[i]
+	for i := start; i < len(vis) && i < start+maxH-2; i++ {
+		line := vis[i]
 		if i == m.slashPick.idx {
 			b.WriteString(lipgloss.NewStyle().Reverse(true).Render(line))
 		} else {

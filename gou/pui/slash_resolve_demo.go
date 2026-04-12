@@ -2,10 +2,8 @@ package pui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	processuserinput "goc/conversation-runtime/process-user-input"
@@ -15,35 +13,12 @@ import (
 
 // SlashResolveHandlerOptions configures [NewSlashResolveProcessSlashCommand] for gou-demo.
 type SlashResolveHandlerOptions struct {
-	// RepoRoot is the monorepo root (directory containing scripts/slash-resolve-bridge.ts).
-	// Empty skips bundled resolution via bridge (disk skills still work).
-	RepoRoot string
 	// SessionID substitutes ${CLAUDE_SESSION_ID} in disk skills.
 	SessionID string
 }
 
-// FindRepoRootForBridge walks upward from startDir looking for scripts/slash-resolve-bridge.ts.
-func FindRepoRootForBridge(startDir string) string {
-	dir, err := filepath.Abs(startDir)
-	if err != nil {
-		dir = startDir
-	}
-	for i := 0; i < 32; i++ {
-		bridge := filepath.Join(dir, "scripts", "slash-resolve-bridge.ts")
-		if st, err := os.Stat(bridge); err == nil && !st.IsDir() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return ""
-}
-
 // NewSlashResolveProcessSlashCommand returns a [processuserinput.ProcessUserInputParams.ProcessSlashCommand]
-// that resolves disk skills in Go and bundled skills via the optional Bun bridge.
+// that resolves disk skills and embedded bundled prompts in Go (no external TS process).
 func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 	ctx context.Context,
 	inputString string,
@@ -58,7 +33,6 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 	if sid == "" {
 		sid = "gou-demo"
 	}
-	repoRoot := strings.TrimSpace(opt.RepoRoot)
 
 	return func(
 		ctx context.Context,
@@ -137,34 +111,9 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			return slashResultToBase(res, attachmentMessages, uuid, p), nil
 		}
 
-		// Optional TS bridge for non-embedded commands
-		if repoRoot != "" {
-			cmdJSON, err := json.Marshal(cmd)
-			if err != nil {
-				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("slash bridge: marshal command: %v", err))},
-					ShouldQuery: false,
-				}, nil
-			}
-			cwd, _ := os.Getwd()
-			res, err := slashresolve.ResolveViaBridge(repoRoot, slashresolve.BridgeRequest{
-				CommandName: parsed.CommandName,
-				Cwd:         cwd,
-				Args:        parsed.Args,
-				CommandJSON: cmdJSON,
-			})
-			if err != nil {
-				return &processuserinput.ProcessUserInputBaseResult{
-					Messages: []types.Message{SystemNotice(fmt.Sprintf("Slash bridge (bundled): %v", err))},
-					ShouldQuery: false,
-				}, nil
-			}
-			return slashResultToBase(res, attachmentMessages, uuid, p), nil
-		}
-
 		return &processuserinput.ProcessUserInputBaseResult{
 			Messages: []types.Message{SystemNotice(fmt.Sprintf(
-				"gou-demo: /%s could not be resolved (not disk, not bundled); set cwd so repo root contains scripts/slash-resolve-bridge.ts, or add a project skill under .claude/skills.",
+				"gou-demo: /%s could not be resolved (not a disk skill and not an embedded bundled prompt); add a project skill under .claude/skills with SKILL.md, or use a bundled command supported by Go.",
 				cmd.Name))},
 			ShouldQuery: false,
 		}, nil

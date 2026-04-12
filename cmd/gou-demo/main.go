@@ -21,8 +21,9 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line in prompt). F2 toggles slash-command picker. When GOU_QUERY_ASK_STRATEGY is unset, tool permission asks use a modal (Y/N).
-// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled skills via [goc/slashresolve.ResolveBundledSkill] (embedded TS-expanded prompts under slashresolve/bundleddata). Optional Bun scripts/slash-resolve-bridge.ts remains for commands not covered by the Go embed.
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line in prompt). F2 toggles slash-command picker (type to filter when open). When GOU_QUERY_ASK_STRATEGY is unset, tool permission asks use a modal (Y/N).
+// Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
+// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition.
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
@@ -63,6 +64,7 @@ import (
 	"goc/gou/messagerow"
 	"goc/gou/prompt"
 	"goc/gou/pui"
+	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/gou/virtualscroll"
@@ -80,6 +82,22 @@ import (
 var gouDemoTrace *log.Logger
 
 // gouDemoMergedSystemLocale mirrors apiparity.GouDemo: user + project settings.go.json / settings.local.json language/outputStyle with env override.
+// resolveToolProjectRoot returns CCB_ENGINE_PROJECT_ROOT if set, else the nearest Go project marker from cwd, else abs(cwd).
+func resolveToolProjectRoot(cwd string) string {
+	if r := strings.TrimSpace(os.Getenv("CCB_ENGINE_PROJECT_ROOT")); r != "" {
+		if a, err := filepath.Abs(r); err == nil {
+			return a
+		}
+	}
+	if pr, err := settingsfile.FindClaudeProjectRoot(cwd); err == nil {
+		return pr
+	}
+	if a, err := filepath.Abs(cwd); err == nil {
+		return a
+	}
+	return cwd
+}
+
 func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) {
 	projRoot := settingsfile.ProjectRootLastResolved()
 	locLang, locStyleKey, err := settingsfile.MergeGouDemoLocalePrefs(projRoot, true)
@@ -222,6 +240,10 @@ func gouDemoEnvTruthy(key string) bool {
 
 func gouDemoScrollStatsEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_SCROLL_STATS")
+}
+
+func gouDemoStatusLineEnabled() bool {
+	return gouDemoEnvTruthy("GOU_DEMO_STATUS_LINE")
 }
 
 func gouDemoEnvWantsApiBodyLog() bool {
@@ -403,6 +425,7 @@ func main() {
 			log.Fatalf("gou-demo: project settings: %v", err)
 		}
 	}
+	theme.InitFromThemeName(os.Getenv("CLAUDE_CODE_THEME"))
 	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: user ~/.claude/settings.json,
 	// project .claude/settings.go.json, settings.local.json. Project .claude/settings.json is TS-only
 	// (see settingsfile package doc); put GOU_DEMO_* / CCB_ENGINE_* in settings.go.json or export in shell.
@@ -721,11 +744,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			gouDemoTracef("enter input=%q", previewForTrace(line, 120))
 			cwd, _ := os.Getwd()
-			repoRoot := pui.FindRepoRootForBridge(cwd)
+			toolProjectRoot := resolveToolProjectRoot(cwd)
 			mergedLang, mergedOutName, mergedOutPrompt := gouDemoMergedSystemLocale()
 			preExp := fullPrompt
 			demoCfg := pui.DemoConfig{
-				RepoRoot:            repoRoot,
 				SessionID:           m.store.ConversationID,
 				Language:            mergedLang,
 				MCPCommandsJSONPath: m.mcpCommandsJSONPath,
@@ -748,7 +770,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				gouDemoLogToolUseContext(params.RuntimeContext)
 			}
 			params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
-				RepoRoot:  repoRoot,
 				SessionID: m.store.ConversationID,
 			})
 			gouDemoTracef("ProcessUserInput start priorMsgs=%d", len(m.store.Messages))
@@ -920,21 +941,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							if errAbs != nil {
 								cwdAbs = cwd
 							}
-							var extraRoots []string
-							if rr := strings.TrimSpace(repoRoot); rr != "" {
-								if ra, e := filepath.Abs(rr); e == nil {
-									extraRoots = append(extraRoots, ra)
-								}
-							}
 							runner := skilltools.ParityToolRunner{
 								DemoToolRunner: skilltools.DemoToolRunner{
 									Commands:  params.Commands,
-									RepoRoot:  repoRoot,
 									SessionID: m.store.ConversationID,
 								},
 								WorkDir:          cwdAbs,
-								ExtraRoots:       extraRoots,
-								ProjectRoot:      repoRoot,
+								ProjectRoot:      toolProjectRoot,
 								LocalBashDefault: true,
 								AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
 							}
@@ -1114,10 +1127,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func listViewportH(m *model) int {
 	h := m.height - m.titleH - m.streamH - m.inputAreaHeight() - 2
+	if gouDemoStatusLineEnabled() {
+		h--
+	}
 	if h < 3 {
 		h = 3
 	}
 	return h
+}
+
+func (m *model) statusLineString() string {
+	if !gouDemoStatusLineEnabled() {
+		return ""
+	}
+	n := len(m.store.Messages)
+	vk := len(m.store.ItemKeys())
+	return lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf(
+		"theme=%s msgs=%d items=%d cols=%d sticky=%v",
+		theme.ActiveTheme(), n, vk, m.cols, m.sticky))
 }
 
 func (m *model) rebuildHeightCache() {
@@ -1254,6 +1281,10 @@ func (m *model) View() string {
 	}
 	b.WriteString(strings.Join(streamRows, "\n"))
 	b.WriteByte('\n')
+	if s := m.statusLineString(); s != "" {
+		b.WriteString(s)
+		b.WriteByte('\n')
+	}
 
 	promptView := m.pr.View()
 	hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render("Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands")
@@ -1292,29 +1323,31 @@ func formatMessageSegments(segs []messagerow.Segment, cols int) string {
 		case messagerow.SegTextMarkdown:
 			parts = append(parts, styleMarkdownTokens(markdown.CachedLexer(seg.Text), cols))
 		case messagerow.SegToolUse:
-			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true).Render("⚙ "+seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+seg.Text))
 		case messagerow.SegToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.DimMuted())
 			if seg.IsToolError {
 				st = lipgloss.NewStyle().Foreground(theme.ToolError())
 			}
-			parts = append(parts, st.Render("↩ "+seg.Text))
+			body := textutil.LinkifyOSC8(seg.Text)
+			parts = append(parts, st.Render("↩ "+body))
 		case messagerow.SegThinking:
-			parts = append(parts, lipgloss.NewStyle().Faint(true).Italic(true).Render(seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Faint(true).Italic(true).Render(textutil.LinkifyOSC8(seg.Text)))
 		case messagerow.SegServerToolUse:
-			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Render("⎈ "+seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ "+seg.Text))
 		case messagerow.SegAdvisorToolResult:
-			st := lipgloss.NewStyle().Foreground(lipgloss.Color("183"))
+			st := lipgloss.NewStyle().Foreground(theme.AdvisorAccent())
 			if seg.IsToolError {
 				st = lipgloss.NewStyle().Foreground(theme.ToolError())
 			}
-			parts = append(parts, st.Render("✧ "+seg.Text))
+			body := textutil.LinkifyOSC8(seg.Text)
+			parts = append(parts, st.Render("✧ "+body))
 		case messagerow.SegGroupedToolUse:
-			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true).Render("▦ "+seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ "+seg.Text))
 		case messagerow.SegCollapsedReadSearch:
-			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("114")).Bold(true).Render("▤ "+seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.CollapsedAccent()).Bold(true).Render("▤ "+seg.Text))
 		default:
-			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(seg.Text)))
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))
@@ -1331,7 +1364,7 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 		case "heading":
 			lv := min(max(t.Level, 1), 6)
 			line := strings.Repeat("#", lv) + " " + t.Text
-			parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")).Render(line))
+			parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(theme.MarkdownHeading()).Render(line))
 		case "code":
 			cb := "```" + t.Lang + "\n" + t.Text
 			if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {

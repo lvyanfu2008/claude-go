@@ -72,7 +72,9 @@ Bubble Tea 最小界面：虚拟列表区间 + `conversation.Store` + 模拟 `St
 cd goc && go run ./cmd/gou-demo
 ```
 
-操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表，`q` / `Esc` 退出。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
+操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表（打开后可直接输入缩小候选；首行 `/foo` 会作为初始 filter），`q` / `Esc` 退出。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
+
+**主题**：合并后的环境变量 **`CLAUDE_CODE_THEME=light`** 使用高对比调色（见 `goc/gou/theme`）。**`GOU_DEMO_STATUS_LINE=1`** 在输入区上方显示一行状态（theme / 消息数 / 列宽等）。工具块中的 `http(s)://` 会做 **OSC 8 超链接**（`goc/gou/textutil.LinkifyOSC8`）。
 
 **调试日志**：`GOU_DEMO_LOG_FILE=/path/to.log` 追加写入；或 `GOU_DEMO_LOG=1` 在 **stderr 为 TTY** 时默认写入 `~/.claude/debug/gou-demo-trace.txt`（全屏 TUI 与 stderr 混用会错位，故不用 stderr）；`GOU_DEMO_LOG_STDERR=1` 强制 stderr。行前缀 `[gou-demo]`。
 
