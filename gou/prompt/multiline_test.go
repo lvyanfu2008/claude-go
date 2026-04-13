@@ -38,3 +38,24 @@ func TestMultiline_emptyNoSubmit(t *testing.T) {
 		t.Fatal("unexpected submit on empty")
 	}
 }
+
+func TestMultiline_altEnterInsertsNewline(t *testing.T) {
+	m := New()
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	if got := m.Value(); got != "a\n" {
+		t.Fatalf("value %q", got)
+	}
+	if m.Submitted() {
+		t.Fatal("alt+enter must not submit")
+	}
+}
+
+func TestMultiline_altEnterStringKey(t *testing.T) {
+	// Same bytes bubbletea maps to alt+enter (see bubbletea key_test).
+	m := New()
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	if m.Value() != "\n" {
+		t.Fatalf("value %q", m.Value())
+	}
+}

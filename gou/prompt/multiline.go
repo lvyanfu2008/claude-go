@@ -1,5 +1,5 @@
 // Package prompt holds a minimal multiline prompt model for gou TUI (Bubble Tea).
-// Enter submits; Ctrl+J or Alt+Enter inserts a newline; Shift+Up/Down move between lines.
+// Enter submits; Ctrl+J or Alt/Option+Enter inserts a newline (matched via KeyMsg.String so Alt survives terminal quirks); Shift+Up/Down move between lines.
 package prompt
 
 import (
@@ -73,19 +73,19 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.Type {
-	case tea.KeyCtrlJ:
+	// Prefer msg.String() for newline shortcuts: some terminals omit Key.Alt on
+	// Option/Meta+Enter while still emitting the "alt+enter" string (bubbletea keymap).
+	switch msg.String() {
+	case "ctrl+j", "alt+enter":
 		m.insertRune('\n')
 		return nil
-	case tea.KeyEnter:
-		if msg.Alt {
-			m.insertRune('\n')
-			return nil
-		}
+	case "enter":
 		if strings.TrimSpace(m.Value()) != "" {
 			m.submitted = true
 		}
 		return nil
+	}
+	switch msg.Type {
 	case tea.KeyBackspace:
 		m.deleteBefore()
 		return nil
