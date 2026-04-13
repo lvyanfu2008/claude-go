@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -34,6 +35,30 @@ func TestSlashGated(t *testing.T) {
 	}
 	if SlashGated("hello") {
 		t.Fatal("expected not gated")
+	}
+}
+
+// TS createUserMessage uses crypto.randomUUID() when uuid is omitted.
+var rfc4122v4 = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func TestBuildDemoParams_defaultUserUUIDMatchesTSRandomUUID(t *testing.T) {
+	st := &conversation.Store{ConversationID: "t"}
+	p, err := BuildDemoParams("hi", st, DemoConfig{SkipCommands: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.UUID != nil {
+		t.Fatalf("BuildDemoParams should leave UUID nil when DemoConfig.uuid unset (TS omits uuid), got %q", *p.UUID)
+	}
+	r, err := processuserinput.ProcessUserInput(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Messages) == 0 || r.Messages[0].UUID == "" {
+		t.Fatal("expected user message with uuid")
+	}
+	if !rfc4122v4.MatchString(r.Messages[0].UUID) {
+		t.Fatalf("user message uuid should match TS randomUUID / createUserMessage, got %q", r.Messages[0].UUID)
 	}
 }
 

@@ -30,7 +30,7 @@
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
-// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). Streaming parity also wires [query.QueryDeps.OnQueryYield] so each assistant/tool_result yield is logged incrementally (deduped by message UUID); turn end still calls maybeRecordTranscript for a full-store sync. Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
+// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] so each assistant/tool_result yield is logged incrementally (deduped by message UUID); turn end still calls maybeRecordTranscript for a full-store sync. Each new non-meta user row is followed by a TS-shaped file-history-snapshot line (empty trackedFileBackups); set GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 to omit. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
 // Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
@@ -654,10 +654,12 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	var tr *sessiontranscript.Store
 	if gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
 		cwd, _ := os.Getwd()
+		fhSnap := !gouDemoEnvTruthy("GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT")
 		tr = &sessiontranscript.Store{
-			SessionID:   st.ConversationID,
-			OriginalCwd: cwd,
-			Cwd:         cwd,
+			SessionID:                 st.ConversationID,
+			OriginalCwd:               cwd,
+			Cwd:                       cwd,
+			FileHistorySnapshotOnUser: fhSnap,
 		}
 	}
 
@@ -976,6 +978,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.rebuildHeightCache()
 			m.sticky = true
 			m.scrollTop = 1 << 30
+			// Flush user (and any other new rows) before OnQueryYield appends streaming assistant/tool lines so JSONL follows conversation time order.
+			m.maybeRecordTranscript()
 			if out.EffectiveShouldQuery && !out.HadExecutionRequest {
 				usedCCB := false
 				var normToolsJSON json.RawMessage

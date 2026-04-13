@@ -161,6 +161,114 @@ func TestRecordTranscript_compactBoundary(t *testing.T) {
 	}
 }
 
+func TestRecordTranscript_fileHistorySnapshotAfterNewUser(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fh.jsonl")
+	st := &Store{
+		SessionID:                 "11111111-2222-3333-4444-555555555555",
+		OriginalCwd:               "/proj/foo",
+		ConfigHome:                filepath.Join(dir, "claude"),
+		Cwd:                       "/proj/foo",
+		UserType:                  "external",
+		TranscriptFile:            path,
+		FileHistorySnapshotOnUser: true,
+	}
+	uid := "5b03942f-f884-4793-abfa-12aa4947fdf7"
+	m1 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    uid,
+		Message: json.RawMessage(`{"role":"user","content":"hello"}`),
+	}
+	_, err := st.RecordTranscript(context.Background(), []types.Message{m1}, RecordOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, ln := range strings.Split(string(raw), "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln != "" {
+			lines = append(lines, ln)
+		}
+	}
+	if len(lines) != 2 {
+		t.Fatalf("want 2 jsonl lines (user + file-history-snapshot), got %d: %v", len(lines), lines)
+	}
+	var urow, fhrow map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &urow); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &fhrow); err != nil {
+		t.Fatal(err)
+	}
+	if urow["uuid"] != uid || urow["type"] != "user" {
+		t.Fatalf("first line: %#v", urow)
+	}
+	if fhrow["type"] != "file-history-snapshot" {
+		t.Fatalf("second line type: %#v", fhrow["type"])
+	}
+	if fhrow["messageId"] != uid {
+		t.Fatalf("fh messageId: %#v", fhrow["messageId"])
+	}
+	if fhrow["isSnapshotUpdate"] != false {
+		t.Fatalf("isSnapshotUpdate: %#v", fhrow["isSnapshotUpdate"])
+	}
+	snap, ok := fhrow["snapshot"].(map[string]any)
+	if !ok {
+		t.Fatalf("snapshot: %#v", fhrow["snapshot"])
+	}
+	if snap["messageId"] != uid {
+		t.Fatalf("snapshot.messageId: %#v", snap["messageId"])
+	}
+	tb, ok := snap["trackedFileBackups"].(map[string]any)
+	if !ok || len(tb) != 0 {
+		t.Fatalf("trackedFileBackups: %#v", snap["trackedFileBackups"])
+	}
+	if _, ok := snap["timestamp"].(string); !ok || snap["timestamp"] == "" {
+		t.Fatalf("timestamp: %#v", snap["timestamp"])
+	}
+}
+
+func TestRecordTranscript_skipsFileHistoryForMetaUser(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "meta.jsonl")
+	meta := true
+	st := &Store{
+		SessionID:                 "11111111-2222-3333-4444-555555555555",
+		OriginalCwd:               "/proj/foo",
+		ConfigHome:                filepath.Join(dir, "claude"),
+		Cwd:                       "/proj/foo",
+		UserType:                  "external",
+		TranscriptFile:            path,
+		FileHistorySnapshotOnUser: true,
+	}
+	m1 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "5b03942f-f884-4793-abfa-12aa4947fdf7",
+		IsMeta:  &meta,
+		Message: json.RawMessage(`{"role":"user","content":"x"}`),
+	}
+	_, err := st.RecordTranscript(context.Background(), []types.Message{m1}, RecordOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
+	n := 0
+	for _, ln := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(ln) != "" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("meta user should not get file-history line, got %d lines", n)
+	}
+}
+
 func TestRecordSidechainTranscript(t *testing.T) {
 	dir := t.TempDir()
 	st := &Store{

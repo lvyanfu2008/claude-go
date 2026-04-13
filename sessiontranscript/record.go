@@ -53,6 +53,11 @@ type Store struct {
 	// Sidechain / agent path (RecordSidechainTranscript)
 	AgentSubdir string
 
+	// FileHistorySnapshotOnUser when true, appends a TS-shaped JSONL row
+	// {type:"file-history-snapshot",...} after each newly persisted non-meta user
+	// message (sessionStorage.insertFileHistorySnapshot parity; empty trackedFileBackups).
+	FileHistorySnapshotOnUser bool
+
 	// TranscriptFile when non-empty overrides the computed JSONL path (tests).
 	TranscriptFile string
 
@@ -158,6 +163,31 @@ func messageToMap(m types.Message) (map[string]any, error) {
 		return nil, err
 	}
 	return o, nil
+}
+
+func isUserMetaMessage(m types.Message) bool {
+	return m.Type == types.MessageTypeUser && m.IsMeta != nil && *m.IsMeta
+}
+
+// appendTSFileHistorySnapshotLine mirrors sessionStorage FileHistorySnapshotMessage JSON shape.
+func appendTSFileHistorySnapshotLine(path, messageID string, isSnapshotUpdate bool) error {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	ts := time.Now().UTC().Format(time.RFC3339Nano)
+	snap := map[string]any{
+		"messageId":          messageID,
+		"trackedFileBackups": map[string]any{},
+		"timestamp":          ts,
+	}
+	entry := map[string]any{
+		"type":             "file-history-snapshot",
+		"messageId":        messageID,
+		"snapshot":         snap,
+		"isSnapshotUpdate": isSnapshotUpdate,
+	}
+	return appendJSONL(path, entry)
 }
 
 func appendJSONL(path string, obj map[string]any) error {
@@ -353,6 +383,11 @@ func (s *Store) RecordTranscript(ctx context.Context, messages []types.Message, 
 			return "", err
 		}
 		existing[m.UUID] = struct{}{}
+		if s.FileHistorySnapshotOnUser && m.Type == types.MessageTypeUser && !isUserMetaMessage(m) {
+			if err := appendTSFileHistorySnapshotLine(path, m.UUID, false); err != nil {
+				return "", err
+			}
+		}
 		if IsChainParticipant(m) {
 			parentUUID = m.UUID
 			lastRecorded = m.UUID

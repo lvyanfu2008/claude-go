@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"goc/agents/builtin"
 	"goc/ccb-engine/skilltools"
@@ -99,12 +98,11 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 			model = defaultMainLoopModel
 		}
 	}
+	// When UUID is unset, leave nil so process-user-input newUserMessage uses
+	// randomUUID() — TS createUserMessage default is crypto.randomUUID().
 	var uuidPtr *string
 	if cfg.UserMessageUUID != nil && strings.TrimSpace(*cfg.UserMessageUUID) != "" {
 		u := strings.TrimSpace(*cfg.UserMessageUUID)
-		uuidPtr = &u
-	} else {
-		u := fmt.Sprintf("u-%d", time.Now().UnixNano())
 		uuidPtr = &u
 	}
 
