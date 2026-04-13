@@ -25,6 +25,7 @@
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
+// Mouse: tea.WithMouseCellMotion enables wheel + left-drag on the message list (see mouse_message_list.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to turn off.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
@@ -533,6 +534,10 @@ type model struct {
 	transcriptSearchHits   []int
 	transcriptSearchCursor int
 
+	// Message-list mouse scroll (see mouse_message_list.go; tea.WithMouseCellMotion).
+	msgListMouseDragging bool
+	msgListMouseLastY    int
+
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
 	lastMainLoopModel string
@@ -611,6 +616,7 @@ func main() {
 	if !noAltScreen {
 		opts = append(opts, tea.WithAltScreen())
 	}
+	opts = append(opts, tea.WithMouseCellMotion())
 	if *streamStdin {
 		tty, err := os.Open("/dev/tty")
 		if err == nil {
@@ -846,6 +852,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleTranscriptEditorChainMsg(msg)
 	case gouTranscriptEditorClearStatusMsg:
 		return m, m.handleTranscriptEditorChainMsg(msg)
+
+	case tea.MouseMsg:
+		if m.tryHandleMessageListMouse(msg) {
+			return m, nil
+		}
 
 	case tea.KeyMsg:
 		if m.permAsk != nil && msg.String() == "ctrl+c" {

@@ -31,6 +31,7 @@
 //   - TS VirtualMessageList + useVirtualScroll → goc/gou/virtualscroll
 //   - TS scrollRef (ScrollBoxHandle: scrollTo, scrollToBottom, sticky, …) → gou-demo model fields
 //     (scrollTop, sticky, pendingDelta) updated in Update/keys; next View pass renders — no separate ref type.
+//   - Wheel / drag-to-scroll on the message list: cmd/gou-demo/mouse_message_list.go (tea.WithMouseCellMotion).
 //   - Row body: goc/gou/messagerow (SegmentsFromMessage*, tool chrome, collapsed_read_search)
 //   - Render/stitch: cmd/gou-demo/main.go formatMessageSegments, renderMessageRow, measureMessageRows
 //
