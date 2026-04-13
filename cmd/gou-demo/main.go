@@ -366,6 +366,88 @@ func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams
 
 type streamTick struct{}
 
+// teardropAsterisk matches TS constants/figures.ts TEARDROP_ASTERISK (Spinner.tsx).
+const teardropAsterisk = "\u273b"
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouSpinnerTickMsg{} })
+}
+
+func (m *model) beginQuerySpinner() {
+	m.queryBusyStartedAt = time.Now()
+	m.spinnerVerb = pickSpinnerVerb()
+	m.spinnerFrame = 0
+}
+
+func (m *model) endQuerySpinner() {
+	m.spinnerVerb = ""
+	m.queryBusyStartedAt = time.Time{}
+	m.spinnerFrame = 0
+}
+
+func padStreamRows(rows []string, h int) []string {
+	for len(rows) < h {
+		rows = append(rows, "")
+	}
+	if len(rows) > h {
+		return rows[:h]
+	}
+	return rows
+}
+
+func (m *model) promptBottomStreamRows() []string {
+	h := m.streamH
+	if h < 2 {
+		h = 2
+	}
+	w := m.width - 2
+	if w < 8 {
+		w = m.cols
+	}
+	if m.queryBusy {
+		verb := strings.TrimSpace(m.spinnerVerb)
+		if verb == "" {
+			verb = "Working"
+		}
+		frames := []string{"…", ".", "..", "..."}
+		sfx := frames[m.spinnerFrame%len(frames)]
+		row0 := lipgloss.NewStyle().Bold(true).Render(teardropAsterisk + " " + verb + sfx)
+		row1 := ""
+		if gouDemoSpinnerTipsEnabled() && !m.queryBusyStartedAt.IsZero() {
+			if tip := effectiveSpinnerTip(time.Since(m.queryBusyStartedAt), true); tip != "" {
+				row1 = lipgloss.NewStyle().Faint(true).Render("Tip: " + tip)
+			}
+		}
+		restH := h - 2
+		if restH < 0 {
+			restH = 0
+		}
+		var streamTail string
+		if strings.TrimSpace(m.store.StreamingText) != "" {
+			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
+			streamTail = styleMarkdownTokens(toks, m.cols)
+		} else {
+			streamTail = lipgloss.NewStyle().Faint(true).Render("(streaming)")
+		}
+		wrapped := layout.WrapForViewport(streamTail, w)
+		tailLines := strings.Split(wrapped, "\n")
+		tailLines = padStreamRows(tailLines, restH)
+		out := append([]string{row0, row1}, tailLines...)
+		return padStreamRows(out, h)
+	}
+	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
+	var streamBody string
+	if m.store.StreamingText != "" {
+		toks := markdown.CachedLexerStreaming(m.store.StreamingText)
+		streamBody = styleMarkdownTokens(toks, m.cols)
+	} else {
+		streamBody = lipgloss.NewStyle().Faint(true).Render("(idle)")
+	}
+	streamWrapped := layout.WrapForViewport(streamLabel+streamBody, w)
+	streamRows := strings.Split(streamWrapped, "\n")
+	return padStreamRows(streamRows, h)
+}
+
 type model struct {
 	store  *conversation.Store
 	pr     prompt.Model
@@ -417,6 +499,9 @@ type model struct {
 	// REPL chrome (terminal title, permission pill): see repl_chrome.go.
 	permissionMode        types.PermissionMode
 	queryBusy             bool
+	queryBusyStartedAt    time.Time
+	spinnerVerb           string
+	spinnerFrame          int
 	lastEmittedTitlePlain string
 
 	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozen lengths).
@@ -1066,6 +1151,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
 								gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
 									reqID, len(m.store.Messages), len(toolsJSON))
+								m.beginQuerySpinner()
 								m.queryBusy = true
 								runQueryStreamingParityTurn(m.ccbSend, qp)
 								usedCCB = true
@@ -1079,9 +1165,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				if usedCCB {
-					return m, cmd
+					if cmd != nil {
+						return m, tea.Batch(cmd, spinnerTickCmd())
+					}
+					return m, spinnerTickCmd()
 				}
 				gouDemoTracef("starting fake streamTick path")
+				m.beginQuerySpinner()
 				m.queryBusy = true
 				m.streamChunks = []string{
 					"## Streamed reply\n\n",
@@ -1092,7 +1182,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.streamIdx = 0
 				m.store.ClearStreaming()
-				return m, tea.Batch(cmd, tea.Tick(90*time.Millisecond, func(time.Time) tea.Msg { return streamTick{} }))
+				return m, tea.Batch(cmd, tea.Tick(90*time.Millisecond, func(time.Time) tea.Msg { return streamTick{} }), spinnerTickCmd())
 			}
 			gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
 			if !out.EffectiveShouldQuery && !out.HadExecutionRequest {
@@ -1120,8 +1210,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case gouSpinnerTickMsg:
+		if !m.queryBusy {
+			return m, nil
+		}
+		m.spinnerFrame++
+		return m, spinnerTickCmd()
+
 	case gouQueryDoneMsg:
 		m.queryBusy = false
+		m.endQuerySpinner()
 		if msg.Err != nil {
 			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
 			m.rebuildHeightCache()
@@ -1158,6 +1256,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streamChunks = nil
 		m.streamIdx = 0
 		m.queryBusy = false
+		m.endQuerySpinner()
 		m.rebuildHeightCache()
 		gouDemoTracef("fake streamTick finished storeMessages=%d", len(m.store.Messages))
 		if m.transcript != nil {
@@ -1254,7 +1353,7 @@ func (m *model) messagerowOpts() *messagerow.RenderOpts {
 
 func (m *model) measureMessageRows(msg types.Message, cols int) int {
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
-	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols)
+	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols, m.showToolUseCtrlOExpandHint())
 	block := header + "\n" + body
 	return max(1, layout.WrappedRowCount(block, cols))
 }
@@ -1368,22 +1467,7 @@ func (m *model) View() string {
 	b.WriteByte('\n')
 
 	if m.uiScreen != gouDemoScreenTranscript {
-		streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
-		var streamBody string
-		if m.store.StreamingText != "" {
-			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-			streamBody = styleMarkdownTokens(toks, m.cols)
-		} else {
-			streamBody = lipgloss.NewStyle().Faint(true).Render("(idle)")
-		}
-		streamWrapped := layout.WrapForViewport(streamLabel+streamBody, m.width-2)
-		streamRows := strings.Split(streamWrapped, "\n")
-		for len(streamRows) < m.streamH {
-			streamRows = append(streamRows, "")
-		}
-		if len(streamRows) > m.streamH {
-			streamRows = streamRows[:m.streamH]
-		}
+		streamRows := m.promptBottomStreamRows()
 		b.WriteString(strings.Join(streamRows, "\n"))
 		b.WriteByte('\n')
 	}
@@ -1418,9 +1502,13 @@ func (m *model) View() string {
 	return out
 }
 
+func (m *model) showToolUseCtrlOExpandHint() bool {
+	return m.uiScreen == gouDemoScreenPrompt && !m.transcriptDumpMode
+}
+
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
-	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols)
+	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols, m.showToolUseCtrlOExpandHint())
 	block := header + "\n" + body
 	wrapped := layout.WrapForViewport(block, cols)
 	rows := strings.Split(wrapped, "\n")
@@ -1431,14 +1519,18 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
 }
 
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
-func formatMessageSegments(segs []messagerow.Segment, cols int) string {
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool) string {
 	var parts []string
 	for _, seg := range segs {
 		switch seg.Kind {
 		case messagerow.SegTextMarkdown:
 			parts = append(parts, styleMarkdownTokens(markdown.CachedLexer(seg.Text), cols))
 		case messagerow.SegToolUse:
-			parts = append(parts, lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+seg.Text))
+			line := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + seg.Text)
+			if toolUseCtrlOHint {
+				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			}
+			parts = append(parts, line)
 		case messagerow.SegToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.DimMuted())
 			if seg.IsToolError {
@@ -1452,7 +1544,11 @@ func formatMessageSegments(segs []messagerow.Segment, cols int) string {
 		case messagerow.SegDisplayHint:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(seg.Text)))
 		case messagerow.SegServerToolUse:
-			parts = append(parts, lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ "+seg.Text))
+			line := lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + seg.Text)
+			if toolUseCtrlOHint {
+				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			}
+			parts = append(parts, line)
 		case messagerow.SegAdvisorToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.AdvisorAccent())
 			if seg.IsToolError {

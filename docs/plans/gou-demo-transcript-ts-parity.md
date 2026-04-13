@@ -36,6 +36,7 @@ Transcript-focused cases in `cmd/gou-demo` (non-exhaustive): pager (**space**, *
 
 ## Related
 
+- Loading / spinner / tool activity vs TS: [gou-demo-loading-ui-parity.md](./gou-demo-loading-ui-parity.md).
 - REPL tool permissions vs TS: [go-repl-permissions-parity.md](./go-repl-permissions-parity.md).
 - ReplBridge non-goal: [gou-demo-repl-bridge-scope.md](./gou-demo-repl-bridge-scope.md).
 

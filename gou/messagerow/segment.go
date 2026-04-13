@@ -194,9 +194,9 @@ func segmentFromBlock(b types.MessageContentBlock) []Segment {
 		}
 		return []Segment{{Kind: SegTextMarkdown, Text: b.Text}}
 	case "tool_use":
-		return []Segment{{Kind: SegToolUse, Text: formatNamedTool("tool_use", b.Name, b.ID, b.Input)}}
+		return ActivitySegmentForToolBlock(b, SegToolUse)
 	case "server_tool_use":
-		return []Segment{{Kind: SegServerToolUse, Text: formatNamedTool("server_tool_use", b.Name, b.ID, b.Input)}}
+		return ActivitySegmentForToolBlock(b, SegServerToolUse)
 	case "advisor_tool_result":
 		var sb strings.Builder
 		sb.WriteString("advisor_tool_result")
