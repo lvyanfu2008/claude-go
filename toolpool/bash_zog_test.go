@@ -9,7 +9,7 @@ import (
 	"goc/types"
 )
 
-func TestReplaceBashToolSpecIfZogMode_appendsBashZogLeavesBash(t *testing.T) {
+func TestReplaceBashToolSpecIfZogMode_replacesBashWithBashZog(t *testing.T) {
 	t.Setenv(toolvalidator.EnvToolInputValidator, "zog")
 	base := []types.ToolSpec{
 		{Name: "Read", Description: "r", InputJSONSchema: []byte(`{}`)},
@@ -19,16 +19,13 @@ func TestReplaceBashToolSpecIfZogMode_appendsBashZogLeavesBash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != len(base)+1 {
-		t.Fatalf("len got %d want %d", len(out), len(base)+1)
+	if len(out) != len(base) {
+		t.Fatalf("len got %d want %d (Bash replaced, not appended)", len(out), len(base))
 	}
 	if out[0].Description != "r" {
 		t.Fatal("unexpected Read change")
 	}
-	if out[1].Name != "Bash" || out[1].Description != "short" || string(out[1].InputJSONSchema) != `{"type":"object"}` {
-		t.Fatalf("Bash row must be unchanged, got %#v", out[1])
-	}
-	z := out[2]
+	z := out[1]
 	if z.Name != bashzog.ZogToolName {
 		t.Fatalf("name %q", z.Name)
 	}
@@ -40,6 +37,11 @@ func TestReplaceBashToolSpecIfZogMode_appendsBashZogLeavesBash(t *testing.T) {
 	}
 	if z.MaxResultSizeChars != 42 {
 		t.Fatalf("expected MaxResultSizeChars copied from Bash, got %d", z.MaxResultSizeChars)
+	}
+	for _, row := range out {
+		if strings.TrimSpace(row.Name) == "Bash" {
+			t.Fatal("Bash must be removed in zog mode")
+		}
 	}
 }
 
@@ -54,8 +56,11 @@ func TestReplaceBashToolSpecIfZogMode_idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(once) != 2 || len(twice) != 2 {
+	if len(once) != 1 || len(twice) != 1 {
 		t.Fatalf("once %d twice %d", len(once), len(twice))
+	}
+	if strings.TrimSpace(once[0].Name) != bashzog.ZogToolName {
+		t.Fatalf("got %q", once[0].Name)
 	}
 }
 

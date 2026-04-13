@@ -23,10 +23,13 @@ func GouParityToolList() []ToolDefinition {
 		agentToolDefinition(),
 		askUserQuestionToolDefinition(),
 		taskOutputToolDefinition(),
-		bashToolDefinition(),
 	)
-	if td, ok := bashZogToolDefinitionMaybe(); ok {
-		out = append(out, td)
+	if toolvalidator.InputValidatorMode() == "zog" {
+		if td, ok := bashZogToolDefinitionMaybe(); ok {
+			out = append(out, td)
+		}
+	} else {
+		out = append(out, bashToolDefinition())
 	}
 	out = append(out,
 		globToolDefinition(),

@@ -36,8 +36,18 @@ func TestGouParityToolList_includesBashZogWhenValidatorZog(t *testing.T) {
 			seenBashZog = true
 		}
 	}
-	if !seenBash || !seenBashZog {
-		t.Fatalf("expected Bash and BashZog in list, got %v", names)
+	if seenBash || !seenBashZog {
+		t.Fatalf("expected BashZog only (no Bash) in zog list, got %v", names)
+	}
+	want := []string{
+		"Agent", "AskUserQuestion", "TaskOutput", "BashZog", "Glob", "Grep", "ExitPlanMode",
+		"Read", "Write", "Edit", "NotebookEdit", "WebFetch", "TodoWrite", "WebSearch", "TaskStop",
+		"Skill", "EnterPlanMode", "SendMessage",
+		"CronCreate", "CronDelete", "CronList", "SendUserMessage", "Brief",
+		"ListMcpResourcesTool", "ReadMcpResourceTool", "echo_stub",
+	}
+	if !slices.Equal(names, want) {
+		t.Fatalf("got %v want %v", names, want)
 	}
 }
 

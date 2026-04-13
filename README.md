@@ -33,16 +33,15 @@ go test ./...
 
 More detail on embeds and channel flags: [`commands/data/README.md`](commands/data/README.md).
 
-## `GO_TOOL_INPUT_VALIDATOR=zog` (extra **`BashZog`** tool)
+## `GO_TOOL_INPUT_VALIDATOR=zog` (**`BashZog`** replaces **`Bash`**)
 
 When **`GO_TOOL_INPUT_VALIDATOR=zog`** (see [`internal/toolvalidator/mode.go`](internal/toolvalidator/mode.go)):
 
-- The usual **`Bash`** tool row still comes from embed **`tools_api.json`** (JSON Schema + [`toolrefine`](internal/toolrefine)) like other tools.
-- A second tool **`BashZog`** is added (same shell execution as `Bash` in the Go runner). Its **`description` / `input_schema`** are defined in Go ([`ccb-engine/bashzog/tool_model_wire.go`](ccb-engine/bashzog/tool_model_wire.go), base64 of the former `bash_tool.json` payload); **Zog** validates **`BashZog`** input in [`zoglayer`](internal/zoglayer) plus `toolrefine`, aligned with the TS `fullInputSchema` **wire** (including optional `_simulatedSedEdit`). The model-facing copy can omit internal-only keys on purpose.
-- **[`toolpool.AssembleToolPoolFromEmbedded`](toolpool/assemble_embedded.go)** appends the **`BashZog`** [`types.ToolSpec`](types/tool.go) after the built-in list; **[`anthropic.GouParityToolList`](ccb-engine/internal/anthropic/canonical_demo_tools.go)** appends the matching tool definition for tests and parity runners.
-- **Diff / parity:** checked-in [`ccb-engine/bashzog/bash_zog_tool_export.json`](ccb-engine/bashzog/bash_zog_tool_export.json) is the API-shaped **`BashZog`** row (pretty JSON). Regenerate from `claude-go`: `go run ./cmd/export-bashzog-json` (or `-stdout` to pipe to `diff` / `jq`).
+- The built-in **`Bash`** row from embed **`tools_api.json`** is **removed** from the tool list and replaced by **`BashZog`** (same local shell execution in the Go runner). **`description` / `input_schema`** for that row come from Go ([`ccb-engine/bashzog/tool_model_wire.go`](ccb-engine/bashzog/tool_model_wire.go)); **Zog** validates **`BashZog`** in [`zoglayer`](internal/zoglayer) plus [`toolrefine`](internal/toolrefine), aligned with the TS `fullInputSchema` **wire** (including optional `_simulatedSedEdit`).
+- **[`toolpool.ReplaceBashToolSpecIfZogMode`](toolpool/bash_zog.go)** (used by [`AssembleToolPoolFromEmbedded`](toolpool/assemble_embedded.go)) swaps **`Bash` → `BashZog`** on the embedded pool; **[`anthropic.GouParityToolList`](ccb-engine/internal/anthropic/canonical_demo_tools.go)** exposes **`BashZog`** instead of **`Bash`** for parity tests.
+- **Diff / parity:** [`ccb-engine/bashzog/bash_zog_tool_export.json`](ccb-engine/bashzog/bash_zog_tool_export.json) is the API-shaped **`BashZog`** row. Regenerate: `go run ./cmd/export-bashzog-json` (or `-stdout`).
 
-Default (unset or any value other than `zog`) omits **`BashZog`** and keeps only **`Bash`** from the export pipeline.
+Default (unset or any value other than `zog`) keeps **`Bash`** from **`tools_api.json`** and does not register **`BashZog`** in [`GouParityToolList`](ccb-engine/internal/anthropic/canonical_demo_tools.go).
 
 ## Standalone layout note
 
