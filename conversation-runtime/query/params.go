@@ -78,6 +78,10 @@ type QueryDeps struct {
 	ToolexecutionDeps toolexecution.ExecutionDeps
 	// OnQueryYield optional; invoked after each successful streaming-parity yield (assistant and tool_result rows) so hosts can persist incrementally (e.g. [sessiontranscript.RecordTranscript]).
 	OnQueryYield func(ctx context.Context, y QueryYield) error
+	// OnStreamingToolUses optional; invoked during Anthropic/OpenAI streaming parity with the
+	// current in-flight tool_use snapshot after each content_block_start|delta|stop. uses==nil
+	// means message_stop (TS clears streamingToolUses). Non-nil slice replaces the live list (may be empty).
+	OnStreamingToolUses func(ctx context.Context, uses []StreamingToolUseLive) error
 }
 
 // ToolResultBudgetInput is passed to [QueryDeps.ApplyToolResultBudget] (query.ts applyToolResultBudget).

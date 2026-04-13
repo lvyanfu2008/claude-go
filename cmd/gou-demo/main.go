@@ -296,6 +296,12 @@ type gouQueryYieldMsg struct {
 	Message types.Message
 }
 
+// gouStreamingToolUsesMsg carries in-flight tool_use snapshots from [query.QueryDeps.OnStreamingToolUses].
+// Uses==nil clears the store (Anthropic message_stop); non-nil replaces the live list (may be empty).
+type gouStreamingToolUsesMsg struct {
+	Uses []query.StreamingToolUseLive
+}
+
 // gouQueryDoneMsg marks completion of a query streaming parity turn (Err set on failure).
 type gouQueryDoneMsg struct {
 	Err error
@@ -1097,6 +1103,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else {
 							reqID := fmt.Sprintf("turn-%d", time.Now().UnixNano())
 							m.store.ClearStreaming()
+							m.store.ClearStreamingToolUses()
 							// TS: skill_listing attachment is pushed to mutableMessages before callModel (QueryEngine attachment case).
 							if strings.TrimSpace(listing) != "" {
 								if att, ok := ccbhydrate.SkillListingStoreMessage(listing, listingMeta); ok {
@@ -1138,6 +1145,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								m.installAskResolver(&te)
 								qdeps.ToolexecutionDeps = te
+								if send := m.ccbSend; send != nil {
+									qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
+										send(gouStreamingToolUsesMsg{Uses: uses})
+										return nil
+									}
+								}
 								if m.transcript != nil && gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
 									tr := m.transcript
 									store := m.store
@@ -1172,6 +1185,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									reqID, len(m.store.Messages), len(toolsJSON))
 								m.beginQuerySpinner()
 								m.queryBusy = true
+								m.store.ClearStreamingToolUses()
 								runQueryStreamingParityTurn(m.ccbSend, qp)
 								usedCCB = true
 							} else {
@@ -1201,6 +1215,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.streamIdx = 0
 				m.store.ClearStreaming()
+				m.store.ClearStreamingToolUses()
 				return m, tea.Batch(cmd, tea.Tick(90*time.Millisecond, func(time.Time) tea.Msg { return streamTick{} }), spinnerTickCmd())
 			}
 			gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
@@ -1229,6 +1244,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case gouStreamingToolUsesMsg:
+		if msg.Uses == nil {
+			m.store.ClearStreamingToolUses()
+		} else {
+			m.store.ClearStreamingToolUses()
+			for _, u := range msg.Uses {
+				m.store.AppendStreamingToolUse(conversation.StreamingToolUse{
+					Index:         u.Index,
+					ToolUseID:     u.ToolUseID,
+					Name:          u.Name,
+					UnparsedInput: u.UnparsedInput,
+				})
+			}
+		}
+		m.rebuildHeightCache()
+		if m.uiScreen != gouDemoScreenTranscript {
+			m.sticky = true
+			m.scrollTop = 1 << 30
+		}
+		return m, nil
+
 	case gouSpinnerTickMsg:
 		if !m.queryBusy {
 			return m, nil
@@ -1239,6 +1275,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouQueryDoneMsg:
 		m.queryBusy = false
 		m.endQuerySpinner()
+		m.store.ClearStreamingToolUses()
 		if msg.Err != nil {
 			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
 			m.rebuildHeightCache()
@@ -1272,6 +1309,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Content: raw,
 		})
 		m.store.ClearStreaming()
+		m.store.ClearStreamingToolUses()
 		m.streamChunks = nil
 		m.streamIdx = 0
 		m.queryBusy = false
@@ -1492,6 +1530,27 @@ func (m *model) View() string {
 			msgPane.WriteByte('\n')
 		}
 		msgPane.WriteString(block)
+	}
+	// Prompt: in-flight tool_use rows during HTTP SSE (TS syntheticStreamingToolUseMessages), before streaming text tail.
+	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
+		for _, tu := range m.store.StreamingToolUses {
+			if msgPane.Len() > 0 {
+				msgPane.WriteByte('\n')
+			}
+			head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+			msgPane.WriteString(head)
+			msgPane.WriteByte('\n')
+			toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+tu.Name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+			msgPane.WriteString(toolTitle)
+			if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+				msgPane.WriteByte('\n')
+				maxW := cols * 4
+				if maxW < 80 {
+					maxW = 80
+				}
+				msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(previewForTrace(s, maxW)))
+			}
+		}
 	}
 	// Same transcript as TS: show in-flight assistant text in the main pane, not only the small stream: strip.
 	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {

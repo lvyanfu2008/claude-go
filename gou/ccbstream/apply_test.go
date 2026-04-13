@@ -15,9 +15,13 @@ func TestApply_deltaAndTurnComplete(t *testing.T) {
 	if strings.TrimSpace(st.StreamingText) != "Hello world" {
 		t.Fatalf("streaming %q", st.StreamingText)
 	}
+	st.AppendStreamingToolUse(conversation.StreamingToolUse{Index: 1, ToolUseID: "z", Name: "Bash"})
 	Apply(st, StreamEvent{Type: "turn_complete"})
 	if st.StreamingText != "" {
 		t.Fatalf("expected cleared stream, got %q", st.StreamingText)
+	}
+	if len(st.StreamingToolUses) != 0 {
+		t.Fatalf("streaming tool uses: got %d want 0 (TS message_stop)", len(st.StreamingToolUses))
 	}
 	if len(st.Messages) != 1 {
 		t.Fatalf("messages %d", len(st.Messages))

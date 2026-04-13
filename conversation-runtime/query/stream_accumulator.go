@@ -203,3 +203,29 @@ func (a *assistantStreamAccumulator) ToolUseBlocks() []streamingtool.ToolUseBloc
 	}
 	return out
 }
+
+// StreamingToolUsesLive returns a snapshot of tool_use blocks still being assembled (TS streamingToolUses).
+func (a *assistantStreamAccumulator) StreamingToolUsesLive() []StreamingToolUseLive {
+	if a == nil {
+		return nil
+	}
+	keys := make([]int, 0, len(a.blocks))
+	for k := range a.blocks {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	var out []StreamingToolUseLive
+	for _, idx := range keys {
+		b := a.blocks[idx]
+		if b == nil || b.typ != "tool_use" {
+			continue
+		}
+		out = append(out, StreamingToolUseLive{
+			Index:         idx,
+			ToolUseID:     b.id,
+			Name:          b.name,
+			UnparsedInput: b.toolInput.String(),
+		})
+	}
+	return out
+}

@@ -189,6 +189,88 @@ func sseToolUseRound() string {
 		"data: {\"type\":\"message_stop\"}\n\n"
 }
 
+// sseToolUseWithJSONDeltas streams tool input via input_json_delta before block_stop (TS path).
+func sseToolUseWithJSONDeltas() string {
+	return "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_td\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n" +
+		"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_delta\",\"name\":\"echo_stub\",\"input\":{}}}\n\n" +
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"message\\\":\\\"hi\\\"}\"}}\n\n" +
+		"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+		"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"usage\":{\"output_tokens\":3}}}\n\n" +
+		"data: {\"type\":\"message_stop\"}\n\n"
+}
+
+func TestStreamingParity_OnStreamingToolUsesSnapshots(t *testing.T) {
+	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
+	tools, _ := json.Marshal([]map[string]any{{
+		"name":         "echo_stub",
+		"description":  "echo",
+		"input_schema": map[string]any{"type": "object", "properties": map[string]any{"message": map[string]any{"type": "string"}}},
+	}})
+
+	var clears int
+	var last []StreamingToolUseLive
+	deps := ProductionDeps()
+	deps.StreamPost = func(ctx context.Context, p anthropicmessages.PostStreamParams) error {
+		return anthropicmessages.ReadSSE(strings.NewReader(sseToolUseWithJSONDeltas()), func(data []byte) error {
+			return anthropicmessages.ProcessStreamPayloads(data, p.Emit)
+		})
+	}
+	deps.OnStreamingToolUses = func(ctx context.Context, uses []StreamingToolUseLive) error {
+		if uses == nil {
+			clears++
+			return nil
+		}
+		last = append([]StreamingToolUseLive(nil), uses...)
+		return nil
+	}
+	deps.ToolexecutionDeps = toolexecution.ExecutionDeps{
+		RandomUUID: func() string { return "tool-result-uuid-2" },
+		InvokeTool: func(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
+			if name == "echo_stub" {
+				return `{"echoed":"ok"}`, false, nil
+			}
+			return "", false, nil
+		},
+	}
+
+	ctx := context.Background()
+	for y, err := range Query(ctx, QueryParams{
+		Messages: []types.Message{{
+			Type:    types.MessageTypeUser,
+			UUID:    "u1",
+			Message: mustJSON(t, map[string]any{"role": "user", "content": "run tool"}),
+		}},
+		SystemPrompt: AsSystemPrompt([]string{"sys"}),
+		ToolUseContext: types.ToolUseContext{
+			Options: types.ToolUseContextOptionsData{
+				Tools:         tools,
+				MainLoopModel: "claude-3-5-haiku-20241022",
+			},
+		},
+		StreamingParity: true,
+		Deps:            &deps,
+	}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if y.Terminal != nil {
+			break
+		}
+	}
+	if clears < 1 {
+		t.Fatalf("expected at least one message_stop clear, got clears=%d", clears)
+	}
+	if len(last) != 1 {
+		t.Fatalf("last snapshot: want 1 tool row, got %d %#v", len(last), last)
+	}
+	if last[0].ToolUseID != "toolu_delta" || last[0].Name != "echo_stub" {
+		t.Fatalf("last row: %#v", last[0])
+	}
+	if last[0].UnparsedInput != `{"message":"hi"}` {
+		t.Fatalf("unparsed want JSON concat, got %q", last[0].UnparsedInput)
+	}
+}
+
 func TestStreamingParity_toolThenFollowUpText(t *testing.T) {
 	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
 	tools, _ := json.Marshal([]map[string]any{{

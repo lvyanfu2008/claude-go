@@ -63,10 +63,12 @@ func Apply(store *conversation.Store, ev StreamEvent) {
 		flushStreamingAssistant(store)
 		// Always clear buffer after a turn (flush may no-op on empty trim but buffer had whitespace-only).
 		store.ClearStreaming()
+		store.ClearStreamingToolUses()
 	case "response_end":
 		// Safety net if turn_complete was not received; avoids a stuck streaming buffer / empty UI.
 		flushStreamingAssistant(store)
 		store.ClearStreaming()
+		store.ClearStreamingToolUses()
 	case "error":
 		ts := time.Now().UTC().Format(time.RFC3339Nano)
 		txt := ev.Message
@@ -81,6 +83,7 @@ func Apply(store *conversation.Store, ev StreamEvent) {
 			Content:   raw,
 			Timestamp: &ts,
 		})
+		store.ClearStreamingToolUses()
 	case "usage":
 		store.AddUsage(ev.InputTokens, ev.OutputTokens)
 	case "execute_tool":

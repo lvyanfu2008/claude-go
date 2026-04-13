@@ -101,8 +101,9 @@ func TestEnterExitTranscript_frozenSnapshotMatchesTS(t *testing.T) {
 	}
 	m := &model{store: st, uiScreen: gouDemoScreenPrompt, scrollTop: 3, sticky: false}
 	m.transcriptShowAll = true
+	st.AppendStreamingToolUse(conversation.StreamingToolUse{Index: 0, ToolUseID: "tu-live", Name: "Read"})
 	m.enterTranscriptScreen()
-	if m.transcriptFrozen == nil || m.transcriptFrozen.MessagesLen != 2 || m.transcriptFrozen.StreamingToolUsesLen != 0 {
+	if m.transcriptFrozen == nil || m.transcriptFrozen.MessagesLen != 2 || m.transcriptFrozen.StreamingToolUsesLen != 1 {
 		t.Fatalf("frozen %+v", m.transcriptFrozen)
 	}
 	if m.transcriptShowAll {

@@ -144,7 +144,16 @@ func runStreamingParityModelLoop(
 			HTTP:    httpClient,
 			Beta:    betas,
 			Emit: func(ev anthropicmessages.MessageStreamEvent) error {
-				return acc.OnEvent(ev)
+				if err := acc.OnEvent(ev); err != nil {
+					return err
+				}
+				switch ev.Type {
+				case "content_block_start", "content_block_delta", "content_block_stop":
+					notifyStreamingToolUsesSnapshot(ctx, deps, acc)
+				case "message_stop":
+					notifyStreamingToolUsesClear(ctx, deps)
+				}
+				return nil
 			},
 		}); err != nil {
 			return err

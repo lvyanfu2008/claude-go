@@ -19,8 +19,7 @@ const (
 
 // frozenTranscriptSnapshot mirrors REPL.tsx useState frozenTranscriptState:
 // { messagesLength, streamingToolUsesLength } (see handleEnterTranscript).
-// gou-demo has no separate streamingToolUses slice in the store; length stays 0
-// until a parity structure exists (Messages still freeze at toggle time).
+// streamingToolUsesLength is len(store.StreamingToolUses) at enter time (TS streamingToolUses.slice(0, n) in transcript).
 type frozenTranscriptSnapshot struct {
 	MessagesLen          int
 	StreamingToolUsesLen int
@@ -65,7 +64,7 @@ func (m *model) enterTranscriptScreen() {
 	// TS: handleEnterTranscript sets frozen lengths; toggle handler also setShowAllInTranscript(false).
 	m.transcriptFrozen = &frozenTranscriptSnapshot{
 		MessagesLen:          len(m.store.Messages),
-		StreamingToolUsesLen: 0,
+		StreamingToolUsesLen: len(m.store.StreamingToolUses),
 	}
 	m.transcriptShowAll = false
 	m.transcriptDumpMode = false
