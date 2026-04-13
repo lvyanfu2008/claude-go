@@ -149,9 +149,17 @@ func replChromeTranscriptTopBar(narrow bool) string {
 // replChromeFooterHint is the faint line under the prompt.
 func replChromeFooterHint(narrow bool) string {
 	if narrow {
-		return "Shift+Enter newline · F2 · q"
+		s := "Shift+Enter newline · F2 · q"
+		if gouDemoBubblesViewport() {
+			s += " · ctrl+y"
+		}
+		return s
 	}
-	return "Shift+Enter / Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
+	s := "Shift+Enter / Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
+	if gouDemoBubblesViewport() {
+		s += " · ctrl+y fold pane (bubbles viewport)"
+	}
+	return s
 }
 
 // replChromePermissionFragment returns a short permission pill (empty when default in narrow).

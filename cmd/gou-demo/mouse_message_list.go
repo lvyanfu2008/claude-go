@@ -6,6 +6,13 @@ import (
 	"goc/gou/virtualscroll"
 )
 
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 // mouseYInMessageListPane reports whether screen row y falls in the virtual message list
 // (title row(s) above, stream strip / prompt below). Coords are 0-based from top of terminal.
 func (m *model) mouseYInMessageListPane(y int) bool {
@@ -90,6 +97,25 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 			return false
 		}
 		m.clearMsgSelection()
+		if m.msgViewportWanted() {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				m.handleMsgViewportMouseWheel(1)
+			case tea.MouseButtonWheelDown:
+				m.handleMsgViewportMouseWheel(-1)
+			case tea.MouseButtonWheelLeft:
+				for range max(1, listViewportH(m)/12) {
+					m.msgViewport.HalfPageUp()
+				}
+			case tea.MouseButtonWheelRight:
+				for range max(1, listViewportH(m)/12) {
+					m.msgViewport.HalfPageDown()
+				}
+			default:
+				return false
+			}
+			return true
+		}
 		step := max(1, listViewportH(m)/6)
 		m.sticky = false
 		switch msg.Button {
@@ -137,8 +163,20 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 		if m.msgListMouseDragging && msg.Button == tea.MouseButtonLeft && !ev.Shift {
 			dy := msg.Y - m.msgListMouseLastY
 			if dy != 0 {
-				m.sticky = false
-				m.scrollTop = max(0, m.scrollTop-dy)
+				if m.msgViewportWanted() {
+					n := min(8, max(1, absInt(dy)))
+					if dy > 0 {
+						m.msgViewport.ScrollUp(n)
+					} else {
+						m.msgViewport.ScrollDown(n)
+					}
+					if !m.msgViewport.AtBottom() {
+						m.sticky = false
+					}
+				} else {
+					m.sticky = false
+					m.scrollTop = max(0, m.scrollTop-dy)
+				}
 				m.msgListMouseLastY = msg.Y
 			}
 			return true

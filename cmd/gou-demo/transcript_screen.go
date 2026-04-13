@@ -142,6 +142,10 @@ func (m *model) exitTranscriptScreen() {
 	m.transcriptEditorBusy = false
 	m.transcriptEditorStatus = ""
 	m.rebuildHeightCache()
+	if m.useMsgViewport {
+		m.lastVpContentSig = ""
+		m.vpNeedResizeContent = true
+	}
 }
 
 // exitTranscriptScreenWithPostCmd restores the alternate screen after TS-style [ dump (Ink unwrap).

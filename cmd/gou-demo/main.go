@@ -25,6 +25,7 @@
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
+// Bubbles viewport message pane (optional): GOU_DEMO_BUBBLES_VIEWPORT=1 uses [bubbles/viewport] for the prompt-screen message list (full-document scroll + ctrl+y fold-all summaries). Exceeding GOU_DEMO_VIEWPORT_MAX_LINES (default 20000 wrapped rows) falls back to classic virtualscroll. Transcript mode always uses the legacy pane.
 // Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: native pbcopy/xclip when available, tmux load-buffer in tmux, plus OSC 52 to the tty (see selection_clipboard.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Alternate screen (default) has no host scrollback scrollbar—use -no-alt-screen if you need normal-buffer scrollback. Optional TUI scrollbar: GOU_DEMO_NO_SCROLLBAR=1 hides the in-app strip beside the message list.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -49,6 +50,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
@@ -548,13 +550,23 @@ type model struct {
 	msgListMouseLastY    int
 
 	// In-app selection (Shift+drag in message pane); copy via Ctrl+C when non-empty (TS ScrollKeybindingHandler).
-	selDragging          bool
-	selHas               bool
+	selDragging            bool
+	selHas                 bool
 	selAnchorR, selAnchorC int
 	selFocusR, selFocusC   int
-	lastMsgPaneLines     []string
-	lastMsgPaneBodyCols  int
-	copyStatus           string
+	lastMsgPaneLines       []string
+	lastMsgPaneBodyCols    int
+	copyStatus             string
+
+	// Optional bubbles/viewport message pane (GOU_DEMO_BUBBLES_VIEWPORT=1, prompt only); see message_viewport_pane.go.
+	useMsgViewport      bool
+	msgViewport         viewport.Model
+	lastVpGeom          string
+	lastVpContentSig    string
+	vpNeedResizeContent bool
+	msgFoldAll          bool
+	msgFoldRev          int
+	msgViewportFallback bool
 
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
@@ -709,6 +721,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		transcript:           tr,
 		permissionMode:       gouDemoPermissionModeFromEnv(),
 		programUsesAltScreen: programUsesAltScreen,
+		useMsgViewport:       gouDemoBubblesViewport(),
 	}
 }
 
@@ -868,6 +881,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if oldCols != m.cols || oldH != m.height || len(m.heightCache) == 0 {
 			m.rebuildHeightCache()
 		}
+		if m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback {
+			m.vpNeedResizeContent = true
+			m.lastVpContentSig = ""
+			m.lastVpGeom = ""
+		}
 		return m, nil
 
 	case gouPermissionAskMsg:
@@ -924,6 +942,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearMsgSelection()
 			return m, nil
 		}
+		if m.msgViewportWanted() && msg.String() == "ctrl+y" {
+			m.msgFoldAll = !m.msgFoldAll
+			m.msgFoldRev++
+			return m, nil
+		}
 		if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
 			m.enterTranscriptScreen()
 			m.slashPick = nil
@@ -935,6 +958,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.uiScreen == gouDemoScreenPrompt && isListViewportScrollKey(msg.String()) {
 			m.clearMsgSelection()
+		}
+		if m.msgViewportWanted() && isListViewportScrollKey(msg.String()) {
+			m.handleMsgViewportScrollKey(msg.String())
+			return m, nil
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -1624,44 +1651,16 @@ func (m *model) View() string {
 		return "Loading…"
 	}
 
-	keys := m.scrollItemKeys()
-	n := len(keys)
 	vpH := listViewportH(m)
-	if !m.sticky {
-		m.clampScrollTopForVirtualList()
+	bodyCols := m.messageBodyColsForLayout()
+	useVp := m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback
+	if useVp {
+		m.msgViewportSyncGeometry()
+		m.applyMsgViewportContentFromView()
+		if m.msgViewportFallback {
+			useVp = false
+		}
 	}
-
-	// Phase 3: refine last frame's visible rows (TS measureRef), then recompute range with fresh heights.
-	if m.prevRange != nil && n > 0 {
-		m.refineVisibleHeights(keys, m.prevRange.Start, m.prevRange.End, n)
-	}
-
-	ri := virtualscroll.RangeInput{
-		ItemKeys:     keys,
-		HeightCache:  m.heightCache,
-		ScrollTop:    m.scrollTop,
-		PendingDelta: m.pendingDelta,
-		ViewportH:    vpH,
-		IsSticky:     m.sticky,
-		ListOrigin:   0,
-		PrevRange:    m.prevRange,
-		MountedKeys:  m.mountedKeys,
-		FastScroll:   false,
-	}
-	if gouDemoVirtualScrollDisabled() && n > 0 {
-		ri.MaxMountedItemsOverride = min(n, 2000)
-	}
-	vr := virtualscroll.ComputeRange(ri)
-
-	m.mountedKeys = make(map[string]struct{}, max(0, vr.End-vr.Start))
-	for i := vr.Start; i < vr.End && i < n; i++ {
-		m.mountedKeys[keys[i]] = struct{}{}
-	}
-
-	if m.prevRange == nil {
-		m.prevRange = &virtualscroll.Range{}
-	}
-	m.prevRange.Start, m.prevRange.End = vr.Start, vr.End
 
 	var b strings.Builder
 	narrow := m.cols > 0 && m.cols < 80
@@ -1680,91 +1679,128 @@ func (m *model) View() string {
 	b.WriteString(title)
 	b.WriteByte('\n')
 
-	var msgPane strings.Builder
-	if gouDemoScrollStatsEnabled() {
-		msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(
-			fmt.Sprintf("messages %d  cols=%d  visible [%d,%d)  topSpacer=%d bottomSpacer=%d sticky=%v",
-				n, m.cols, vr.Start, vr.End, vr.TopSpacer, vr.BottomSpacer, m.sticky)))
-		msgPane.WriteByte('\n')
-	}
+	if useVp {
+		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
+		b.WriteByte('\n')
+	} else {
+		keys := m.scrollItemKeys()
+		n := len(keys)
+		if !m.sticky {
+			m.clampScrollTopForVirtualList()
+		}
 
-	bodyCols := m.messageBodyColsForLayout()
-	hl := m.transcriptSearchHighlightNeedle()
-	msgView := m.messagesForScroll()
-	msgN := len(msgView)
-	stRows := m.transcriptStreamingToolsForView()
-	for i := vr.Start; i < vr.End && i < n; i++ {
-		key := keys[i]
-		h := m.heightCache[key]
-		var block string
-		if i < msgN {
-			msg := msgView[i]
-			block = m.renderMessageRow(msg, bodyCols, h, hl)
-		} else {
-			ti := i - msgN
-			if ti < 0 || ti >= len(stRows) {
-				continue
-			}
-			block = m.renderTranscriptStreamingToolRow(stRows[ti], bodyCols, h, hl)
+		if m.prevRange != nil && n > 0 {
+			m.refineVisibleHeights(keys, m.prevRange.Start, m.prevRange.End, n)
 		}
-		if strings.TrimSpace(block) == "" && h <= 0 {
-			continue
+
+		ri := virtualscroll.RangeInput{
+			ItemKeys:     keys,
+			HeightCache:  m.heightCache,
+			ScrollTop:    m.scrollTop,
+			PendingDelta: m.pendingDelta,
+			ViewportH:    vpH,
+			IsSticky:     m.sticky,
+			ListOrigin:   0,
+			PrevRange:    m.prevRange,
+			MountedKeys:  m.mountedKeys,
+			FastScroll:   false,
 		}
-		if msgPane.Len() > 0 {
+		if gouDemoVirtualScrollDisabled() && n > 0 {
+			ri.MaxMountedItemsOverride = min(n, 2000)
+		}
+		vr := virtualscroll.ComputeRange(ri)
+
+		m.mountedKeys = make(map[string]struct{}, max(0, vr.End-vr.Start))
+		for i := vr.Start; i < vr.End && i < n; i++ {
+			m.mountedKeys[keys[i]] = struct{}{}
+		}
+
+		if m.prevRange == nil {
+			m.prevRange = &virtualscroll.Range{}
+		}
+		m.prevRange.Start, m.prevRange.End = vr.Start, vr.End
+
+		var msgPane strings.Builder
+		if gouDemoScrollStatsEnabled() {
+			msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(
+				fmt.Sprintf("messages %d  cols=%d  visible [%d,%d)  topSpacer=%d bottomSpacer=%d sticky=%v",
+					n, m.cols, vr.Start, vr.End, vr.TopSpacer, vr.BottomSpacer, m.sticky)))
 			msgPane.WriteByte('\n')
 		}
-		msgPane.WriteString(block)
-	}
-	// Prompt: in-flight tool_use rows during HTTP SSE (TS syntheticStreamingToolUseMessages), before streaming text tail.
-	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
-		for _, tu := range m.store.StreamingToolUses {
+
+		hl := m.transcriptSearchHighlightNeedle()
+		msgView := m.messagesForScroll()
+		msgN := len(msgView)
+		stRows := m.transcriptStreamingToolsForView()
+		for i := vr.Start; i < vr.End && i < n; i++ {
+			key := keys[i]
+			h := m.heightCache[key]
+			var block string
+			if i < msgN {
+				msg := msgView[i]
+				block = m.renderMessageRow(msg, bodyCols, h, hl)
+			} else {
+				ti := i - msgN
+				if ti < 0 || ti >= len(stRows) {
+					continue
+				}
+				block = m.renderTranscriptStreamingToolRow(stRows[ti], bodyCols, h, hl)
+			}
+			if strings.TrimSpace(block) == "" && h <= 0 {
+				continue
+			}
 			if msgPane.Len() > 0 {
 				msgPane.WriteByte('\n')
 			}
+			msgPane.WriteString(block)
+		}
+		if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
+			for _, tu := range m.store.StreamingToolUses {
+				if msgPane.Len() > 0 {
+					msgPane.WriteByte('\n')
+				}
+				head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+				msgPane.WriteString(head)
+				msgPane.WriteByte('\n')
+				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+tu.Name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+				msgPane.WriteString(toolTitle)
+				if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+					msgPane.WriteByte('\n')
+					maxW := bodyCols * 4
+					if maxW < 80 {
+						maxW = 80
+					}
+					msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(previewForTrace(s, maxW)))
+				}
+			}
+		}
+		if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
+			msgPane.WriteByte('\n')
 			head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 			msgPane.WriteString(head)
 			msgPane.WriteByte('\n')
-			toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+tu.Name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
-			msgPane.WriteString(toolTitle)
-			if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-				msgPane.WriteByte('\n')
-				maxW := bodyCols * 4
-				if maxW < 80 {
-					maxW = 80
-				}
-				msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(previewForTrace(s, maxW)))
+			msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols))
+		}
+
+		lines := strings.Split(msgPane.String(), "\n")
+		for len(lines) < vpH {
+			lines = append(lines, "")
+		}
+		if len(lines) > vpH {
+			if m.sticky {
+				lines = lines[len(lines)-vpH:]
+			} else {
+				lines = lines[:vpH]
 			}
 		}
-	}
-	// Same transcript as TS: show in-flight assistant text in the main pane, not only the small stream: strip.
-	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
-		msgPane.WriteByte('\n')
-		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-		msgPane.WriteString(head)
-		msgPane.WriteByte('\n')
-		msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols))
-	}
-
-	// pad message pane to fixed height for stable layout
-	lines := strings.Split(msgPane.String(), "\n")
-	for len(lines) < vpH {
-		lines = append(lines, "")
-	}
-	if len(lines) > vpH {
-		// Height cache can be slightly low vs lipgloss; sticky bottom must keep the *tail* or newest lines vanish.
-		if m.sticky {
-			lines = lines[len(lines)-vpH:]
-		} else {
-			lines = lines[:vpH]
+		m.cachePaneLinesForSelection(lines, bodyCols)
+		if m.selDragging || m.msgSelectionActive() {
+			lines = applyMsgSelectionVisualHighlight(lines, bodyCols, vpH, m.selAnchorR, m.selAnchorC, m.selFocusR, m.selFocusC)
 		}
+		totalScroll := m.messageScrollContentHeight()
+		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalScroll, m.scrollTop, m.msgScrollbarW))
+		b.WriteByte('\n')
 	}
-	m.cachePaneLinesForSelection(lines, bodyCols)
-	if m.selDragging || m.msgSelectionActive() {
-		lines = applyMsgSelectionVisualHighlight(lines, bodyCols, vpH, m.selAnchorR, m.selAnchorC, m.selFocusR, m.selFocusC)
-	}
-	totalScroll := m.messageScrollContentHeight()
-	b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalScroll, m.scrollTop, m.msgScrollbarW))
-	b.WriteByte('\n')
 
 	if m.uiScreen != gouDemoScreenTranscript {
 		streamRows := m.promptBottomStreamRows()

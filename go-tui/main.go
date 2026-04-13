@@ -8,19 +8,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"goc/gou/viewportfold"
 )
 
 type model struct {
 	viewport viewport.Model
-	sections []Section // 所有可折叠的区块
+	sections []viewportfold.Section // 所有可折叠的区块
 	ready    bool
-}
-
-// Section 表示一个可折叠的区块
-type Section struct {
-	Title     string
-	Content   string
-	Collapsed bool // 该区块是否已折叠
 }
 
 func (m model) Init() tea.Cmd {
@@ -50,9 +45,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "ctrl+o": // 处理折叠快捷键
-			for i := range m.sections {
-				m.sections[i].Collapsed = !m.sections[i].Collapsed
-			}
+			viewportfold.ToggleAll(m.sections)
 			// 状态改变后，重新生成内容并更新 viewport
 			m.viewport.SetContent(m.buildContent())
 			return m, nil
@@ -83,22 +76,17 @@ func (m *model) buildContent() string {
 	b.WriteString("\n" + helpStyle.Render("方向键/hjkl 滚动，Ctrl+O 折叠/展开，q 退出"))
 	b.WriteString("\n" + strings.Repeat("─", 50))
 
-	// 遍历所有区块，根据折叠状态渲染
 	for _, sec := range m.sections {
 		b.WriteString("\n\n")
-		// 区块标题：显示折叠状态图标
-		icon := "▼" // 展开状态
+		icon := "▼"
 		if sec.Collapsed {
-			icon = "▶" // 折叠状态
+			icon = "▶"
 		}
 		header := fmt.Sprintf("%s %s", icon, sec.Title)
 		b.WriteString(lipgloss.NewStyle().Bold(true).Render(header))
-
 		if !sec.Collapsed {
-			// 展开状态：渲染完整内容
 			b.WriteString("\n" + lipgloss.NewStyle().PaddingLeft(2).Render(sec.Content))
 		} else {
-			// 折叠状态：显示占位符
 			b.WriteString("\n" + lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("8")).Render("[内容已折叠...]"))
 		}
 	}
@@ -108,7 +96,7 @@ func (m *model) buildContent() string {
 
 func main() {
 	// 初始化可折叠的区块
-	sections := []Section{
+	sections := []viewportfold.Section{
 		{
 			Title:   "使用说明",
 			Content: "• 使用 ↑↓ 或 jk 逐行滚动，←→ 或 hl 横向滚动\n• PageUp/PageDown 或 Ctrl+U/Ctrl+D 翻页\n• Home/End 跳至开头/结尾\n• 按 Ctrl+O 可以折叠或展开所有内容区块",
