@@ -6,7 +6,17 @@ Additional prompt/skill rows can live under **`../builtin_*/`** (see [`../builti
 
 ## Embedded
 
-- **`tools_api.json`** — embedded via [`../tools_api_embed.go`](../tools_api_embed.go) (`//go:embed`). Regenerate with `bun run export:tools-registry` from the repo root. For TS parity when channel relay is active, set **`CLAUDE_CODE_GO_ALLOWED_CHANNELS`** (non-empty, comma-separated) together with **`FEATURE_KAIROS`** or **`FEATURE_KAIROS_CHANNELS`** so `toolpool.GetTools` omits **AskUserQuestion**, matching `AskUserQuestionTool.isEnabled()` in TS.
+- **`tools_api.json`** — embedded via [`../tools_api_embed.go`](../tools_api_embed.go) (`//go:embed`). Source of truth is **`claude-code`** (`toolToAPISchema` / Zod). Workflow:
+  1. In **`claude-code`**: `bun run export:tools-registry` → writes `claude-code/data/exports/commands/data/tools_api.json`.
+  2. **Copy** that file over this path:  
+     `cp /path/to/claude-code/data/exports/commands/data/tools_api.json /path/to/claude-go/commands/data/tools_api.json`  
+     (Monorepo sibling example: from `claude-code` repo root,  
+     `cp data/exports/commands/data/tools_api.json ../claude-go/commands/data/tools_api.json`.)
+  3. Optional: in **`claude-code`**, `bun run zod-parity-goldens` → refreshes `ccb-engine/internal/toolinput/testdata/zodparity/expected.jsonl` for Go↔Zod accept/reject tests.
+  4. In **`claude-go`**: `go test ./...`  
+  See also the top-level [`../../README.md`](../../README.md) in this module.
+
+- **Channel / AskUserQuestion parity**: For TS parity when channel relay is active, set **`CLAUDE_CODE_GO_ALLOWED_CHANNELS`** (non-empty, comma-separated) together with **`FEATURE_KAIROS`** or **`FEATURE_KAIROS_CHANNELS`** so `toolpool.GetTools` omits **AskUserQuestion**, matching `AskUserQuestionTool.isEnabled()` in TS.
 
 ## MCP JSON (optional, any path)
 

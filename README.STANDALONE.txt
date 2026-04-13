@@ -3,8 +3,11 @@ Standalone copy of claude-code goc/ (module goc).
 Upstream workflow: open the claude-code repo and read:
   docs/plans/goc-standalone-extraction.md
 
-Regenerate embedded JSON from TS repo:
-  bun run export:tools-registry
-  (and other export:* scripts listed in that doc)
+tools_api.json sync (full steps): see README.md in this directory.
 
-Then: cd "claude-go" && go test ./...
+Summary: in claude-code run `bun run export:tools-registry`, copy
+  data/exports/commands/data/tools_api.json
+  → claude-go/commands/data/tools_api.json
+then optionally `bun run zod-parity-goldens` in claude-code, then `cd claude-go && go test ./...`
+
+Other export:* scripts: listed in goc-standalone-extraction.md
