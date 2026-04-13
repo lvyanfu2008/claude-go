@@ -39,6 +39,11 @@
 // # Stream apply (assistant_delta, tool_use, tool_result, turn_complete)
 //
 //   - TS handleMessageFromStream path → goc/gou/ccbstream.Apply on conversation.Store
+//   - TS useDeferredValue(messages) (yield heavy Messages during streaming): Go has no React Concurrent; gou-demo
+//     instead skips full rebuildHeightCache on ccbstream assistant_delta (Apply only appends StreamingText;
+//     prompt View draws streaming markdown outside virtual-scroll keys). gouStreamingToolUsesMsg skips full
+//     rebuild on prompt (live tools outside scroll keys); transcript mode still rebuilds for gou-st-tool:* keys.
+//     See cmd/gou-demo/stream_ui_height.go and Update ccbstream.Msg / gouStreamingToolUsesMsg branches.
 //   - Optional Read/Grep/Glob tail merge: env GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL (gou/ccbstream/apply.go)
 //
 // # Prompt input (multiline, submit, newline keys)

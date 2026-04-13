@@ -30,7 +30,7 @@
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
-// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] so each assistant/tool_result yield is logged incrementally (deduped by message UUID); turn end still calls maybeRecordTranscript for a full-store sync. Each new non-meta user row is followed by a TS-shaped file-history-snapshot line (empty trackedFileBackups); set GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 to omit. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
+// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] so each assistant/tool_result yield is logged incrementally (deduped by message UUID); turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
 // Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
@@ -169,7 +169,12 @@ func setupGouDemoTrace() (cleanup func()) {
 			return func() {}
 		}
 		debugpath.MaybeUpdateLatestSymlink(p)
-		fmt.Fprintf(os.Stderr, "[gou-demo] trace -> %s (TTY: stderr+TUI garbles output; use this file or GOU_DEMO_LOG_FILE=...)\n", p)
+		lp := debugpath.LatestLinkPathFor(p)
+		if lp != "" {
+			fmt.Fprintf(os.Stderr, "[gou-demo] trace -> %s points to %s (TTY: stderr+TUI garbles; or GOU_DEMO_LOG_FILE=...)\n", lp, p)
+		} else {
+			fmt.Fprintf(os.Stderr, "[gou-demo] trace -> %s (TTY: stderr+TUI garbles output; use this file or GOU_DEMO_LOG_FILE=...)\n", p)
+		}
 		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
 		return func() { _ = f.Close() }
 	}
@@ -541,6 +546,9 @@ type model struct {
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
 	lastMainLoopModel string
+
+	// rebuildHeightCacheCalls increments in rebuildHeightCache (tests: streaming skip policy).
+	rebuildHeightCacheCalls int
 }
 
 func main() {
@@ -655,11 +663,14 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	if gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
 		cwd, _ := os.Getwd()
 		fhSnap := !gouDemoEnvTruthy("GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT")
+		fhEachUser := gouDemoEnvTruthy("GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER")
 		tr = &sessiontranscript.Store{
 			SessionID:                 st.ConversationID,
 			OriginalCwd:               cwd,
 			Cwd:                       cwd,
 			FileHistorySnapshotOnUser: fhSnap,
+			// Default: at most one stub snapshot per session (TS often shows one line with checkpointing off or single-turn).
+			FileHistorySnapshotOnce: fhSnap && !fhEachUser,
 		}
 	}
 
@@ -1274,7 +1285,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 		}
-		m.rebuildHeightCache()
+		// Transcript scroll keys include gou-st-tool:* rows; prompt renders live tools outside virtual keys.
+		if m.uiScreen == gouDemoScreenTranscript {
+			m.rebuildHeightCache()
+		}
 		if m.uiScreen != gouDemoScreenTranscript {
 			m.sticky = true
 			m.scrollTop = 1 << 30
@@ -1357,7 +1371,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if ev.Type == "turn_complete" || ev.Type == "response_end" {
 			gouDemoLogStoreMessages("after_stream_"+ev.Type, m.store)
 		}
-		m.rebuildHeightCache()
+		if ccbStreamEventNeedsFullHeightRebuild(ev) {
+			m.rebuildHeightCache()
+		}
 		if m.transcript != nil && (ev.Type == "turn_complete" || ev.Type == "response_end") {
 			m.maybeRecordTranscript()
 		}
@@ -1405,6 +1421,7 @@ func (m *model) statusLineString() string {
 }
 
 func (m *model) rebuildHeightCache() {
+	m.rebuildHeightCacheCalls++
 	if m.heightCache == nil {
 		m.heightCache = make(map[string]int)
 	}
