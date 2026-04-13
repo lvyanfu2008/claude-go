@@ -4,7 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// EchoStubFromJSON is a tiny echo tool for Go tests and demos (not a TS built-in).
+func EchoStubFromJSON(raw []byte) (string, bool, error) {
+	var in struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return "", true, err
+	}
+	return in.Message, false, nil
+}
 
 // AgentStubFromJSON returns a tool error string (plan P6 path a: explicit unsupported).
 func AgentStubFromJSON(raw []byte) (string, bool, error) {
@@ -35,12 +47,14 @@ func BriefFromJSON(raw []byte) (string, bool, error) {
 	if st != "normal" && st != "proactive" {
 		return "", true, fmt.Errorf("status must be normal or proactive")
 	}
-	out := map[string]any{
-		"message":     in.Message,
-		"attachments": in.Attachments,
-		"sentAt":      "",
-		"note":        "Go runner Brief/SendUserMessage: returned as structured tool_result only (no UI routing).",
+	sentAt := time.Now().UTC().Format(time.RFC3339Nano)
+	var data map[string]any
+	if len(in.Attachments) == 0 {
+		data = map[string]any{"message": in.Message, "sentAt": sentAt}
+	} else {
+		data = map[string]any{"message": in.Message, "attachments": in.Attachments, "sentAt": sentAt}
 	}
+	out := map[string]any{"data": data}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }

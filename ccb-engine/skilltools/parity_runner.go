@@ -85,8 +85,6 @@ func (r ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID stri
 		return s, isErr, perr
 	}
 	switch name {
-	case "echo_stub":
-		return parityEchoStub(input)
 	case "Read":
 		return localtools.ReadFromJSON(input, roots)
 	case "Write":
@@ -104,14 +102,4 @@ func (r ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID stri
 		return `{"note":"Go local runner: discover-skills is not implemented; use the Skill tool with a skill name, or enable the TS socket worker for full tool parity."}`, false, nil
 	}
 	return r.DemoToolRunner.Run(ctx, name, toolUseID, input)
-}
-
-func parityEchoStub(raw []byte) (string, bool, error) {
-	var in struct {
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(raw, &in); err != nil {
-		return "", true, err
-	}
-	return in.Message, false, nil
 }

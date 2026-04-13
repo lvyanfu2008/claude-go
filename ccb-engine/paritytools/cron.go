@@ -22,6 +22,7 @@ type cronTask struct {
 	CreatedAt   int64  `json:"createdAt"`
 	LastFiredAt *int64 `json:"lastFiredAt,omitempty"`
 	Recurring   bool   `json:"recurring,omitempty"`
+	SessionOnly bool   `json:"-"`
 }
 
 type cronFile struct {
@@ -187,16 +188,18 @@ func CronCreateFromJSON(raw []byte, c Config) (string, bool, error) {
 			return "", true, err
 		}
 	} else {
+		task.SessionOnly = true
 		cronMu.Lock()
 		sessionBuf = append(sessionBuf, task)
 		cronMu.Unlock()
 	}
 	out := map[string]any{
-		"id":             id,
-		"humanSchedule":  humanCron(expr),
-		"recurring":      recurring,
-		"durable":        effectiveDurable,
-		"scheduler_note": "Go runner persists jobs but does not execute the TS scheduler loop.",
+		"data": map[string]any{
+			"id":            id,
+			"humanSchedule": humanCron(expr),
+			"recurring":     recurring,
+			"durable":       effectiveDurable,
+		},
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
@@ -253,7 +256,7 @@ func CronDeleteFromJSON(raw []byte, c Config) (string, bool, error) {
 	if !removed {
 		return "", true, fmt.Errorf("no cron job with id %q", id)
 	}
-	out := map[string]any{"id": id}
+	out := map[string]any{"data": map[string]any{"id": id}}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }
@@ -267,16 +270,21 @@ func CronListFromJSON(_ []byte, c Config) (string, bool, error) {
 	all := listMerged(pr)
 	jobs := make([]map[string]any, 0, len(all))
 	for _, t := range all {
-		jobs = append(jobs, map[string]any{
-			"id":             t.ID,
-			"cron":           t.Cron,
-			"humanSchedule":  humanCron(t.Cron),
-			"prompt":         t.Prompt,
-			"recurring":      t.Recurring,
-			"durable":        nil,
-		})
+		j := map[string]any{
+			"id":            t.ID,
+			"cron":          t.Cron,
+			"humanSchedule": humanCron(t.Cron),
+			"prompt":        t.Prompt,
+		}
+		if t.Recurring {
+			j["recurring"] = true
+		}
+		if t.SessionOnly {
+			j["durable"] = false
+		}
+		jobs = append(jobs, j)
 	}
-	out := map[string]any{"jobs": jobs}
+	out := map[string]any{"data": map[string]any{"jobs": jobs}}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }

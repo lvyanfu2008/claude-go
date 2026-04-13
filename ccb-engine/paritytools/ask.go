@@ -38,19 +38,16 @@ func AskUserQuestionFromJSON(raw []byte, c Config) (string, bool, error) {
 			return "", true, fmt.Errorf("each question needs 2-4 options")
 		}
 		if q.MultiSelect {
-			var labels []string
-			for _, o := range q.Options {
-				labels = append(labels, strings.TrimSpace(o.Label))
-			}
-			answers[qt] = strings.Join(labels, ", ")
+			answers[qt] = strings.TrimSpace(q.Options[0].Label)
 		} else {
 			answers[qt] = strings.TrimSpace(q.Options[0].Label)
 		}
 	}
 	out := map[string]any{
-		"questions": in.Questions,
-		"answers":   answers,
-		"note":      "Go runner auto-selected options (GOU_DEMO_ASK_AUTO_FIRST / AskAutoFirst).",
+		"data": map[string]any{
+			"questions": in.Questions,
+			"answers":   answers,
+		},
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil

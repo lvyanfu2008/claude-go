@@ -71,6 +71,7 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 	origBytes, _ := json.MarshalIndent(nb, "", "  ")
 	origStr := string(origBytes)
 
+	var deletedCellType string
 	switch mode {
 	case "replace", "delete":
 		idx, err := findCellIndexByID(cells, in.CellID)
@@ -78,6 +79,11 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 			return "", true, err
 		}
 		if mode == "delete" {
+			if cm, ok := cells[idx].(map[string]any); ok {
+				if s, ok := cm["cell_type"].(string); ok {
+					deletedCellType = s
+				}
+			}
 			nb["cells"] = append(cells[:idx], cells[idx+1:]...)
 		} else {
 			cell, ok := cells[idx].(map[string]any)
@@ -113,6 +119,27 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 		in.CellID = cellIDFromCell(nm)
 	}
 
+	ctOut := strings.TrimSpace(in.CellType)
+	if ctOut == "" && mode == "delete" && deletedCellType != "" {
+		ctOut = deletedCellType
+	}
+	if ctOut == "" {
+		rawCells, _ := nb["cells"].([]any)
+		id := strings.TrimSpace(in.CellID)
+		if id != "" {
+			if idx, err := findCellIndexByID(rawCells, id); err == nil {
+				if cm, ok := rawCells[idx].(map[string]any); ok {
+					if s, ok := cm["cell_type"].(string); ok && s != "" {
+						ctOut = s
+					}
+				}
+			}
+		}
+		if ctOut == "" {
+			ctOut = "code"
+		}
+	}
+
 	outBytes, err := json.MarshalIndent(nb, "", "  ")
 	if err != nil {
 		return "", true, err
@@ -133,14 +160,15 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 	resp := map[string]any{
 		"new_source":    in.NewSource,
 		"cell_id":       cid,
-		"cell_type":     strings.TrimSpace(in.CellType),
+		"cell_type":     ctOut,
 		"language":      lang,
 		"edit_mode":     mode,
+		"error":         "",
 		"notebook_path": abs,
 		"original_file": origStr,
 		"updated_file":  string(outBytes),
 	}
-	b, _ := json.Marshal(resp)
+	b, _ := json.Marshal(map[string]any{"data": resp})
 	return string(b), false, nil
 }
 

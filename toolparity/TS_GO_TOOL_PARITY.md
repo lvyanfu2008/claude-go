@@ -8,7 +8,7 @@ go run ./cmd/gen-tool-parity
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
 - **Go anchor:** [ccb-engine/skilltools/parity_runner.go](ccb-engine/skilltools/parity_runner.go) — ParityToolRunner.Run + paritytools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-11T23:52:05Z
+- **Generated:** 2026-04-13T01:58:48Z
 
 ## Status legend
 
@@ -22,30 +22,30 @@ go run ./cmd/gen-tool-parity
 | Tool | Aliases | TS presence | TS note | Go status | Go location |
 |------|---------|-------------|---------|-----------|-------------|
 | Agent | Task | core | — | stub | paritytools.Run |
-| TaskOutput | — | core | — | partial | paritytools.Run |
-| Bash | — | core | — | partial | localtools.BashFromJSON |
+| TaskOutput | — | core | — | full | paritytools.Run |
+| Bash | — | core | — | full | localtools.BashFromJSON |
 | Glob | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GlobFromJSON |
 | Grep | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GrepFromJSON |
 | ExitPlanMode | — | core | ExitPlanModeV2Tool | full | paritytools.ExitPlanModeFromJSON |
 | Read | — | core | — | full | localtools.ReadFromJSON |
 | Edit | — | core | — | full | localtools.EditFromJSON |
 | Write | — | core | — | full | localtools.WriteFromJSON |
-| NotebookEdit | — | core | — | partial | paritytools.NotebookEditFromJSON |
-| WebFetch | — | core | — | partial | paritytools.WebFetchFromJSON |
-| TodoWrite | — | core | — | partial | paritytools.TodoWriteFromJSON |
-| WebSearch | — | core | — | partial | paritytools.WebSearchFromJSON |
-| TaskStop | KillShell | core | — | partial | paritytools.Run |
-| AskUserQuestion | — | core | — | partial | paritytools.AskUserQuestionFromJSON |
-| Skill | — | core | — | partial | skilltools.DemoToolRunner |
-| EnterPlanMode | — | core | — | partial | paritytools.Run |
+| NotebookEdit | — | core | — | full | paritytools.NotebookEditFromJSON |
+| WebFetch | — | core | — | full | paritytools.WebFetchFromJSON |
+| TodoWrite | — | core | — | full | paritytools.TodoWriteFromJSON |
+| WebSearch | — | core | — | full | paritytools.WebSearchFromJSON |
+| TaskStop | KillShell | core | — | full | paritytools.Run |
+| AskUserQuestion | — | core | — | full | paritytools.AskUserQuestionFromJSON |
+| Skill | — | core | — | full | skilltools.DemoToolRunner |
+| EnterPlanMode | — | core | — | full | paritytools.Run |
 | Config | — | ant_only | — | none | — |
 | Tungsten | — | ant_only | — | none | — |
 | SuggestBackgroundPR | — | ant_feature | — | none | — |
 | WebBrowser | — | conditional_import | — | none | — |
-| TaskCreate | — | todo_v2 | — | partial | paritytools.TaskCreateFromJSON |
-| TaskGet | — | todo_v2 | — | partial | paritytools.TaskGetFromJSON |
-| TaskUpdate | — | todo_v2 | — | partial | paritytools.TaskUpdateFromJSON |
-| TaskList | — | todo_v2 | — | partial | paritytools.TaskListFromJSON |
+| TaskCreate | — | todo_v2 | — | full | paritytools.TaskCreateFromJSON |
+| TaskGet | — | todo_v2 | — | full | paritytools.TaskGetFromJSON |
+| TaskUpdate | — | todo_v2 | — | full | paritytools.TaskUpdateFromJSON |
+| TaskList | — | todo_v2 | — | full | paritytools.TaskListFromJSON |
 | OverflowTest | — | feature_flag | — | none | — |
 | CtxInspect | — | feature_flag | — | none | — |
 | TerminalCapture | — | feature_flag | — | none | — |
@@ -60,12 +60,12 @@ go run ./cmd/gen-tool-parity
 | REPL | — | ant_only | — | none | — |
 | Workflow | — | feature_import | — | none | — |
 | Sleep | — | proactive_kairos | — | none | — |
-| CronCreate | — | core | — | partial | paritytools.Run |
-| CronDelete | — | core | — | partial | paritytools.Run |
-| CronList | — | core | — | partial | paritytools.Run |
+| CronCreate | — | core | — | full | paritytools.Run |
+| CronDelete | — | core | — | full | paritytools.Run |
+| CronList | — | core | — | full | paritytools.Run |
 | RemoteTrigger | — | AGENT_TRIGGERS_REMOTE | — | none | — |
 | Monitor | — | MONITOR_TOOL | — | none | — |
-| SendUserMessage | Brief | kairos_brief | BriefTool primary name SendUserMessage; legacy alias Brief | partial | paritytools.BriefFromJSON |
+| SendUserMessage | Brief | kairos_brief | BriefTool primary name SendUserMessage; legacy alias Brief | full | paritytools.BriefFromJSON |
 | SendUserFile | — | kairos | — | none | — |
 | PushNotification | — | kairos | — | none | — |
 | SubscribePR | — | kairos_github | — | none | — |
@@ -74,14 +74,13 @@ go run ./cmd/gen-tool-parity
 | TestingPermission | — | NODE_ENV=test | — | none | — |
 | ListMcpResourcesTool | — | core | — | stub | paritytools.Run |
 | ReadMcpResourceTool | — | core | — | stub | paritytools.Run |
-| ToolSearch | — | tool_search_optimistic | — | partial | ccb-engine/internal/toolsearch |
-| echo_stub | — | not_ts_builtin | Go tests / demos only | partial | parity_runner parityEchoStub |
+| ToolSearch | — | tool_search_optimistic | — | full | ccb-engine/internal/toolsearch |
+| echo_stub | — | not_ts_builtin | Go tests / demos only | full | paritytools.Run |
 
 ## Counts (this catalog)
 
 | Go status | Count |
 |-----------|------:|
-| full | 6 |
-| partial | 20 |
+| full | 26 |
 | stub | 4 |
 | none | 25 |

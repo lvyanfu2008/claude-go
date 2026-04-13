@@ -59,13 +59,15 @@ func TaskOutputFromJSON(ctx context.Context, raw []byte, c Config) (string, bool
 		data, err := readFileLimited(outPath, maxTaskOutputRead)
 		if err == nil {
 			resp := map[string]any{
-				"retrieval_status": "success",
-				"task": map[string]any{
-					"task_id":     id,
-					"task_type":   "unknown",
-					"status":      "unknown",
-					"description": "",
-					"output":      string(data),
+				"data": map[string]any{
+					"retrieval_status": "success",
+					"task": map[string]any{
+						"task_id":     id,
+						"task_type":   "unknown",
+						"status":      "unknown",
+						"description": "",
+						"output":      string(data),
+					},
 				},
 			}
 			b, _ := json.Marshal(resp)
@@ -76,24 +78,30 @@ func TaskOutputFromJSON(ctx context.Context, raw []byte, c Config) (string, bool
 		}
 		if !block {
 			resp := map[string]any{
-				"retrieval_status": "not_ready",
-				"task":             nil,
+				"data": map[string]any{
+					"retrieval_status": "not_ready",
+					"task":             nil,
+				},
 			}
 			b, _ := json.Marshal(resp)
 			return string(b), false, nil
 		}
 		if time.Now().After(deadline) {
 			resp := map[string]any{
-				"retrieval_status": "timeout",
-				"task":             nil,
+				"data": map[string]any{
+					"retrieval_status": "timeout",
+					"task":             nil,
+				},
 			}
 			b, _ := json.Marshal(resp)
 			return string(b), false, nil
 		}
 		if _, err := os.Stat(stopPath); err == nil {
 			resp := map[string]any{
-				"retrieval_status": "not_ready",
-				"task":             nil,
+				"data": map[string]any{
+					"retrieval_status": "not_ready",
+					"task":             nil,
+				},
 			}
 			b, _ := json.Marshal(resp)
 			return string(b), false, nil
@@ -131,10 +139,14 @@ func TaskStopFromJSON(raw []byte, c Config) (string, bool, error) {
 		return "", true, err
 	}
 	_ = f.Close()
+	msg := "Successfully stopped task: " + id + " ()"
 	resp := map[string]any{
-		"message":   "Stop signal written (Go runner does not manage live tasks; use TS worker for real task kill)",
-		"task_id":   id,
-		"task_type": "file_stub",
+		"data": map[string]any{
+			"message":   msg,
+			"task_id":   id,
+			"task_type": "local_bash",
+			"command":   "",
+		},
 	}
 	b, _ := json.Marshal(resp)
 	return string(b), false, nil

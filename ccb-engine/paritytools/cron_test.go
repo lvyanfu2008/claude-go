@@ -23,7 +23,8 @@ func TestCronCreate_list_durable(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &cr); err != nil {
 		t.Fatal(err)
 	}
-	id, _ := cr["id"].(string)
+	d0 := cr["data"].(map[string]any)
+	id, _ := d0["id"].(string)
 	if id == "" {
 		t.Fatal("missing id")
 	}
@@ -39,7 +40,8 @@ func TestCronCreate_list_durable(t *testing.T) {
 	if err := json.Unmarshal([]byte(listOut), &li); err != nil {
 		t.Fatal(err)
 	}
-	jobs := li["jobs"].([]any)
+	d1 := li["data"].(map[string]any)
+	jobs := d1["jobs"].([]any)
 	if len(jobs) != 1 {
 		t.Fatalf("jobs len %d", len(jobs))
 	}

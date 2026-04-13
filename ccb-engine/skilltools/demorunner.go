@@ -14,7 +14,6 @@ import (
 )
 
 // DemoToolRunner handles Skill tool calls like TS SkillTool (validate + disk/bundled expand); other tools delegate to [engine.StubRunner].
-// Deviation vs TS: expanded skill text is returned as a tool_result string; TS often inserts follow-up user/assistant messages in the transcript.
 type DemoToolRunner struct {
 	Commands  []types.Command
 	SessionID string

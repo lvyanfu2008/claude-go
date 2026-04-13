@@ -29,7 +29,11 @@ func TestTodoWrite_roundTrip(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &payload); err != nil {
 		t.Fatal(err)
 	}
-	old, _ := payload["oldTodos"].([]any)
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected data wrapper, got %#v", payload)
+	}
+	old, _ := data["oldTodos"].([]any)
 	if old != nil && len(old) != 0 {
 		t.Fatalf("expected empty oldTodos, got %d", len(old))
 	}

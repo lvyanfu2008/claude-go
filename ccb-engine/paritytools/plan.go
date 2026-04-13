@@ -25,7 +25,8 @@ func EnterPlanModeFromJSON(_ []byte, c Config) (string, bool, error) {
 	if err := writeFileAtomic(path, append(data, '\n'), 0o644); err != nil {
 		return "", true, err
 	}
-	out := map[string]any{"message": "Entered plan mode (Go runner file flag)."}
+	msg := "Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach."
+	out := map[string]any{"data": map[string]any{"message": msg}}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }
@@ -45,10 +46,9 @@ func ExitPlanModeFromJSON(raw []byte, c Config) (string, bool, error) {
 	_ = json.Unmarshal(raw, &in)
 	path := c.PlanModePath()
 	rec := map[string]any{
-		"active":          false,
-		"exitedAt":        time.Now().UTC().Format(time.RFC3339),
-		"allowedPrompts":  in.AllowedPrompts,
-		"note":            "Go runner does not enforce prompt-based permissions like TS.",
+		"active":         false,
+		"exitedAt":       time.Now().UTC().Format(time.RFC3339),
+		"allowedPrompts": in.AllowedPrompts,
 	}
 	data, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
@@ -60,7 +60,7 @@ func ExitPlanModeFromJSON(raw []byte, c Config) (string, bool, error) {
 	if err := writeFileAtomic(path, append(data, '\n'), 0o644); err != nil {
 		return "", true, err
 	}
-	out := map[string]any{"message": "Exited plan mode (Go runner file flag)."}
+	out := map[string]any{"data": map[string]any{"message": "Exited plan mode."}}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }

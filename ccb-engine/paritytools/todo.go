@@ -39,8 +39,18 @@ func TodoWriteFromJSON(raw []byte, c Config) (string, bool, error) {
 			return "", true, fmt.Errorf("invalid todo status %q", t.Status)
 		}
 	}
-	newTodos := in.Todos
-	data, err := json.MarshalIndent(newTodos, "", "  ")
+	allDone := true
+	for _, t := range in.Todos {
+		if t.Status != "completed" {
+			allDone = false
+			break
+		}
+	}
+	stored := in.Todos
+	if allDone {
+		stored = nil
+	}
+	data, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
 		return "", true, err
 	}
@@ -51,8 +61,11 @@ func TodoWriteFromJSON(raw []byte, c Config) (string, bool, error) {
 		return "", true, err
 	}
 	out := map[string]any{
-		"oldTodos": old,
-		"newTodos": newTodos,
+		"data": map[string]any{
+			"oldTodos":                old,
+			"newTodos":                in.Todos,
+			"verificationNudgeNeeded": false,
+		},
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil

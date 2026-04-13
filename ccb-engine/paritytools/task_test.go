@@ -16,10 +16,11 @@ func TestTaskOutput_notReady(t *testing.T) {
 	if err != nil || isErr {
 		t.Fatalf("not_ready: %v %v %s", err, isErr, out)
 	}
-	var v map[string]any
-	if err := json.Unmarshal([]byte(out), &v); err != nil {
+	var wrap map[string]any
+	if err := json.Unmarshal([]byte(out), &wrap); err != nil {
 		t.Fatal(err)
 	}
+	v := wrap["data"].(map[string]any)
 	if v["retrieval_status"] != "not_ready" {
 		t.Fatalf("got %v", v)
 	}
@@ -41,10 +42,11 @@ func TestTaskOutput_readsFile(t *testing.T) {
 	if err != nil || isErr {
 		t.Fatalf("read: %v %v %s", err, isErr, out)
 	}
-	var v map[string]any
-	if err := json.Unmarshal([]byte(out), &v); err != nil {
+	var wrap map[string]any
+	if err := json.Unmarshal([]byte(out), &wrap); err != nil {
 		t.Fatal(err)
 	}
+	v := wrap["data"].(map[string]any)
 	if v["retrieval_status"] != "success" {
 		t.Fatalf("got %v", v)
 	}

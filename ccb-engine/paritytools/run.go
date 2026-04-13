@@ -51,6 +51,8 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return ListMcpResourcesStub(raw)
 	case "ReadMcpResourceTool":
 		return ReadMcpResourceStub(raw)
+	case "echo_stub":
+		return EchoStubFromJSON(raw)
 	default:
 		return "", false, ErrNotHandled
 	}
