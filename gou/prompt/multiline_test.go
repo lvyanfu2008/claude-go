@@ -59,3 +59,16 @@ func TestMultiline_altEnterStringKey(t *testing.T) {
 		t.Fatalf("value %q", m.Value())
 	}
 }
+
+func TestMultiline_altCtrlJ_insertsNewline(t *testing.T) {
+	// ESC + LF: bubbletea uses KeyCtrlJ with Alt (not KeyEnter).
+	m := New()
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlJ, Alt: true})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if got := m.Value(); got != "\nx" {
+		t.Fatalf("value %q", got)
+	}
+	if m.Submitted() {
+		t.Fatal("alt+ctrl+j must not submit")
+	}
+}

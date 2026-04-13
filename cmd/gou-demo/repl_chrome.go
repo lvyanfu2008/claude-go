@@ -110,9 +110,9 @@ func permissionModeSymbol(mode types.PermissionMode) string {
 // replChromeTopBar returns the single-line header (TS isNarrow uses columns < 80).
 func replChromeTopBar(narrow bool) string {
 	if narrow {
-		return "gou-demo  ↑↓ Pg F2 Enter Ctrl+J q"
+		return "gou-demo  ↑↓ Pg F2 Enter Shift+Enter q"
 	}
-	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Enter send  Ctrl+J/Alt+Enter newline  q or Esc quit"
+	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Enter send  Shift+Enter/Ctrl+J/Alt+Enter newline  q or Esc quit"
 }
 
 // replChromeTranscriptTopBar is the header line while TS-style transcript mode is active.
@@ -126,9 +126,9 @@ func replChromeTranscriptTopBar(narrow bool) string {
 // replChromeFooterHint is the faint line under the prompt.
 func replChromeFooterHint(narrow bool) string {
 	if narrow {
-		return "Ctrl+J newline · F2 · q"
+		return "Shift+Enter newline · F2 · q"
 	}
-	return "Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
+	return "Shift+Enter / Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
 }
 
 // replChromePermissionFragment returns a short permission pill (empty when default in narrow).
