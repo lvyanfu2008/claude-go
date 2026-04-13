@@ -29,6 +29,8 @@
 // # Message list / virtual scroll
 //
 //   - TS VirtualMessageList + useVirtualScroll → goc/gou/virtualscroll
+//   - TS scrollRef (ScrollBoxHandle: scrollTo, scrollToBottom, sticky, …) → gou-demo model fields
+//     (scrollTop, sticky, pendingDelta) updated in Update/keys; next View pass renders — no separate ref type.
 //   - Row body: goc/gou/messagerow (SegmentsFromMessage*, tool chrome, collapsed_read_search)
 //   - Render/stitch: cmd/gou-demo/main.go formatMessageSegments, renderMessageRow, measureMessageRows
 //

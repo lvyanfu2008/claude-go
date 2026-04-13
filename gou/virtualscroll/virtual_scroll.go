@@ -40,6 +40,10 @@ type RangeInput struct {
 	MountedKeys map[string]struct{}
 
 	FastScroll bool
+
+	// MaxMountedItemsOverride, when > 0, replaces MaxMountedItems for this ComputeRange call
+	// (TS CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL widens the effective window in gou-demo; not full Ink path).
+	MaxMountedItemsOverride int
 }
 
 // VirtualScrollResult mirrors src/hooks/useVirtualScroll.ts VirtualScrollResult
@@ -103,8 +107,16 @@ func ScaleHeightCache(cache map[string]int, oldCols, newCols int) {
 	}
 }
 
+func maxMountedCap(in RangeInput) int {
+	if in.MaxMountedItemsOverride > 0 {
+		return in.MaxMountedItemsOverride
+	}
+	return MaxMountedItems
+}
+
 // ComputeRange computes visible item indices and spacers (simplified vs full TS: no deferred range).
 func ComputeRange(in RangeInput) VirtualScrollResult {
+	capItems := maxMountedCap(in)
 	n := len(in.ItemKeys)
 	offsets := BuildOffsets(in.ItemKeys, in.HeightCache, DefaultEstimate)
 	totalHeight := 0
@@ -182,7 +194,7 @@ func ComputeRange(in RangeInput) VirtualScrollResult {
 		}
 
 		needed := in.ViewportH + 2*OverscanRows
-		maxEnd := min(n, start+MaxMountedItems)
+		maxEnd := min(n, start+capItems)
 		coverage := 0
 		end = start
 		for end < maxEnd &&
@@ -192,7 +204,7 @@ func ComputeRange(in RangeInput) VirtualScrollResult {
 		}
 
 		// Expand start upward if coverage still short (TS second loop).
-		minStart := max(0, end-MaxMountedItems)
+		minStart := max(0, end-capItems)
 		coverage = 0
 		for i := start; i < end; i++ {
 			coverage += HeightForCoverage(in.HeightCache, in.ItemKeys[i])
@@ -217,12 +229,12 @@ func ComputeRange(in RangeInput) VirtualScrollResult {
 	}
 
 	// Final trim if window too wide (TS: MAX_MOUNTED_ITEMS by viewport position).
-	if end-start > MaxMountedItems {
+	if end-start > capItems {
 		mid := (offsets[start] + offsets[end]) / 2
 		if in.ScrollTop-in.ListOrigin < mid {
-			end = start + MaxMountedItems
+			end = start + capItems
 		} else {
-			start = end - MaxMountedItems
+			start = end - capItems
 		}
 	}
 

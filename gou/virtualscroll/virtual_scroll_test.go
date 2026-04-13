@@ -1,6 +1,9 @@
 package virtualscroll
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestBuildOffsets_missingUsesDefault(t *testing.T) {
 	keys := []string{"a", "b", "c"}
@@ -120,6 +123,44 @@ func TestScaleHeightCache(t *testing.T) {
 	ScaleHeightCache(c, 80, 40)
 	if c["x"] != 20 || c["y"] != 40 {
 		t.Fatalf("got %v", c)
+	}
+}
+
+func TestComputeRange_MaxMountedItemsOverrideWidensWindow(t *testing.T) {
+	n := 400
+	keys := make([]string, n)
+	cache := map[string]int{}
+	for i := 0; i < n; i++ {
+		keys[i] = fmt.Sprintf("k%d", i)
+		cache[keys[i]] = 1
+	}
+	// Sticky + huge viewport pulls start toward 0 and end=n; final trim then caps at MaxMountedItems (300)
+	// unless MaxMountedItemsOverride exceeds row count.
+	in := RangeInput{
+		ItemKeys:     keys,
+		HeightCache:  cache,
+		ScrollTop:    0,
+		PendingDelta: 0,
+		ViewportH:    5000,
+		IsSticky:     true,
+		ListOrigin:   0,
+	}
+	base := ComputeRange(in)
+	wide := ComputeRange(RangeInput{
+		ItemKeys:                keys,
+		HeightCache:             cache,
+		ScrollTop:               in.ScrollTop,
+		PendingDelta:            in.PendingDelta,
+		ViewportH:               in.ViewportH,
+		IsSticky:                in.IsSticky,
+		ListOrigin:              in.ListOrigin,
+		MaxMountedItemsOverride: 600,
+	})
+	if base.End-base.Start != 300 {
+		t.Fatalf("base trim: want span 300 got [%d,%d)", base.Start, base.End)
+	}
+	if wide.End-wide.Start != n {
+		t.Fatalf("override: want full span %d got [%d,%d)", n, wide.Start, wide.End)
 	}
 }
 

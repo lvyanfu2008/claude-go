@@ -34,6 +34,17 @@ func TestOscSetWindowTitle_disabled(t *testing.T) {
 	}
 }
 
+func TestGouDemoVirtualScrollDisabled(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL", "")
+	if gouDemoVirtualScrollDisabled() {
+		t.Fatal("empty env should be false")
+	}
+	t.Setenv("CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL", "1")
+	if !gouDemoVirtualScrollDisabled() {
+		t.Fatal("truthy env should enable disable-virtual-scroll mode")
+	}
+}
+
 func TestOscSetWindowTitle_kittyST(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("OSC title skipped on windows")

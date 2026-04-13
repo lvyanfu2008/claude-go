@@ -26,6 +26,13 @@ func gouDemoTerminalTitleDisabled() bool {
 	return gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_TERMINAL_TITLE")
 }
 
+// gouDemoVirtualScrollDisabled mirrors CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL in REPL.tsx / Messages.tsx.
+// When true, gou-demo raises the virtual-list mounted-item cap (see virtualscroll.RangeInput.MaxMountedItemsOverride);
+// it does not replicate Ink ScrollBox full non-virtual rendering.
+func gouDemoVirtualScrollDisabled() bool {
+	return gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL")
+}
+
 func sanitizeWindowTitle(s string) string {
 	s = strings.ReplaceAll(s, "\x1b", "")
 	s = strings.ReplaceAll(s, bel, "")
