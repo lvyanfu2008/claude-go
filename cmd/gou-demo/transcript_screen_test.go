@@ -101,17 +101,16 @@ func TestHandleTranscriptKeySwallowsUnknown(t *testing.T) {
 	}
 }
 
-func TestExitTranscriptScreenWithPostCmd_altScreenAfterDump(t *testing.T) {
+func TestExitTranscriptScreenWithPostCmd_afterDump(t *testing.T) {
 	t.Parallel()
 	m := &model{
-		store:                &conversation.Store{ConversationID: "x"},
-		uiScreen:             gouDemoScreenTranscript,
-		programUsesAltScreen: true,
-		transcriptDumpMode:   true,
+		store:              &conversation.Store{ConversationID: "x"},
+		uiScreen:           gouDemoScreenTranscript,
+		transcriptDumpMode: true,
 	}
 	cmd := m.exitTranscriptScreenWithPostCmd()
-	if cmd == nil {
-		t.Fatal("expected EnterAltScreen cmd when leaving dump with alt-screen program")
+	if cmd != nil {
+		t.Fatalf("expected nil cmd, got %v", cmd)
 	}
 	if m.uiScreen != gouDemoScreenPrompt {
 		t.Fatalf("uiScreen got %v want prompt", m.uiScreen)
@@ -125,18 +124,14 @@ func TestExitTranscriptScreenWithPostCmd_altScreenAfterDump(t *testing.T) {
 	if m.transcriptShowAll {
 		t.Fatal("showAll should reset on exit (TS handleExitTranscript)")
 	}
-	if cmd() == nil {
-		t.Fatal("expected tea.Msg from post cmd")
-	}
 }
 
-func TestExitTranscriptScreenWithPostCmd_noCmdWithoutAltOrDump(t *testing.T) {
+func TestExitTranscriptScreenWithPostCmd_noDumpNilCmd(t *testing.T) {
 	t.Parallel()
 	m := &model{
-		store:                &conversation.Store{ConversationID: "x"},
-		uiScreen:             gouDemoScreenTranscript,
-		programUsesAltScreen: true,
-		transcriptDumpMode:   false,
+		store:              &conversation.Store{ConversationID: "x"},
+		uiScreen:           gouDemoScreenTranscript,
+		transcriptDumpMode: false,
 	}
 	if m.exitTranscriptScreenWithPostCmd() != nil {
 		t.Fatal("expected nil cmd when not leaving dump mode")

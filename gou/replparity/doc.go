@@ -32,11 +32,11 @@
 //   - TS Messages.tsx list pipeline (filter / reorder / transcript tail cap) → goc/gou/messagesview (MessagesForScrollList, ReorderMessagesInUI)
 //   - TS scrollRef (ScrollBoxHandle: scrollTo, scrollToBottom, sticky, …) → gou-demo model fields
 //     (scrollTop, sticky, pendingDelta) updated in Update/keys; next View pass renders — no separate ref type.
-//   - Optional GOU_DEMO_BUBBLES_VIEWPORT=1 (prompt only): bubbles/viewport full-document pane vs virtualscroll; ctrl+y fold; see cmd/gou-demo/message_viewport_pane.go. go-tui sample shares goc/gou/viewportfold for section toggles.
+//   - Prompt message list defaults to bubbles/viewport (go-tui-style); opt out via env in cmd/gou-demo/message_viewport_pane.go; ctrl+y fold; legacy virtualscroll via GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. go-tui shares goc/gou/viewportfold for section toggles.
 //   - Wheel / drag-to-scroll on the message list: cmd/gou-demo/mouse_message_list.go (tea.WithMouseCellMotion when enabled).
 //     TS CLAUDE_CODE_DISABLE_MOUSE / GOU_DEMO_DISABLE_MOUSE omits SGR mouse so the host terminal can select/copy;
-//     optional one-column TUI scrollbar when content overflows (GOU_DEMO_NO_SCROLLBAR=1 to hide). Alternate screen
-//     has no host scrollback; use -no-alt-screen when normal-buffer scrollback matters.
+//     optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1 (GOU_DEMO_NO_SCROLLBAR=1 forces off). gou-demo
+//     does not use tea.WithAltScreen; redraw uses the normal terminal buffer.
 //   - In-app selection (Shift+left-drag) + Ctrl+C copy + OSC 52 / pbcopy / tmux load-buffer: cmd/gou-demo/message_selection.go,
 //     selection_clipboard.go (subset of TS useSelection + setClipboard).
 //   - Row body: goc/gou/messagerow (SegmentsFromMessage*, tool chrome, collapsed_read_search)

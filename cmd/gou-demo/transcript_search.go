@@ -216,7 +216,7 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyMsg) bool {
 	return false
 }
 
-// handleTranscriptKey returns (handled, cmd). cmd may be non-nil when leaving dump restores alt-screen (TS).
+// handleTranscriptKey returns (handled, cmd). cmd may be non-nil when bracket dump prints to scrollback (TS).
 func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.uiScreen != gouDemoScreenTranscript {
 		return false, nil
@@ -268,7 +268,7 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.transcriptShowAll = true
 		m.rebuildHeightCache()
 		plain := transcriptExportPlain(m, exportTranscriptWidth(m))
-		return true, transcriptBracketDumpScrollbackCmd(plain, m.programUsesAltScreen)
+		return true, transcriptBracketDumpScrollbackCmd(plain)
 	case "v":
 		if m.transcriptSearchOpen {
 			return true, nil

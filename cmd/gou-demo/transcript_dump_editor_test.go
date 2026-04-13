@@ -19,21 +19,17 @@ func TestExportTranscriptWidth_atLeast80(t *testing.T) {
 	}
 }
 
-func TestTranscriptBracketDumpScrollbackCmd_emptyWithAltScreen(t *testing.T) {
+func TestTranscriptBracketDumpScrollbackCmd_empty(t *testing.T) {
 	t.Parallel()
-	cmd := transcriptBracketDumpScrollbackCmd("", true)
-	if cmd == nil {
-		t.Fatal("expected non-nil cmd for ExitAltScreen path")
-	}
-	// Ensure the command is invocable (returns a tea.Msg).
-	if msg := cmd(); msg == nil {
-		t.Fatal("expected tea.Msg from cmd")
+	cmd := transcriptBracketDumpScrollbackCmd("")
+	if cmd != nil {
+		t.Fatal("expected nil cmd for empty plain body")
 	}
 }
 
-func TestTranscriptBracketDumpScrollbackCmd_plainNoAltUsesPrintf(t *testing.T) {
+func TestTranscriptBracketDumpScrollbackCmd_plainUsesPrintf(t *testing.T) {
 	t.Parallel()
-	cmd := transcriptBracketDumpScrollbackCmd("hello", false)
+	cmd := transcriptBracketDumpScrollbackCmd("hello")
 	if cmd == nil {
 		t.Fatal("expected printf cmd")
 	}

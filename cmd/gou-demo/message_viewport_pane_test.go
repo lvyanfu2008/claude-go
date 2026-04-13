@@ -15,7 +15,7 @@ func TestTryBuildFullMessagePaneContent_fold(t *testing.T) {
 		UUID:    "u1",
 		Content: []byte(`[{"type":"text","text":"hello"}]`),
 	}}
-	m := newModel(st, "", "", nil, false)
+	m := newModel(st, "", "", nil)
 	m.width = 80
 	m.height = 40
 	m.cols = 76
@@ -36,7 +36,7 @@ func TestTryBuildFullMessagePaneContent_fold(t *testing.T) {
 
 func TestMsgViewportWanted_transcriptOff(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c"}
-	m := newModel(st, "", "", nil, false)
+	m := newModel(st, "", "", nil)
 	m.useMsgViewport = true
 	m.uiScreen = gouDemoScreenTranscript
 	if m.msgViewportWanted() {

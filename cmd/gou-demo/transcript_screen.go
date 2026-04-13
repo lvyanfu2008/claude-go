@@ -148,13 +148,9 @@ func (m *model) exitTranscriptScreen() {
 	}
 }
 
-// exitTranscriptScreenWithPostCmd restores the alternate screen after TS-style [ dump (Ink unwrap).
+// exitTranscriptScreenWithPostCmd exits transcript mode; kept for call sites that expect a tea.Cmd return.
 func (m *model) exitTranscriptScreenWithPostCmd() tea.Cmd {
-	hadDump := m.transcriptDumpMode
 	m.exitTranscriptScreen()
-	if m.programUsesAltScreen && hadDump {
-		return func() tea.Msg { return tea.EnterAltScreen() }
-	}
 	return nil
 }
 

@@ -16,7 +16,7 @@ import (
 	"goc/types"
 )
 
-// TS REPL.tsx: [ → dumpMode + showAll; unwrap from alt-screen + plain dump to scrollback.
+// TS REPL.tsx: [ → dumpMode + showAll; plain dump to scrollback (Printf).
 // v → renderMessagesToPlainText (strip trailing spaces per line), temp file, openFileInExternalEditor.
 
 type gouTranscriptEditorPrepMsg struct {
@@ -110,22 +110,12 @@ func transcriptPlainBodyFromMessage(msg types.Message, opts *messagerow.RenderOp
 	return strings.TrimRight(layout.WrapForViewport(raw, wrapCols), "\n")
 }
 
-func transcriptBracketDumpScrollbackCmd(plain string, programUsesAltScreen bool) tea.Cmd {
+func transcriptBracketDumpScrollbackCmd(plain string) tea.Cmd {
 	plain = strings.TrimSuffix(plain, "\n")
 	if plain == "" {
-		if programUsesAltScreen {
-			return func() tea.Msg { return tea.ExitAltScreen() }
-		}
 		return nil
 	}
-	out := plain + "\n"
-	if !programUsesAltScreen {
-		return tea.Printf("%s", out)
-	}
-	return tea.Sequence(
-		func() tea.Msg { return tea.ExitAltScreen() },
-		tea.Printf("%s", out),
-	)
+	return tea.Printf("%s", plain+"\n")
 }
 
 func scheduleTranscriptEditorStatusClear(gen int) tea.Cmd {

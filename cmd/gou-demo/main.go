@@ -1,5 +1,5 @@
 // Command gou-demo is a minimal Bubble Tea full-screen UI: virtualscroll + markdown + tool blocks (Phase 4 messagerow).
-// Model replies appear inside the TUI. Default uses the terminal alt-screen (full-screen); after quit, that buffer is gone — use -no-alt-screen (or GOU_DEMO_NO_ALT_SCREEN=1) so output stays in normal shell scrollback.
+// Model replies appear inside the TUI. The program does not use the terminal alternate screen: it redraws in the normal buffer so shell scrollback above the session stays available (no tea.WithAltScreen).
 // With GOU_DEMO_LOG=1, trace uses the same path rules as TS debug log (see goc/ccb-engine/debugpath); on TTY without GOU_DEMO_LOG_FILE, trace goes to that file, not stderr.
 //
 // Run from repo: cd goc && go run ./cmd/gou-demo
@@ -22,11 +22,11 @@
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 // Read/Grep/Glob stream tail: default keeps each tool_use + tool_result as separate rows (avoids looking like history was cleared). Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 for TS-style merge into collapsed_read_search (gou/ccbstream/apply.go).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
 // Prompt message list uses [bubbles/viewport] by default (same scrolling style as go-tui: full-document scroll + ctrl+y fold-all). Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no, or use legacy virtualscroll only with GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. Exceeding GOU_DEMO_VIEWPORT_MAX_LINES (default 20000 wrapped rows) falls back to classic virtualscroll. Transcript mode always uses the legacy pane.
-// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: native pbcopy/xclip when available, tmux load-buffer in tmux, plus OSC 52 to the tty (see selection_clipboard.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Alternate screen (default) has no host scrollback scrollbar—use -no-alt-screen if you need normal-buffer scrollback. Optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1; GOU_DEMO_NO_SCROLLBAR=1 forces it off.
+// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: native pbcopy/xclip when available, tmux load-buffer in tmux, plus OSC 52 to the tty (see selection_clipboard.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1; GOU_DEMO_NO_SCROLLBAR=1 forces it off.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
@@ -152,7 +152,7 @@ func setupGouDemoTrace() (cleanup func()) {
 	if v != "1" && v != "true" && v != "yes" && v != "on" {
 		return func() {}
 	}
-	// GOU_DEMO_LOG=1: writing to stderr while Bubble Tea uses the alt screen corrupts line order and layout.
+	// GOU_DEMO_LOG=1: writing to stderr while the TUI runs may corrupt line order and layout.
 	if gouDemoEnvTruthy("GOU_DEMO_LOG_STDERR") {
 		gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
 		return func() {}
@@ -534,8 +534,6 @@ type model struct {
 	promptSavedScrollTop int
 	promptSavedSticky    bool
 
-	programUsesAltScreen bool // set at startup; [ may tea.ExitAltScreen until transcript exit
-
 	transcriptEditorBusy   bool
 	transcriptEditorStatus string
 	transcriptEditorGen    int
@@ -601,19 +599,12 @@ func main() {
 	replayCC := flag.String("replay-cc", "", "apply ccb-engine NDJSON stream events from file (protocol-v1 StreamEvent lines), then open TUI")
 	streamStdin := flag.Bool("stream-stdin", false, "read NDJSON stream events from stdin (pipe from ccb-engine); open /dev/tty for keys when available")
 	fakeStreamFlag := flag.Bool("fake-stream", false, "do not call the model: simulated stream only (no HTTP; no apilog bodies)")
-	noAltScreenFlag := flag.Bool("no-alt-screen", false, "do not use alt-screen: conversation stays in normal terminal scrollback (visible after exit)")
 	mcpCommandsJSON := flag.String("mcp-commands-json", "", "JSON array file of MCP prompt commands (types.Command); overrides "+mcpcommands.EnvCommandsJSONPath)
 	mcpToolsJSON := flag.String("mcp-tools-json", "", "JSON array file of MCP tool definitions for assembleToolPool; overrides "+mcpcommands.EnvToolsJSONPath)
 	// Backward compat: real LLM used to be opt-in via -ccb-inline; it is now the default. Flag is a no-op.
 	ccbInlineCompat := flag.Bool("ccb-inline", false, "deprecated: no-op (real LLM is default). Use -fake-stream for simulation only")
 	flag.Parse()
 	_ = ccbInlineCompat
-
-	noAltScreen := *noAltScreenFlag
-	if !noAltScreen {
-		v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_NO_ALT_SCREEN")))
-		noAltScreen = v == "1" || v == "true" || v == "yes" || v == "on"
-	}
 
 	st := &conversation.Store{ConversationID: "demo"}
 	if gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
@@ -643,12 +634,9 @@ func main() {
 		log.Fatalf("gou-demo: GOU_DEMO_TS_CONTEXT_BRIDGE is no longer supported (scripts/go-context-bridge.ts removed). Use Go prompt assembly and GOU_DEMO_USE_EMBEDDED_TOOLS_API / MCP JSON; unset GOU_DEMO_TS_CONTEXT_BRIDGE.")
 	}
 
-	m := newModel(st, strings.TrimSpace(*mcpCommandsJSON), strings.TrimSpace(*mcpToolsJSON), nil, !noAltScreen)
+	m := newModel(st, strings.TrimSpace(*mcpCommandsJSON), strings.TrimSpace(*mcpToolsJSON), nil)
 
 	opts := []tea.ProgramOption{}
-	if !noAltScreen {
-		opts = append(opts, tea.WithAltScreen())
-	}
 	if gouDemoMouseCellMotionEnabled() {
 		opts = append(opts, tea.WithMouseCellMotion())
 	}
@@ -683,7 +671,7 @@ func main() {
 	}
 }
 
-func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot, programUsesAltScreen bool) *model {
+func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot) *model {
 	pr := prompt.New()
 
 	var tr *sessiontranscript.Store
@@ -719,9 +707,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		mcpToolsJSONPath:     mcpToolsJSONPath,
 		tsBridge:             tsBridge,
 		transcript:           tr,
-		permissionMode:       gouDemoPermissionModeFromEnv(),
-		programUsesAltScreen: programUsesAltScreen,
-		useMsgViewport:       gouDemoBubblesViewport(),
+		permissionMode: gouDemoPermissionModeFromEnv(),
+		useMsgViewport: gouDemoBubblesViewport(),
 	}
 }
 

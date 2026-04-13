@@ -182,8 +182,7 @@ func testTranscriptModelWithMessages(t *testing.T, msgs []types.Message) *model 
 		width:                120,
 		cols:                 100,
 		titleH:               1,
-		heightCache:          make(map[string]int),
-		programUsesAltScreen: false,
+		heightCache: make(map[string]int),
 	}
 }
 
