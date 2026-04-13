@@ -24,6 +24,11 @@ func GouParityToolList() []ToolDefinition {
 		askUserQuestionToolDefinition(),
 		taskOutputToolDefinition(),
 		bashToolDefinition(),
+	)
+	if td, ok := bashZogToolDefinitionMaybe(); ok {
+		out = append(out, td)
+	}
+	out = append(out,
 		globToolDefinition(),
 		grepToolDefinition(),
 		exitPlanModeToolDefinition(),
@@ -107,22 +112,27 @@ func editToolDefinition() ToolDefinition {
 }
 
 func bashToolDefinition() ToolDefinition {
-	if toolvalidator.InputValidatorMode() == "zog" {
-		d, err := bashzog.LoadAPIData()
-		if err == nil {
-			return ToolDefinition{
-				Name:        d.Name,
-				Description: d.Description,
-				InputSchema: d.InputSchema,
-			}
-		}
-		// fall through to embed if snapshot fails to load
-	}
 	return ToolDefinition{
 		Name:        "Bash",
 		Description: "Execute a shell command in the user's environment.",
 		InputSchema: mustExportInputSchema("Bash"),
 	}
+}
+
+// bashZogToolDefinitionMaybe returns the Zog-wire Bash sibling when GO_TOOL_INPUT_VALIDATOR=zog.
+func bashZogToolDefinitionMaybe() (ToolDefinition, bool) {
+	if toolvalidator.InputValidatorMode() != "zog" {
+		return ToolDefinition{}, false
+	}
+	d, err := bashzog.LoadAPIData()
+	if err != nil {
+		return ToolDefinition{}, false
+	}
+	return ToolDefinition{
+		Name:        bashzog.ZogToolName,
+		Description: d.Description,
+		InputSchema: d.InputSchema,
+	}, true
 }
 
 func globToolDefinition() ToolDefinition {

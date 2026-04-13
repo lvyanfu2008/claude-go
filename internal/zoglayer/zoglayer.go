@@ -7,8 +7,8 @@ import (
 // validators holds tools with a Zog-based input path (GO_TOOL_INPUT_VALIDATOR=zog).
 // Tools not listed here fall back to JSON Schema + toolrefine in toolvalidator.
 var validators = map[string]func(json.RawMessage) error{
-	"Bash":           validateBash,
-	"EnterPlanMode":  validateEnterPlanMode,
+	"BashZog":       validateBashZog,
+	"EnterPlanMode": validateEnterPlanMode,
 }
 
 // Has reports whether toolName uses the Zog validator when Zog mode is on.

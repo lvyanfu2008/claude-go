@@ -43,3 +43,6 @@ const (
 
 // BashToolName mirrors BASH_TOOL_NAME in src/tools/BashTool/toolName.js.
 const BashToolName = "Bash"
+
+// BashZogToolName is the Go-only Zog-validated Bash sibling (same execution path as BashToolName).
+const BashZogToolName = "BashZog"

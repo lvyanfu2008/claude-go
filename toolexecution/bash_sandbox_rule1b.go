@@ -3,6 +3,8 @@ package toolexecution
 import (
 	"encoding/json"
 	"strings"
+
+	"goc/ccb-engine/bashzog"
 )
 
 // BashToolName is the primary Bash tool id (src/tools/BashTool/toolName.ts BASH_TOOL_NAME).
@@ -51,7 +53,7 @@ func WholeToolAskSkippedForBash1b(toolName string, input json.RawMessage, b *Bas
 	if b == nil || !b.SandboxingEnabled || !b.AutoAllowWholeToolAskWhenSandboxed {
 		return false
 	}
-	if toolName != BashToolName {
+	if toolName != BashToolName && toolName != bashzog.ZogToolName {
 		return false
 	}
 	return BashInputUsesSandboxForRule1b(input)

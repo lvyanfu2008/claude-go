@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"goc/ccb-engine/bashzog"
 	"goc/ccb-engine/localtools"
 	"goc/ccb-engine/paritytools"
 )
@@ -95,7 +96,7 @@ func (r ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID stri
 		return localtools.GlobFromJSON(ctx, input, roots)
 	case "Grep":
 		return localtools.GrepFromJSON(ctx, input, roots)
-	case "Bash":
+	case "Bash", bashzog.ZogToolName:
 		return localtools.BashFromJSON(ctx, input, wd, r.LocalBashDefault)
 	}
 	if dn := DiscoverSkillsToolNameFromEnv(); dn != "" && name == dn {

@@ -33,15 +33,15 @@ go test ./...
 
 More detail on embeds and channel flags: [`commands/data/README.md`](commands/data/README.md).
 
-## `GO_TOOL_INPUT_VALIDATOR=zog` (Bash Go-sourced path)
+## `GO_TOOL_INPUT_VALIDATOR=zog` (extra **`BashZog`** tool)
 
 When **`GO_TOOL_INPUT_VALIDATOR=zog`** (see [`internal/toolvalidator/mode.go`](internal/toolvalidator/mode.go)):
 
-- **Bash** validation uses **Zog** plus [`toolrefine`](internal/toolrefine) for tools registered in [`zoglayer`](internal/zoglayer); **`toolvalidator.ValidateInput` does not require an `input_schema` from `tools_api.json` for those tools** (schema may be nil).
-- **Bash** model-facing **`name` / `description` / `input_schema`** come from the checked-in snapshot [`ccb-engine/bashzog/bash_tool.json`](ccb-engine/bashzog/bash_tool.json) (via [`ccb-engine/bashzog`](ccb-engine/bashzog)), not from a runtime read of embed `tools_api.json`. Refresh that JSON when the TS export for Bash changes and you want Go to stay aligned. Zog validation follows the TS `fullInputSchema` **wire** shape (a superset that may include internal keys such as `_simulatedSedEdit`); the JSON snapshot can stay slimmer and model-facing on purpose.
-- **[`toolpool.AssembleToolPoolFromEmbedded`](toolpool/assemble_embedded.go)** and **[`anthropic.bashToolDefinition`](ccb-engine/internal/anthropic/canonical_demo_tools.go)** substitute the Bash row when this mode is on. Other tools still use the embed / export pipeline.
+- The usual **`Bash`** tool row still comes from embed **`tools_api.json`** (JSON Schema + [`toolrefine`](internal/toolrefine)) like other tools.
+- A second tool **`BashZog`** is added (same shell execution as `Bash` in the Go runner). Its **`description` / `input_schema`** come from the checked-in snapshot [`ccb-engine/bashzog/bash_tool.json`](ccb-engine/bashzog/bash_tool.json); **Zog** validates **`BashZog`** input in [`zoglayer`](internal/zoglayer) plus `toolrefine`, aligned with the TS `fullInputSchema` **wire** (including optional `_simulatedSedEdit`). The snapshot stays model-facing on purpose and can omit internal-only keys.
+- **[`toolpool.AssembleToolPoolFromEmbedded`](toolpool/assemble_embedded.go)** appends the **`BashZog`** [`types.ToolSpec`](types/tool.go) after the built-in list; **[`anthropic.GouParityToolList`](ccb-engine/internal/anthropic/canonical_demo_tools.go)** appends the matching tool definition for tests and parity runners.
 
-Default (unset or any value other than `zog`) keeps the **JSON Schema + embed `tools_api.json`** path for Bash like all other tools.
+Default (unset or any value other than `zog`) omits **`BashZog`** and keeps only **`Bash`** from the export pipeline.
 
 ## Standalone layout note
 

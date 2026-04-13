@@ -6,6 +6,6 @@ import (
 	"goc/ccb-engine/bashzog"
 )
 
-func validateBash(input json.RawMessage) error {
+func validateBashZog(input json.RawMessage) error {
 	return bashzog.Validate(input)
 }

@@ -27,6 +27,19 @@ func TestLoadAPIData_hasCommandProperty(t *testing.T) {
 	}
 }
 
+func TestBashZogToolSpec_nameAndSchema(t *testing.T) {
+	spec, err := BashZogToolSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != ZogToolName {
+		t.Fatalf("name %q", spec.Name)
+	}
+	if len(spec.InputJSONSchema) < 50 {
+		t.Fatal("expected embedded input_schema bytes")
+	}
+}
+
 func TestBashToolSpec_matchesLoadAPIDataSchema(t *testing.T) {
 	d, err := LoadAPIData()
 	if err != nil {

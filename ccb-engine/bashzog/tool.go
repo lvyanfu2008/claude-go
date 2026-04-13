@@ -8,14 +8,17 @@ import (
 	"goc/types"
 )
 
+// ZogToolName is the tool_use name for the Go Zog-validated Bash sibling (same execution as "Bash").
+const ZogToolName = "BashZog"
+
 //go:embed bash_tool.json
 var bashToolJSON []byte
 
 type bashWire struct {
-	Name            string
-	Description     string
-	InputSchemaRaw  json.RawMessage
-	inputSchemaObj  map[string]any
+	Name           string
+	Description    string
+	InputSchemaRaw json.RawMessage
+	inputSchemaObj map[string]any
 }
 
 var (
@@ -69,7 +72,8 @@ func LoadAPIData() (APIData, error) {
 	}, nil
 }
 
-// BashToolSpec returns a [types.ToolSpec] for Bash from the embedded snapshot (toolpool / assemble).
+// BashToolSpec returns a [types.ToolSpec] using the embedded snapshot’s name (always "Bash" today),
+// description, and input_schema. Prefer [BashZogToolSpec] when wiring the Zog-specific tool row.
 func BashToolSpec() (types.ToolSpec, error) {
 	d, err := LoadAPIData()
 	if err != nil {
@@ -77,6 +81,20 @@ func BashToolSpec() (types.ToolSpec, error) {
 	}
 	return types.ToolSpec{
 		Name:            d.Name,
+		Description:     d.Description,
+		InputJSONSchema: append(json.RawMessage(nil), d.InputSchemaRaw...),
+	}, nil
+}
+
+// BashZogToolSpec returns a [types.ToolSpec] for [ZogToolName] using the embedded snapshot’s
+// description and input_schema; the name is always [ZogToolName].
+func BashZogToolSpec() (types.ToolSpec, error) {
+	d, err := LoadAPIData()
+	if err != nil {
+		return types.ToolSpec{}, err
+	}
+	return types.ToolSpec{
+		Name:            ZogToolName,
 		Description:     d.Description,
 		InputJSONSchema: append(json.RawMessage(nil), d.InputSchemaRaw...),
 	}, nil

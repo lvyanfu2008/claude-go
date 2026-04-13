@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"goc/ccb-engine/bashzog"
 )
 
 // replInnerToolNames matches TS REPL_ONLY_TOOLS (src/tools/REPLTool/constants.ts) —
 // primitives routed inside REPL when CLAUDE_REPL_MODE hides them from the outer pool.
 var replInnerToolNames = map[string]struct{}{
 	"Read": {}, "Write": {}, "Edit": {}, "Glob": {}, "Grep": {},
-	"Bash": {}, "NotebookEdit": {}, "Agent": {},
+	"Bash": {}, bashzog.ZogToolName: {}, "NotebookEdit": {}, "Agent": {},
 }
 
 func replInnerAllowed(name string) bool {

@@ -45,7 +45,7 @@ const (
 // REPL-only tool names hidden when REPL mode is on (src/tools/REPLTool/constants.ts REPL_ONLY_TOOLS).
 var replOnlyToolNames = map[string]struct{}{
 	"Read": {}, "Write": {}, "Edit": {}, "Glob": {}, "Grep": {},
-	"Bash": {}, "NotebookEdit": {}, "Agent": {},
+	"Bash": {}, "BashZog": {}, "NotebookEdit": {}, "Agent": {},
 }
 
 // IsReplModeEnabled mirrors isReplModeEnabled in src/tools/REPLTool/constants.ts (lines 23–29).

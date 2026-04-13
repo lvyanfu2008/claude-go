@@ -52,7 +52,7 @@ func ToolChromeParts(toolName string, input json.RawMessage) (facing, paren, hin
 		}
 		hint = `"` + pat + `"`
 		return "Search", paren, hint
-	case "Bash":
+	case "Bash", "BashZog":
 		cmd := strFromMap(m, "command")
 		if cmd == "" {
 			return "Bash", "", ""

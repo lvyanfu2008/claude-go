@@ -347,7 +347,7 @@ func (e *StreamingToolExecutor) collectResults(tool *trackedTool) {
 
 		if upd.Message != nil && isErrorToolResult(upd.Message) {
 			thisToolErrored = true
-			if tool.block.Name == BashToolName {
+			if tool.block.Name == BashToolName || tool.block.Name == BashZogToolName {
 				e.mu.Lock()
 				e.hasErrored = true
 				e.erroredToolDescription = e.getToolDescription(tool)

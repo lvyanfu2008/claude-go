@@ -100,7 +100,7 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 			return "Reading file"
 		}
 		return "Reading " + truncateToolSummary(DisplayPathForActivity(fp))
-	case "Bash":
+	case "Bash", "BashZog":
 		cmd := strFromMap(m, "command")
 		if cmd == "" {
 			return "Running command"
