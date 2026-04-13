@@ -15,10 +15,12 @@ Reference: [`claude-code/src/components/Spinner.tsx`](../../../claude-code/src/c
 | `✻` + spinner verb + ellipsis animation | `queryBusy` + `spinner_verbs.go`, tick in `main.go` | Verbs list manually synced from TS `SPINNER_VERBS`. |
 | Tip line priority | `effectiveSpinnerTip` in `spinner_tip.go` | Simplified: **30m** → `/clear` tip, **30s** → `/btw` tip (no `btwUseCount` gate), else fixed **prompt-queue** sentence from TS registry. No full `tipScheduler` / context tips. |
 | Tips disabled | `CLAUDE_CODE_SPINNER_TIPS_ENABLED=0` or `GOU_DEMO_SPINNER_TIPS=0` | Default tips on. |
+| `collapsed_read_search` rollup | [`messagerow/collapse_roll_up.go`](../../gou/messagerow/collapse_roll_up.go), [`ccbstream/apply.go`](../../gou/ccbstream/apply.go) | After each **`tool_result`**, the transcript tail of complete **Read / Grep / Glob** `tool_use` + matching `tool_result` pairs is replaced by one **`collapsed_read_search`** row (TS `collapseReadSearchGroups` subset). Not in MVP: Bash list/git, memory/team splits, MCP, Snip/ToolSearch absorption. |
 
 ## Automated
 
-- `go test ./gou/messagerow/...` — `tool_activity_test.go`, segment tests.
+- `go test ./gou/messagerow/...` — `tool_activity_test.go`, `collapse_roll_up_test.go`, segment tests.
+- `go test ./gou/ccbstream/...` — `apply_test.go` includes rollup after `tool_result`.
 - `go test ./cmd/gou-demo/...` — `spinner_tip_test.go` and existing transcript/REPL tests.
 
 ## Related

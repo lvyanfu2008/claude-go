@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"goc/gou/conversation"
+	"goc/gou/messagerow"
 	"goc/types"
 )
 
@@ -46,6 +47,7 @@ func Apply(store *conversation.Store, ev StreamEvent) {
 			UUID:    fmt.Sprintf("tr-%d", time.Now().UnixNano()),
 			Content: raw,
 		})
+		messagerow.CollapseReadSearchTail(&store.Messages)
 	case "turn_complete":
 		flushStreamingAssistant(store)
 		// Always clear buffer after a turn (flush may no-op on empty trim but buffer had whitespace-only).

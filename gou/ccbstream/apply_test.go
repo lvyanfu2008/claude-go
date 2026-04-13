@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"goc/gou/conversation"
+	"goc/types"
 )
 
 func TestApply_deltaAndTurnComplete(t *testing.T) {
@@ -49,6 +50,18 @@ func TestApply_usageAccumulates(t *testing.T) {
 	Apply(st, StreamEvent{Type: "usage", InputTokens: 30, OutputTokens: 5})
 	if st.UsageInputTotal != 130 || st.UsageOutputTotal != 25 || st.TotalUsageTokens() != 155 {
 		t.Fatalf("usage %+v", st)
+	}
+}
+
+func TestApply_toolResultCollapsesReadSearchTail(t *testing.T) {
+	st := &conversation.Store{ConversationID: "t"}
+	Apply(st, StreamEvent{Type: "tool_use", ID: "r1", Name: "Read", Input: map[string]any{"file_path": "/tmp/a.txt"}})
+	Apply(st, StreamEvent{Type: "tool_result", ToolUseID: "r1", Content: "body"})
+	if len(st.Messages) != 1 {
+		t.Fatalf("messages %d", len(st.Messages))
+	}
+	if st.Messages[0].Type != types.MessageTypeCollapsedReadSearch {
+		t.Fatalf("type=%s", st.Messages[0].Type)
 	}
 }
 
