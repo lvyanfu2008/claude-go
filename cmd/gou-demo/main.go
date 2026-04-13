@@ -21,7 +21,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line in prompt). F2 toggles slash-command picker (type to filter when open). When GOU_QUERY_ASK_STRATEGY is unset, tool permission asks use a modal (Y/N).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, q or Esc quit, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -413,6 +413,11 @@ type model struct {
 
 	// transcript when non-nil (GOU_DEMO_RECORD_TRANSCRIPT=1) appends messages after each completed turn.
 	transcript *sessiontranscript.Store
+
+	// REPL chrome (terminal title, permission pill): see repl_chrome.go.
+	permissionMode        types.PermissionMode
+	queryBusy             bool
+	lastEmittedTitlePlain string
 }
 
 func main() {
@@ -544,6 +549,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		mcpToolsJSONPath:    mcpToolsJSONPath,
 		tsBridge:            tsBridge,
 		transcript:          tr,
+		permissionMode:      gouDemoPermissionModeFromEnv(),
 	}
 }
 
@@ -754,6 +760,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				MCPCommandsJSONPath: m.mcpCommandsJSONPath,
 				MCPToolsJSONPath:    m.mcpToolsJSONPath,
 				PreExpansionInput:   &preExp,
+				PermissionMode:      &m.permissionMode,
 			}
 			if m.tsBridge != nil {
 				demoCfg.TSContextBridge = m.tsBridge
@@ -1002,6 +1009,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
 								gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
 									reqID, len(m.store.Messages), len(toolsJSON))
+								m.queryBusy = true
 								runQueryStreamingParityTurn(m.ccbSend, qp)
 								usedCCB = true
 							} else {
@@ -1017,6 +1025,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 				gouDemoTracef("starting fake streamTick path")
+				m.queryBusy = true
 				m.streamChunks = []string{
 					"## Streamed reply\n\n",
 					"Chunks preserve ``` fences.\n\n```go\n",
@@ -1053,6 +1062,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case gouQueryDoneMsg:
+		m.queryBusy = false
 		if msg.Err != nil {
 			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
 			m.rebuildHeightCache()
@@ -1086,6 +1096,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.store.ClearStreaming()
 		m.streamChunks = nil
 		m.streamIdx = 0
+		m.queryBusy = false
 		m.rebuildHeightCache()
 		gouDemoTracef("fake streamTick finished storeMessages=%d", len(m.store.Messages))
 		if m.transcript != nil {
@@ -1216,7 +1227,15 @@ func (m *model) View() string {
 	m.prevRange.Start, m.prevRange.End = vr.Start, vr.End
 
 	var b strings.Builder
-	title := lipgloss.NewStyle().Bold(true).Render("gou-demo — ↑↓ scroll  F2 slash  Enter send  Ctrl+J newline  q quit")
+	narrow := m.cols > 0 && m.cols < 80
+	plainTitle := replChromeComposeTerminalTitle(m.store.ConversationID, m.queryBusy, strings.TrimSpace(m.store.StreamingText) != "")
+	if !gouDemoTerminalTitleDisabled() && plainTitle != m.lastEmittedTitlePlain {
+		m.lastEmittedTitlePlain = plainTitle
+		if osc := oscSetWindowTitle(plainTitle); osc != "" {
+			b.WriteString(osc)
+		}
+	}
+	title := lipgloss.NewStyle().Bold(true).Render(replChromeTopBar(narrow))
 	b.WriteString(title)
 	b.WriteByte('\n')
 
@@ -1288,7 +1307,11 @@ func (m *model) View() string {
 	}
 
 	promptView := m.pr.View()
-	hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render("Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands")
+	hintText := replChromeFooterHint(narrow)
+	if frag := replChromePermissionFragment(m.permissionMode, narrow); frag != "" {
+		hintText = frag + " · " + hintText
+	}
+	hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintText)
 	b.WriteString(promptView)
 	b.WriteByte('\n')
 	b.WriteString(hint)

@@ -348,6 +348,19 @@ func TestBuildDemoParams_TSContextBridge_toolsAndCommands(t *testing.T) {
 	}
 }
 
+func TestBuildDemoParams_permissionMode(t *testing.T) {
+	clearModelEnvForPuiTest(t)
+	st := &conversation.Store{ConversationID: "t"}
+	pm := types.PermissionPlan
+	p, err := BuildDemoParams("hi", st, DemoConfig{SkipCommands: true, PermissionMode: &pm})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.PermissionMode != types.PermissionPlan {
+		t.Fatalf("PermissionMode %q", p.PermissionMode)
+	}
+}
+
 func TestSlashResolve_unknownSlashBecomesPrompt(t *testing.T) {
 	st := &conversation.Store{ConversationID: "t"}
 	p, err := BuildDemoParams("/ask what is 2+2", st, DemoConfig{SkipCommands: true})

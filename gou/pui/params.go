@@ -72,6 +72,8 @@ type DemoConfig struct {
 	IsRemoteMode bool `json:"-"`
 	// PreExpansionInput optional; when non-nil, copied to [processuserinput.ProcessUserInputParams.PreExpansionInput] (TS preExpansionInput).
 	PreExpansionInput *string `json:"-"`
+	// PermissionMode optional; when non-nil, sets [processuserinput.ProcessUserInputParams.PermissionMode] (TS toolPermissionContext.mode).
+	PermissionMode *types.PermissionMode `json:"-"`
 }
 
 // BuildDemoParams builds params for gou-demo: prompt mode, skip attachments, minimal ToolUseContext.
@@ -195,12 +197,16 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 			Messages: msgs,
 		},
 	}
+	perm := types.PermissionDefault
+	if cfg.PermissionMode != nil && *cfg.PermissionMode != "" {
+		perm = *cfg.PermissionMode
+	}
 	out := &processuserinput.ProcessUserInputParams{
 		Input:                raw,
 		Mode:                 types.PromptInputModePrompt,
 		Messages:             msgs,
 		UUID:                 uuidPtr,
-		PermissionMode:       types.PermissionDefault,
+		PermissionMode:       perm,
 		Commands:             cmds,
 		SkillListingCommands: listing,
 		RuntimeContext:       rc,
