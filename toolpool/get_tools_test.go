@@ -84,6 +84,65 @@ func TestGetTools_simpleMode(t *testing.T) {
 	}
 }
 
+// TS getTools (tools.ts): CLAUDE_CODE_SIMPLE + isReplModeEnabled returns [REPL] (+ coordinator tools when active).
+func TestGetTools_simpleReplMode_returnsREPLOnly(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SIMPLE", "1")
+	t.Setenv("CLAUDE_CODE_REPL", "")
+	t.Setenv("CLAUDE_REPL_MODE", "1")
+	t.Setenv("USER_TYPE", "")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	t.Setenv("FEATURE_COORDINATOR_MODE", "")
+	t.Setenv("CLAUDE_CODE_COORDINATOR_MODE", "")
+	base := []types.ToolSpec{
+		{Name: "REPL"}, {Name: "Bash"}, {Name: "Read"}, {Name: "Edit"},
+	}
+	ctx := types.EmptyToolPermissionContextData()
+	out := GetTools(ctx, base)
+	if len(out) != 1 || out[0].Name != "REPL" {
+		t.Fatalf("want [REPL] got %#v", out)
+	}
+}
+
+func TestGetTools_fullReplMode_hidesReplOnlyPrimitives(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SIMPLE", "")
+	t.Setenv("CLAUDE_CODE_REPL", "")
+	t.Setenv("CLAUDE_REPL_MODE", "1")
+	t.Setenv("USER_TYPE", "")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	base := []types.ToolSpec{
+		{Name: "REPL"}, {Name: "Read"}, {Name: "Bash"}, {Name: "Skill"},
+	}
+	ctx := types.EmptyToolPermissionContextData()
+	out := GetTools(ctx, base)
+	names := map[string]struct{}{}
+	for _, s := range out {
+		names[s.Name] = struct{}{}
+	}
+	if _, ok := names["Read"]; ok {
+		t.Fatalf("Read should be hidden when REPL present, got %#v", out)
+	}
+	if _, ok := names["REPL"]; !ok {
+		t.Fatalf("want REPL in pool, got %#v", out)
+	}
+	if _, ok := names["Skill"]; !ok {
+		t.Fatalf("want non-REPL_ONLY tool Skill, got %#v", out)
+	}
+}
+
+func TestGetTools_fullReplMode_noHideWithoutREPLTool(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SIMPLE", "")
+	t.Setenv("CLAUDE_CODE_REPL", "")
+	t.Setenv("CLAUDE_REPL_MODE", "1")
+	t.Setenv("USER_TYPE", "")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	base := []types.ToolSpec{{Name: "Read"}, {Name: "Bash"}}
+	ctx := types.EmptyToolPermissionContextData()
+	out := GetTools(ctx, base)
+	if len(out) != 2 {
+		t.Fatalf("without REPL tool primitives stay visible, got %#v", out)
+	}
+}
+
 func TestMarshalToolsAPIDocumentDefinitions(t *testing.T) {
 	t.Parallel()
 	raw, err := MarshalToolsAPIDocumentDefinitions([]types.ToolSpec{

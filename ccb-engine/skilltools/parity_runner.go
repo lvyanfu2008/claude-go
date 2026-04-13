@@ -57,6 +57,13 @@ func (r ParityToolRunner) roots() []string {
 
 // Run implements [engine.ToolRunner].
 func (r ParityToolRunner) Run(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
+	if name == "REPL" {
+		return r.runREPLTool(ctx, toolUseID, input)
+	}
+	return r.dispatchTool(ctx, name, toolUseID, input)
+}
+
+func (r ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
 	roots := r.roots()
 	wd := strings.TrimSpace(r.WorkDir)
 	if wd == "" && len(roots) > 0 {

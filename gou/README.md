@@ -17,7 +17,7 @@
 | `goc/gou/conversation` | 会话切片、`StreamingText` 追加、`ItemKey`（对标 `messageKey`） |
 | `goc/gou/markdown` | `HasMarkdownSyntax`、`CachedLexer`、`TokenCache`、`RenderTokensPlain`、`NormalizeStreamingForLexer`（对标 `Markdown.tsx` / `cachedLexer`） |
 | `goc/gou/layout` | `VisualWidth`、`WrapForViewport`、`WrappedRowCount`、`MeasuredLine`（ANSI 感知，对标高度与 `useVirtualScroll` 折行语义） |
-| `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result`；**`collapsed_read_search`** 摘要文案由 [`SearchReadSummaryText`](messagerow/search_read_summary.go) 对齐 TS [`getSearchReadSummaryText`](../../claude-code/src/utils/collapseReadSearch.ts)，行末附带 **[`CtrlOToExpandHint`](messagerow/search_read_summary.go)**（与 Ink `CtrlOToExpand` 字面一致）。**注意**：gou-demo **无** TS 的 transcript 全屏切换，`ctrl+o` 仅为 **占位提示**，不绑定键位。 |
+| `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result`；**`collapsed_read_search`** 摘要文案由 [`SearchReadSummaryText`](messagerow/search_read_summary.go) 对齐 TS [`getSearchReadSummaryText`](../../claude-code/src/utils/collapseReadSearch.ts)，行末附带 **[`CtrlOToExpandHint`](messagerow/search_read_summary.go)**（与 Ink `CtrlOToExpand` 字面一致）。gou-demo 下 **`ctrl+o`** 绑定 **transcript 全屏**（冻结进入时刻的消息列表；`Esc`/`q`/`ctrl+c` 关闭，`ctrl+e` 切换 show-all 提示），见 [`docs/plans/gou-demo-transcript-ts-parity.md`](../../docs/plans/gou-demo-transcript-ts-parity.md)。 |
 | `goc/gou/transcript` | 从 JSON 加载消息：UI 形 `[]Message`（含 `type`）或 API 形 `[{role,content}]` |
 | `goc/gou/ccbstream` | 将 ccb-engine 风格 NDJSON `StreamEvent` 应用到 `conversation.Store`（`Apply` / `Feed` / `ReplayFile`） |
 | `goc/conversation-runtime/query` | gou-demo **真实模型**：HTTP 流式 parity（`StreamingParity` + env 门控 + 密钥）；`-fake-stream` 为纯模拟 |
@@ -39,7 +39,7 @@
 | 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ `GOU_QUERY_STREAMING_PARITY=1` 或 `GOU_DEMO_STREAMING_TOOL_EXECUTION=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。Unix **socketserve** + 外部 TS 客户端见 `goc/ccb-engine/README.md`（**ccb-socket-host**） |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `execution_request`（bash/slash 的 prepare 桩） | `bashprepare` / `slashprepare` 仍可能返回 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
-| Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **未做** |
+| Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript 模式（ctrl+o）与顶栏/底栏键位已对齐子集；`/` 搜索、`v`/`[` 等见 parity 文档 |
 
 ## ProcessUserInput（gou-demo + `goc/gou/pui`）：已做 vs 未做
 
@@ -72,7 +72,7 @@ Bubble Tea 最小界面：虚拟列表区间 + `conversation.Store` + 模拟 `St
 cd goc && go run ./cmd/gou-demo
 ```
 
-操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表（打开后可直接输入缩小候选；首行 `/foo` 会作为初始 filter），`q` / `Esc` 退出。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
+操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表（打开后可直接输入缩小候选；首行 `/foo` 会作为初始 filter）。**`Ctrl+o`** 进入/退出 **transcript**（冻结历史；transcript 内 **`Esc` / `q` / `Ctrl+c`** 仅退出 transcript，不退出程序；**`Ctrl+e`** 切换 show-all 提示）。在 **prompt** 界面 **`q` / `Esc`** 仍退出 demo。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
 
 **与 Ink REPL 壳层对齐（轻量）**：列宽不足 **80** 列时使用更短的顶栏与底栏提示（对标 TS `columns < 80` / `isNarrow`）。**终端标签标题** 通过 **OSC 0** 设为 `gou-demo`（可带会话 id 截断）；流式进行中标题加 **`…` 前缀**；设置 **`CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`** 时不写标题序列（与 TS 一致）。底栏可显示 **`CLAUDE_CODE_PERMISSION_MODE`**（如 `plan`、`bypassPermissions`）的短标签与符号（对标 `permissionModeSymbol` / `shortTitle`）。Kitty 下若存在 **`KITTY_WINDOW_ID`**，标题序列使用 **ST** 结尾而非 BEL。
 

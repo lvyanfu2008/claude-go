@@ -46,7 +46,7 @@
     {"name": "TeamCreate", "ts_presence": "agent_swarms", "go_status": "none", "go_location": ""},
     {"name": "TeamDelete", "ts_presence": "agent_swarms", "go_status": "none", "go_location": ""},
     {"name": "VerifyPlanExecution", "ts_presence": "CLAUDE_CODE_VERIFY_PLAN", "go_status": "none", "go_location": ""},
-    {"name": "REPL", "ts_presence": "ant_only", "go_status": "none", "go_location": ""},
+    {"name": "REPL", "ts_presence": "ant_only", "go_status": "partial", "go_location": "skilltools/parity_runner_repl.go", "ts_note": "Go: batch JSON dispatch to REPL_ONLY primitives; no ReplBridge / full TS VM"},
     {"name": "Workflow", "ts_presence": "feature_import", "go_status": "none", "go_location": ""},
     {"name": "Sleep", "ts_presence": "proactive_kairos", "go_status": "none", "go_location": ""},
     {"name": "CronCreate", "ts_presence": "core", "go_status": "partial", "go_location": "paritytools.Run"},

@@ -21,7 +21,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, q or Esc quit, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript screen (frozen message tail; Esc/q/ctrl+c closes; ctrl+e toggles show-all hint). In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -418,6 +418,13 @@ type model struct {
 	permissionMode        types.PermissionMode
 	queryBusy             bool
 	lastEmittedTitlePlain string
+
+	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozen lengths).
+	uiScreen              gouDemoScreen
+	transcriptFreezeN     int
+	transcriptShowAll     bool
+	promptSavedScrollTop  int
+	promptSavedSticky     bool
 }
 
 func main() {
@@ -669,6 +676,21 @@ func (m *model) inputAreaHeight() int {
 	return n
 }
 
+// bottomChromeHeight is prompt input height or transcript footer height (TS transcript has no prompt).
+func (m *model) bottomChromeHeight() int {
+	if m.uiScreen != gouDemoScreenTranscript {
+		return m.inputAreaHeight()
+	}
+	narrow := m.cols > 0 && m.cols < 80
+	foot := joinFooterLines(transcriptFooterLines(narrow, m.transcriptShowAll), m.cols)
+	c := m.cols
+	if c < 1 {
+		c = 40
+	}
+	n := len(strings.Split(layout.WrapForViewport(foot, c), "\n"))
+	return max(4, n+1)
+}
+
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -707,6 +729,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
+			m.enterTranscriptScreen()
+			m.slashPick = nil
+			m.rebuildHeightCache()
+			return m, nil
+		}
+		if m.handleTranscriptKey(msg) {
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
@@ -738,6 +769,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "end":
 			m.sticky = true
 			m.scrollTop = 1 << 30
+			return m, nil
+		}
+		if m.uiScreen == gouDemoScreenTranscript {
 			return m, nil
 		}
 		m.pr.Update(msg)
@@ -1057,8 +1091,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouQueryYieldMsg:
 		m.store.AppendMessage(msg.Message)
 		m.rebuildHeightCache()
-		m.sticky = true
-		m.scrollTop = 1 << 30
+		if m.uiScreen != gouDemoScreenTranscript {
+			m.sticky = true
+			m.scrollTop = 1 << 30
+		}
 		return m, nil
 
 	case gouQueryDoneMsg:
@@ -1074,8 +1110,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.maybeRecordTranscript()
 		}
 		m.rebuildHeightCache()
-		m.sticky = true
-		m.scrollTop = 1 << 30
+		if m.uiScreen != gouDemoScreenTranscript {
+			m.sticky = true
+			m.scrollTop = 1 << 30
+		}
 		return m, nil
 
 	case streamTick:
@@ -1102,6 +1140,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.transcript != nil {
 			m.maybeRecordTranscript()
 		}
+		if m.uiScreen != gouDemoScreenTranscript {
+			m.sticky = true
+			m.scrollTop = 1 << 30
+		}
 		return m, nil
 
 	case ccbstream.Msg:
@@ -1125,20 +1167,28 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.maybeRecordTranscript()
 		}
 		// Model events often arrive while the user has scrolled up; always jump to bottom so the reply is visible.
-		switch ev.Type {
-		case "assistant_delta", "tool_use", "tool_result", "turn_complete", "error":
-			m.sticky = true
-			m.scrollTop = 1 << 30
+		if m.uiScreen != gouDemoScreenTranscript {
+			switch ev.Type {
+			case "assistant_delta", "tool_use", "tool_result", "turn_complete", "error":
+				m.sticky = true
+				m.scrollTop = 1 << 30
+			}
 		}
 		return m, nil
 	}
 
-	m.pr.Update(msg)
+	if m.uiScreen != gouDemoScreenTranscript {
+		m.pr.Update(msg)
+	}
 	return m, nil
 }
 
 func listViewportH(m *model) int {
-	h := m.height - m.titleH - m.streamH - m.inputAreaHeight() - 2
+	streamReserve := m.streamH
+	if m.uiScreen == gouDemoScreenTranscript {
+		streamReserve = 0
+	}
+	h := m.height - m.titleH - streamReserve - m.bottomChromeHeight() - 2
 	if gouDemoStatusLineEnabled() {
 		h--
 	}
@@ -1194,7 +1244,7 @@ func (m *model) View() string {
 		return "Loading…"
 	}
 
-	keys := m.store.ItemKeys()
+	keys := m.scrollItemKeys()
 	n := len(keys)
 	vpH := listViewportH(m)
 
@@ -1235,7 +1285,11 @@ func (m *model) View() string {
 			b.WriteString(osc)
 		}
 	}
-	title := lipgloss.NewStyle().Bold(true).Render(replChromeTopBar(narrow))
+	topBar := replChromeTopBar(narrow)
+	if m.uiScreen == gouDemoScreenTranscript {
+		topBar = replChromeTranscriptTopBar(narrow)
+	}
+	title := lipgloss.NewStyle().Bold(true).Render(topBar)
 	b.WriteString(title)
 	b.WriteByte('\n')
 
@@ -1259,7 +1313,7 @@ func (m *model) View() string {
 		}
 	}
 	// Same transcript as TS: show in-flight assistant text in the main pane, not only the small stream: strip.
-	if strings.TrimSpace(m.store.StreamingText) != "" {
+	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
 		msgPane.WriteByte('\n')
 		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 		msgPane.WriteString(head)
@@ -1283,38 +1337,45 @@ func (m *model) View() string {
 	b.WriteString(strings.Join(lines, "\n"))
 	b.WriteByte('\n')
 
-	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
-	var streamBody string
-	if m.store.StreamingText != "" {
-		toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-		streamBody = styleMarkdownTokens(toks, m.cols)
-	} else {
-		streamBody = lipgloss.NewStyle().Faint(true).Render("(idle)")
+	if m.uiScreen != gouDemoScreenTranscript {
+		streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
+		var streamBody string
+		if m.store.StreamingText != "" {
+			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
+			streamBody = styleMarkdownTokens(toks, m.cols)
+		} else {
+			streamBody = lipgloss.NewStyle().Faint(true).Render("(idle)")
+		}
+		streamWrapped := layout.WrapForViewport(streamLabel+streamBody, m.width-2)
+		streamRows := strings.Split(streamWrapped, "\n")
+		for len(streamRows) < m.streamH {
+			streamRows = append(streamRows, "")
+		}
+		if len(streamRows) > m.streamH {
+			streamRows = streamRows[:m.streamH]
+		}
+		b.WriteString(strings.Join(streamRows, "\n"))
+		b.WriteByte('\n')
 	}
-	streamWrapped := layout.WrapForViewport(streamLabel+streamBody, m.width-2)
-	streamRows := strings.Split(streamWrapped, "\n")
-	for len(streamRows) < m.streamH {
-		streamRows = append(streamRows, "")
-	}
-	if len(streamRows) > m.streamH {
-		streamRows = streamRows[:m.streamH]
-	}
-	b.WriteString(strings.Join(streamRows, "\n"))
-	b.WriteByte('\n')
 	if s := m.statusLineString(); s != "" {
 		b.WriteString(s)
 		b.WriteByte('\n')
 	}
 
-	promptView := m.pr.View()
-	hintText := replChromeFooterHint(narrow)
-	if frag := replChromePermissionFragment(m.permissionMode, narrow); frag != "" {
-		hintText = frag + " · " + hintText
+	if m.uiScreen == gouDemoScreenTranscript {
+		foot := joinFooterLines(transcriptFooterLines(narrow, m.transcriptShowAll), m.cols)
+		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))
+	} else {
+		promptView := m.pr.View()
+		hintText := replChromeFooterHint(narrow)
+		if frag := replChromePermissionFragment(m.permissionMode, narrow); frag != "" {
+			hintText = frag + " · " + hintText
+		}
+		hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintText)
+		b.WriteString(promptView)
+		b.WriteByte('\n')
+		b.WriteString(hint)
 	}
-	hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintText)
-	b.WriteString(promptView)
-	b.WriteByte('\n')
-	b.WriteString(hint)
 	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
 	if m.permAsk != nil {
 		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.width))
