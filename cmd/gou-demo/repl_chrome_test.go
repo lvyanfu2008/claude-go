@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"runtime"
 	"strings"
 	"testing"
@@ -68,5 +69,36 @@ func TestReplChromeComposeTerminalTitle(t *testing.T) {
 func TestPermissionModeSymbolPlan(t *testing.T) {
 	if permissionModeSymbol(types.PermissionPlan) != "\u23f8" {
 		t.Fatalf("plan symbol")
+	}
+}
+
+func TestUserPromptPointerGlyph(t *testing.T) {
+	if UserPromptPointerGlyph() != "\u276f" {
+		t.Fatalf("pointer glyph")
+	}
+}
+
+func TestUserMessageHasPromptText(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]string{{"type": "text", "text": "hi"}})
+	m := types.Message{Type: types.MessageTypeUser, Content: raw}
+	if !userMessageHasPromptText(m) {
+		t.Fatal("expected true for text user message")
+	}
+	raw2, _ := json.Marshal([]map[string]string{{"type": "tool_result", "tool_use_id": "x", "content": "ok"}})
+	m2 := types.Message{Type: types.MessageTypeUser, Content: raw2}
+	if userMessageHasPromptText(m2) {
+		t.Fatal("tool_result-only user message should not get pointer")
+	}
+}
+
+func TestWithUserPromptPointerIfNeeded(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]string{{"type": "text", "text": "hello"}})
+	m := types.Message{Type: types.MessageTypeUser, Content: raw}
+	out := withUserPromptPointerIfNeeded(m, "body line")
+	if !strings.Contains(out, "body line") {
+		t.Fatalf("missing body: %q", out)
+	}
+	if !strings.Contains(out, UserPromptPointerGlyph()) {
+		t.Fatalf("missing pointer: %q", out)
 	}
 }

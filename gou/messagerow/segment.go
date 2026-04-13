@@ -53,6 +53,8 @@ type RenderOpts struct {
 	ShowAllInTranscript bool
 	// FoldToolResultBody hides tool_result / advisor_tool_result payload in the main prompt (gou-demo: ctrl+o opens transcript to read).
 	FoldToolResultBody bool
+	// CollapsedReadSearchActive is true only for the in-flight tail collapsed_read_search row (TS MessageRow isActiveCollapsedGroup).
+	CollapsedReadSearchActive bool
 }
 
 // SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
@@ -105,7 +107,8 @@ func segmentsGroupedToolUse(msg types.Message, depth int, opts *RenderOpts) []Se
 }
 
 func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts) []Segment {
-	summary := SearchReadSummaryTextFromMessage(false, msg)
+	isActive := opts != nil && opts.CollapsedReadSearchActive
+	summary := SearchReadSummaryTextFromMessage(isActive, msg)
 	if opts != nil && opts.ShowAllInTranscript {
 		var parts []string
 		if strings.TrimSpace(summary) != "" {
@@ -122,6 +125,7 @@ func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts)
 			text = "…"
 		}
 		out := []Segment{{Kind: SegCollapsedReadSearch, Text: text}}
+		// Transcript show-all: keep ⎿ hint for expanded inspection (TS focuses prompt parity on active-only).
 		if msg.LatestDisplayHint != nil {
 			h := strings.TrimSpace(*msg.LatestDisplayHint)
 			if h != "" {
@@ -143,7 +147,8 @@ func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts)
 	}
 	line := summary + CtrlOToExpandHint
 	out := []Segment{{Kind: SegCollapsedReadSearch, Text: line}}
-	if msg.LatestDisplayHint != nil {
+	// TS CollapsedReadSearchContent: ⎿ + latestDisplayHint only when isActiveGroup.
+	if isActive && msg.LatestDisplayHint != nil {
 		h := strings.TrimSpace(*msg.LatestDisplayHint)
 		if h != "" {
 			h = strings.ReplaceAll(h, "\r\n", "\n")

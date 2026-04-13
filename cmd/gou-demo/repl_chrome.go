@@ -16,6 +16,11 @@ const (
 	oscST = "\x1b\\" // OSC string terminator (Kitty; TS uses ST instead of BEL)
 )
 
+// UserPromptPointerGlyph matches npm figures.pointer in HighlightedThinkingText.tsx (user prompt line).
+func UserPromptPointerGlyph() string {
+	return "\u276f" // HEAVY RIGHT-POINTING ANGLE BRACKET ORNAMENT
+}
+
 // gouDemoTerminalTitleDisabled mirrors CLAUDE_CODE_DISABLE_TERMINAL_TITLE in REPL.tsx.
 func gouDemoTerminalTitleDisabled() bool {
 	return gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_TERMINAL_TITLE")

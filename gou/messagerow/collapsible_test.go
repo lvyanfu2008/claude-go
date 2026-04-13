@@ -64,8 +64,39 @@ func TestSegments_collapsedReadSearch(t *testing.T) {
 	if !strings.Contains(segs[0].Text, CtrlOToExpandHint) {
 		t.Fatalf("want ctrl+o hint: %q", segs[0].Text)
 	}
-	if len(segs) < 3 || segs[1].Kind != SegDisplayHint || !strings.Contains(segs[1].Text, "⎿") {
-		t.Fatalf("want hint row after summary, got %+v", segs)
+	// TS: ⎿ latestDisplayHint only when isActiveGroup; default opts => inactive.
+	for i := 1; i < len(segs); i++ {
+		if segs[i].Kind == SegDisplayHint && strings.Contains(segs[i].Text, "⎿") {
+			t.Fatalf("inactive collapsed group should omit ⎿ row, got %+v", segs)
+		}
+	}
+}
+
+func TestSegments_collapsedReadSearch_activeShowsHintRow(t *testing.T) {
+	disp := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "d2",
+		Content: []byte(`[{"type":"text","text":"tail"}]`),
+	}
+	h := "pattern-hint"
+	msg := types.Message{
+		Type:              types.MessageTypeCollapsedReadSearch,
+		UUID:              "c1",
+		ReadCount:         1,
+		SearchCount:       1,
+		LatestDisplayHint: &h,
+		DisplayMessage:    &disp,
+	}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{CollapsedReadSearchActive: true})
+	found := false
+	for _, s := range segs {
+		if s.Kind == SegDisplayHint && strings.Contains(s.Text, "⎿") && strings.Contains(s.Text, "pattern-hint") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("active group should show ⎿ hint, segs=%+v", segs)
 	}
 }
 

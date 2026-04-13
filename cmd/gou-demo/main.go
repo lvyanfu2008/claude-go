@@ -1363,9 +1363,17 @@ func (m *model) rebuildHeightCache() {
 }
 
 // measureMessageRows matches final View styling (ANSI + wrap) for VirtualMessageList heightCache parity.
-func (m *model) messagerowOpts() *messagerow.RenderOpts {
+func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 	if m.uiScreen == gouDemoScreenPrompt {
-		return &messagerow.RenderOpts{FoldToolResultBody: true}
+		active := m.queryBusy &&
+			len(m.store.Messages) > 0 &&
+			m.store.Messages[len(m.store.Messages)-1].UUID == msg.UUID &&
+			msg.Type == types.MessageTypeCollapsedReadSearch &&
+			strings.TrimSpace(m.store.StreamingText) == ""
+		return &messagerow.RenderOpts{
+			FoldToolResultBody:        true,
+			CollapsedReadSearchActive: active,
+		}
 	}
 	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptShowAll || m.transcriptDumpMode) {
 		return &messagerow.RenderOpts{ShowAllInTranscript: true}
@@ -1374,7 +1382,7 @@ func (m *model) messagerowOpts() *messagerow.RenderOpts {
 }
 
 func (m *model) measureMessageRows(msg types.Message, cols int) int {
-	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts())
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
 	if msg.Type == types.MessageTypeAttachment && len(segs) == 0 {
 		return 0
 	}
@@ -1383,6 +1391,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int) int {
 		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	}
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs)
+	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
@@ -1549,13 +1558,44 @@ func (m *model) showToolUseCtrlOExpandHint() bool {
 	return m.uiScreen == gouDemoScreenPrompt && !m.transcriptDumpMode
 }
 
+func userMessageHasPromptText(msg types.Message) bool {
+	if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
+		return false
+	}
+	var blocks []types.MessageContentBlock
+	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
+		return false
+	}
+	for _, b := range blocks {
+		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// withUserPromptPointerIfNeeded prepends TS HighlightedThinkingText-style figures.pointer before the first body line.
+func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
+	if msg.Type != types.MessageTypeUser || !userMessageHasPromptText(msg) || body == "" {
+		return body
+	}
+	prefix := lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted()).Render(UserPromptPointerGlyph() + " ")
+	lines := strings.Split(body, "\n")
+	if len(lines) == 0 {
+		return prefix
+	}
+	lines[0] = prefix + lines[0]
+	return strings.Join(lines, "\n")
+}
+
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
-	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts())
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
 	var header string
 	if msg.Type != types.MessageTypeAttachment {
 		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	}
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs)
+	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
