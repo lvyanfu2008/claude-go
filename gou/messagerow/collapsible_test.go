@@ -69,6 +69,71 @@ func TestSegments_collapsedReadSearch(t *testing.T) {
 	}
 }
 
+func TestSegments_collapsedReadSearch_showAllExpandsPaths(t *testing.T) {
+	disp := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "d3",
+		Content: []byte(`[{"type":"text","text":"tail"}]`),
+	}
+	hint := "hint"
+	msg := types.Message{
+		Type:              types.MessageTypeCollapsedReadSearch,
+		UUID:              "c2",
+		ReadCount:         2,
+		SearchCount:       1,
+		ReadFilePaths:     []string{"a.go", "b.go"},
+		DisplayMessage:    &disp,
+		LatestDisplayHint: &hint,
+	}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{ShowAllInTranscript: true})
+	if segs[0].Kind != SegCollapsedReadSearch || !strings.Contains(segs[0].Text, "Files:") {
+		t.Fatalf("want Files block in show-all, got %+v", segs)
+	}
+	if strings.Contains(segs[0].Text, CtrlOToExpandHint) {
+		t.Fatalf("show-all first segment should omit ctrl+o hint, got %q", segs[0].Text)
+	}
+}
+
+func TestSegments_groupedToolUse_showAllInlinesNested(t *testing.T) {
+	nested := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "na",
+		Content: []byte(`[{"type":"text","text":"inner"}]`),
+	}
+	res := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "nu",
+		Content: []byte(`[{"type":"text","text":"ok"}]`),
+	}
+	disp := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "d4",
+		Content: []byte(`[{"type":"text","text":"Hi"}]`),
+	}
+	msg := types.Message{
+		Type:           types.MessageTypeGroupedToolUse,
+		UUID:           "g2",
+		ToolName:       "Read",
+		Messages:       []types.Message{nested},
+		Results:        []types.Message{res},
+		DisplayMessage: &disp,
+	}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{ShowAllInTranscript: true})
+	if len(segs) < 3 {
+		t.Fatalf("want nested segments, got %d: %+v", len(segs), segs)
+	}
+	found := false
+	for _, s := range segs {
+		if s.Kind == SegTextMarkdown && strings.Contains(s.Text, "inner") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected nested assistant text, got %+v", segs)
+	}
+}
+
 func TestSegments_serverAndAdvisor(t *testing.T) {
 	raw, _ := json.Marshal([]map[string]any{
 		{"type": "server_tool_use", "id": "s1", "name": "N", "input": map[string]any{"x": 1}},

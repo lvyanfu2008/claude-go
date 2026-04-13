@@ -21,7 +21,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript screen (frozen message tail; Esc/q/ctrl+c closes; ctrl+e toggles show-all hint). In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N; search bar Esc clears; ctrl+e expands collapsed/grouped rows; Esc/q/ctrl+c exit transcript when search bar closed). In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -425,6 +425,11 @@ type model struct {
 	transcriptShowAll     bool
 	promptSavedScrollTop  int
 	promptSavedSticky     bool
+
+	transcriptSearchOpen   bool
+	transcriptSearchQuery  string
+	transcriptSearchHits   []int
+	transcriptSearchCursor int
 }
 
 func main() {
@@ -682,7 +687,7 @@ func (m *model) bottomChromeHeight() int {
 		return m.inputAreaHeight()
 	}
 	narrow := m.cols > 0 && m.cols < 80
-	foot := joinFooterLines(transcriptFooterLines(narrow, m.transcriptShowAll), m.cols)
+	foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
 	c := m.cols
 	if c < 1 {
 		c = 40
@@ -699,6 +704,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.cols = max(12, msg.Width-4)
 		_ = m.pr.Update(msg)
+		if m.uiScreen == gouDemoScreenTranscript && oldCols > 0 && oldCols != m.cols {
+			m.clearTranscriptSearchState()
+		}
 		if oldCols > 0 && oldCols != m.cols && len(m.heightCache) > 0 {
 			virtualscroll.ScaleHeightCache(m.heightCache, oldCols, m.cols)
 		} else {
@@ -1222,9 +1230,16 @@ func (m *model) rebuildHeightCache() {
 }
 
 // measureMessageRows matches final View styling (ANSI + wrap) for VirtualMessageList heightCache parity.
+func (m *model) messagerowOpts() *messagerow.RenderOpts {
+	if m.uiScreen == gouDemoScreenTranscript && m.transcriptShowAll {
+		return &messagerow.RenderOpts{ShowAllInTranscript: true}
+	}
+	return nil
+}
+
 func (m *model) measureMessageRows(msg types.Message, cols int) int {
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
-	body := formatMessageSegments(messagerow.SegmentsFromMessage(msg), cols)
+	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols)
 	block := header + "\n" + body
 	return max(1, layout.WrappedRowCount(block, cols))
 }
@@ -1306,7 +1321,7 @@ func (m *model) View() string {
 		msg := m.store.Messages[i]
 		key := keys[i]
 		h := m.heightCache[key]
-		block := renderMessageRow(msg, cols, h)
+		block := m.renderMessageRow(msg, cols, h)
 		msgPane.WriteString(block)
 		if i+1 < vr.End {
 			msgPane.WriteByte('\n')
@@ -1363,7 +1378,7 @@ func (m *model) View() string {
 	}
 
 	if m.uiScreen == gouDemoScreenTranscript {
-		foot := joinFooterLines(transcriptFooterLines(narrow, m.transcriptShowAll), m.cols)
+		foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
 		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))
 	} else {
 		promptView := m.pr.View()
@@ -1388,9 +1403,9 @@ func (m *model) View() string {
 	return out
 }
 
-func renderMessageRow(m types.Message, cols, maxRows int) string {
-	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(m.Type)).Render(string(m.Type))
-	body := formatMessageSegments(messagerow.SegmentsFromMessage(m), cols)
+func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
+	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols)
 	block := header + "\n" + body
 	wrapped := layout.WrapForViewport(block, cols)
 	rows := strings.Split(wrapped, "\n")

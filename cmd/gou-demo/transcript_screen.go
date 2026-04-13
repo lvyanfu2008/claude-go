@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"goc/gou/conversation"
 )
 
@@ -47,6 +45,7 @@ func (m *model) scrollItemKeys() []string {
 }
 
 func (m *model) enterTranscriptScreen() {
+	m.clearTranscriptSearchState()
 	m.promptSavedScrollTop = m.scrollTop
 	m.promptSavedSticky = m.sticky
 	m.transcriptFreezeN = len(m.store.Messages)
@@ -57,52 +56,11 @@ func (m *model) enterTranscriptScreen() {
 }
 
 func (m *model) exitTranscriptScreen() {
+	m.clearTranscriptSearchState()
 	m.uiScreen = gouDemoScreenPrompt
 	m.scrollTop = m.promptSavedScrollTop
 	m.sticky = m.promptSavedSticky
 	m.transcriptFreezeN = 0
-}
-
-// handleTranscriptKey returns true when the key was consumed (transcript mode only).
-func (m *model) handleTranscriptKey(msg tea.KeyMsg) bool {
-	if m.uiScreen != gouDemoScreenTranscript {
-		return false
-	}
-	s := msg.String()
-	switch s {
-	case "ctrl+o":
-		m.exitTranscriptScreen()
-		return true
-	case "ctrl+e":
-		m.transcriptShowAll = !m.transcriptShowAll
-		return true
-	case "esc", "q", "ctrl+c":
-		m.exitTranscriptScreen()
-		return true
-	case "up":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-1)
-		return true
-	case "down":
-		m.sticky = false
-		m.scrollTop += 1
-		return true
-	case "pgup":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
-		return true
-	case "pgdown":
-		m.sticky = false
-		m.scrollTop += listViewportH(m) / 2
-		return true
-	case "end":
-		m.sticky = true
-		m.scrollTop = 1 << 30
-		return true
-	default:
-		// Swallow typing so the prompt buffer is not mutated while browsing (TS has no prompt in transcript).
-		return true
-	}
 }
 
 func transcriptFooterLines(narrow, showAll bool) []string {
@@ -111,11 +69,19 @@ func transcriptFooterLines(narrow, showAll bool) []string {
 	if showAll {
 		showAllHint = "on"
 	}
-	line := fmt.Sprintf("Transcript · %s toggle · ctrl+e show-all %s · Esc/q/ctrl+c close", toggle, showAllHint)
+	line := fmt.Sprintf("Transcript · %s toggle · ctrl+e expand %s · / search · Esc/q/ctrl+c close", toggle, showAllHint)
 	if narrow {
-		line = fmt.Sprintf("Transcript · %s · ctrl+e %s · Esc", toggle, showAllHint)
+		line = fmt.Sprintf("Transcript · %s · ctrl+e %s · / · Esc", toggle, showAllHint)
 	}
 	return []string{line}
+}
+
+func transcriptChromeFootLines(m *model, narrow bool) []string {
+	lines := transcriptFooterLines(narrow, m.transcriptShowAll)
+	if extra := transcriptSearchStatusLines(m); len(extra) > 0 {
+		lines = append(lines, extra...)
+	}
+	return lines
 }
 
 func joinFooterLines(lines []string, cols int) string {

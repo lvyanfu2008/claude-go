@@ -37,27 +37,38 @@ type Segment struct {
 
 const maxDisplayNest = 8
 
-// SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
-func SegmentsFromMessage(msg types.Message) []Segment {
-	return segmentsFromMessageDepth(msg, 0)
+// RenderOpts optional flags for transcript-style rendering (TS Messages.tsx showAllInTranscript).
+type RenderOpts struct {
+	// ShowAllInTranscript expands collapsed_read_search and grouped_tool_use bodies (gou-demo ctrl+e in transcript).
+	ShowAllInTranscript bool
 }
 
-func segmentsFromMessageDepth(msg types.Message, depth int) []Segment {
+// SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
+func SegmentsFromMessage(msg types.Message) []Segment {
+	return SegmentsFromMessageOpts(msg, nil)
+}
+
+// SegmentsFromMessageOpts is like [SegmentsFromMessage] with optional transcript expand (nil opts == default).
+func SegmentsFromMessageOpts(msg types.Message, opts *RenderOpts) []Segment {
+	return segmentsFromMessageDepthOpts(msg, 0, opts)
+}
+
+func segmentsFromMessageDepthOpts(msg types.Message, depth int, opts *RenderOpts) []Segment {
 	if depth > maxDisplayNest {
 		return []Segment{{Kind: SegUnknown, Text: "…"}}
 	}
 	msg = NormalizeMessageJSON(msg)
 	switch msg.Type {
 	case types.MessageTypeGroupedToolUse:
-		return segmentsGroupedToolUse(msg, depth)
+		return segmentsGroupedToolUse(msg, depth, opts)
 	case types.MessageTypeCollapsedReadSearch:
-		return segmentsCollapsedReadSearch(msg, depth)
+		return segmentsCollapsedReadSearch(msg, depth, opts)
 	default:
 		return segmentsFromContentArray(msg)
 	}
 }
 
-func segmentsGroupedToolUse(msg types.Message, depth int) []Segment {
+func segmentsGroupedToolUse(msg types.Message, depth int, opts *RenderOpts) []Segment {
 	var sb strings.Builder
 	sb.WriteString("grouped_tool_use")
 	if msg.ToolName != "" {
@@ -66,14 +77,53 @@ func segmentsGroupedToolUse(msg types.Message, depth int) []Segment {
 	}
 	sb.WriteString(fmt.Sprintf(" · %d assistant · %d results", len(msg.Messages), len(msg.Results)))
 	out := []Segment{{Kind: SegGroupedToolUse, Text: strings.TrimSpace(sb.String())}}
-	if msg.DisplayMessage != nil {
-		out = append(out, segmentsFromMessageDepth(*msg.DisplayMessage, depth+1)...)
+	if opts != nil && opts.ShowAllInTranscript {
+		for i := range msg.Messages {
+			out = append(out, segmentsFromMessageDepthOpts(msg.Messages[i], depth+1, opts)...)
+		}
+		for i := range msg.Results {
+			out = append(out, segmentsFromMessageDepthOpts(msg.Results[i], depth+1, opts)...)
+		}
+	} else if msg.DisplayMessage != nil {
+		out = append(out, segmentsFromMessageDepthOpts(*msg.DisplayMessage, depth+1, opts)...)
 	}
 	return out
 }
 
-func segmentsCollapsedReadSearch(msg types.Message, depth int) []Segment {
+func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts) []Segment {
 	summary := SearchReadSummaryTextFromMessage(false, msg)
+	if opts != nil && opts.ShowAllInTranscript {
+		var parts []string
+		if strings.TrimSpace(summary) != "" {
+			parts = append(parts, strings.TrimSpace(summary))
+		}
+		if len(msg.ReadFilePaths) > 0 {
+			parts = append(parts, "Files:\n- "+strings.Join(msg.ReadFilePaths, "\n- "))
+		}
+		if len(msg.SearchArgs) > 0 {
+			parts = append(parts, "Search terms:\n- "+strings.Join(msg.SearchArgs, "\n- "))
+		}
+		text := strings.Join(parts, "\n")
+		if text == "" {
+			text = "…"
+		}
+		out := []Segment{{Kind: SegCollapsedReadSearch, Text: text}}
+		if msg.LatestDisplayHint != nil {
+			h := strings.TrimSpace(*msg.LatestDisplayHint)
+			if h != "" {
+				h = strings.ReplaceAll(h, "\r\n", "\n")
+				h = strings.ReplaceAll(h, "\n", " ")
+				if len(h) > 400 {
+					h = h[:400] + "…"
+				}
+				out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + h})
+			}
+		}
+		if msg.DisplayMessage != nil {
+			out = append(out, segmentsFromMessageDepthOpts(*msg.DisplayMessage, depth+1, opts)...)
+		}
+		return out
+	}
 	if summary == "" {
 		summary = "…"
 	}
@@ -91,7 +141,7 @@ func segmentsCollapsedReadSearch(msg types.Message, depth int) []Segment {
 		}
 	}
 	if msg.DisplayMessage != nil {
-		out = append(out, segmentsFromMessageDepth(*msg.DisplayMessage, depth+1)...)
+		out = append(out, segmentsFromMessageDepthOpts(*msg.DisplayMessage, depth+1, opts)...)
 	}
 	return out
 }

@@ -9,7 +9,7 @@ import (
 	"goc/types"
 )
 
-// CtrlOToExpandHint is the static transcript-expand hint (gou-demo: ctrl+o opens TS-style transcript screen; hint still matches Ink CtrlOToExpand wording).
+// CtrlOToExpandHint is the static transcript-expand hint (gou-demo: ctrl+o opens transcript; ctrl+e uses [RenderOpts.ShowAllInTranscript] to expand rows; hint still matches Ink CtrlOToExpand wording).
 const CtrlOToExpandHint = " (ctrl+o to expand)"
 
 // SearchReadSummaryText builds a comma-separated summary like TS getSearchReadSummaryText.
