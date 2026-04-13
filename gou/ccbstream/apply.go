@@ -69,6 +69,7 @@ func Apply(store *conversation.Store, ev StreamEvent) {
 			Timestamp: &ts,
 		})
 	case "usage":
+		store.AddUsage(ev.InputTokens, ev.OutputTokens)
 	case "execute_tool":
 		// Client must run the tool and write tool_result; we only surface a placeholder for replay visibility.
 		flushStreamingAssistant(store)

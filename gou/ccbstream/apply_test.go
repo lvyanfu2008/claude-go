@@ -43,6 +43,15 @@ func TestApply_toolUse(t *testing.T) {
 	}
 }
 
+func TestApply_usageAccumulates(t *testing.T) {
+	st := &conversation.Store{ConversationID: "t"}
+	Apply(st, StreamEvent{Type: "usage", InputTokens: 100, OutputTokens: 20})
+	Apply(st, StreamEvent{Type: "usage", InputTokens: 30, OutputTokens: 5})
+	if st.UsageInputTotal != 130 || st.UsageOutputTotal != 25 || st.TotalUsageTokens() != 155 {
+		t.Fatalf("usage %+v", st)
+	}
+}
+
 func TestApply_executeToolPlaceholder(t *testing.T) {
 	st := &conversation.Store{ConversationID: "t"}
 	Apply(st, StreamEvent{

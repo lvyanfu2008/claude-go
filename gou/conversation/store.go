@@ -10,6 +10,10 @@ type Store struct {
 	ConversationID string
 	Messages       []types.Message
 	StreamingText  string
+
+	// UsageInputTotal / UsageOutputTotal sum ccbstream "usage" events (TS getTotalInputTokens / getTotalOutputTokens path).
+	UsageInputTotal  int
+	UsageOutputTotal int
 }
 
 // ItemKey mirrors Messages.tsx messageKey: `${uuid}-${conversationId}`.
@@ -39,4 +43,21 @@ func (s *Store) ClearStreaming() {
 // AppendMessage appends a normalized message (caller sets Type / UUID / fields).
 func (s *Store) AppendMessage(m types.Message) {
 	s.Messages = append(s.Messages, m)
+}
+
+// AddUsage accumulates token counts from stream usage lines (Anthropic per-turn usage on the wire).
+func (s *Store) AddUsage(inputTokens, outputTokens int) {
+	if inputTokens < 0 {
+		inputTokens = 0
+	}
+	if outputTokens < 0 {
+		outputTokens = 0
+	}
+	s.UsageInputTotal += inputTokens
+	s.UsageOutputTotal += outputTokens
+}
+
+// TotalUsageTokens returns input+output totals for status UI.
+func (s *Store) TotalUsageTokens() int {
+	return s.UsageInputTotal + s.UsageOutputTotal
 }

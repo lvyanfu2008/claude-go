@@ -85,6 +85,17 @@ func formatCostUSD(x float64) string {
 	return fmt.Sprintf("$%.4f", x)
 }
 
+// effectiveUsedTokens prefers ccbstream usage totals when any usage line was applied (TS session totals).
+func (m *model) effectiveUsedTokens() int {
+	if m.store == nil {
+		return 0
+	}
+	if u := m.store.TotalUsageTokens(); u > 0 {
+		return u
+	}
+	return estimateMessagesSizeTokens(m.store.Messages)
+}
+
 func (m *model) builtinStatusLineView() string {
 	if gouDemoBuiltinStatusLineDisabled() || m.uiScreen == gouDemoScreenTranscript {
 		return ""
@@ -96,7 +107,7 @@ func (m *model) builtinStatusLineView() string {
 	if modelName == "" {
 		modelName = pui.DefaultMainLoopModelForDemo()
 	}
-	used := estimateMessagesSizeTokens(m.store.Messages)
+	used := m.effectiveUsedTokens()
 	win := defaultContextWindowForModel(modelName)
 	pct := 0
 	if win > 0 {
