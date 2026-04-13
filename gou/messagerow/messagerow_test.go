@@ -36,6 +36,41 @@ func TestSegments_toolResult(t *testing.T) {
 	if len(segs) != 1 || segs[0].Kind != SegToolResult {
 		t.Fatalf("%+v", segs)
 	}
+	if !strings.Contains(segs[0].Text, "ok") {
+		t.Fatalf("default opts should include body preview, got %q", segs[0].Text)
+	}
+}
+
+func TestSegments_toolResult_foldedWhenOpts(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]any{
+		{"type": "tool_result", "tool_use_id": "x1", "content": "secret-body"},
+	})
+	msg := types.Message{Type: types.MessageTypeUser, Content: raw}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{FoldToolResultBody: true})
+	if len(segs) != 1 || segs[0].Kind != SegToolResult || !segs[0].ToolBodyOmitted {
+		t.Fatalf("%+v", segs[0])
+	}
+	if strings.Contains(segs[0].Text, "secret") {
+		t.Fatalf("body should be omitted, got %q", segs[0].Text)
+	}
+	if !strings.Contains(segs[0].Text, "tool_use_id=x1") {
+		t.Fatalf("want id line, got %q", segs[0].Text)
+	}
+}
+
+func TestSegments_toolResult_verboseUnfoldsDespiteOpts(t *testing.T) {
+	t.Setenv("GOU_DEMO_VERBOSE_TOOL_OUTPUT", "1")
+	raw, _ := json.Marshal([]map[string]any{
+		{"type": "tool_result", "tool_use_id": "x1", "content": "full-body"},
+	})
+	msg := types.Message{Type: types.MessageTypeUser, Content: raw}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{FoldToolResultBody: true})
+	if len(segs) != 1 || segs[0].ToolBodyOmitted {
+		t.Fatalf("%+v", segs[0])
+	}
+	if !strings.Contains(segs[0].Text, "full-body") {
+		t.Fatalf("verbose should show body, got %q", segs[0].Text)
+	}
 }
 
 func TestSegments_assistantEmptyTextBlocksShowsPlaceholder(t *testing.T) {

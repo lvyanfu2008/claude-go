@@ -21,7 +21,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, tool_result bodies are folded to a one-line stub with the same (ctrl+o to expand) hint; transcript view shows the full preview. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -507,18 +507,18 @@ type model struct {
 	lastEmittedTitlePlain string
 
 	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozen lengths).
-	uiScreen              gouDemoScreen
-	transcriptFreezeN     int
-	transcriptShowAll     bool
-	transcriptDumpMode    bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
-	promptSavedScrollTop  int
-	promptSavedSticky     bool
+	uiScreen             gouDemoScreen
+	transcriptFreezeN    int
+	transcriptShowAll    bool
+	transcriptDumpMode   bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
+	promptSavedScrollTop int
+	promptSavedSticky    bool
 
 	programUsesAltScreen bool // set at startup; [ may tea.ExitAltScreen until transcript exit
 
-	transcriptEditorBusy    bool
-	transcriptEditorStatus  string
-	transcriptEditorGen     int
+	transcriptEditorBusy   bool
+	transcriptEditorStatus string
+	transcriptEditorGen    int
 
 	transcriptSearchOpen   bool
 	transcriptSearchQuery  string
@@ -1364,6 +1364,9 @@ func (m *model) rebuildHeightCache() {
 
 // measureMessageRows matches final View styling (ANSI + wrap) for VirtualMessageList heightCache parity.
 func (m *model) messagerowOpts() *messagerow.RenderOpts {
+	if m.uiScreen == gouDemoScreenPrompt {
+		return &messagerow.RenderOpts{FoldToolResultBody: true}
+	}
 	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptShowAll || m.transcriptDumpMode) {
 		return &messagerow.RenderOpts{ShowAllInTranscript: true}
 	}
@@ -1621,7 +1624,11 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				st = lipgloss.NewStyle().Foreground(theme.ToolError())
 			}
 			body := textutil.LinkifyOSC8(seg.Text)
-			parts = append(parts, st.Render("↩ "+body))
+			line := st.Render("↩ " + body)
+			if seg.ToolBodyOmitted && toolUseCtrlOHint {
+				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			}
+			parts = append(parts, line)
 		case messagerow.SegThinking:
 			body := textutil.LinkifyOSC8(seg.Text)
 			parts = append(parts, lipgloss.NewStyle().Bold(true).Render("● "+body))
@@ -1660,7 +1667,11 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				st = lipgloss.NewStyle().Foreground(theme.ToolError())
 			}
 			body := textutil.LinkifyOSC8(seg.Text)
-			parts = append(parts, st.Render("✧ "+body))
+			line := st.Render("✧ " + body)
+			if seg.ToolBodyOmitted && toolUseCtrlOHint {
+				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			}
+			parts = append(parts, line)
 		case messagerow.SegGroupedToolUse:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ "+seg.Text))
 		case messagerow.SegCollapsedReadSearch:

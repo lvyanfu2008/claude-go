@@ -41,6 +41,8 @@ type Segment struct {
 	ToolHint   string
 	// IsToolError is set for tool_result / advisor blocks when TS is_error is true (OutputLine error styling).
 	IsToolError bool
+	// ToolBodyOmitted is true when RenderOpts.FoldToolResultBody omitted block output (prompt stub; ctrl+o opens transcript).
+	ToolBodyOmitted bool
 }
 
 const maxDisplayNest = 8
@@ -49,6 +51,8 @@ const maxDisplayNest = 8
 type RenderOpts struct {
 	// ShowAllInTranscript expands collapsed_read_search and grouped_tool_use bodies (gou-demo ctrl+e in transcript).
 	ShowAllInTranscript bool
+	// FoldToolResultBody hides tool_result / advisor_tool_result payload in the main prompt (gou-demo: ctrl+o opens transcript to read).
+	FoldToolResultBody bool
 }
 
 // SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
@@ -74,7 +78,7 @@ func segmentsFromMessageDepthOpts(msg types.Message, depth int, opts *RenderOpts
 	case types.MessageTypeCollapsedReadSearch:
 		return segmentsCollapsedReadSearch(msg, depth, opts)
 	default:
-		return segmentsFromContentArray(msg)
+		return segmentsFromContentArray(msg, opts)
 	}
 }
 
@@ -171,7 +175,7 @@ func compactJoin(ss []string, maxN, maxRunes int) string {
 	return compactJSON(s, maxRunes)
 }
 
-func segmentsFromContentArray(msg types.Message) []Segment {
+func segmentsFromContentArray(msg types.Message, opts *RenderOpts) []Segment {
 	if len(msg.Content) == 0 {
 		if msg.Type == types.MessageTypeUser || msg.Type == types.MessageTypeAssistant {
 			return []Segment{{Kind: SegTextMarkdown, Text: "[" + string(msg.Type) + " · empty content]"}}
@@ -187,7 +191,7 @@ func segmentsFromContentArray(msg types.Message) []Segment {
 	}
 	var out []Segment
 	for _, b := range blocks {
-		out = append(out, segmentFromBlock(b)...)
+		out = append(out, segmentFromBlock(b, opts)...)
 	}
 	if len(out) == 0 && (msg.Type == types.MessageTypeAssistant || msg.Type == types.MessageTypeUser) {
 		// e.g. content: [{type:"text",text:""}] or only unrecognized blocks — avoid a blank body under the role header.
@@ -196,7 +200,7 @@ func segmentsFromContentArray(msg types.Message) []Segment {
 	return out
 }
 
-func segmentFromBlock(b types.MessageContentBlock) []Segment {
+func segmentFromBlock(b types.MessageContentBlock, opts *RenderOpts) []Segment {
 	switch b.Type {
 	case "text":
 		if strings.TrimSpace(b.Text) == "" {
@@ -214,9 +218,13 @@ func segmentFromBlock(b types.MessageContentBlock) []Segment {
 			sb.WriteString(" id=")
 			sb.WriteString(b.ID)
 		}
+		isErr := b.IsError != nil && *b.IsError
+		fold := opts != nil && opts.FoldToolResultBody && !VerboseToolOutputEnabled()
+		if fold {
+			return []Segment{{Kind: SegAdvisorToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr, ToolBodyOmitted: true}}
+		}
 		sb.WriteByte('\n')
 		sb.WriteString(toolResultContentPreview(b.Content))
-		isErr := b.IsError != nil && *b.IsError
 		return []Segment{{Kind: SegAdvisorToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr}}
 	case "tool_result":
 		var sb strings.Builder
@@ -228,6 +236,10 @@ func segmentFromBlock(b types.MessageContentBlock) []Segment {
 		isErr := b.IsError != nil && *b.IsError
 		if isErr {
 			sb.WriteString(" [error]")
+		}
+		fold := opts != nil && opts.FoldToolResultBody && !VerboseToolOutputEnabled()
+		if fold {
+			return []Segment{{Kind: SegToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr, ToolBodyOmitted: true}}
 		}
 		sb.WriteByte('\n')
 		sb.WriteString(toolResultContentPreview(b.Content))
