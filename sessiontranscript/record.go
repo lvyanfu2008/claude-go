@@ -53,10 +53,22 @@ type Store struct {
 	// Sidechain / agent path (RecordSidechainTranscript)
 	AgentSubdir string
 
-	// FileHistorySnapshotOnUser when true, appends a TS-shaped JSONL row
-	// {type:"file-history-snapshot",...} after each newly persisted non-meta user
-	// message (sessionStorage.insertFileHistorySnapshot parity; empty trackedFileBackups).
+	// FileHistorySnapshotOnUser when true, may append a TS-shaped JSONL row
+	// {type:"file-history-snapshot",...} immediately before a newly persisted non-meta user
+	// message (sessionStorage.insertFileHistorySnapshot shape; empty trackedFileBackups when
+	// Go has no file-backup pipeline). Skipped when file checkpointing is disabled (same as TS
+	// fileHistoryEnabled() false — see [fileCheckpointingDisabled]).
 	FileHistorySnapshotOnUser bool
+	// FileHistorySnapshotOnce when true, append at most one such stub line per Store lifetime
+	// (first eligible user only). TS writes one snapshot per fileHistoryMakeSnapshot call when
+	// checkpointing is on; empty Go stubs every turn inflate JSONL — use Once for demo parity.
+	FileHistorySnapshotOnce bool
+
+	fileHistoryStubEmitted bool
+
+	// currentSessionLastPrompt mirrors TS sessionStorage currentSessionLastPrompt
+	// (tail last-prompt JSONL rows for resume picker / lite metadata).
+	currentSessionLastPrompt string
 
 	// TranscriptFile when non-empty overrides the computed JSONL path (tests).
 	TranscriptFile string
@@ -170,6 +182,10 @@ func isUserMetaMessage(m types.Message) bool {
 }
 
 // appendTSFileHistorySnapshotLine mirrors sessionStorage FileHistorySnapshotMessage JSON shape.
+func fileCheckpointingDisabled() bool {
+	return envTruthy("CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING")
+}
+
 func appendTSFileHistorySnapshotLine(path, messageID string, isSnapshotUpdate bool) error {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
@@ -314,6 +330,9 @@ func (s *Store) RecordTranscript(ctx context.Context, messages []types.Message, 
 			if err := writeMetadataLines(path, s.SessionID, s.InitialMetadata); err != nil {
 				return "", err
 			}
+			if lp := strings.TrimSpace(s.InitialMetadata.LastPrompt); lp != "" {
+				s.currentSessionLastPrompt = FlattenLastPromptCache(lp)
+			}
 		}
 	}
 
@@ -379,18 +398,36 @@ func (s *Store) RecordTranscript(ctx context.Context, messages []types.Message, 
 			line["slug"] = slug
 		}
 
+		if s.FileHistorySnapshotOnUser && m.Type == types.MessageTypeUser && !isUserMetaMessage(m) && !fileCheckpointingDisabled() {
+			if !s.FileHistorySnapshotOnce || !s.fileHistoryStubEmitted {
+				if err := appendTSFileHistorySnapshotLine(path, m.UUID, false); err != nil {
+					return "", err
+				}
+				s.fileHistoryStubEmitted = true
+			}
+		}
 		if err := appendJSONL(path, line); err != nil {
 			return "", err
 		}
 		existing[m.UUID] = struct{}{}
-		if s.FileHistorySnapshotOnUser && m.Type == types.MessageTypeUser && !isUserMetaMessage(m) {
-			if err := appendTSFileHistorySnapshotLine(path, m.UUID, false); err != nil {
-				return "", err
-			}
-		}
 		if IsChainParticipant(m) {
 			parentUUID = m.UUID
 			lastRecorded = m.UUID
+		}
+	}
+
+	// TS insertMessageChain: cache last prompt from this batch; reAppendSessionMetadata
+	// appends last-prompt at EOF whenever new lines land and cache is set.
+	if text := FirstMeaningfulUserMessageTextContent(cleaned); text != "" {
+		s.currentSessionLastPrompt = FlattenLastPromptCache(text)
+	}
+	if len(newMsgs) > 0 && strings.TrimSpace(s.currentSessionLastPrompt) != "" {
+		if err := appendJSONL(path, map[string]any{
+			"type":       "last-prompt",
+			"lastPrompt": s.currentSessionLastPrompt,
+			"sessionId":  s.SessionID,
+		}); err != nil {
+			return "", err
 		}
 	}
 
