@@ -7,7 +7,7 @@ Reference: [`claude-code/src/screens/REPL.tsx`](../../../claude-code/src/screens
 | TS | gou-demo (this port) | Notes |
 |----|----------------------|--------|
 | `ctrl+o` → `app:toggleTranscript` | `ctrl+o` toggles `prompt` ↔ `transcript` | Matches default keybinding |
-| Enter transcript → `onEnterTranscript` freezes lengths | On enter, `transcriptFreezeN = len(Messages)` | TS stores `messagesLength` + `streamingToolUsesLength`; Go uses message count only (no separate streaming tool-use map) |
+| Enter transcript → `onEnterTranscript` freezes lengths | On enter, `transcriptFrozen = &frozenTranscriptSnapshot{MessagesLen, StreamingToolUsesLen}` (`transcript_screen.go`) | Matches TS `{ messagesLength, streamingToolUsesLength }`; `StreamingToolUsesLen` is 0 until gou-demo tracks a streaming tool-use list like TS. |
 | Exit transcript: `transcript:exit` on `Esc` / `ctrl+c` when search bar closed | `Esc` / `ctrl+c` / `q` exit transcript when **search bar is closed** | In **prompt** mode, `q` / `Esc` / `ctrl+c` still **quit** the program (unchanged) |
 | Transcript `q` (less-style) | Same as above when `screen == transcript` | TS `useInput` bare `q` calls `handleExitTranscript` |
 | `ctrl+e` → `transcript:toggleShowAll` | `ctrl+e` toggles `transcriptShowAll` | Drives [messagerow.RenderOpts.ShowAllInTranscript](../../gou/messagerow/segment.go): expands `collapsed_read_search` (files + search terms) and inlines `grouped_tool_use` nested messages/results |

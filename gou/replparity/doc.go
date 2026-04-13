@@ -22,7 +22,7 @@
 // # Screen / transcript (TS Screen, ctrl+o, frozen tail)
 //
 //   - gou-demo: gouDemoScreenPrompt | gouDemoScreenTranscript (cmd/gou-demo/transcript_screen.go)
-//   - Enter/exit transcript, freeze count: enterTranscriptScreen, exitTranscriptScreen, transcriptFreezeN
+//   - Enter/exit transcript, frozen snapshot: enterTranscriptScreen, exitTranscriptScreen, transcriptFrozen (*frozenTranscriptSnapshot)
 //   - View split: cmd/gou-demo/main.go View, listViewportH, scrollItemKeys
 //   - Parity checklist: docs/plans/gou-demo-transcript-ts-parity.md
 //

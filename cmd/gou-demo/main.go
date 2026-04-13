@@ -507,9 +507,9 @@ type model struct {
 	spinnerFrame          int
 	lastEmittedTitlePlain string
 
-	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozen lengths).
+	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozenTranscriptState).
 	uiScreen             gouDemoScreen
-	transcriptFreezeN    int
+	transcriptFrozen     *frozenTranscriptSnapshot // nil in prompt; set on enterTranscriptScreen
 	transcriptShowAll    bool
 	transcriptDumpMode   bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
 	promptSavedScrollTop int

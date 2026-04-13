@@ -28,7 +28,11 @@ func TestScrollItemKeysTranscriptSubset(t *testing.T) {
 			{UUID: "a"}, {UUID: "b"}, {UUID: "c"},
 		},
 	}
-	m := &model{store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 2}
+	m := &model{
+		store:            st,
+		uiScreen:         gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 2, StreamingToolUsesLen: 0},
+	}
 	keys := m.scrollItemKeys()
 	if len(keys) != 2 {
 		t.Fatalf("len keys: got %d want 2", len(keys))
@@ -65,6 +69,12 @@ func TestExitTranscriptScreenWithPostCmd_altScreenAfterDump(t *testing.T) {
 	if m.transcriptDumpMode {
 		t.Fatal("dump mode should clear on exit")
 	}
+	if m.transcriptFrozen != nil {
+		t.Fatal("frozen snapshot should clear on exit")
+	}
+	if m.transcriptShowAll {
+		t.Fatal("showAll should reset on exit (TS handleExitTranscript)")
+	}
 	if cmd() == nil {
 		t.Fatal("expected tea.Msg from post cmd")
 	}
@@ -80,5 +90,29 @@ func TestExitTranscriptScreenWithPostCmd_noCmdWithoutAltOrDump(t *testing.T) {
 	}
 	if m.exitTranscriptScreenWithPostCmd() != nil {
 		t.Fatal("expected nil cmd when not leaving dump mode")
+	}
+}
+
+func TestEnterExitTranscript_frozenSnapshotMatchesTS(t *testing.T) {
+	t.Parallel()
+	st := &conversation.Store{
+		ConversationID: "c",
+		Messages:       []types.Message{{UUID: "1"}, {UUID: "2"}},
+	}
+	m := &model{store: st, uiScreen: gouDemoScreenPrompt, scrollTop: 3, sticky: false}
+	m.transcriptShowAll = true
+	m.enterTranscriptScreen()
+	if m.transcriptFrozen == nil || m.transcriptFrozen.MessagesLen != 2 || m.transcriptFrozen.StreamingToolUsesLen != 0 {
+		t.Fatalf("frozen %+v", m.transcriptFrozen)
+	}
+	if m.transcriptShowAll {
+		t.Fatal("enter transcript should reset showAll (TS toggle sets setShowAllInTranscript(false))")
+	}
+	m.exitTranscriptScreen()
+	if m.transcriptFrozen != nil {
+		t.Fatal("exit should clear frozen state (TS onExitTranscript)")
+	}
+	if m.transcriptShowAll {
+		t.Fatal("exit should reset showAll")
 	}
 }

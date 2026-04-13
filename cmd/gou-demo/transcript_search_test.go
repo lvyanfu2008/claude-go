@@ -17,14 +17,14 @@ func TestTranscriptSpaceFullPageDown(t *testing.T) {
 		Messages:       []types.Message{{UUID: "a"}},
 	}
 	m := &model{
-		store:             st,
-		uiScreen:          gouDemoScreenTranscript,
-		transcriptFreezeN: 1,
-		height:            40,
-		width:             100,
-		cols:              80,
-		titleH:            1,
-		scrollTop:         0,
+		store:            st,
+		uiScreen:         gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+		height:           40,
+		width:            100,
+		cols:             80,
+		titleH:           1,
+		scrollTop:        0,
 	}
 	before := m.scrollTop
 	vp := listViewportH(m)
@@ -40,8 +40,9 @@ func TestTranscriptSpaceFullPageDown(t *testing.T) {
 func TestTranscriptCtrlNLineDown(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{
-		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
-		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 5,
+		store: st, uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 5,
 	}
 	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlN})
 	if !handled {
@@ -56,8 +57,9 @@ func TestTranscriptHomeEndTopBottom(t *testing.T) {
 	t.Parallel()
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{
-		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
-		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 42,
+		store: st, uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 42,
 	}
 	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyHome})
 	if !handled {
@@ -80,8 +82,9 @@ func TestTranscriptCtrlHomeCtrlEndTopBottom(t *testing.T) {
 	t.Parallel()
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{
-		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
-		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 99,
+		store: st, uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 99,
 	}
 	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlHome})
 	if !handled {
@@ -102,8 +105,9 @@ func TestTranscriptCtrlHomeCtrlEndTopBottom(t *testing.T) {
 func TestTranscriptSearchOpenDisablesPagerArrows(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{
-		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
-		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 100,
+		store: st, uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 100,
 		transcriptSearchOpen: true,
 	}
 	before := m.scrollTop
@@ -120,8 +124,9 @@ func TestTranscriptSearchOpenDisablesCtrlHome(t *testing.T) {
 	t.Parallel()
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{
-		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
-		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 50,
+		store: st, uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 50,
 		transcriptSearchOpen: true,
 	}
 	before := m.scrollTop
@@ -150,9 +155,12 @@ func testTranscriptModelWithMessages(t *testing.T, msgs []types.Message) *model 
 	t.Helper()
 	st := &conversation.Store{ConversationID: "c1", Messages: msgs}
 	return &model{
-		store:                st,
-		uiScreen:             gouDemoScreenTranscript,
-		transcriptFreezeN:    len(msgs),
+		store:    st,
+		uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{
+			MessagesLen:          len(msgs),
+			StreamingToolUsesLen: 0,
+		},
 		height:               40,
 		width:                120,
 		cols:                 100,

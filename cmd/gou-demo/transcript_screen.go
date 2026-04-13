@@ -17,6 +17,15 @@ const (
 	gouDemoScreenTranscript
 )
 
+// frozenTranscriptSnapshot mirrors REPL.tsx useState frozenTranscriptState:
+// { messagesLength, streamingToolUsesLength } (see handleEnterTranscript).
+// gou-demo has no separate streamingToolUses slice in the store; length stays 0
+// until a parity structure exists (Messages still freeze at toggle time).
+type frozenTranscriptSnapshot struct {
+	MessagesLen          int
+	StreamingToolUsesLen int
+}
+
 func clampTranscriptFreeze(freezeN, nMsgs int) int {
 	if nMsgs < 0 {
 		nMsgs = 0
@@ -34,7 +43,10 @@ func (m *model) transcriptEffectiveN() int {
 	if m.uiScreen != gouDemoScreenTranscript {
 		return len(m.store.Messages)
 	}
-	return clampTranscriptFreeze(m.transcriptFreezeN, len(m.store.Messages))
+	if m.transcriptFrozen == nil {
+		return len(m.store.Messages)
+	}
+	return clampTranscriptFreeze(m.transcriptFrozen.MessagesLen, len(m.store.Messages))
 }
 
 func (m *model) scrollItemKeys() []string {
@@ -50,7 +62,11 @@ func (m *model) enterTranscriptScreen() {
 	m.clearTranscriptSearchState()
 	m.promptSavedScrollTop = m.scrollTop
 	m.promptSavedSticky = m.sticky
-	m.transcriptFreezeN = len(m.store.Messages)
+	// TS: handleEnterTranscript sets frozen lengths; toggle handler also setShowAllInTranscript(false).
+	m.transcriptFrozen = &frozenTranscriptSnapshot{
+		MessagesLen:          len(m.store.Messages),
+		StreamingToolUsesLen: 0,
+	}
 	m.transcriptShowAll = false
 	m.transcriptDumpMode = false
 	m.uiScreen = gouDemoScreenTranscript
@@ -63,7 +79,9 @@ func (m *model) exitTranscriptScreen() {
 	m.uiScreen = gouDemoScreenPrompt
 	m.scrollTop = m.promptSavedScrollTop
 	m.sticky = m.promptSavedSticky
-	m.transcriptFreezeN = 0
+	// TS: handleExitTranscript / toggle clears frozenTranscriptState; exit also setShowAllInTranscript(false).
+	m.transcriptFrozen = nil
+	m.transcriptShowAll = false
 	m.transcriptDumpMode = false
 	m.transcriptEditorGen++
 	m.transcriptEditorBusy = false
