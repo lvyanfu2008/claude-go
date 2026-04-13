@@ -86,7 +86,8 @@ func SessionSpecificGuidanceFull(o GouDemoSystemOpts) string {
 	if _, ok := enabledToolNames[agentToolName]; ok {
 		bullets = append(bullets, agentToolSectionForOpts(o))
 	}
-	if _, hasAgent := enabledToolNames[agentToolName]; hasAgent && o.ExplorePlanAgentsEnabled && !o.ReplModeEnabled && !ForkSubagentEnabled(o) {
+	// TS getSessionSpecificGuidanceSection: explore bullets are not gated on isReplModeEnabled().
+	if _, hasAgent := enabledToolNames[agentToolName]; hasAgent && o.ExplorePlanAgentsEnabled && !ForkSubagentEnabled(o) {
 		searchTools := fmt.Sprintf("the %s or %s", globToolName, grepToolName)
 		if o.EmbeddedSearchTools {
 			searchTools = fmt.Sprintf("`find` or `grep` via the %s tool", bashToolName)
@@ -99,10 +100,13 @@ func SessionSpecificGuidanceFull(o GouDemoSystemOpts) string {
 	if b := skillSlashGuidanceBullet(enabledToolNames, o.SkillToolCommands); b != "" {
 		bullets = append(bullets, b)
 	}
+	// TS: DISCOVER_SKILLS_TOOL_NAME && hasSkills (Skill enabled + non-empty listing) && tool registered.
 	ds := strings.TrimSpace(o.DiscoverSkillsToolName)
 	if ds != "" && len(o.SkillToolCommands) > 0 {
-		if _, ok := enabledToolNames[ds]; ok {
-			bullets = append(bullets, DiscoverSkillsGuidance(ds))
+		if _, hasSkill := enabledToolNames[skillToolName]; hasSkill {
+			if _, ok := enabledToolNames[ds]; ok {
+				bullets = append(bullets, DiscoverSkillsGuidance(ds))
+			}
 		}
 	}
 	if _, ok := enabledToolNames[agentToolName]; ok && o.VerificationAgentGuidance {

@@ -30,6 +30,34 @@ func TestSessionSpecificGuidanceFull_includesAskUserAndDiscover(t *testing.T) {
 	}
 }
 
+func TestSessionSpecificGuidanceFull_discoverRequiresSkillToolLikeTS(t *testing.T) {
+	sk := []types.Command{{CommandBase: types.CommandBase{Name: "s", LoadedFrom: ptrStr("skills")}, Type: "prompt"}}
+	en := EnabledToolNames([]string{"DiscoverX", "AskUserQuestion"})
+	s := SessionSpecificGuidanceFull(GouDemoSystemOpts{
+		EnabledToolNames:       en,
+		SkillToolCommands:      sk,
+		DiscoverSkillsToolName: "DiscoverX",
+		NonInteractiveSession:  false,
+	})
+	if strings.Contains(s, "Skills relevant to your task") {
+		t.Fatalf("discover guidance without Skill tool enabled: %q", s)
+	}
+}
+
+func TestSessionSpecificGuidanceFull_exploreNotGatedOnReplMode(t *testing.T) {
+	en := EnabledToolNames([]string{agentToolName, globToolName, grepToolName})
+	s := SessionSpecificGuidanceFull(GouDemoSystemOpts{
+		EnabledToolNames:         en,
+		ExplorePlanAgentsEnabled: true,
+		ReplModeEnabled:          true,
+		EmbeddedSearchTools:      false,
+		NonInteractiveSession:    false,
+	})
+	if !strings.Contains(s, "subagent_type="+exploreAgentType) {
+		t.Fatalf("expected explore bullets when ReplModeEnabled (TS parity): %q", s)
+	}
+}
+
 func TestSessionSpecificGuidanceFull_agentAndExplore(t *testing.T) {
 	en := EnabledToolNames([]string{agentToolName, globToolName, grepToolName})
 	s := SessionSpecificGuidanceFull(GouDemoSystemOpts{
