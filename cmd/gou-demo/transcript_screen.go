@@ -69,9 +69,9 @@ func transcriptFooterLines(narrow, showAll bool) []string {
 	if showAll {
 		showAllHint = "on"
 	}
-	line := fmt.Sprintf("Transcript · %s toggle · ctrl+e expand %s · / search · Esc/q/ctrl+c close", toggle, showAllHint)
+	line := fmt.Sprintf("Transcript · %s toggle · ctrl+e %s · jk gG ctrl+udbf · / search · Esc/q/ctrl+c", toggle, showAllHint)
 	if narrow {
-		line = fmt.Sprintf("Transcript · %s · ctrl+e %s · / · Esc", toggle, showAllHint)
+		line = fmt.Sprintf("Transcript · %s · ctrl+e %s · jk · / · Esc", toggle, showAllHint)
 	}
 	return []string{line}
 }

@@ -11,7 +11,7 @@ Reference: [`claude-code/src/screens/REPL.tsx`](../../../claude-code/src/screens
 | Exit transcript: `transcript:exit` on `Esc` / `ctrl+c` when search bar closed | `Esc` / `ctrl+c` / `q` exit transcript when **search bar is closed** | In **prompt** mode, `q` / `Esc` / `ctrl+c` still **quit** the program (unchanged) |
 | Transcript `q` (less-style) | Same as above when `screen == transcript` | TS `useInput` bare `q` calls `handleExitTranscript` |
 | `ctrl+e` → `transcript:toggleShowAll` | `ctrl+e` toggles `transcriptShowAll` | Drives [messagerow.RenderOpts.ShowAllInTranscript](../../gou/messagerow/segment.go): expands `collapsed_read_search` (files + search terms) and inlines `grouped_tool_use` nested messages/results |
-| Scroll `g`/`G`/`j`/`k`/… | **Not ported** (ScrollKeybindingHandler) | gou-demo keeps **↑↓ PgUp PgDn End** in transcript |
+| Scroll `g`/`G`/`j`/`k`, `ctrl+u`/`ctrl+d`, `ctrl+b`/`ctrl+f`, bare `b` | **Ported** (subset of TS `modalPagerAction` in `ScrollKeybindingHandler.tsx`) | When **search bar closed**; **not** bare `space` (page down in less) to avoid accidental scroll |
 | Search `/`, bar `Esc` / `Enter`, `n`/`N`, resize clears | **`/`** opens search bar; **`Esc`** in bar clears search state (stay in transcript); **`Enter`** closes bar but keeps query for **`n`/`N`**; **`n`/`N`** step matches when bar closed and query non-empty; **column change** clears search | Plain-text substring match over frozen messages (no TS highlight overlay) |
 | `[` dump mode, `v` external editor | **Not ported** | Optional later milestone |
 | New model events while in transcript | **No auto-scroll** to tail | TS frozen slice ignores new tail until exit |
@@ -34,3 +34,11 @@ Reference: [`claude-code/src/screens/REPL.tsx`](../../../claude-code/src/screens
 
 - REPL tool permissions vs TS: [go-repl-permissions-parity.md](./go-repl-permissions-parity.md).
 - ReplBridge non-goal: [gou-demo-repl-bridge-scope.md](./gou-demo-repl-bridge-scope.md).
+
+## Phase 3 (optional, not yet in gou-demo)
+
+| TS transcript | Status |
+|-----------------|--------|
+| `[` dump to scrollback + expand all | Not implemented |
+| `v` open full transcript in `$VISUAL` / `$EDITOR` | Not implemented |
+| Modal pager bare `space` (full page down), `ctrl+n` / `ctrl+p` line scroll | Not implemented (space omitted intentionally) |

@@ -113,9 +113,9 @@ func replChromeTopBar(narrow bool) string {
 // replChromeTranscriptTopBar is the header line while TS-style transcript mode is active.
 func replChromeTranscriptTopBar(narrow bool) string {
 	if narrow {
-		return "TRANSCRIPT  ↑↓ Pg / ctrl+o ctrl+e Esc"
+		return "TRANSCRIPT  jk Pg / gG ctrl+udbf ctrl+o ctrl+e Esc"
 	}
-	return "TRANSCRIPT — frozen history · ↑↓ PgUp/PgDn End · ctrl+o close · ctrl+e expand · / search · Esc/q/ctrl+c close"
+	return "TRANSCRIPT — j/k line · g top · G End bottom · ctrl+u/d half-page · ctrl+b/f page · b page up · PgUpDn · / search · ctrl+o · ctrl+e · Esc"
 }
 
 // replChromeFooterHint is the faint line under the prompt.

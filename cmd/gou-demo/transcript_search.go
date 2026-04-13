@@ -210,6 +210,44 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) bool {
 		m.sticky = true
 		m.scrollTop = 1 << 30
 		return true
+	// TS ScrollKeybindingHandler modalPagerAction (transcript, no prompt): j/k/g/G, less ctrl+u/d/b/f.
+	// Not active while search bar is open (bare letters go into the query).
+	case "j":
+		m.sticky = false
+		m.scrollTop += 1
+		return true
+	case "k":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-1)
+		return true
+	case "g":
+		m.sticky = false
+		m.scrollTop = 0
+		return true
+	case "G", "shift+g":
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return true
+	case "ctrl+u":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		return true
+	case "ctrl+d":
+		m.sticky = false
+		m.scrollTop += listViewportH(m) / 2
+		return true
+	case "ctrl+b":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+		return true
+	case "ctrl+f":
+		m.sticky = false
+		m.scrollTop += listViewportH(m)
+		return true
+	case "b":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+		return true
 	default:
 		return true
 	}
