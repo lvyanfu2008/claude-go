@@ -22,10 +22,10 @@
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 // Read/Grep/Glob stream tail: default keeps each tool_use + tool_result as separate rows (avoids looking like history was cleared). Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 for TS-style merge into collapsed_read_search (gou/ccbstream/apply.go).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
-// Mouse: tea.WithMouseCellMotion enables wheel + left-drag on the message list (see mouse_message_list.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to turn off.
+// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: native pbcopy/xclip when available, tmux load-buffer in tmux, plus OSC 52 to the tty (see selection_clipboard.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Alternate screen (default) has no host scrollback scrollbar—use -no-alt-screen if you need normal-buffer scrollback. Optional TUI scrollbar: GOU_DEMO_NO_SCROLLBAR=1 hides the in-app strip beside the message list.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
@@ -469,7 +469,11 @@ type model struct {
 	pr     prompt.Model
 	width  int
 	height int
-	cols   int // content width for wrap + virtual scroll
+	cols   int // terminal content width (title/footer); message list may use msgBodyCols when a scrollbar strip is shown
+
+	// msgBodyCols is wrap width for virtual message rows (m.cols or m.cols-1). msgScrollbarW is 0 or 1.
+	msgBodyCols   int
+	msgScrollbarW int
 
 	permAsk           *permissionAskOverlay
 	slashPick         *slashPickerOverlay
@@ -542,6 +546,15 @@ type model struct {
 	// Message-list mouse scroll (see mouse_message_list.go; tea.WithMouseCellMotion).
 	msgListMouseDragging bool
 	msgListMouseLastY    int
+
+	// In-app selection (Shift+drag in message pane); copy via Ctrl+C when non-empty (TS ScrollKeybindingHandler).
+	selDragging          bool
+	selHas               bool
+	selAnchorR, selAnchorC int
+	selFocusR, selFocusC   int
+	lastMsgPaneLines     []string
+	lastMsgPaneBodyCols  int
+	copyStatus           string
 
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
@@ -624,7 +637,9 @@ func main() {
 	if !noAltScreen {
 		opts = append(opts, tea.WithAltScreen())
 	}
-	opts = append(opts, tea.WithMouseCellMotion())
+	if gouDemoMouseCellMotionEnabled() {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
 	if *streamStdin {
 		tty, err := os.Open("/dev/tty")
 		if err == nil {
@@ -802,6 +817,12 @@ func (m *model) Init() tea.Cmd {
 	return nil
 }
 
+// teaGlobalRedrawCmd mirrors TS useGlobalKeybindings app:redraw (ctrl+l): clear the terminal
+// so the next frame repaints fully (e.g. after the host cleared scrollback with Cmd+K).
+func teaGlobalRedrawCmd() tea.Cmd {
+	return func() tea.Msg { return tea.ClearScreen() }
+}
+
 func (m *model) inputAreaHeight() int {
 	n := m.pr.LineCount() + 2
 	if m.uiScreen != gouDemoScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
@@ -835,6 +856,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		oldCols := m.cols
+		oldH := m.height
 		m.width = msg.Width
 		m.height = msg.Height
 		m.cols = max(12, msg.Width-4)
@@ -842,9 +864,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.uiScreen == gouDemoScreenTranscript && oldCols > 0 && oldCols != m.cols {
 			m.clearTranscriptSearchState()
 		}
-		if oldCols > 0 && oldCols != m.cols && len(m.heightCache) > 0 {
-			virtualscroll.ScaleHeightCache(m.heightCache, oldCols, m.cols)
-		} else {
+		// Always rebuild (not ScaleHeightCache only): message wrap width may be m.cols-1 when the TUI scrollbar strip is shown.
+		if oldCols != m.cols || oldH != m.height || len(m.heightCache) == 0 {
 			m.rebuildHeightCache()
 		}
 		return m, nil
@@ -866,6 +887,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouTranscriptEditorClearStatusMsg:
 		return m, m.handleTranscriptEditorChainMsg(msg)
 
+	case gouDemoCopyStatusClearMsg:
+		m.copyStatus = ""
+		return m, nil
+
 	case tea.MouseMsg:
 		if m.tryHandleMessageListMouse(msg) {
 			return m, nil
@@ -884,6 +909,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		if msg.String() == "ctrl+l" {
+			return m, teaGlobalRedrawCmd()
+		}
+		// TS ScrollKeybindingHandler: Ctrl+C copies when a selection exists (terminals often send \x03 without shift).
+		if m.msgSelectionActive() && msg.Type == tea.KeyCtrlC {
+			t := m.selectionTextForCopy()
+			if t != "" {
+				return m, m.selectionCopyToClipboardCmd(t)
+			}
+			return m, nil
+		}
+		if msg.String() == "esc" && (m.selDragging || m.msgSelectionActive()) {
+			m.clearMsgSelection()
+			return m, nil
+		}
 		if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
 			m.enterTranscriptScreen()
 			m.slashPick = nil
@@ -892,6 +932,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if handled, cmd := m.handleTranscriptKey(msg); handled {
 			return m, cmd
+		}
+		if m.uiScreen == gouDemoScreenPrompt && isListViewportScrollKey(msg.String()) {
+			m.clearMsgSelection()
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -1415,9 +1458,12 @@ func (m *model) statusLineString() string {
 	}
 	n := len(m.store.Messages)
 	vk := len(m.store.ItemKeys())
-	return lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf(
-		"theme=%s msgs=%d items=%d cols=%d sticky=%v",
-		theme.ActiveTheme(), n, vk, m.cols, m.sticky))
+	s := fmt.Sprintf("theme=%s msgs=%d items=%d cols=%d sticky=%v",
+		theme.ActiveTheme(), n, vk, m.cols, m.sticky)
+	if strings.TrimSpace(m.copyStatus) != "" {
+		s += " · " + m.copyStatus
+	}
+	return lipgloss.NewStyle().Faint(true).Render(s)
 }
 
 func (m *model) rebuildHeightCache() {
@@ -1425,24 +1471,27 @@ func (m *model) rebuildHeightCache() {
 	if m.heightCache == nil {
 		m.heightCache = make(map[string]int)
 	}
-	m.resolvedToolIDs = messagerow.CollectResolvedToolUseIDs(m.store.Messages)
-	allKeys := m.scrollItemKeys()
-	virtualscroll.PruneHeightCache(m.heightCache, allKeys)
-	cols := m.cols
-	if cols < 1 {
-		cols = 40
-	}
 	hl := m.transcriptSearchHighlightNeedle()
-	msgView := m.messagesForScroll()
-	for i := range msgView {
-		k := conversation.ItemKey(msgView[i], m.store.ConversationID)
-		m.heightCache[k] = m.measureMessageRows(msgView[i], cols, hl)
+	baseCols := m.cols
+	if baseCols < 1 {
+		baseCols = 40
 	}
-	streamKeys := m.transcriptStreamingToolScrollKeys()
-	st := m.transcriptStreamingToolsForView()
-	for i, sk := range streamKeys {
-		if i < len(st) {
-			m.heightCache[sk] = m.measureTranscriptStreamingToolRow(st[i], cols, hl)
+	m.msgScrollbarW = 0
+	m.msgBodyCols = baseCols
+	m.fillMessageHeightCache(baseCols, hl)
+	vp := listViewportH(m)
+	if gouDemoMessageScrollbarStrip() && baseCols >= 18 && vp >= 3 {
+		if m.messageScrollContentHeight() > vp {
+			narrow := baseCols - 1
+			if narrow >= 8 {
+				m.fillMessageHeightCache(narrow, hl)
+				if m.messageScrollContentHeight() > vp {
+					m.msgScrollbarW = 1
+					m.msgBodyCols = narrow
+				} else {
+					m.fillMessageHeightCache(baseCols, hl)
+				}
+			}
 		}
 	}
 }
@@ -1548,7 +1597,7 @@ func (m *model) renderTranscriptStreamingToolRow(tu conversation.StreamingToolUs
 }
 
 func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
-	cols := m.cols
+	cols := m.messageBodyColsForLayout()
 	if cols < 1 {
 		return
 	}
@@ -1639,7 +1688,7 @@ func (m *model) View() string {
 		msgPane.WriteByte('\n')
 	}
 
-	cols := m.cols
+	bodyCols := m.messageBodyColsForLayout()
 	hl := m.transcriptSearchHighlightNeedle()
 	msgView := m.messagesForScroll()
 	msgN := len(msgView)
@@ -1650,13 +1699,13 @@ func (m *model) View() string {
 		var block string
 		if i < msgN {
 			msg := msgView[i]
-			block = m.renderMessageRow(msg, cols, h, hl)
+			block = m.renderMessageRow(msg, bodyCols, h, hl)
 		} else {
 			ti := i - msgN
 			if ti < 0 || ti >= len(stRows) {
 				continue
 			}
-			block = m.renderTranscriptStreamingToolRow(stRows[ti], cols, h, hl)
+			block = m.renderTranscriptStreamingToolRow(stRows[ti], bodyCols, h, hl)
 		}
 		if strings.TrimSpace(block) == "" && h <= 0 {
 			continue
@@ -1679,7 +1728,7 @@ func (m *model) View() string {
 			msgPane.WriteString(toolTitle)
 			if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
 				msgPane.WriteByte('\n')
-				maxW := cols * 4
+				maxW := bodyCols * 4
 				if maxW < 80 {
 					maxW = 80
 				}
@@ -1693,7 +1742,7 @@ func (m *model) View() string {
 		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 		msgPane.WriteString(head)
 		msgPane.WriteByte('\n')
-		msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), cols))
+		msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols))
 	}
 
 	// pad message pane to fixed height for stable layout
@@ -1709,7 +1758,12 @@ func (m *model) View() string {
 			lines = lines[:vpH]
 		}
 	}
-	b.WriteString(strings.Join(lines, "\n"))
+	m.cachePaneLinesForSelection(lines, bodyCols)
+	if m.selDragging || m.msgSelectionActive() {
+		lines = applyMsgSelectionVisualHighlight(lines, bodyCols, vpH, m.selAnchorR, m.selAnchorC, m.selFocusR, m.selFocusC)
+	}
+	totalScroll := m.messageScrollContentHeight()
+	b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalScroll, m.scrollTop, m.msgScrollbarW))
 	b.WriteByte('\n')
 
 	if m.uiScreen != gouDemoScreenTranscript {

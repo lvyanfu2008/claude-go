@@ -243,7 +243,12 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 	}
 	s := msg.String()
+	if !m.transcriptSearchOpen && !m.transcriptDumpMode && isListViewportScrollKey(s) {
+		m.clearMsgSelection()
+	}
 	switch s {
+	case "ctrl+l":
+		return true, teaGlobalRedrawCmd()
 	case "ctrl+o":
 		return true, m.exitTranscriptScreenWithPostCmd()
 	case "ctrl+e":

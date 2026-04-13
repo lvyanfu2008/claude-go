@@ -139,7 +139,11 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		if useStream {
 			var streamErr error
 			if StreamingUsesOpenAIChat() {
-				streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				if OpenAIChatNoStreamEnabled() {
+					streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				} else {
+					streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				}
 			} else {
 				streamErr = runStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
 			}

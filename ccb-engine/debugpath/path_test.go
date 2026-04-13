@@ -22,6 +22,18 @@ func TestResolveLogPath_relativeLogsDirUnderConfigHome(t *testing.T) {
 	}
 }
 
+func TestLatestLinkPathFor(t *testing.T) {
+	if got := LatestLinkPathFor(""); got != "" {
+		t.Fatalf("empty: got %q", got)
+	}
+	dir := t.TempDir()
+	logf := filepath.Join(dir, "sub", "sess.txt")
+	want := filepath.Join(dir, "sub", "latest")
+	if got := LatestLinkPathFor(logf); got != want {
+		t.Fatalf("LatestLinkPathFor: got %q want %q", got, want)
+	}
+}
+
 func TestMaybeUpdateLatestSymlink_createsLatest(t *testing.T) {
 	dir := t.TempDir()
 	logf := filepath.Join(dir, "abc123.txt")

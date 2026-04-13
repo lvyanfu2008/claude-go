@@ -9,3 +9,9 @@ func StreamingUsesOpenAIChat() bool {
 	}
 	return UseOpenAIChatProvider()
 }
+
+// OpenAIChatNoStreamEnabled is true when GOU_QUERY_OPENAI_CHAT_NO_STREAM is truthy: OpenAI-compatible
+// parity uses one POST /v1/chat/completions (stream:false) per round instead of SSE streaming.
+func OpenAIChatNoStreamEnabled() bool {
+	return envTruthy("GOU_QUERY_OPENAI_CHAT_NO_STREAM")
+}

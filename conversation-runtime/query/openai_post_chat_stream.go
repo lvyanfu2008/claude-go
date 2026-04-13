@@ -56,12 +56,20 @@ func PostOpenAIChatStream(ctx context.Context, p OpenAIPostStreamParams) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		apilog.LogResponseBody("POST "+url+" (stream error "+resp.Status+")", b)
 		return fmt.Errorf("openai chat stream %s: %s", resp.Status, truncateOpenAIErr(string(b), 800))
 	}
+
+	streamRd := io.ReadCloser(resp.Body)
+	var sseCapture *bytes.Buffer
+	if apilog.ResponseBodyLoggingEnabled() {
+		sseCapture = &bytes.Buffer{}
+		streamRd = anthropicmessages.NewStreamBodyReadTee(resp.Body, sseCapture, anthropicmessages.MaxStreamBodyLogBytes)
+	}
+	defer func() { _ = streamRd.Close() }()
 
 	var reqHead struct {
 		Model string `json:"model"`
@@ -69,13 +77,20 @@ func PostOpenAIChatStream(ctx context.Context, p OpenAIPostStreamParams) error {
 	_ = json.Unmarshal(p.Body, &reqHead)
 	ad := newOpenAIStreamAdapter(reqHead.Model)
 
-	if err := anthropicmessages.ReadSSE(resp.Body, func(data []byte) error {
+	if err := anthropicmessages.ReadSSE(streamRd, func(data []byte) error {
 		if len(data) == 0 || string(data) == "[DONE]" {
 			return nil
 		}
 		return ad.HandleChunk(data, p.Emit)
 	}); err != nil {
 		return err
+	}
+	if sseCapture != nil && sseCapture.Len() > 0 {
+		label := "POST " + url + " (SSE stream)"
+		if sseCapture.Len() >= anthropicmessages.MaxStreamBodyLogBytes {
+			label += fmt.Sprintf(" [truncated after %d bytes]", anthropicmessages.MaxStreamBodyLogBytes)
+		}
+		apilog.LogResponseBody(label, sseCapture.Bytes())
 	}
 	return ad.FlushOpenBlocks(p.Emit)
 }

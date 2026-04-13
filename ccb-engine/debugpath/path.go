@@ -83,19 +83,28 @@ func resolveDebugLogsDir(d string) string {
 	return d
 }
 
+// LatestLinkPathFor returns filepath.Join(filepath.Dir(logPath), "latest").
+// It is the symlink path [MaybeUpdateLatestSymlink] updates to point at the
+// current log file (same as TS join(dirname(getDebugLogPath()), 'latest')).
+func LatestLinkPathFor(logPath string) string {
+	if logPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(logPath), "latest")
+}
+
 // MaybeUpdateLatestSymlink creates <debug-dir>/latest -> logPath (best-effort; TS parity:
 // ~/.claude/debug/latest — see src/utils/debug.ts updateLatestDebugLogSymlink).
 func MaybeUpdateLatestSymlink(logPath string) {
 	if logPath == "" {
 		return
 	}
-	dir := filepath.Dir(logPath)
 	abs, err := filepath.Abs(logPath)
 	target := logPath
 	if err == nil && abs != "" {
 		target = abs
 	}
-	latest := filepath.Join(dir, "latest")
+	latest := LatestLinkPathFor(logPath)
 	_ = os.Remove(latest)
 	_ = os.Symlink(target, latest)
 }

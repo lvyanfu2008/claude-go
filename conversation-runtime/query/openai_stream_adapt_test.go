@@ -93,3 +93,21 @@ func eventTypes(events []anthropicmessages.MessageStreamEvent) []string {
 	}
 	return out
 }
+
+func TestReplayOpenAINonStreamChatResponse_textOnly(t *testing.T) {
+	body := []byte(`{"choices":[{"index":0,"message":{"role":"assistant","content":"你好"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`)
+	acc := newAssistantStreamAccumulator()
+	if err := ReplayOpenAINonStreamChatResponse(body, "deepseek-chat", acc.OnEvent); err != nil {
+		t.Fatal(err)
+	}
+	wire, err := acc.AssistantWire("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(wire, []byte("你好")) {
+		t.Fatalf("wire: %s", string(wire))
+	}
+	if acc.HasToolUse() {
+		t.Fatal("unexpected tool use")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"goc/anthropicmessages"
 )
@@ -404,4 +405,136 @@ func (a *openAIStreamAdapter) FlushOpenBlocks(emit func(anthropicmessages.Messag
 	}
 	a.openBlockIndices = make(map[int]struct{})
 	return nil
+}
+
+// ReplayOpenAINonStreamChatResponse converts a full POST /v1/chat/completions JSON body (stream:false)
+// into the same Anthropic-shaped stream events [openAIStreamAdapter] would emit, so
+// [assistantStreamAccumulator] and the streaming tool executor stay unchanged.
+func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(anthropicmessages.MessageStreamEvent) error) error {
+	var head struct {
+		Error   *struct{ Message string `json:"message"` } `json:"error"`
+		Choices []json.RawMessage `json:"choices"`
+		Usage   json.RawMessage   `json:"usage"`
+	}
+	if err := json.Unmarshal(respBody, &head); err != nil {
+		return fmt.Errorf("openai non-stream json: %w", err)
+	}
+	if head.Error != nil && strings.TrimSpace(head.Error.Message) != "" {
+		return fmt.Errorf("openai non-stream api error: %s", head.Error.Message)
+	}
+	if len(head.Choices) == 0 {
+		return fmt.Errorf("openai non-stream: empty choices")
+	}
+	var ch struct {
+		Message struct {
+			Content   json.RawMessage   `json:"content"`
+			ToolCalls []map[string]any `json:"tool_calls"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	}
+	if err := json.Unmarshal(head.Choices[0], &ch); err != nil {
+		return fmt.Errorf("openai non-stream choice: %w", err)
+	}
+
+	ad := newOpenAIStreamAdapter(model)
+	kick, err := json.Marshal(map[string]any{
+		"choices": []map[string]any{{"index": 0, "delta": map[string]any{}}},
+		"usage":   head.Usage,
+	})
+	if err != nil {
+		return err
+	}
+	if err := ad.HandleChunk(kick, emit); err != nil {
+		return err
+	}
+
+	var textPieces []string
+	if len(ch.Message.Content) > 0 && string(ch.Message.Content) != "null" {
+		var s string
+		if err := json.Unmarshal(ch.Message.Content, &s); err == nil {
+			if strings.TrimSpace(s) != "" {
+				textPieces = append(textPieces, s)
+			}
+		} else {
+			var parts []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if err := json.Unmarshal(ch.Message.Content, &parts); err == nil {
+				for _, p := range parts {
+					if p.Type == "text" && p.Text != "" {
+						textPieces = append(textPieces, p.Text)
+					}
+				}
+			}
+		}
+	}
+	for _, piece := range textPieces {
+		b, err := json.Marshal(map[string]any{
+			"choices": []map[string]any{{
+				"index": 0,
+				"delta": map[string]any{"content": piece},
+			}},
+		})
+		if err != nil {
+			return err
+		}
+		if err := ad.HandleChunk(b, emit); err != nil {
+			return err
+		}
+	}
+
+	if len(ch.Message.ToolCalls) > 0 {
+		tcalls := make([]map[string]any, 0, len(ch.Message.ToolCalls))
+		for i, tc := range ch.Message.ToolCalls {
+			if tc == nil {
+				continue
+			}
+			if _, ok := tc["index"]; !ok {
+				tc["index"] = float64(i)
+			}
+			tcalls = append(tcalls, tc)
+		}
+		if len(tcalls) > 0 {
+			b, err := json.Marshal(map[string]any{
+				"choices": []map[string]any{{
+					"index": 0,
+					"delta": map[string]any{"tool_calls": tcalls},
+				}},
+			})
+			if err != nil {
+				return err
+			}
+			if err := ad.HandleChunk(b, emit); err != nil {
+				return err
+			}
+		}
+	}
+
+	finish := strings.TrimSpace(ch.FinishReason)
+	if finish == "" {
+		if len(ch.Message.ToolCalls) > 0 {
+			finish = "tool_calls"
+		} else {
+			finish = "stop"
+		}
+	}
+	endObj := map[string]any{
+		"choices": []map[string]any{{
+			"index":         0,
+			"delta":         map[string]any{},
+			"finish_reason": finish,
+		}},
+	}
+	if len(head.Usage) > 0 && string(head.Usage) != "null" {
+		endObj["usage"] = json.RawMessage(head.Usage)
+	}
+	endB, err := json.Marshal(endObj)
+	if err != nil {
+		return err
+	}
+	if err := ad.HandleChunk(endB, emit); err != nil {
+		return err
+	}
+	return ad.FlushOpenBlocks(emit)
 }

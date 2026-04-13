@@ -30,6 +30,37 @@ func TestLogRequestBody_writesWhenSet(t *testing.T) {
 	if len(b) < 20 || !strings.Contains(s, "API_REQUEST_BODY") || !strings.Contains(s, `"a"`) {
 		t.Fatalf("unexpected file: %s", s)
 	}
+	if !strings.Contains(s, `llmRequest-1{"a":1}`) {
+		t.Fatalf("want llmRequest-1 glued to JSON body, got: %s", s)
+	}
+	LogRequestBody("POST /y", []byte(`{"b":2}`))
+	b2, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b2), `llmRequest-2{"b":2}`) {
+		t.Fatalf("second request should be llmRequest-2 glued to body: %s", string(b2))
+	}
+}
+
+func TestLogResponseBody_llmResponseTag(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CODE_LOG_API_RESPONSE_BODY", "1")
+	t.Setenv("CLAUDE_CODE_LOG_API_REQUEST_BODY", "")
+	t.Setenv("CLAUDE_CODE_DEBUG_LOGS_DIR", dir)
+	path := filepath.Join(dir, debugpath.SessionID()+".txt")
+	LogResponseBody("POST /ok", []byte(`{"ok":true}`))
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, "API_RESPONSE_BODY") || !strings.Contains(s, `"ok"`) {
+		t.Fatalf("unexpected file: %s", s)
+	}
+	if !strings.Contains(s, `llmResponse-1{"ok":true}`) {
+		t.Fatalf("want llmResponse-1 glued to JSON body: %s", s)
+	}
 }
 
 func TestLogRequestBody_defaultPathUnderHomeClaudeDebug(t *testing.T) {

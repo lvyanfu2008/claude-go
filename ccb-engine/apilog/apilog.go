@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"goc/ccb-engine/debugpath"
@@ -52,6 +53,9 @@ func MaybePrintDiag() {
 	fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: CLAUDE_CODE_LOG_API_REQUEST_BODY=%v CLAUDE_CODE_LOG_API_RESPONSE_BODY=%v\n",
 		envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY"), envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY"))
 	fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: resolved log path: %q\n", path)
+	if lp := debugpath.LatestLinkPathFor(path); lp != "" {
+		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: latest symlink (same log): %q\n", lp)
+	}
 	if path == "" {
 		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: path empty — check HOME; or set CLAUDE_CODE_DEBUG_LOG_FILE / CLAUDE_CODE_DEBUG_LOGS_DIR\n")
 	}
@@ -81,6 +85,9 @@ func PrepareIfEnabled() {
 
 var prepareOnce sync.Once
 
+// Monotonic per-process counters; tags are concatenated to the body line (llmRequest-3{…}).
+var llmRequestSeq, llmResponseSeq atomic.Uint64
+
 func prepareLogDestination() {
 	path := logPath()
 	if path == "" {
@@ -102,32 +109,37 @@ func prepareLogDestination() {
 	_ = f.Close()
 	debugpath.MaybeUpdateLatestSymlink(path)
 	announcePath.Do(func() {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] writing LLM API bodies to %s\n", path)
+		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] LLM API bodies: %s points to %s\n", debugpath.LatestLinkPathFor(path), path)
 	})
 }
 
 // LogRequestBody when CLAUDE_CODE_LOG_API_REQUEST_BODY is truthy.
+// Prefixes the serialized body line with llmRequest-N (no space) for grep.
 func LogRequestBody(label string, rawJSON []byte) {
 	if !envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") {
 		return
 	}
-	writeLog("API_REQUEST_BODY", label, rawJSON)
+	n := llmRequestSeq.Add(1)
+	writeLog("API_REQUEST_BODY", label, fmt.Sprintf("llmRequest-%d", n), rawJSON)
 }
 
 // LogResponseBody when CLAUDE_CODE_LOG_API_RESPONSE_BODY is truthy.
+// Prefixes the serialized body line with llmResponse-N (no space) for grep.
 func LogResponseBody(label string, rawJSON []byte) {
 	if !envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY") {
 		return
 	}
-	writeLog("API_RESPONSE_BODY", label, rawJSON)
+	n := llmResponseSeq.Add(1)
+	writeLog("API_RESPONSE_BODY", label, fmt.Sprintf("llmResponse-%d", n), rawJSON)
 }
 
 var announcePath, warnNoPath sync.Once
 
-func writeLog(kind, label string, raw []byte) {
+func writeLog(kind, label, bodyPrefix string, raw []byte) {
 	serialized := formatJSONForLog(raw)
+	bodyOut := joinBodyPrefix(bodyPrefix, serialized)
 	ts := time.Now().UTC().Format(time.RFC3339Nano)
-	out := fmt.Sprintf("%s [%s] %s\n%s\n----------\n", ts, kind, label, serialized)
+	out := fmt.Sprintf("%s [%s] %s\n%s\n----------\n", ts, kind, label, bodyOut)
 	path := logPath()
 	if path == "" {
 		warnNoPath.Do(func() {
@@ -146,11 +158,21 @@ func writeLog(kind, label string, raw []byte) {
 		return
 	}
 	announcePath.Do(func() {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] writing LLM API bodies to %s\n", path)
+		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] LLM API bodies: %s points to %s\n", debugpath.LatestLinkPathFor(path), path)
 	})
 	_, _ = f.WriteString(out)
 	_ = f.Close()
 	debugpath.MaybeUpdateLatestSymlink(path)
+}
+
+func joinBodyPrefix(prefix, serialized string) string {
+	if prefix == "" {
+		return serialized
+	}
+	if serialized == "" {
+		return prefix
+	}
+	return prefix + serialized
 }
 
 func formatJSONForLog(raw []byte) string {

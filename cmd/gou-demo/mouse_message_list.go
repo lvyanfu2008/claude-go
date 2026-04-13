@@ -18,6 +18,27 @@ func (m *model) mouseYInMessageListPane(y int) bool {
 	return y >= top && y < bot
 }
 
+// msgPaneCell maps a mouse event to message-pane (0-based row within the vpH lines, col within body width).
+func (m *model) msgPaneCell(msg tea.MouseMsg) (row, col int, ok bool) {
+	if !m.mouseYInMessageListPane(msg.Y) {
+		return 0, 0, false
+	}
+	vp := listViewportH(m)
+	row = msg.Y - m.titleH
+	if row < 0 || row >= vp {
+		return 0, 0, false
+	}
+	col = msg.X
+	bc := m.messageBodyColsForLayout()
+	if col < 0 {
+		col = 0
+	}
+	if col >= bc {
+		col = bc - 1
+	}
+	return row, col, true
+}
+
 // clampScrollTopForVirtualList pins scrollTop to [0, max(0, totalContentHeight−viewportH)] when not sticky.
 // After sticky-bottom (scrollTop sentinel ~1<<30), the first manual scroll leaves a huge scrollTop; without
 // clamping, ComputeRange's binary search breaks and wheel/keys cannot scroll back toward the tail.
@@ -49,8 +70,8 @@ func (m *model) clampScrollTopForVirtualList() {
 	}
 }
 
-// tryHandleMessageListMouse maps wheel and left-drag to virtual scroll (TS ScrollBox wheel / drag).
-// Returns true if the event was consumed (caller should not forward to prompt).
+// tryHandleMessageListMouse maps wheel to virtual scroll and Shift+left-drag to in-app selection (TS selection + wheel clears).
+// Plain left-drag scrolls the list. Returns true if the event was consumed.
 func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 	if gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE_SCROLL") {
 		return false
@@ -62,10 +83,13 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 		return false
 	}
 
-	if tea.MouseEvent(msg).IsWheel() {
+	ev := tea.MouseEvent(msg)
+
+	if ev.IsWheel() {
 		if !m.mouseYInMessageListPane(msg.Y) {
 			return false
 		}
+		m.clearMsgSelection()
 		step := max(1, listViewportH(m)/6)
 		m.sticky = false
 		switch msg.Button {
@@ -85,7 +109,17 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 
 	switch msg.Action {
 	case tea.MouseActionPress:
-		if msg.Button == tea.MouseButtonLeft {
+		if msg.Button == tea.MouseButtonLeft && ev.Shift {
+			if pr, pc, ok := m.msgPaneCell(msg); ok {
+				m.selDragging = true
+				m.selHas = false
+				m.selAnchorR, m.selAnchorC = pr, pc
+				m.selFocusR, m.selFocusC = pr, pc
+				m.msgListMouseDragging = false
+				return true
+			}
+		}
+		if msg.Button == tea.MouseButtonLeft && !ev.Shift {
 			if m.mouseYInMessageListPane(msg.Y) {
 				m.msgListMouseDragging = true
 				m.msgListMouseLastY = msg.Y
@@ -94,7 +128,13 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 			m.msgListMouseDragging = false
 		}
 	case tea.MouseActionMotion:
-		if m.msgListMouseDragging && msg.Button == tea.MouseButtonLeft {
+		if m.selDragging && ev.Shift && msg.Button == tea.MouseButtonLeft {
+			if pr, pc, ok := m.msgPaneCell(msg); ok {
+				m.selFocusR, m.selFocusC = pr, pc
+				return true
+			}
+		}
+		if m.msgListMouseDragging && msg.Button == tea.MouseButtonLeft && !ev.Shift {
 			dy := msg.Y - m.msgListMouseLastY
 			if dy != 0 {
 				m.sticky = false
@@ -104,6 +144,11 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 			return true
 		}
 	case tea.MouseActionRelease:
+		if m.selDragging {
+			m.selDragging = false
+			m.selHas = true
+			return true
+		}
 		if m.msgListMouseDragging {
 			m.msgListMouseDragging = false
 			return true

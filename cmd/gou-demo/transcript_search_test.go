@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,6 +11,22 @@ import (
 	"goc/gou/conversation"
 	"goc/types"
 )
+
+func TestTranscriptCtrlLGlobalRedraw(t *testing.T) {
+	m := &model{
+		uiScreen:         gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
+	}
+	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlL})
+	if !handled || cmd == nil {
+		t.Fatalf("handled=%v cmd=%v", handled, cmd)
+	}
+	got := cmd()
+	want := tea.ClearScreen()
+	if reflect.TypeOf(got) != reflect.TypeOf(want) {
+		t.Fatalf("cmd() type %T want same kind as tea.ClearScreen() %T", got, want)
+	}
+}
 
 func TestTranscriptSpaceFullPageDown(t *testing.T) {
 	st := &conversation.Store{

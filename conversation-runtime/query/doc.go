@@ -20,6 +20,9 @@
 //     [assistantStreamAccumulator] events. Tests set GOU_QUERY_STREAMING_FORCE_ANTHROPIC=1 ([TestMain])
 //     so injected Anthropic [QueryDeps.StreamPost] is used unless a test clears it.
 //     Optional [QueryDeps.OpenAIPostStream] overrides [PostOpenAIChatStream] for OpenAI streaming tests.
+//     When [OpenAIChatNoStreamEnabled] (GOU_QUERY_OPENAI_CHAT_NO_STREAM), OpenAI parity uses
+//     [runOpenAINonStreamingParityModelLoop]: one non-streaming JSON response per round, replayed
+//     through [ReplayOpenAINonStreamChatResponse] into the same accumulator path (no SSE).
 //   - Debug: GOU_QUERY_LOG_USER_CONTEXT=1 logs [QueryParams.UserContext] JSON to stderr before [PrependUserContext]
 //     (see [LogQueryUserContextIfEnabled]).
 //   - [QueryParams.CanUseTool] is [toolexecution.QueryCanUseToolFn] ([toolexecution.PermissionDecision] + error); [NewStreamingToolExecutor]

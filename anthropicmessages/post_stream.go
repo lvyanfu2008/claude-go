@@ -13,10 +13,6 @@ import (
 
 const apiVersion = "2023-06-01"
 
-// maxStreamResponseLogBytes caps raw SSE bytes logged for one stream when
-// CLAUDE_CODE_LOG_API_RESPONSE_BODY is on (avoids unbounded memory).
-const maxStreamResponseLogBytes = 32 << 20
-
 // PostStreamParams configures POST /v1/messages with a JSON body that must include "stream":true.
 type PostStreamParams struct {
 	BaseURL string
@@ -69,9 +65,8 @@ func PostStream(ctx context.Context, p PostStreamParams) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		apilog.LogResponseBody("POST "+url+" (stream error "+resp.Status+")", b)
 		return fmt.Errorf("anthropic stream API %s (POST %s): %s", resp.Status, url, truncate(string(b), 800))
@@ -81,11 +76,7 @@ func PostStream(ctx context.Context, p PostStreamParams) error {
 	var sseCapture *bytes.Buffer
 	if apilog.ResponseBodyLoggingEnabled() {
 		sseCapture = &bytes.Buffer{}
-		streamRd = &sseStreamCapture{
-			rc:  resp.Body,
-			buf: sseCapture,
-			max: maxStreamResponseLogBytes,
-		}
+		streamRd = NewStreamBodyReadTee(resp.Body, sseCapture, MaxStreamBodyLogBytes)
 	}
 	defer func() { _ = streamRd.Close() }()
 
@@ -96,38 +87,12 @@ func PostStream(ctx context.Context, p PostStreamParams) error {
 	}
 	if sseCapture != nil && sseCapture.Len() > 0 {
 		label := "POST " + url + " (SSE stream)"
-		if sseCapture.Len() >= maxStreamResponseLogBytes {
-			label += fmt.Sprintf(" [truncated after %d bytes]", maxStreamResponseLogBytes)
+		if sseCapture.Len() >= MaxStreamBodyLogBytes {
+			label += fmt.Sprintf(" [truncated after %d bytes]", MaxStreamBodyLogBytes)
 		}
 		apilog.LogResponseBody(label, sseCapture.Bytes())
 	}
 	return nil
-}
-
-// sseStreamCapture tees the raw SSE bytes into buf up to max bytes (for apilog).
-type sseStreamCapture struct {
-	rc  io.ReadCloser
-	buf *bytes.Buffer
-	max int
-}
-
-func (s *sseStreamCapture) Read(p []byte) (int, error) {
-	n, err := s.rc.Read(p)
-	if n > 0 && s.buf != nil && s.buf.Len() < s.max {
-		room := s.max - s.buf.Len()
-		if room > 0 {
-			if n <= room {
-				_, _ = s.buf.Write(p[:n])
-			} else {
-				_, _ = s.buf.Write(p[:room])
-			}
-		}
-	}
-	return n, err
-}
-
-func (s *sseStreamCapture) Close() error {
-	return s.rc.Close()
 }
 
 func truncate(s string, n int) string {

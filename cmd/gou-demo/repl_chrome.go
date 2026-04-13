@@ -33,6 +33,22 @@ func gouDemoVirtualScrollDisabled() bool {
 	return gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL")
 }
 
+// gouDemoMouseCellMotionEnabled mirrors TS isMouseTrackingEnabled (fullscreen.ts): when false, the program
+// does not enable SGR mouse tracking (DEC 1006), so terminal-native drag-to-select / copy-on-select keeps working.
+// Set CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 (same semantics as TS).
+func gouDemoMouseCellMotionEnabled() bool {
+	if gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_MOUSE") || gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE") {
+		return false
+	}
+	return true
+}
+
+// gouDemoMessageScrollbarStrip draws a one-column TUI scrollbar beside the message list when content overflows.
+// Opt out with GOU_DEMO_NO_SCROLLBAR=1 (alternate screen has no host scrollback; this is an in-app position hint).
+func gouDemoMessageScrollbarStrip() bool {
+	return !gouDemoEnvTruthy("GOU_DEMO_NO_SCROLLBAR")
+}
+
 func sanitizeWindowTitle(s string) string {
 	s = strings.ReplaceAll(s, "\x1b", "")
 	s = strings.ReplaceAll(s, bel, "")
@@ -117,17 +133,17 @@ func permissionModeSymbol(mode types.PermissionMode) string {
 // replChromeTopBar returns the single-line header (TS isNarrow uses columns < 80).
 func replChromeTopBar(narrow bool) string {
 	if narrow {
-		return "gou-demo  ↑↓ Pg F2 Enter Shift+Enter q"
+		return "gou-demo  ↑↓ Pg F2 Ctrl+l Sh+drag Ctrl+C Enter Shift+Enter q"
 	}
-	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Enter send  Shift+Enter/Ctrl+J/Alt+Enter newline  q or Esc quit"
+	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Ctrl+l redraw  Shift+drag select · Ctrl+C copy  Enter send  Shift+Enter/Ctrl+J/Alt+Enter newline  q or Esc quit"
 }
 
 // replChromeTranscriptTopBar is the header line while TS-style transcript mode is active.
 func replChromeTranscriptTopBar(narrow bool) string {
 	if narrow {
-		return "TRANSCRIPT  jk Pg / gG ctrl+udbf ctrl+o ctrl+e Esc"
+		return "TRANSCRIPT  jk Pg / gG ctrl+udbf ctrl+l ctrl+o ctrl+e Esc"
 	}
-	return "TRANSCRIPT — j/k line · g top · G End bottom · ctrl+u/d half-page · ctrl+b/f page · b page up · PgUpDn · / search · ctrl+o · ctrl+e · Esc"
+	return "TRANSCRIPT — j/k line · g top · G End bottom · ctrl+u/d half-page · ctrl+b/f page · b page up · PgUpDn · / search · ctrl+l redraw · ctrl+o · ctrl+e · Esc"
 }
 
 // replChromeFooterHint is the faint line under the prompt.
