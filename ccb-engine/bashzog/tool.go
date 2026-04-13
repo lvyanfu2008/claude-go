@@ -1,7 +1,6 @@
 package bashzog
 
 import (
-	_ "embed"
 	"encoding/json"
 	"sync"
 
@@ -10,9 +9,6 @@ import (
 
 // ZogToolName is the tool_use name for the Go Zog-validated Bash sibling (same execution as "Bash").
 const ZogToolName = "BashZog"
-
-//go:embed bash_tool.json
-var bashToolJSON []byte
 
 type bashWire struct {
 	Name           string
@@ -33,7 +29,7 @@ func loadWire() {
 		Description string          `json:"description"`
 		InputSchema json.RawMessage `json:"input_schema"`
 	}
-	if err := json.Unmarshal(bashToolJSON, &raw); err != nil {
+	if err := json.Unmarshal(bashToolModelWire, &raw); err != nil {
 		wireErr = err
 		return
 	}
@@ -58,7 +54,7 @@ type APIData struct {
 	InputSchemaRaw json.RawMessage
 }
 
-// LoadAPIData returns the embedded Bash tool snapshot (name, description, input_schema).
+// LoadAPIData returns the Go-sourced Bash model snapshot (name, description, input_schema).
 func LoadAPIData() (APIData, error) {
 	wireOnce.Do(loadWire)
 	if wireErr != nil {

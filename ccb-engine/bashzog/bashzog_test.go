@@ -11,6 +11,12 @@ import (
 //go:embed bash_zog_tool_export.json
 var bashZogExportGolden []byte
 
+func TestBashToolModelWireIsValidJSON(t *testing.T) {
+	if !json.Valid(bashToolModelWire) {
+		t.Fatal("bashToolModelWire must be valid JSON")
+	}
+}
+
 func TestExportBashZogToolJSON_matchesGoldenFile(t *testing.T) {
 	got, err := ExportBashZogToolJSON()
 	if err != nil {
