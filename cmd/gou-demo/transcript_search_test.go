@@ -76,6 +76,29 @@ func TestTranscriptHomeEndTopBottom(t *testing.T) {
 	}
 }
 
+func TestTranscriptCtrlHomeCtrlEndTopBottom(t *testing.T) {
+	t.Parallel()
+	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
+	m := &model{
+		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
+		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 99,
+	}
+	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlHome})
+	if !handled {
+		t.Fatal("expected ctrl+home handled")
+	}
+	if m.scrollTop != 0 || m.sticky {
+		t.Fatalf("ctrl+home: scrollTop=%d sticky=%v", m.scrollTop, m.sticky)
+	}
+	handled2, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlEnd})
+	if !handled2 {
+		t.Fatal("expected ctrl+end handled")
+	}
+	if !m.sticky || m.scrollTop != 1<<30 {
+		t.Fatalf("ctrl+end: scrollTop=%d sticky=%v", m.scrollTop, m.sticky)
+	}
+}
+
 func TestTranscriptSearchOpenDisablesPagerArrows(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{
@@ -90,6 +113,24 @@ func TestTranscriptSearchOpenDisablesPagerArrows(t *testing.T) {
 	}
 	if m.scrollTop != before {
 		t.Fatalf("up must not scroll when search bar open: got %d want %d", m.scrollTop, before)
+	}
+}
+
+func TestTranscriptSearchOpenDisablesCtrlHome(t *testing.T) {
+	t.Parallel()
+	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
+	m := &model{
+		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
+		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 50,
+		transcriptSearchOpen: true,
+	}
+	before := m.scrollTop
+	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlHome})
+	if !handled {
+		t.Fatal("expected ctrl+home swallowed")
+	}
+	if m.scrollTop != before {
+		t.Fatalf("ctrl+home must not jump to top when search bar open: got %d want %d", m.scrollTop, before)
 	}
 }
 
