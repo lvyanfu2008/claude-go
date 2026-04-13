@@ -29,6 +29,7 @@
 // # Message list / virtual scroll
 //
 //   - TS VirtualMessageList + useVirtualScroll → goc/gou/virtualscroll
+//   - TS Messages.tsx list pipeline (filter / reorder / transcript tail cap) → goc/gou/messagesview (MessagesForScrollList, ReorderMessagesInUI)
 //   - TS scrollRef (ScrollBoxHandle: scrollTo, scrollToBottom, sticky, …) → gou-demo model fields
 //     (scrollTop, sticky, pendingDelta) updated in Update/keys; next View pass renders — no separate ref type.
 //   - Wheel / drag-to-scroll on the message list: cmd/gou-demo/mouse_message_list.go (tea.WithMouseCellMotion).

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"goc/gou/conversation"
+	"goc/gou/messagesview"
 	"goc/types"
 )
 
@@ -50,19 +51,26 @@ func (m *model) transcriptEffectiveN() int {
 	return clampTranscriptFreeze(m.transcriptFrozen.MessagesLen, len(m.store.Messages))
 }
 
-// messagesForScroll returns UI-ordered messages (TS reorderMessagesInUI) for virtual scroll and transcript export.
+// messagesForScroll returns UI-ordered messages (TS Messages.tsx pre-VirtualMessageList pipeline) for virtual scroll and transcript export.
 func (m *model) messagesForScroll() []types.Message {
+	var raw []types.Message
 	if m.uiScreen == gouDemoScreenTranscript {
 		n := m.transcriptEffectiveN()
 		if n <= 0 {
 			return nil
 		}
-		return ReorderMessagesInUI(slices.Clone(m.store.Messages[:n]))
+		raw = slices.Clone(m.store.Messages[:n])
+	} else {
+		if len(m.store.Messages) == 0 {
+			return nil
+		}
+		raw = slices.Clone(m.store.Messages)
 	}
-	if len(m.store.Messages) == 0 {
-		return nil
-	}
-	return ReorderMessagesInUI(slices.Clone(m.store.Messages))
+	return messagesview.MessagesForScrollList(raw, messagesview.ScrollListOpts{
+		TranscriptMode:       m.uiScreen == gouDemoScreenTranscript,
+		ShowAllInTranscript:  m.transcriptShowAll || m.transcriptDumpMode,
+		VirtualScrollEnabled: !gouDemoVirtualScrollDisabled(),
+	})
 }
 
 // transcriptStreamToolScrollKey is a virtual-scroll key for in-transcript streaming tool rows (TS transcriptStreamingToolUses).
