@@ -50,6 +50,61 @@ func TestValidate_minimal(t *testing.T) {
 	}
 }
 
+func TestValidate_timeoutSemanticString(t *testing.T) {
+	payload := `{"command":"x","timeout":"30"}`
+	if err := Validate(json.RawMessage(payload)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidate_boolSemanticStrings(t *testing.T) {
+	if err := Validate(json.RawMessage(`{"command":"x","run_in_background":"false","dangerouslyDisableSandbox":"true"}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidate_simulatedSedEdit_ok(t *testing.T) {
+	p := `{"command":"x","_simulatedSedEdit":{"filePath":"/tmp/a","newContent":"hello"}}`
+	if err := Validate(json.RawMessage(p)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidate_simulatedSedEdit_missingContent(t *testing.T) {
+	p := `{"command":"x","_simulatedSedEdit":{"filePath":"/tmp/a"}}`
+	if err := Validate(json.RawMessage(p)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestValidate_unknownTopLevelKey(t *testing.T) {
+	if err := Validate(json.RawMessage(`{"command":"x","extra":1}`)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestValidate_timeoutOverMax(t *testing.T) {
+	p := `{"command":"x","timeout":600001}`
+	if err := Validate(json.RawMessage(p)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestValidate_backgroundDisabledEnv_rejectsRunInBackground(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "1")
+	err := Validate(json.RawMessage(`{"command":"x","run_in_background":false}`))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestValidate_backgroundDisabledEnv_allowsWithoutRunInBackground(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "1")
+	if err := Validate(json.RawMessage(`{"command":"x"}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLoadAPIData_embeddedJSONNonTrivial(t *testing.T) {
 	d, err := LoadAPIData()
 	if err != nil {

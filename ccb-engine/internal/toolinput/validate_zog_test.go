@@ -25,6 +25,25 @@ func TestValidateAgainstTools_zogBashMissingCommand(t *testing.T) {
 	}
 }
 
+func TestValidateAgainstTools_zogBashSemanticTimeoutAndSed(t *testing.T) {
+	t.Setenv(toolvalidator.EnvToolInputValidator, "zog")
+	tools := anthropic.GouParityToolList()
+	payload := `{"command":"echo","timeout":"120000","_simulatedSedEdit":{"filePath":"/p","newContent":"z"}}`
+	if err := ValidateAgainstTools(tools, "Bash", json.RawMessage(payload)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateAgainstTools_zogBashBackgroundTasksDisabled(t *testing.T) {
+	t.Setenv(toolvalidator.EnvToolInputValidator, "zog")
+	t.Setenv("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "1")
+	tools := anthropic.GouParityToolList()
+	err := ValidateAgainstTools(tools, "Bash", json.RawMessage(`{"command":"x","run_in_background":true}`))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestValidateAgainstTools_zogBashNilInputSchemaOnToolRow(t *testing.T) {
 	t.Setenv(toolvalidator.EnvToolInputValidator, "zog")
 	tools := anthropic.GouParityToolList()
