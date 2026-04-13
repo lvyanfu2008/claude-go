@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"goc/gou/conversation"
+	"goc/types"
 )
 
 // gouDemoScreen mirrors TS Screen in src/screens/REPL.tsx ('prompt' | 'transcript').
@@ -48,6 +50,21 @@ func (m *model) transcriptEffectiveN() int {
 	return clampTranscriptFreeze(m.transcriptFrozen.MessagesLen, len(m.store.Messages))
 }
 
+// messagesForScroll returns UI-ordered messages (TS reorderMessagesInUI) for virtual scroll and transcript export.
+func (m *model) messagesForScroll() []types.Message {
+	if m.uiScreen == gouDemoScreenTranscript {
+		n := m.transcriptEffectiveN()
+		if n <= 0 {
+			return nil
+		}
+		return ReorderMessagesInUI(slices.Clone(m.store.Messages[:n]))
+	}
+	if len(m.store.Messages) == 0 {
+		return nil
+	}
+	return ReorderMessagesInUI(slices.Clone(m.store.Messages))
+}
+
 // transcriptStreamToolScrollKey is a virtual-scroll key for in-transcript streaming tool rows (TS transcriptStreamingToolUses).
 func transcriptStreamToolScrollKey(convID string, idx int) string {
 	return fmt.Sprintf("gou-st-tool:%d:%s", idx, convID)
@@ -70,10 +87,10 @@ func (m *model) transcriptStreamingToolsForView() []conversation.StreamingToolUs
 }
 
 func (m *model) scrollItemKeys() []string {
-	msgN := m.transcriptEffectiveN()
-	keys := make([]string, 0, msgN+len(m.transcriptStreamingToolsForView()))
-	for i := 0; i < msgN; i++ {
-		keys = append(keys, conversation.ItemKey(m.store.Messages[i], m.store.ConversationID))
+	msgView := m.messagesForScroll()
+	keys := make([]string, 0, len(msgView)+len(m.transcriptStreamingToolsForView()))
+	for i := range msgView {
+		keys = append(keys, conversation.ItemKey(msgView[i], m.store.ConversationID))
 	}
 	keys = append(keys, m.transcriptStreamingToolScrollKeys()...)
 	return keys
@@ -116,6 +133,7 @@ func (m *model) exitTranscriptScreen() {
 	m.transcriptEditorGen++
 	m.transcriptEditorBusy = false
 	m.transcriptEditorStatus = ""
+	m.rebuildHeightCache()
 }
 
 // exitTranscriptScreenWithPostCmd restores the alternate screen after TS-style [ dump (Ink unwrap).

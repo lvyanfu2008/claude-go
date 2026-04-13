@@ -73,14 +73,14 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 	if wrapCols < 1 {
 		wrapCols = 80
 	}
-	n := m.transcriptEffectiveN()
+	msgView := m.messagesForScroll()
 	opts := &messagerow.RenderOpts{ShowAllInTranscript: true}
 	var b strings.Builder
-	for i := 0; i < n; i++ {
+	for i := range msgView {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		msg := messagerow.NormalizeMessageJSON(m.store.Messages[i])
+		msg := messagerow.NormalizeMessageJSON(msgView[i])
 		b.WriteString(string(msg.Type))
 		b.WriteByte('\n')
 		b.WriteString(transcriptPlainBodyFromMessage(msg, opts, wrapCols))

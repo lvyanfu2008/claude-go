@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"goc/gou/conversation"
 	"goc/gou/messagerow"
@@ -79,24 +80,71 @@ func plainTranscriptStreamingToolSearchText(tu conversation.StreamingToolUse) st
 	return strings.ToLower(strings.TrimSpace(tu.Name) + " " + strings.TrimSpace(tu.ToolUseID) + " " + tu.UnparsedInput)
 }
 
+func transcriptSearchHLStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color("58")).Foreground(lipgloss.Color("230"))
+}
+
+// highlightSearchPlain wraps case-insensitive needle matches in hl (terminal TS useSearchHighlight parity).
+func highlightSearchPlain(s, needle string, hl lipgloss.Style) string {
+	needle = strings.TrimSpace(needle)
+	if needle == "" || s == "" {
+		return s
+	}
+	lowS := strings.ToLower(s)
+	lowN := strings.ToLower(needle)
+	if lowN == "" {
+		return s
+	}
+	var b strings.Builder
+	cur := 0
+	for cur < len(s) {
+		rel := strings.Index(lowS[cur:], lowN)
+		if rel < 0 {
+			b.WriteString(s[cur:])
+			break
+		}
+		idx := cur + rel
+		b.WriteString(s[cur:idx])
+		end := idx + len(lowN)
+		if end > len(s) {
+			end = len(s)
+		}
+		b.WriteString(hl.Render(s[idx:end]))
+		cur = end
+	}
+	return b.String()
+}
+
+func (m *model) transcriptSearchHighlightNeedle() string {
+	if m.uiScreen != gouDemoScreenTranscript || m.transcriptDumpMode {
+		return ""
+	}
+	q := strings.TrimSpace(m.transcriptSearchQuery)
+	if q == "" {
+		return ""
+	}
+	return q
+}
+
 func (m *model) rebuildTranscriptSearchMatches() {
-	msgN := m.transcriptEffectiveN()
+	msgView := m.messagesForScroll()
 	st := m.transcriptStreamingToolsForView()
-	rowN := msgN + len(st)
+	rowN := len(msgView) + len(st)
 	q := strings.TrimSpace(m.transcriptSearchQuery)
 	if q == "" {
 		m.transcriptSearchHits = nil
 		m.transcriptSearchCursor = 0
+		m.rebuildHeightCache()
 		return
 	}
 	needle := strings.ToLower(q)
 	var hits []int
 	for i := 0; i < rowN; i++ {
 		var hay string
-		if i < msgN {
-			hay = plainMessageSearchText(m.store.Messages[i])
+		if i < len(msgView) {
+			hay = plainMessageSearchText(msgView[i])
 		} else {
-			hay = plainTranscriptStreamingToolSearchText(st[i-msgN])
+			hay = plainTranscriptStreamingToolSearchText(st[i-len(msgView)])
 		}
 		if strings.Contains(hay, needle) {
 			hits = append(hits, i)
@@ -105,11 +153,13 @@ func (m *model) rebuildTranscriptSearchMatches() {
 	m.transcriptSearchHits = hits
 	if len(hits) == 0 {
 		m.transcriptSearchCursor = 0
+		m.rebuildHeightCache()
 		return
 	}
 	if m.transcriptSearchCursor >= len(hits) {
 		m.transcriptSearchCursor = 0
 	}
+	m.rebuildHeightCache()
 	m.scrollTranscriptToMessageIndex(hits[m.transcriptSearchCursor])
 }
 
@@ -143,6 +193,7 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyMsg) bool {
 	switch s {
 	case "esc":
 		m.clearTranscriptSearchState()
+		m.rebuildHeightCache()
 		return true
 	case "enter":
 		m.transcriptSearchOpen = false
