@@ -1,0 +1,7 @@
+{"tool":"Agent","fixture":"missing_prompt","zodAccept":false}
+{"tool":"Agent","fixture":"ok","zodAccept":true}
+{"tool":"AskUserQuestion","fixture":"duplicate_option_labels","zodAccept":false}
+{"tool":"AskUserQuestion","fixture":"ok","zodAccept":true}
+{"tool":"Bash","fixture":"missing_command","zodAccept":false}
+{"tool":"Bash","fixture":"ok","zodAccept":true}
+{"tool":"EnterPlanMode","fixture":"ok","zodAccept":true}

@@ -42,20 +42,7 @@ func SkillToolDefinition() ToolDefinition {
 	return ToolDefinition{
 		Name:        SkillToolName,
 		Description: skillToolDescriptionPrompt,
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"skill": map[string]any{
-					"type":        "string",
-					"description": `The skill name. E.g., "commit", "review-pr", or "pdf"`,
-				},
-				"args": map[string]any{
-					"type":        "string",
-					"description": "Optional arguments for the skill",
-				},
-			},
-			"required": []string{"skill"},
-		},
+		InputSchema: mustExportInputSchema(SkillToolName),
 	}
 }
 

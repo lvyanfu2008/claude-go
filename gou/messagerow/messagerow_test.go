@@ -21,7 +21,8 @@ func TestSegments_toolUseAndText(t *testing.T) {
 	if segs[0].Kind != SegTextMarkdown || segs[1].Kind != SegToolUse {
 		t.Fatalf("%+v", segs)
 	}
-	if !strings.Contains(segs[1].Text, "Bash") || !strings.Contains(segs[1].Text, "x1") {
+	// Non-verbose activity line summarizes the command (e.g. "Running ls"), not raw name+id.
+	if !strings.Contains(segs[1].Text, "Running") || !strings.Contains(segs[1].Text, "ls") {
 		t.Fatal(segs[1].Text)
 	}
 }
