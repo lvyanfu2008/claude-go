@@ -46,3 +46,39 @@ func TestHandleTranscriptKeySwallowsUnknown(t *testing.T) {
 		t.Fatalf("expected swallow without cmd: handled=%v cmd=%v", handled, cmd)
 	}
 }
+
+func TestExitTranscriptScreenWithPostCmd_altScreenAfterDump(t *testing.T) {
+	t.Parallel()
+	m := &model{
+		store:                &conversation.Store{ConversationID: "x"},
+		uiScreen:             gouDemoScreenTranscript,
+		programUsesAltScreen: true,
+		transcriptDumpMode:   true,
+	}
+	cmd := m.exitTranscriptScreenWithPostCmd()
+	if cmd == nil {
+		t.Fatal("expected EnterAltScreen cmd when leaving dump with alt-screen program")
+	}
+	if m.uiScreen != gouDemoScreenPrompt {
+		t.Fatalf("uiScreen got %v want prompt", m.uiScreen)
+	}
+	if m.transcriptDumpMode {
+		t.Fatal("dump mode should clear on exit")
+	}
+	if cmd() == nil {
+		t.Fatal("expected tea.Msg from post cmd")
+	}
+}
+
+func TestExitTranscriptScreenWithPostCmd_noCmdWithoutAltOrDump(t *testing.T) {
+	t.Parallel()
+	m := &model{
+		store:                &conversation.Store{ConversationID: "x"},
+		uiScreen:             gouDemoScreenTranscript,
+		programUsesAltScreen: true,
+		transcriptDumpMode:   false,
+	}
+	if m.exitTranscriptScreenWithPostCmd() != nil {
+		t.Fatal("expected nil cmd when not leaving dump mode")
+	}
+}
