@@ -21,6 +21,20 @@ func TestAppendSystemContext(t *testing.T) {
 	}
 }
 
+func TestAppendSystemContext_gitStatusBeforeCacheBreaker(t *testing.T) {
+	sys := AsSystemPrompt([]string{"base"})
+	got := AppendSystemContext(sys, map[string]string{
+		"cacheBreaker": "[x]",
+		"gitStatus":    "clean",
+	})
+	if len(got) != 2 {
+		t.Fatalf("len=%d %#v", len(got), got)
+	}
+	if got[1] != "gitStatus: clean\ncacheBreaker: [x]" {
+		t.Fatalf("want TS object order, got %q", got[1])
+	}
+}
+
 func TestPrependUserContextSkipsWhenEmpty(t *testing.T) {
 	base := []types.Message{{Type: types.MessageTypeUser, UUID: "1", Message: json.RawMessage(`{"role":"user","content":"x"}`)}}
 	got := PrependUserContext(base, nil)

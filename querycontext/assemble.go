@@ -16,14 +16,17 @@ func AppendSystemContextParts(systemPrompt []string, context map[string]string) 
 	if len(context) == 0 {
 		return out
 	}
-	lines := formatSystemContextLines(context)
+	lines := FormatSystemContextLines(context)
 	if lines == "" {
 		return out
 	}
 	return append(out, lines)
 }
 
-func formatSystemContextLines(context map[string]string) string {
+// FormatSystemContextLines formats system context like TS [appendSystemContext]: one block with
+// lines "key: value" joined by '\n'. Key order matches context.ts getSystemContext spread
+// (gitStatus before cacheBreaker), then remaining keys sorted for stable Go map iteration.
+func FormatSystemContextLines(context map[string]string) string {
 	// Match typical TS object key order (gitStatus before cacheBreaker), then any extras sorted.
 	ordered := []string{"gitStatus", "cacheBreaker"}
 	var parts []string

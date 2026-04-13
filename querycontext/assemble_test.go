@@ -5,6 +5,16 @@ import (
 	"testing"
 )
 
+func TestFormatSystemContextLines_tsKeyOrder(t *testing.T) {
+	got := FormatSystemContextLines(map[string]string{
+		"cacheBreaker": "b",
+		"gitStatus":    "a",
+	})
+	if got != "gitStatus: a\ncacheBreaker: b" {
+		t.Fatalf("%q", got)
+	}
+}
+
 func TestAppendSystemContextParts_order(t *testing.T) {
 	got := AppendSystemContextParts([]string{"base"}, map[string]string{
 		"cacheBreaker": "[x]",

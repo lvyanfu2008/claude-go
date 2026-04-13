@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"goc/querycontext"
 	"goc/types"
 )
 
@@ -17,18 +18,7 @@ func AppendSystemContext(system SystemPrompt, context map[string]string) SystemP
 		out = append(out, system...)
 		return AsSystemPrompt(out)
 	}
-	keys := make([]string, 0, len(context))
-	for k := range context {
-		if strings.TrimSpace(k) != "" {
-			keys = append(keys, k)
-		}
-	}
-	sort.Strings(keys)
-	lines := make([]string, 0, len(keys))
-	for _, k := range keys {
-		lines = append(lines, fmt.Sprintf("%s: %s", k, context[k]))
-	}
-	block := strings.Join(lines, "\n")
+	block := querycontext.FormatSystemContextLines(context)
 	var joined []string
 	joined = append(joined, system...)
 	if block != "" {
