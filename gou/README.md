@@ -39,7 +39,7 @@
 | 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ `GOU_QUERY_STREAMING_PARITY=1` 或 `GOU_DEMO_STREAMING_TOOL_EXECUTION=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。Unix **socketserve** + 外部 TS 客户端见 `goc/ccb-engine/README.md`（**ccb-socket-host**） |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `execution_request`（bash/slash 的 prepare 桩） | `bashprepare` / `slashprepare` 仍可能返回 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
-| Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动）；`v`/`[` 等见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
+| Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动、**`[`** 滚动条 dump、**`v`** 外编辑器）；其余见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
 
 ## ProcessUserInput（gou-demo + `goc/gou/pui`）：已做 vs 未做
 
@@ -72,7 +72,7 @@ Bubble Tea 最小界面：虚拟列表区间 + `conversation.Store` + 模拟 `St
 cd goc && go run ./cmd/gou-demo
 ```
 
-操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表（打开后可直接输入缩小候选；首行 `/foo` 会作为初始 filter）。**`Ctrl+o`** 进入/退出 **transcript**（冻结历史；transcript 内 **`Esc` / `q` / `Ctrl+c`** 在无 **搜索条** 时仅退出 transcript；搜索条打开时 **`Esc`** 清空搜索留在 transcript；**`/`** 打开搜索、**`Enter`** 收起搜索条并保留查询以便 **`n`/`N`** 跳匹配；列宽变化会清空搜索）。**`Ctrl+e`** 切换 **show-all**：展开 `collapsed_read_search` / `grouped_tool_use` 的 messagerow 细节（见 `messagerow.RenderOpts`）。在 **prompt** 界面 **`q` / `Esc`** 仍退出 demo。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
+操作：↑↓ / PgUp / PgDn 滚动消息区，`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表（打开后可直接输入缩小候选；首行 `/foo` 会作为初始 filter）。**`Ctrl+o`** 进入/退出 **transcript**（冻结历史；transcript 内 **`Esc` / `q` / `Ctrl+c`** 在无 **搜索条** 时仅退出 transcript；搜索条打开时 **`Esc`** 清空搜索留在 transcript；**`/`** 打开搜索、**`Enter`** 收起搜索条并保留查询以便 **`n`/`N`** 跳匹配；列宽变化会清空搜索）。无搜索条且非 **dump** 时 **`j`/`k`** 逐行、**`g`** 顶、**`G`/`Shift+g`** 底、**`Ctrl+u`/`Ctrl+d`** 半屏、**`Ctrl+b`/`Ctrl+f`** 与 **`b`** 整屏（对齐 TS `modalPagerAction` 子集）。**`[`**（无搜索条）：TS 风格 **dump**（展开 + 退出 alt-screen 时把纯文本刷到滚动条）。**`v`**：把冻结区写成临时 **`gou-transcript-*.txt`** 并调 **`$VISUAL`/`$EDITOR`**（`tea.ExecProcess`）。**`Ctrl+e`** 切换 **show-all**（dump 模式下禁用）。在 **prompt** 界面 **`q` / `Esc`** 仍退出 demo。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
 
 **与 Ink REPL 壳层对齐（轻量）**：列宽不足 **80** 列时使用更短的顶栏与底栏提示（对标 TS `columns < 80` / `isNarrow`）。**终端标签标题** 通过 **OSC 0** 设为 `gou-demo`（可带会话 id 截断）；流式进行中标题加 **`…` 前缀**；设置 **`CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`** 时不写标题序列（与 TS 一致）。底栏可显示 **`CLAUDE_CODE_PERMISSION_MODE`**（如 `plan`、`bypassPermissions`）的短标签与符号（对标 `permissionModeSymbol` / `shortTitle`）。Kitty 下若存在 **`KITTY_WINDOW_ID`**，标题序列使用 **ST** 结尾而非 BEL。
 

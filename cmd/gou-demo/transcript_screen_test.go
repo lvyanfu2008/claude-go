@@ -41,7 +41,8 @@ func TestScrollItemKeysTranscriptSubset(t *testing.T) {
 
 func TestHandleTranscriptKeySwallowsUnknown(t *testing.T) {
 	m := &model{store: &conversation.Store{ConversationID: "x"}, uiScreen: gouDemoScreenTranscript}
-	if !m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) {
-		t.Fatal("expected swallow")
+	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if !handled || cmd != nil {
+		t.Fatalf("expected swallow without cmd: handled=%v cmd=%v", handled, cmd)
 	}
 }

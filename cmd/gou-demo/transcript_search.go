@@ -152,104 +152,130 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyMsg) bool {
 	return false
 }
 
-// handleTranscriptKey returns true when the key was consumed (transcript mode only).
-func (m *model) handleTranscriptKey(msg tea.KeyMsg) bool {
+// handleTranscriptKey returns (handled, cmd). cmd may be non-nil when leaving dump restores alt-screen (TS).
+func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.uiScreen != gouDemoScreenTranscript {
-		return false
+		return false, nil
 	}
 	if m.handleTranscriptSearchBarKey(msg) {
-		return true
+		return true, nil
 	}
-	if !m.transcriptSearchOpen {
+	if !m.transcriptSearchOpen && !m.transcriptDumpMode {
 		if msg.String() == "/" {
 			m.transcriptSearchOpen = true
 			m.transcriptSearchQuery = ""
 			m.rebuildTranscriptSearchMatches()
-			return true
+			return true, nil
 		}
 		if strings.TrimSpace(m.transcriptSearchQuery) != "" {
 			switch msg.String() {
 			case "n":
 				m.transcriptSearchStep(1)
-				return true
+				return true, nil
 			case "N":
 				m.transcriptSearchStep(-1)
-				return true
+				return true, nil
 			}
 		}
 	}
 	s := msg.String()
 	switch s {
 	case "ctrl+o":
-		m.exitTranscriptScreen()
-		return true
+		return true, m.exitTranscriptScreenWithPostCmd()
 	case "ctrl+e":
+		if m.transcriptDumpMode {
+			return true, nil
+		}
 		m.transcriptShowAll = !m.transcriptShowAll
 		m.rebuildHeightCache()
-		return true
+		return true, nil
 	case "esc", "q", "ctrl+c":
-		m.exitTranscriptScreen()
-		return true
+		return true, m.exitTranscriptScreenWithPostCmd()
+	case "[":
+		if m.transcriptDumpMode || m.transcriptSearchOpen {
+			return true, nil
+		}
+		m.transcriptDumpMode = true
+		m.transcriptShowAll = true
+		m.rebuildHeightCache()
+		plain := transcriptExportPlain(m, exportTranscriptWidth(m))
+		return true, transcriptBracketDumpScrollbackCmd(plain, m.programUsesAltScreen)
+	case "v":
+		if m.transcriptSearchOpen {
+			return true, nil
+		}
+		if m.transcriptEditorBusy {
+			return true, nil
+		}
+		gen := m.transcriptEditorGen
+		m.transcriptEditorBusy = true
+		m.transcriptEditorStatus = fmt.Sprintf("rendering %d messages…", m.transcriptEffectiveN())
+		return true, m.transcriptEditorPrepCmd(gen)
+	}
+	if m.transcriptDumpMode {
+		return true, nil
+	}
+	switch s {
 	case "up":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-1)
-		return true
+		return true, nil
 	case "down":
 		m.sticky = false
 		m.scrollTop += 1
-		return true
+		return true, nil
 	case "pgup":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
-		return true
+		return true, nil
 	case "pgdown":
 		m.sticky = false
 		m.scrollTop += listViewportH(m) / 2
-		return true
+		return true, nil
 	case "end":
 		m.sticky = true
 		m.scrollTop = 1 << 30
-		return true
+		return true, nil
 	// TS ScrollKeybindingHandler modalPagerAction (transcript, no prompt): j/k/g/G, less ctrl+u/d/b/f.
 	// Not active while search bar is open (bare letters go into the query).
 	case "j":
 		m.sticky = false
 		m.scrollTop += 1
-		return true
+		return true, nil
 	case "k":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-1)
-		return true
+		return true, nil
 	case "g":
 		m.sticky = false
 		m.scrollTop = 0
-		return true
+		return true, nil
 	case "G", "shift+g":
 		m.sticky = true
 		m.scrollTop = 1 << 30
-		return true
+		return true, nil
 	case "ctrl+u":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
-		return true
+		return true, nil
 	case "ctrl+d":
 		m.sticky = false
 		m.scrollTop += listViewportH(m) / 2
-		return true
+		return true, nil
 	case "ctrl+b":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
-		return true
+		return true, nil
 	case "ctrl+f":
 		m.sticky = false
 		m.scrollTop += listViewportH(m)
-		return true
+		return true, nil
 	case "b":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
-		return true
+		return true, nil
 	default:
-		return true
+		return true, nil
 	}
 }
 

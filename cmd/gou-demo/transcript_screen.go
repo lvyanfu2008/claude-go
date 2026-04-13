@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"goc/gou/conversation"
 )
 
@@ -50,6 +52,7 @@ func (m *model) enterTranscriptScreen() {
 	m.promptSavedSticky = m.sticky
 	m.transcriptFreezeN = len(m.store.Messages)
 	m.transcriptShowAll = false
+	m.transcriptDumpMode = false
 	m.uiScreen = gouDemoScreenTranscript
 	m.sticky = true
 	m.scrollTop = 1 << 30
@@ -61,25 +64,49 @@ func (m *model) exitTranscriptScreen() {
 	m.scrollTop = m.promptSavedScrollTop
 	m.sticky = m.promptSavedSticky
 	m.transcriptFreezeN = 0
+	m.transcriptDumpMode = false
+	m.transcriptEditorGen++
+	m.transcriptEditorBusy = false
+	m.transcriptEditorStatus = ""
 }
 
-func transcriptFooterLines(narrow, showAll bool) []string {
+// exitTranscriptScreenWithPostCmd restores the alternate screen after TS-style [ dump (Ink unwrap).
+func (m *model) exitTranscriptScreenWithPostCmd() tea.Cmd {
+	hadDump := m.transcriptDumpMode
+	m.exitTranscriptScreen()
+	if m.programUsesAltScreen && hadDump {
+		return func() tea.Msg { return tea.EnterAltScreen() }
+	}
+	return nil
+}
+
+func transcriptFooterLines(narrow, showAll, dumpMode bool) []string {
 	toggle := "ctrl+o"
 	showAllHint := "off"
 	if showAll {
 		showAllHint = "on"
 	}
-	line := fmt.Sprintf("Transcript · %s toggle · ctrl+e %s · jk gG ctrl+udbf · / search · Esc/q/ctrl+c", toggle, showAllHint)
+	if dumpMode {
+		line := fmt.Sprintf("Transcript · %s toggle · [ dump · v $EDITOR · Esc/q/ctrl+c", toggle)
+		if narrow {
+			line = fmt.Sprintf("Transcript · %s · [ · v · Esc", toggle)
+		}
+		return []string{line}
+	}
+	line := fmt.Sprintf("Transcript · %s toggle · ctrl+e %s · jk gG ctrl+udbf · / search · [ v · Esc/q/ctrl+c", toggle, showAllHint)
 	if narrow {
-		line = fmt.Sprintf("Transcript · %s · ctrl+e %s · jk · / · Esc", toggle, showAllHint)
+		line = fmt.Sprintf("Transcript · %s · ctrl+e %s · jk · / · [ v · Esc", toggle, showAllHint)
 	}
 	return []string{line}
 }
 
 func transcriptChromeFootLines(m *model, narrow bool) []string {
-	lines := transcriptFooterLines(narrow, m.transcriptShowAll)
+	lines := transcriptFooterLines(narrow, m.transcriptShowAll, m.transcriptDumpMode)
 	if extra := transcriptSearchStatusLines(m); len(extra) > 0 {
 		lines = append(lines, extra...)
+	}
+	if s := strings.TrimSpace(m.transcriptEditorStatus); s != "" {
+		lines = append(lines, s)
 	}
 	return lines
 }
