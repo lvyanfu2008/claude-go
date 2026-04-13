@@ -23,6 +23,7 @@ const (
 	SegAdvisorToolResult
 	SegGroupedToolUse
 	SegCollapsedReadSearch
+	SegDisplayHint
 	SegUnknown
 )
 
@@ -72,22 +73,23 @@ func segmentsGroupedToolUse(msg types.Message, depth int) []Segment {
 }
 
 func segmentsCollapsedReadSearch(msg types.Message, depth int) []Segment {
-	var sb strings.Builder
-	sb.WriteString("collapsed_read_search")
-	sb.WriteString(fmt.Sprintf(" · read=%d search=%d list=%d", msg.ReadCount, msg.SearchCount, msg.ListCount))
-	if len(msg.ReadFilePaths) > 0 {
-		sb.WriteString("\npaths: ")
-		sb.WriteString(compactJoin(msg.ReadFilePaths, 5, 120))
+	summary := SearchReadSummaryTextFromMessage(false, msg)
+	if summary == "" {
+		summary = "…"
 	}
-	if len(msg.SearchArgs) > 0 {
-		sb.WriteString("\nsearch: ")
-		sb.WriteString(compactJoin(msg.SearchArgs, 3, 120))
+	line := summary + CtrlOToExpandHint
+	out := []Segment{{Kind: SegCollapsedReadSearch, Text: line}}
+	if msg.LatestDisplayHint != nil {
+		h := strings.TrimSpace(*msg.LatestDisplayHint)
+		if h != "" {
+			h = strings.ReplaceAll(h, "\r\n", "\n")
+			h = strings.ReplaceAll(h, "\n", " ")
+			if len(h) > 400 {
+				h = h[:400] + "…"
+			}
+			out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + h})
+		}
 	}
-	if msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" {
-		sb.WriteString("\nhint: ")
-		sb.WriteString(compactJSON(*msg.LatestDisplayHint, 200))
-	}
-	out := []Segment{{Kind: SegCollapsedReadSearch, Text: strings.TrimSpace(sb.String())}}
 	if msg.DisplayMessage != nil {
 		out = append(out, segmentsFromMessageDepth(*msg.DisplayMessage, depth+1)...)
 	}

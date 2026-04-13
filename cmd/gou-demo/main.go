@@ -1356,7 +1356,10 @@ func formatMessageSegments(segs []messagerow.Segment, cols int) string {
 			body := textutil.LinkifyOSC8(seg.Text)
 			parts = append(parts, st.Render("↩ "+body))
 		case messagerow.SegThinking:
-			parts = append(parts, lipgloss.NewStyle().Faint(true).Italic(true).Render(textutil.LinkifyOSC8(seg.Text)))
+			body := textutil.LinkifyOSC8(seg.Text)
+			parts = append(parts, lipgloss.NewStyle().Bold(true).Render("● "+body))
+		case messagerow.SegDisplayHint:
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(seg.Text)))
 		case messagerow.SegServerToolUse:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ "+seg.Text))
 		case messagerow.SegAdvisorToolResult:
@@ -1369,7 +1372,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int) string {
 		case messagerow.SegGroupedToolUse:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ "+seg.Text))
 		case messagerow.SegCollapsedReadSearch:
-			parts = append(parts, lipgloss.NewStyle().Foreground(theme.CollapsedAccent()).Bold(true).Render("▤ "+seg.Text))
+			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(seg.Text)))
 		default:
 			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(seg.Text)))
 		}

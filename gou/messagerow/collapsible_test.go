@@ -37,17 +37,35 @@ func TestSegments_collapsedReadSearch(t *testing.T) {
 		UUID:    "d2",
 		Content: []byte(`[{"type":"text","text":"tail"}]`),
 	}
+	h := "ls -la\nbuild"
 	msg := types.Message{
-		Type:           types.MessageTypeCollapsedReadSearch,
-		UUID:           "c1",
-		ReadCount:      3,
-		SearchCount:    1,
-		ReadFilePaths:  []string{"a.go"},
-		DisplayMessage: &disp,
+		Type:              types.MessageTypeCollapsedReadSearch,
+		UUID:              "c1",
+		ReadCount:         3,
+		SearchCount:       1,
+		ReadFilePaths:     []string{"a.go"},
+		LatestDisplayHint: &h,
+		DisplayMessage:    &disp,
 	}
 	segs := SegmentsFromMessage(msg)
 	if segs[0].Kind != SegCollapsedReadSearch {
 		t.Fatalf("%+v", segs[0])
+	}
+	// TS uses lowercase continuation verbs after the first clause ("searched for …, read …").
+	if !strings.Contains(segs[0].Text, "read 3 files") || !strings.Contains(segs[0].Text, "Searched for 1 pattern") {
+		t.Fatalf("want TS-style summary (search then read), got %q", segs[0].Text)
+	}
+	if !strings.HasPrefix(segs[0].Text, "Searched for 1 pattern") {
+		t.Fatalf("TS order: search clause first, got %q", segs[0].Text)
+	}
+	if strings.Contains(segs[0].Text, "collapsed_read_search") {
+		t.Fatalf("should not use debug prefix: %q", segs[0].Text)
+	}
+	if !strings.Contains(segs[0].Text, CtrlOToExpandHint) {
+		t.Fatalf("want ctrl+o hint: %q", segs[0].Text)
+	}
+	if len(segs) < 3 || segs[1].Kind != SegDisplayHint || !strings.Contains(segs[1].Text, "⎿") {
+		t.Fatalf("want hint row after summary, got %+v", segs)
 	}
 }
 

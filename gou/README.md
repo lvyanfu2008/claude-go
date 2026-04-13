@@ -17,7 +17,7 @@
 | `goc/gou/conversation` | 会话切片、`StreamingText` 追加、`ItemKey`（对标 `messageKey`） |
 | `goc/gou/markdown` | `HasMarkdownSyntax`、`CachedLexer`、`TokenCache`、`RenderTokensPlain`、`NormalizeStreamingForLexer`（对标 `Markdown.tsx` / `cachedLexer`） |
 | `goc/gou/layout` | `VisualWidth`、`WrapForViewport`、`WrappedRowCount`、`MeasuredLine`（ANSI 感知，对标高度与 `useVirtualScroll` 折行语义） |
-| `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result` |
+| `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result`；**`collapsed_read_search`** 摘要文案由 [`SearchReadSummaryText`](messagerow/search_read_summary.go) 对齐 TS [`getSearchReadSummaryText`](../../claude-code/src/utils/collapseReadSearch.ts)，行末附带 **[`CtrlOToExpandHint`](messagerow/search_read_summary.go)**（与 Ink `CtrlOToExpand` 字面一致）。**注意**：gou-demo **无** TS 的 transcript 全屏切换，`ctrl+o` 仅为 **占位提示**，不绑定键位。 |
 | `goc/gou/transcript` | 从 JSON 加载消息：UI 形 `[]Message`（含 `type`）或 API 形 `[{role,content}]` |
 | `goc/gou/ccbstream` | 将 ccb-engine 风格 NDJSON `StreamEvent` 应用到 `conversation.Store`（`Apply` / `Feed` / `ReplayFile`） |
 | `goc/conversation-runtime/query` | gou-demo **真实模型**：HTTP 流式 parity（`StreamingParity` + env 门控 + 密钥）；`-fake-stream` 为纯模拟 |
