@@ -10,5 +10,9 @@ func AssembleToolPoolFromEmbedded(permissionContext types.ToolPermissionContextD
 		return nil, err
 	}
 	builtIn := GetTools(permissionContext, base)
+	builtIn, err = ReplaceBashToolSpecIfZogMode(builtIn)
+	if err != nil {
+		return nil, err
+	}
 	return AssembleToolPool(permissionContext, builtIn, mcpTools), nil
 }

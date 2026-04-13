@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"goc/internal/toolvalidator"
 	"goc/types"
 )
 
@@ -101,8 +102,10 @@ func (t *jsonSchemaTool) Call(
 			return nil, err
 		}
 	}
-	if err := ValidateInputAgainstSchema(t.name, t.schema, input); err != nil {
-		return nil, err
+	if !(toolvalidator.InputValidatorMode() == "zog" && strings.EqualFold(t.name, "Bash")) {
+		if err := ValidateInputAgainstSchema(t.name, t.schema, input); err != nil {
+			return nil, err
+		}
 	}
 	data := append(json.RawMessage(nil), input...)
 	if len(bytesTrim(data)) == 0 {

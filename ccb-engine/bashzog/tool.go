@@ -1,0 +1,83 @@
+package bashzog
+
+import (
+	_ "embed"
+	"encoding/json"
+	"sync"
+
+	"goc/types"
+)
+
+//go:embed bash_tool.json
+var bashToolJSON []byte
+
+type bashWire struct {
+	Name            string
+	Description     string
+	InputSchemaRaw  json.RawMessage
+	inputSchemaObj  map[string]any
+}
+
+var (
+	wireOnce sync.Once
+	wireErr  error
+	wire     bashWire
+)
+
+func loadWire() {
+	var raw struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		InputSchema json.RawMessage `json:"input_schema"`
+	}
+	if err := json.Unmarshal(bashToolJSON, &raw); err != nil {
+		wireErr = err
+		return
+	}
+	var schemaObj map[string]any
+	if err := json.Unmarshal(raw.InputSchema, &schemaObj); err != nil {
+		wireErr = err
+		return
+	}
+	wire = bashWire{
+		Name:           raw.Name,
+		Description:    raw.Description,
+		InputSchemaRaw: append(json.RawMessage(nil), raw.InputSchema...),
+		inputSchemaObj: schemaObj,
+	}
+}
+
+// APIData is the Messages API Bash row when GO_TOOL_INPUT_VALIDATOR=zog (no runtime tools_api read).
+type APIData struct {
+	Name           string
+	Description    string
+	InputSchema    map[string]any
+	InputSchemaRaw json.RawMessage
+}
+
+// LoadAPIData returns the embedded Bash tool snapshot (name, description, input_schema).
+func LoadAPIData() (APIData, error) {
+	wireOnce.Do(loadWire)
+	if wireErr != nil {
+		return APIData{}, wireErr
+	}
+	return APIData{
+		Name:           wire.Name,
+		Description:    wire.Description,
+		InputSchema:    wire.inputSchemaObj,
+		InputSchemaRaw: append(json.RawMessage(nil), wire.InputSchemaRaw...),
+	}, nil
+}
+
+// BashToolSpec returns a [types.ToolSpec] for Bash from the embedded snapshot (toolpool / assemble).
+func BashToolSpec() (types.ToolSpec, error) {
+	d, err := LoadAPIData()
+	if err != nil {
+		return types.ToolSpec{}, err
+	}
+	return types.ToolSpec{
+		Name:            d.Name,
+		Description:     d.Description,
+		InputJSONSchema: append(json.RawMessage(nil), d.InputSchemaRaw...),
+	}, nil
+}

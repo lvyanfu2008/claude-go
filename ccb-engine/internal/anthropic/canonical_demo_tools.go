@@ -3,6 +3,9 @@ package anthropic
 import (
 	"os"
 	"strings"
+
+	"goc/ccb-engine/bashzog"
+	"goc/internal/toolvalidator"
 )
 
 // GouParityToolList is gou-demo tools[] aligned with the embedded tools_api.json export (plus echo_stub).
@@ -104,6 +107,17 @@ func editToolDefinition() ToolDefinition {
 }
 
 func bashToolDefinition() ToolDefinition {
+	if toolvalidator.InputValidatorMode() == "zog" {
+		d, err := bashzog.LoadAPIData()
+		if err == nil {
+			return ToolDefinition{
+				Name:        d.Name,
+				Description: d.Description,
+				InputSchema: d.InputSchema,
+			}
+		}
+		// fall through to embed if snapshot fails to load
+	}
 	return ToolDefinition{
 		Name:        "Bash",
 		Description: "Execute a shell command in the user's environment.",
