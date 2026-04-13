@@ -215,68 +215,84 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m.transcriptDumpMode {
 		return true, nil
 	}
-	switch s {
-	case "up":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-1)
-		return true, nil
-	case "down":
-		m.sticky = false
-		m.scrollTop += 1
-		return true, nil
-	case "pgup":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
-		return true, nil
-	case "pgdown":
-		m.sticky = false
-		m.scrollTop += listViewportH(m) / 2
-		return true, nil
-	case "end":
-		m.sticky = true
-		m.scrollTop = 1 << 30
-		return true, nil
-	// TS ScrollKeybindingHandler modalPagerAction (transcript, no prompt): j/k/g/G, less ctrl+u/d/b/f.
-	// Not active while search bar is open (bare letters go into the query).
-	case "j":
-		m.sticky = false
-		m.scrollTop += 1
-		return true, nil
-	case "k":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-1)
-		return true, nil
-	case "g":
-		m.sticky = false
-		m.scrollTop = 0
-		return true, nil
-	case "G", "shift+g":
-		m.sticky = true
-		m.scrollTop = 1 << 30
-		return true, nil
-	case "ctrl+u":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
-		return true, nil
-	case "ctrl+d":
-		m.sticky = false
-		m.scrollTop += listViewportH(m) / 2
-		return true, nil
-	case "ctrl+b":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
-		return true, nil
-	case "ctrl+f":
-		m.sticky = false
-		m.scrollTop += listViewportH(m)
-		return true, nil
-	case "b":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
-		return true, nil
-	default:
-		return true, nil
+	// TS ScrollKeybindingHandler: isActive && isModal with isModal={!searchOpen} in REPL transcript.
+	// Pager keys (arrows, space, j/k, …) do not run while the search bar is open.
+	if !m.transcriptSearchOpen {
+		switch s {
+		case "up":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-1)
+			return true, nil
+		case "down":
+			m.sticky = false
+			m.scrollTop += 1
+			return true, nil
+		case "pgup":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			return true, nil
+		case "pgdown":
+			m.sticky = false
+			m.scrollTop += listViewportH(m) / 2
+			return true, nil
+		case "end":
+			m.sticky = true
+			m.scrollTop = 1 << 30
+			return true, nil
+		// TS modalPagerAction (ScrollKeybindingHandler.tsx): j/k/g/G, ctrl+u/d/b/f, bare b, space, ctrl+n/p.
+		case "j":
+			m.sticky = false
+			m.scrollTop += 1
+			return true, nil
+		case "k":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-1)
+			return true, nil
+		case "g":
+			m.sticky = false
+			m.scrollTop = 0
+			return true, nil
+		case "G", "shift+g":
+			m.sticky = true
+			m.scrollTop = 1 << 30
+			return true, nil
+		case "ctrl+u":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			return true, nil
+		case "ctrl+d":
+			m.sticky = false
+			m.scrollTop += listViewportH(m) / 2
+			return true, nil
+		case "ctrl+b":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+			return true, nil
+		case "ctrl+f":
+			m.sticky = false
+			m.scrollTop += listViewportH(m)
+			return true, nil
+		case "b":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+			return true, nil
+		case " ":
+			m.sticky = false
+			m.scrollTop += listViewportH(m)
+			return true, nil
+		case "ctrl+n":
+			m.sticky = false
+			m.scrollTop += 1
+			return true, nil
+		case "ctrl+p":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-1)
+			return true, nil
+		default:
+			return true, nil
+		}
 	}
+	return true, nil
 }
 
 func transcriptSearchStatusLines(m *model) []string {
