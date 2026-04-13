@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"goc/gou/conversation"
 	"goc/gou/messagerow"
+	"goc/types"
 )
 
 func countToolLeadGlyphs(s string) int {
@@ -48,5 +50,29 @@ func TestFormatMessageSegments_resolvedToolOmitsActivityAndHint(t *testing.T) {
 	}
 	if strings.Contains(out, "Reading") {
 		t.Fatalf("resolved tool should not render activity line, got:\n%s", out)
+	}
+}
+
+func TestMeasureMessageRows_skipsToolResultOnlyUserOnPrompt(t *testing.T) {
+	m := &model{
+		uiScreen: gouDemoScreenPrompt,
+		store:    &conversation.Store{ConversationID: "c"},
+	}
+	raw := `[{"type":"tool_result","tool_use_id":"call_x","content":"ok"}]`
+	msg := types.Message{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(raw)}
+	if got := m.measureMessageRows(msg, 80); got != 0 {
+		t.Fatalf("measureMessageRows = %d, want 0", got)
+	}
+	if s := m.renderMessageRow(msg, 80, 99); strings.TrimSpace(s) != "" {
+		t.Fatalf("renderMessageRow want empty, got %q", s)
+	}
+}
+
+func TestMeasureMessageRows_keepsUserToolResultWithText(t *testing.T) {
+	m := &model{uiScreen: gouDemoScreenPrompt, store: &conversation.Store{ConversationID: "c"}}
+	raw := `[{"type":"text","text":"hi"},{"type":"tool_result","tool_use_id":"x","content":"ok"}]`
+	msg := types.Message{Type: types.MessageTypeUser, UUID: "u2", Content: []byte(raw)}
+	if got := m.measureMessageRows(msg, 80); got < 1 {
+		t.Fatalf("measureMessageRows = %d, want >=1", got)
 	}
 }

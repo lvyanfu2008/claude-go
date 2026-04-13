@@ -21,7 +21,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, tool_result bodies are folded to a one-line stub with the same (ctrl+o to expand) hint; transcript view shows the full preview. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (ExitAltScreen+Printf when alt on). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed; exiting after [ restores alt-screen when the program started with it. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -1382,6 +1382,9 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 }
 
 func (m *model) measureMessageRows(msg types.Message, cols int) int {
+	if m.skipFoldedToolResultStubInPrompt(msg) {
+		return 0
+	}
 	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
 	if msg.Type == types.MessageTypeAttachment && len(segs) == 0 {
 		return 0
@@ -1574,6 +1577,36 @@ func userMessageHasPromptText(msg types.Message) bool {
 	return false
 }
 
+// userMessageIsToolResultsOnly is true when every content block is tool_result or advisor_tool_result.
+func userMessageIsToolResultsOnly(msg types.Message) bool {
+	if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
+		return false
+	}
+	var blocks []types.MessageContentBlock
+	if err := json.Unmarshal(msg.Content, &blocks); err != nil || len(blocks) == 0 {
+		return false
+	}
+	for _, b := range blocks {
+		switch b.Type {
+		case "tool_result", "advisor_tool_result":
+			// ok
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
+	if m.uiScreen != gouDemoScreenPrompt {
+		return false
+	}
+	if messagerow.VerboseToolOutputEnabled() {
+		return false
+	}
+	return userMessageIsToolResultsOnly(msg)
+}
+
 // withUserPromptPointerIfNeeded prepends TS HighlightedThinkingText-style figures.pointer before the first body line.
 func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 	if msg.Type != types.MessageTypeUser || !userMessageHasPromptText(msg) || body == "" {
@@ -1589,6 +1622,9 @@ func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 }
 
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
+	if m.skipFoldedToolResultStubInPrompt(msg) {
+		return ""
+	}
 	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
 	var header string
 	if msg.Type != types.MessageTypeAttachment {
