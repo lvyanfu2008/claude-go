@@ -3,6 +3,8 @@ package paritytools
 import (
 	"context"
 	"errors"
+
+	"goc/ccb-engine/localtools"
 )
 
 // Run executes unconditional built-in tools for the Go parity runner.
@@ -29,6 +31,8 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return WebFetchFromJSON(ctx, raw)
 	case "WebSearch":
 		return WebSearchFromJSON(ctx, raw)
+	case "PowerShell":
+		return localtools.PowerShellFromJSON(ctx, raw, cfg.WorkDir)
 	case "EnterPlanMode":
 		return EnterPlanModeFromJSON(raw, cfg)
 	case "ExitPlanMode":
@@ -53,6 +57,52 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return ReadMcpResourceFromJSON(raw)
 	case "echo_stub":
 		return EchoStubFromJSON(raw)
+	case "TestingPermission":
+		return TestingPermissionFromJSON(raw)
+	case "Sleep":
+		return SleepFromJSON(ctx, raw)
+	case "ListPeers":
+		return ListPeersFromJSON(raw)
+	case "VerifyPlanExecution":
+		return VerifyPlanExecutionFromJSON(raw)
+	case "OverflowTest":
+		return OverflowTestFromJSON(raw)
+	case "CtxInspect":
+		return CtxInspectFromJSON(raw)
+	case "TerminalCapture":
+		return TerminalCaptureFromJSON(raw)
+	case "LSP":
+		return LSPFromJSON(raw)
+	case "EnterWorktree":
+		return EnterWorktreeFromJSON(raw)
+	case "ExitWorktree":
+		return ExitWorktreeFromJSON(raw)
+	case "TeamCreate":
+		return TeamCreateFromJSON(raw)
+	case "TeamDelete":
+		return TeamDeleteFromJSON(raw)
+	case "Config":
+		return ConfigFromJSON(raw)
+	case "Tungsten":
+		return TungstenFromJSON(raw)
+	case "SuggestBackgroundPR":
+		return SuggestBackgroundPRFromJSON(raw)
+	case "WebBrowser":
+		return WebBrowserFromJSON(raw)
+	case "RemoteTrigger":
+		return RemoteTriggerFromJSON(raw)
+	case "Monitor":
+		return MonitorFromJSON(raw)
+	case "Workflow":
+		return WorkflowFromJSON(raw)
+	case "Snip":
+		return SnipFromJSON(raw)
+	case "SendUserFile":
+		return SendUserFileFromJSON(raw)
+	case "PushNotification":
+		return PushNotificationFromJSON(raw)
+	case "SubscribePR":
+		return SubscribePRFromJSON(raw)
 	default:
 		return "", false, ErrNotHandled
 	}
