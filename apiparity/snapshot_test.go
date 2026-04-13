@@ -13,8 +13,8 @@ import (
 // Omit AskUserQuestion the TS way: FEATURE_KAIROS or FEATURE_KAIROS_CHANNELS plus non-empty CLAUDE_CODE_GO_ALLOWED_CHANNELS.
 // When tools or system assembly intentionally changes, update these constants and document in the PR.
 const (
-	goldenToolsSHA256Default        = "9a1e5e91409373a698eab3a3d1761d22ac3ffcae5b37775cd974b5ea1c9d2403"
-	goldenSystemSHA256Default       = "4075e939add85eea005aae2245de33cf386d8347d3d8968e3b7621f765f5a220"
+	goldenToolsSHA256Default        = "c24fd5e9b02cf80fd35557776a4bac239bce0ac2175b9042d7999e356cb5be9e"
+	goldenSystemSHA256Default       = "6db65686769ee3cb0de2a0c9ca909741035353a3e3625ebfb906c98a953a9f33"
 	goldenUserContextReminderSHA256 = "83ae35d35803cc9ec3e35280018a91b78af1e71190e68001e395c5bb7ca15f7a"
 )
 

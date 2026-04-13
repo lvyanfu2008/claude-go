@@ -4,17 +4,14 @@ package toolinput
 
 import (
 	"encoding/json"
-	"os"
-	"strings"
 
 	"goc/ccb-engine/internal/anthropic"
-	"goc/internal/jsonschemavalidate"
-	"goc/internal/toolrefine"
+	"goc/internal/toolvalidator"
 )
 
 // SkipValidation returns true when CCB_ENGINE_SKIP_TOOL_INPUT_SCHEMA=1 (escape hatch).
 func SkipValidation() bool {
-	return strings.TrimSpace(os.Getenv("CCB_ENGINE_SKIP_TOOL_INPUT_SCHEMA")) == "1"
+	return toolvalidator.SkipValidation()
 }
 
 func findInputSchema(tools []anthropic.ToolDefinition, name string) any {
@@ -29,17 +26,10 @@ func findInputSchema(tools []anthropic.ToolDefinition, name string) any {
 // ValidateAgainstTools checks input against the named tool's input_schema from tools (if present).
 // Unknown tool names or missing/empty schemas are skipped (no error).
 // Compilation or validation failures return a wrapped error — callers should surface them as tool_result is_error.
+//
+// When GO_TOOL_INPUT_VALIDATOR=zog and the tool is registered in zoglayer, Zog validates input first;
+// otherwise the legacy path uses embedded JSON Schema (tools_api.json) + toolrefine.
 func ValidateAgainstTools(tools []anthropic.ToolDefinition, toolName string, input json.RawMessage) error {
-	if SkipValidation() {
-		return nil
-	}
 	rawSchema := findInputSchema(tools, toolName)
-	if rawSchema == nil {
-		return nil
-	}
-
-	if err := jsonschemavalidate.Validate(toolName, rawSchema, input); err != nil {
-		return err
-	}
-	return toolrefine.AfterJSONSchema(toolName, input)
+	return toolvalidator.ValidateInput(toolName, rawSchema, input)
 }

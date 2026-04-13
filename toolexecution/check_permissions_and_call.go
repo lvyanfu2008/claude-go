@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"iter"
 
-	"goc/internal/toolrefine"
+	"goc/internal/toolvalidator"
 	"goc/types"
 )
 
@@ -62,11 +62,7 @@ func CheckPermissionsAndCallTool(
 		return []types.Message{um}, nil
 	}
 	if st, ok := tool.(interface{ InputSchemaAny() any }); ok {
-		if err := ValidateInputAgainstSchema(tool.Name(), st.InputSchemaAny(), input); err != nil {
-			um := syntheticPreToolHookDenied(deps, toolUseID, assistant.UUID, err.Error())
-			return []types.Message{um}, nil
-		}
-		if err := toolrefine.AfterJSONSchema(tool.Name(), input); err != nil {
+		if err := toolvalidator.ValidateInput(tool.Name(), st.InputSchemaAny(), input); err != nil {
 			um := syntheticPreToolHookDenied(deps, toolUseID, assistant.UUID, err.Error())
 			return []types.Message{um}, nil
 		}
