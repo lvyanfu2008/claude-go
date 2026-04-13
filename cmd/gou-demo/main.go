@@ -1637,12 +1637,23 @@ func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 	return ok
 }
 
+// priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
+// One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
+func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
+	for j := 0; j < idx && j < len(segs); j++ {
+		if segs[j].Kind == messagerow.SegTextMarkdown && strings.TrimSpace(segs[j].Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
 // assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
 func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool) string {
 	var parts []string
 	assistantTextLeadDone := false
-	for _, seg := range segs {
+	for i, seg := range segs {
 		switch seg.Kind {
 		case messagerow.SegTextMarkdown:
 			md := styleMarkdownTokens(markdown.CachedLexer(seg.Text), cols)
@@ -1653,7 +1664,10 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, md)
 		case messagerow.SegToolUse:
 			if seg.ToolFacing != "" {
-				row1 := toolRowLeadPrefix()
+				row1 := ""
+				if !priorNonEmptyAssistantText(segs, i) {
+					row1 = toolRowLeadPrefix()
+				}
 				row1 += lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render(seg.ToolFacing)
 				if p := strings.TrimSpace(seg.ToolParen); p != "" {
 					row1 += " (" + p + ")"
@@ -1698,7 +1712,10 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(seg.Text)))
 		case messagerow.SegServerToolUse:
 			if seg.ToolFacing != "" {
-				row1 := toolRowLeadPrefix()
+				row1 := ""
+				if !priorNonEmptyAssistantText(segs, i) {
+					row1 = toolRowLeadPrefix()
+				}
 				row1 += lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render(seg.ToolFacing)
 				if p := strings.TrimSpace(seg.ToolParen); p != "" {
 					row1 += " (" + p + ")"
