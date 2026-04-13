@@ -57,7 +57,7 @@ func TestMessagesJSONWithLeadingMeta_preservesAssistantBetweenUsers(t *testing.T
 	}
 	ctx := "CTX"
 	listing := "SKILL"
-	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, messagesapi.DefaultOptions())
+	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, nil, messagesapi.DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestMessagesJSONWithLeadingMeta_singleUser_TSPrependThenHiThenSkillListing(
 	}
 	ctx := "<system-reminder>\nctx\n</system-reminder>"
 	listing := "<system-reminder>\nskills\n</system-reminder>"
-	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, messagesapi.DefaultOptions())
+	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, nil, messagesapi.DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestMessagesJSONWithLeadingMeta_singleUser_threeTextBlocksLikeTS(t *testing
 	}
 	ctx := "<system-reminder>\nctx\n</system-reminder>"
 	listing := "<system-reminder>\nskills\n</system-reminder>"
-	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, messagesapi.DefaultOptions())
+	out, err := MessagesJSONWithLeadingMeta(msgs, ctx, listing, nil, nil, messagesapi.DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestMergeConsecutiveUserMessagesJSON_skipsNonStringPair(t *testing.T) {
 
 func TestSkillListingStoreMessage(t *testing.T) {
 	api := commands.SkillListingAPIUserText("- `demo-skill`: short")
-	m, ok := SkillListingStoreMessage(api)
+	m, ok := SkillListingStoreMessage(api, &SkillListingMeta{SkillCount: 1, IsInitial: false})
 	if !ok {
 		t.Fatal("expected ok")
 	}
@@ -316,15 +316,22 @@ func TestSkillListingStoreMessage(t *testing.T) {
 	if m.UUID == "" || !strings.HasPrefix(m.UUID, "sl-") {
 		t.Fatalf("uuid=%q", m.UUID)
 	}
-	var att map[string]string
+	var att map[string]any
 	if err := json.Unmarshal(m.Attachment, &att); err != nil {
 		t.Fatal(err)
 	}
 	if att["type"] != "skill_listing" {
-		t.Fatalf("attachment type=%q", att["type"])
+		t.Fatalf("attachment type=%v", att["type"])
 	}
-	if !strings.Contains(att["content"], "demo-skill") {
-		t.Fatalf("content=%q", att["content"])
+	content, _ := att["content"].(string)
+	if !strings.Contains(content, "demo-skill") {
+		t.Fatalf("content=%q", content)
+	}
+	if sc, ok := att["skillCount"].(float64); !ok || int(sc) != 1 {
+		t.Fatalf("skillCount=%v", att["skillCount"])
+	}
+	if att["isInitial"] == true {
+		t.Fatal("expected isInitial false")
 	}
 }
 

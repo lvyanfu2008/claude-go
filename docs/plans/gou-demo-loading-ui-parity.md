@@ -7,6 +7,7 @@ Reference: [`claude-code/src/components/Spinner.tsx`](../../../claude-code/src/c
 | TS | gou-demo | Notes |
 |----|----------|-------|
 | Tool row activity + summary | [`messagerow/tool_activity.go`](../../gou/messagerow/tool_activity.go) + [`segment.go`](../../gou/messagerow/segment.go) | Read path uses `filepath.Rel` to cwd when safe; otherwise cleaned path (TS `getDisplayPath` may differ slightly). |
+| `attachment` rows (e.g. `skill_listing`) | [`messagerow/attachment_segment.go`](../../gou/messagerow/attachment_segment.go) | Matches TS `AttachmentMessage`: no `attachment` role header; `skill_listing` shows **`N skill(s) available`** with bold count, hides when `isInitial` (store JSON includes `skillCount` / `isInitial` from [`AppendSkillListingForAPI`](../../commands/skill_listing_delta.go)). |
 | Verbose tool JSON | `GOU_DEMO_VERBOSE_TOOL_OUTPUT` | Same env as tool_result preview cap; forces `formatNamedTool` JSON for `tool_use` / `server_tool_use`. |
 | Dim `(ctrl+o to expand)` on tool rows | [`cmd/gou-demo/main.go`](../../cmd/gou-demo/main.go) | Only when `uiScreen == prompt` and not transcript dump mode; literal `ctrl+o` until shortcut display is wired. |
 | `✻` + spinner verb + ellipsis animation | `queryBusy` + `spinner_verbs.go`, tick in `main.go` | Verbs list manually synced from TS `SPINNER_VERBS`. |

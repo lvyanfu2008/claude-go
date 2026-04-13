@@ -24,6 +24,7 @@ const (
 	SegGroupedToolUse
 	SegCollapsedReadSearch
 	SegDisplayHint
+	SegSkillListingAvailable // Num = skill count; TS AttachmentMessage skill_listing
 	SegUnknown
 )
 
@@ -31,6 +32,8 @@ const (
 type Segment struct {
 	Kind SegmentKind
 	Text string
+	// Num is used when Kind == SegSkillListingAvailable (TS bold skillCount + " skills available").
+	Num int
 	// IsToolError is set for tool_result / advisor blocks when TS is_error is true (OutputLine error styling).
 	IsToolError bool
 }
@@ -59,6 +62,8 @@ func segmentsFromMessageDepthOpts(msg types.Message, depth int, opts *RenderOpts
 	}
 	msg = NormalizeMessageJSON(msg)
 	switch msg.Type {
+	case types.MessageTypeAttachment:
+		return segmentsFromAttachment(msg)
 	case types.MessageTypeGroupedToolUse:
 		return segmentsGroupedToolUse(msg, depth, opts)
 	case types.MessageTypeCollapsedReadSearch:

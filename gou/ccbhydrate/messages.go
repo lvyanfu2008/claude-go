@@ -81,6 +81,13 @@ func marshalJSONNoEscapeHTML(v any) (json.RawMessage, error) {
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
+// SkillListingMeta carries TS skill_listing attachment fields (skillCount, isInitial) for UI parity;
+// optional on [MessagesJSONWithLeadingMeta] when callers only have listing text (tests infer counts from content).
+type SkillListingMeta struct {
+	SkillCount int
+	IsInitial  bool
+}
+
 // MessagesJSONWithLeadingMeta mirrors TS [query.ts] prependUserContext + [processTextPrompt] attachment
 // order, then [messagesapi.NormalizeMessagesForAPI]: skill_listing is appended after the **last** transcript
 // user (same turn as TS processTextPrompt: [userMessage, ...attachmentMessages]), then prependUserContext
@@ -91,9 +98,11 @@ func marshalJSONNoEscapeHTML(v any) (json.RawMessage, error) {
 // wire dumps. Set [messagesapi.Options.CompactAllTextUserContent] true to collapse each all-text user row
 // before projection.
 //
+// skillListingMeta when non-nil is merged into the skill_listing attachment JSON (TS AttachmentMessage gates).
+//
 // Diagnostic: set CLAUDE_CODE_GO_MESSAGESJSON_STAGE_LOG=1 to append the pre-normalize [stage] JSON to the diag log
 // (see [diaglog.Line]; same path as other Claude debug lines, truncated at 32KiB).
-func MessagesJSONWithLeadingMeta(msgs []types.Message, userContextReminder, skillListingText string, tools []messagesapi.ToolSpec, opts messagesapi.Options) (json.RawMessage, error) {
+func MessagesJSONWithLeadingMeta(msgs []types.Message, userContextReminder, skillListingText string, skillListingMeta *SkillListingMeta, tools []messagesapi.ToolSpec, opts messagesapi.Options) (json.RawMessage, error) {
 	skill := strings.TrimSpace(skillListingText)
 	ctx := strings.TrimSpace(userContextReminder)
 	if skill == "" && ctx == "" {
@@ -102,10 +111,10 @@ func MessagesJSONWithLeadingMeta(msgs []types.Message, userContextReminder, skil
 	stage := slices.Clone(msgs)
 	switch {
 	case skill != "" && ctx != "":
-		stage = appendSkillListingAttachmentAfterLastUser(stage, skillListingText)
+		stage = appendSkillListingAttachmentAfterLastUser(stage, skillListingText, skillListingMeta)
 		stage = prependReminderUser(stage, userContextReminder)
 	case skill != "":
-		stage = appendSkillListingAttachmentAfterLastUser(stage, skillListingText)
+		stage = appendSkillListingAttachmentAfterLastUser(stage, skillListingText, skillListingMeta)
 	default:
 		stage = prependReminderUser(stage, userContextReminder)
 	}
@@ -138,15 +147,20 @@ func prependReminderUser(msgs []types.Message, text string) []types.Message {
 	return append([]types.Message{messagesapi.ReminderUserMessage(text, true)}, msgs...)
 }
 
-func skillListingAttachmentMessage(listingAPIUserText string) (types.Message, bool) {
+func skillListingAttachmentMessage(listingAPIUserText string, meta *SkillListingMeta) (types.Message, bool) {
 	inner := skillListingAttachmentInner(listingAPIUserText)
 	if strings.TrimSpace(inner) == "" {
 		return types.Message{}, false
 	}
-	att, err := json.Marshal(map[string]string{
+	payload := map[string]any{
 		"type":    "skill_listing",
 		"content": inner,
-	})
+	}
+	if meta != nil {
+		payload["skillCount"] = meta.SkillCount
+		payload["isInitial"] = meta.IsInitial
+	}
+	att, err := json.Marshal(payload)
 	if err != nil {
 		return types.Message{}, false
 	}
@@ -157,8 +171,8 @@ func skillListingAttachmentMessage(listingAPIUserText string) (types.Message, bo
 // QueryEngine push of type attachment + skill_listing before the assistant reply for that turn.
 // Use the same string as [commands.AppendSkillListingForAPI]. Persist only after [MessagesJSONWithLeadingMeta]
 // succeeds so hydrate does not see a duplicate listing in the same stage.
-func SkillListingStoreMessage(listingAPIUserText string) (types.Message, bool) {
-	m, ok := skillListingAttachmentMessage(listingAPIUserText)
+func SkillListingStoreMessage(listingAPIUserText string, meta *SkillListingMeta) (types.Message, bool) {
+	m, ok := skillListingAttachmentMessage(listingAPIUserText, meta)
 	if !ok {
 		return types.Message{}, false
 	}
@@ -185,8 +199,8 @@ func skillListingAttachmentInner(apiUserText string) string {
 
 // appendSkillListingAttachmentAfterLastUser appends a skill_listing attachment row immediately after the last
 // [types.MessageTypeUser] row (TS processTextPrompt: attachments after the current user message).
-func appendSkillListingAttachmentAfterLastUser(msgs []types.Message, listingAPIUserText string) []types.Message {
-	attMsg, ok := skillListingAttachmentMessage(listingAPIUserText)
+func appendSkillListingAttachmentAfterLastUser(msgs []types.Message, listingAPIUserText string, meta *SkillListingMeta) []types.Message {
+	attMsg, ok := skillListingAttachmentMessage(listingAPIUserText, meta)
 	if !ok {
 		return msgs
 	}
@@ -233,7 +247,7 @@ func appendReminderUserAfterLastUserOrAppendIfNoUser(msgs []types.Message, text 
 // MessagesJSONWithSkillListing inserts listing after the last user message (no user-context reminder).
 // With a reminder, use [MessagesJSONWithLeadingMeta].
 func MessagesJSONWithSkillListing(msgs []types.Message, listingUserText string, tools []messagesapi.ToolSpec, opts messagesapi.Options) (json.RawMessage, error) {
-	return MessagesJSONWithLeadingMeta(msgs, "", listingUserText, tools, opts)
+	return MessagesJSONWithLeadingMeta(msgs, "", listingUserText, nil, tools, opts)
 }
 
 // InsertUserMessageAfterLastUserJSON inserts one user message with string content immediately after the last

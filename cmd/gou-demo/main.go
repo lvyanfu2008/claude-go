@@ -41,6 +41,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1060,17 +1061,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 
 						listing := ""
+						var listingMeta *ccbhydrate.SkillListingMeta
 						if !gouDemoEnvTruthy("GOU_DEMO_SKIP_SKILL_LISTING") {
 							listingSent := m.skillListingSent
 							if gouDemoEnvTruthy("GOU_DEMO_SKILL_LISTING_EVERY_TURN") {
 								listingSent = make(map[string]struct{})
 							}
-							if s, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, listingSent, nil); ok {
+							if s, n, initial, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, listingSent, nil); ok {
 								listing = s
+								listingMeta = &ccbhydrate.SkillListingMeta{SkillCount: n, IsInitial: initial}
 							}
 						}
 						gouDemoLogStoreMessages("before_ccbhydrate", m.store)
-						msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.store.Messages, userCtxReminder, listing, toolSpecs, normOpts)
+						msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.store.Messages, userCtxReminder, listing, listingMeta, toolSpecs, normOpts)
 						if errL != nil {
 							gouDemoTracef("gou-demo: MessagesJSONWithLeadingMeta error: %v", errL)
 							m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
@@ -1080,7 +1083,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.store.ClearStreaming()
 							// TS: skill_listing attachment is pushed to mutableMessages before callModel (QueryEngine attachment case).
 							if strings.TrimSpace(listing) != "" {
-								if att, ok := ccbhydrate.SkillListingStoreMessage(listing); ok {
+								if att, ok := ccbhydrate.SkillListingStoreMessage(listing, listingMeta); ok {
 									m.store.AppendMessage(att)
 									m.rebuildHeightCache()
 								}
@@ -1352,10 +1355,24 @@ func (m *model) messagerowOpts() *messagerow.RenderOpts {
 }
 
 func (m *model) measureMessageRows(msg types.Message, cols int) int {
-	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
-	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols, m.showToolUseCtrlOExpandHint())
-	block := header + "\n" + body
-	return max(1, layout.WrappedRowCount(block, cols))
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts())
+	if msg.Type == types.MessageTypeAttachment && len(segs) == 0 {
+		return 0
+	}
+	var header string
+	if msg.Type != types.MessageTypeAttachment {
+		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+	}
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint())
+	block := body
+	if header != "" {
+		block = header + "\n" + body
+	}
+	r := layout.WrappedRowCount(block, cols)
+	if msg.Type == types.MessageTypeAttachment {
+		return r
+	}
+	return max(1, r)
 }
 
 func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
@@ -1436,10 +1453,13 @@ func (m *model) View() string {
 		key := keys[i]
 		h := m.heightCache[key]
 		block := m.renderMessageRow(msg, cols, h)
-		msgPane.WriteString(block)
-		if i+1 < vr.End {
+		if strings.TrimSpace(block) == "" && h <= 0 {
+			continue
+		}
+		if msgPane.Len() > 0 {
 			msgPane.WriteByte('\n')
 		}
+		msgPane.WriteString(block)
 	}
 	// Same transcript as TS: show in-flight assistant text in the main pane, not only the small stream: strip.
 	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
@@ -1507,9 +1527,16 @@ func (m *model) showToolUseCtrlOExpandHint() bool {
 }
 
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
-	header := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
-	body := formatMessageSegments(messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts()), cols, m.showToolUseCtrlOExpandHint())
-	block := header + "\n" + body
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts())
+	var header string
+	if msg.Type != types.MessageTypeAttachment {
+		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+	}
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint())
+	block := body
+	if header != "" {
+		block = header + "\n" + body
+	}
 	wrapped := layout.WrapForViewport(block, cols)
 	rows := strings.Split(wrapped, "\n")
 	if len(rows) > maxRows {
@@ -1560,6 +1587,17 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ "+seg.Text))
 		case messagerow.SegCollapsedReadSearch:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(seg.Text)))
+		case messagerow.SegSkillListingAvailable:
+			n := seg.Num
+			if n < 1 {
+				n = 1
+			}
+			word := "skills"
+			if n == 1 {
+				word = "skill"
+			}
+			line := lipgloss.NewStyle().Bold(true).Render(strconv.Itoa(n)) + " " + word + " available"
+			parts = append(parts, line)
 		default:
 			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(seg.Text)))
 		}
