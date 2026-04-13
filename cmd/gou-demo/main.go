@@ -1557,6 +1557,9 @@ func (m *model) View() string {
 	keys := m.scrollItemKeys()
 	n := len(keys)
 	vpH := listViewportH(m)
+	if !m.sticky {
+		m.clampScrollTopForVirtualList()
+	}
 
 	// Phase 3: refine last frame's visible rows (TS measureRef), then recompute range with fresh heights.
 	if m.prevRange != nil && n > 0 {

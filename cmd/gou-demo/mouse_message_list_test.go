@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"goc/gou/conversation"
+	"goc/types"
 )
 
 func TestMouseYInMessageListPane_transcriptBand(t *testing.T) {
@@ -55,6 +56,28 @@ func TestTryHandleMessageListMouse_wheelInPane(t *testing.T) {
 	}
 	if m.sticky {
 		t.Fatal("sticky should clear on manual scroll")
+	}
+}
+
+func TestClampScrollTopForVirtualList_normalizesHugeScrollTop(t *testing.T) {
+	m := &model{
+		store:     &conversation.Store{ConversationID: "c"},
+		height:    40,
+		width:     100,
+		cols:      96,
+		titleH:    1,
+		streamH:   4,
+		uiScreen:  gouDemoScreenTranscript,
+		sticky:    false,
+		scrollTop: 1 << 30,
+	}
+	m.store.Messages = []types.Message{{UUID: "u0"}}
+	m.heightCache = map[string]int{conversation.ItemKey(m.store.Messages[0], "c"): 5}
+	// scrollItemKeys uses messagesForScroll; single message one key.
+	m.clampScrollTopForVirtualList()
+	vp := listViewportH(m)
+	if m.scrollTop < 0 || m.scrollTop > 1<<20 {
+		t.Fatalf("scrollTop should be clamped to a modest range, got %d (vp=%d)", m.scrollTop, vp)
 	}
 }
 

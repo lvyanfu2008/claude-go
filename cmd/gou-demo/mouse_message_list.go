@@ -2,6 +2,8 @@ package main
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+
+	"goc/gou/virtualscroll"
 )
 
 // mouseYInMessageListPane reports whether screen row y falls in the virtual message list
@@ -14,6 +16,37 @@ func (m *model) mouseYInMessageListPane(y int) bool {
 	top := m.titleH
 	bot := top + vp
 	return y >= top && y < bot
+}
+
+// clampScrollTopForVirtualList pins scrollTop to [0, max(0, totalContentHeight−viewportH)] when not sticky.
+// After sticky-bottom (scrollTop sentinel ~1<<30), the first manual scroll leaves a huge scrollTop; without
+// clamping, ComputeRange's binary search breaks and wheel/keys cannot scroll back toward the tail.
+func (m *model) clampScrollTopForVirtualList() {
+	if m.sticky {
+		return
+	}
+	keys := m.scrollItemKeys()
+	n := len(keys)
+	if n == 0 {
+		m.scrollTop = 0
+		return
+	}
+	vpH := listViewportH(m)
+	if vpH < 1 {
+		return
+	}
+	off := virtualscroll.BuildOffsets(keys, m.heightCache, virtualscroll.DefaultEstimate)
+	total := off[n]
+	maxTop := total - vpH
+	if maxTop < 0 {
+		maxTop = 0
+	}
+	if m.scrollTop < 0 {
+		m.scrollTop = 0
+	}
+	if m.scrollTop > maxTop {
+		m.scrollTop = maxTop
+	}
 }
 
 // tryHandleMessageListMouse maps wheel and left-drag to virtual scroll (TS ScrollBox wheel / drag).
