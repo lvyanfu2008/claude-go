@@ -42,15 +42,15 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "CronList":
 		return CronListFromJSON(raw, cfg)
 	case "Agent":
-		return AgentStubFromJSON(raw)
+		return AgentFromJSON(raw)
 	case "SendMessage":
-		return SendMessageStubFromJSON(raw)
+		return SendMessageFromJSON(raw)
 	case "SendUserMessage", "Brief":
 		return BriefFromJSON(raw)
 	case "ListMcpResourcesTool":
-		return ListMcpResourcesStub(raw)
+		return ListMcpResourcesFromJSON(raw)
 	case "ReadMcpResourceTool":
-		return ReadMcpResourceStub(raw)
+		return ReadMcpResourceFromJSON(raw)
 	case "echo_stub":
 		return EchoStubFromJSON(raw)
 	default:

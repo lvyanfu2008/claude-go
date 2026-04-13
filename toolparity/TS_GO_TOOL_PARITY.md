@@ -8,7 +8,7 @@ go run ./cmd/gen-tool-parity
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
 - **Go anchor:** [ccb-engine/skilltools/parity_runner.go](ccb-engine/skilltools/parity_runner.go) — ParityToolRunner.Run + paritytools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-13T01:58:48Z
+- **Generated:** 2026-04-13T02:16:44Z
 
 ## Status legend
 
@@ -21,7 +21,7 @@ go run ./cmd/gen-tool-parity
 
 | Tool | Aliases | TS presence | TS note | Go status | Go location |
 |------|---------|-------------|---------|-----------|-------------|
-| Agent | Task | core | — | stub | paritytools.Run |
+| Agent | Task | core | — | full | paritytools.AgentFromJSON |
 | TaskOutput | — | core | — | full | paritytools.Run |
 | Bash | — | core | — | full | localtools.BashFromJSON |
 | Glob | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GlobFromJSON |
@@ -52,7 +52,7 @@ go run ./cmd/gen-tool-parity
 | LSP | — | ENABLE_LSP_TOOL | — | none | — |
 | EnterWorktree | — | worktree_mode | — | none | — |
 | ExitWorktree | — | worktree_mode | — | none | — |
-| SendMessage | — | core_dynamic | getSendMessageTool() | stub | paritytools.Run |
+| SendMessage | — | core_dynamic | getSendMessageTool() | full | paritytools.SendMessageFromJSON |
 | ListPeers | — | feature_flag | — | none | — |
 | TeamCreate | — | agent_swarms | — | none | — |
 | TeamDelete | — | agent_swarms | — | none | — |
@@ -72,8 +72,8 @@ go run ./cmd/gen-tool-parity
 | PowerShell | — | conditional | — | none | — |
 | Snip | — | feature_import | — | none | — |
 | TestingPermission | — | NODE_ENV=test | — | none | — |
-| ListMcpResourcesTool | — | core | — | stub | paritytools.Run |
-| ReadMcpResourceTool | — | core | — | stub | paritytools.Run |
+| ListMcpResourcesTool | — | core | — | full | paritytools.ListMcpResourcesFromJSON |
+| ReadMcpResourceTool | — | core | — | full | paritytools.ReadMcpResourceFromJSON |
 | ToolSearch | — | tool_search_optimistic | — | full | ccb-engine/internal/toolsearch |
 | echo_stub | — | not_ts_builtin | Go tests / demos only | full | paritytools.Run |
 
@@ -81,6 +81,5 @@ go run ./cmd/gen-tool-parity
 
 | Go status | Count |
 |-----------|------:|
-| full | 26 |
-| stub | 4 |
+| full | 30 |
 | none | 25 |

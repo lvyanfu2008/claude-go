@@ -18,16 +18,22 @@ func EchoStubFromJSON(raw []byte) (string, bool, error) {
 	return in.Message, false, nil
 }
 
-// AgentStubFromJSON returns a tool error string (plan P6 path a: explicit unsupported).
-func AgentStubFromJSON(raw []byte) (string, bool, error) {
+// AgentFromJSON mirrors TS-style tool_result content: JSON with {data: {success, message}} (no subagent engine in Go runner).
+func AgentFromJSON(raw []byte) (string, bool, error) {
 	_ = raw
-	return "Agent tool is not implemented in the Go ParityToolRunner (use TS socket worker or a future sub-turn engine).", true, nil
+	msg := "Agent tool is not implemented in the Go ParityToolRunner (use TS socket worker or a future sub-turn engine)."
+	out := map[string]any{"data": map[string]any{"success": false, "message": msg}}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
 }
 
-// SendMessageStubFromJSON — teammate mailbox not available in Go runner.
-func SendMessageStubFromJSON(raw []byte) (string, bool, error) {
+// SendMessageFromJSON mirrors TS SendMessage soft-failure shape when mailbox / swarm is unavailable.
+func SendMessageFromJSON(raw []byte) (string, bool, error) {
 	_ = raw
-	return "SendMessage is not implemented in the Go runner (requires TS teammate / mailbox / bridge).", true, nil
+	msg := "SendMessage is not implemented in the Go runner (requires TS teammate / mailbox / bridge)."
+	out := map[string]any{"data": map[string]any{"success": false, "message": msg}}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
 }
 
 // BriefFromJSON records a user-visible message path: returns JSON echo (headless transcript hint).
@@ -59,14 +65,37 @@ func BriefFromJSON(raw []byte) (string, bool, error) {
 	return string(b), false, nil
 }
 
-// ListMcpResourcesStub returns structured “no MCP” error.
-func ListMcpResourcesStub(raw []byte) (string, bool, error) {
-	_ = raw
-	return "", true, fmt.Errorf("ListMcpResourcesTool: no MCP client in Go runner (use TS worker or future Go MCP client)")
+// ListMcpResourcesFromJSON mirrors ListMcpResourcesTool.call with zero MCP clients (TS returns {data: []}).
+// If server is set, TS throws when no client matches — same error text as TS.
+func ListMcpResourcesFromJSON(raw []byte) (string, bool, error) {
+	var in struct {
+		Server string `json:"server"`
+	}
+	_ = json.Unmarshal(raw, &in)
+	target := strings.TrimSpace(in.Server)
+	if target != "" {
+		return "", true, fmt.Errorf(`Server "%s" not found. Available servers: `, target)
+	}
+	out := map[string]any{"data": []any{}}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
 }
 
-// ReadMcpResourceStub returns structured “no MCP” error.
-func ReadMcpResourceStub(raw []byte) (string, bool, error) {
-	_ = raw
-	return "", true, fmt.Errorf("ReadMcpResourceTool: no MCP client in Go runner (use TS worker or future Go MCP client)")
+// ReadMcpResourceFromJSON mirrors ReadMcpResourceTool when no MCP client exists for server (TS throws).
+func ReadMcpResourceFromJSON(raw []byte) (string, bool, error) {
+	var in struct {
+		Server string `json:"server"`
+		URI    string `json:"uri"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return "", true, err
+	}
+	srv := strings.TrimSpace(in.Server)
+	if srv == "" {
+		return "", true, fmt.Errorf("server is required")
+	}
+	if strings.TrimSpace(in.URI) == "" {
+		return "", true, fmt.Errorf("uri is required")
+	}
+	return "", true, fmt.Errorf(`Server "%s" not found. Available servers: `, srv)
 }

@@ -10,7 +10,7 @@
     "none": "No dedicated Go handler in paritytools/ParityToolRunner/localtools Skill path."
   },
   "entries": [
-    {"name": "Agent", "aliases": ["Task"], "ts_presence": "core", "go_status": "stub", "go_location": "paritytools.Run"},
+    {"name": "Agent", "aliases": ["Task"], "ts_presence": "core", "go_status": "full", "go_location": "paritytools.AgentFromJSON"},
     {"name": "TaskOutput", "ts_presence": "core", "go_status": "full", "go_location": "paritytools.Run"},
     {"name": "Bash", "ts_presence": "core", "go_status": "full", "go_location": "localtools.BashFromJSON"},
     {"name": "Glob", "ts_presence": "core_if_not_embedded_search", "ts_note": "Omitted when hasEmbeddedSearchTools()", "go_status": "full", "go_location": "localtools.GlobFromJSON"},
@@ -41,7 +41,7 @@
     {"name": "LSP", "ts_presence": "ENABLE_LSP_TOOL", "go_status": "none", "go_location": ""},
     {"name": "EnterWorktree", "ts_presence": "worktree_mode", "go_status": "none", "go_location": ""},
     {"name": "ExitWorktree", "ts_presence": "worktree_mode", "go_status": "none", "go_location": ""},
-    {"name": "SendMessage", "ts_presence": "core_dynamic", "ts_note": "getSendMessageTool()", "go_status": "stub", "go_location": "paritytools.Run"},
+    {"name": "SendMessage", "ts_presence": "core_dynamic", "ts_note": "getSendMessageTool()", "go_status": "full", "go_location": "paritytools.SendMessageFromJSON"},
     {"name": "ListPeers", "ts_presence": "feature_flag", "go_status": "none", "go_location": ""},
     {"name": "TeamCreate", "ts_presence": "agent_swarms", "go_status": "none", "go_location": ""},
     {"name": "TeamDelete", "ts_presence": "agent_swarms", "go_status": "none", "go_location": ""},
@@ -61,8 +61,8 @@
     {"name": "PowerShell", "ts_presence": "conditional", "go_status": "none", "go_location": ""},
     {"name": "Snip", "ts_presence": "feature_import", "go_status": "none", "go_location": ""},
     {"name": "TestingPermission", "ts_presence": "NODE_ENV=test", "go_status": "none", "go_location": ""},
-    {"name": "ListMcpResourcesTool", "ts_presence": "core", "go_status": "stub", "go_location": "paritytools.Run"},
-    {"name": "ReadMcpResourceTool", "ts_presence": "core", "go_status": "stub", "go_location": "paritytools.Run"},
+    {"name": "ListMcpResourcesTool", "ts_presence": "core", "go_status": "full", "go_location": "paritytools.ListMcpResourcesFromJSON"},
+    {"name": "ReadMcpResourceTool", "ts_presence": "core", "go_status": "full", "go_location": "paritytools.ReadMcpResourceFromJSON"},
     {"name": "ToolSearch", "ts_presence": "tool_search_optimistic", "go_status": "full", "go_location": "ccb-engine/internal/toolsearch"},
     {"name": "echo_stub", "ts_presence": "not_ts_builtin", "ts_note": "Go tests / demos only", "go_status": "full", "go_location": "paritytools.Run"}
   ]
