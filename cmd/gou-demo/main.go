@@ -1577,8 +1577,11 @@ func userMessageHasPromptText(msg types.Message) bool {
 	return false
 }
 
-// userMessageIsToolResultsOnly is true when every content block is tool_result or advisor_tool_result.
-func userMessageIsToolResultsOnly(msg types.Message) bool {
+// userMessageIsOmittableToolResultStub is true when the user row would render only folded tool_result
+// stubs (no visible user text). Empty text blocks and whitespace-only text are ignored so
+// [{"type":"text","text":""},{"type":"tool_result",...}] still omits. Call after [messagerow.NormalizeMessageJSON]
+// so API-shaped rows with content only in Message.{role,content} match.
+func userMessageIsOmittableToolResultStub(msg types.Message) bool {
 	if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
 		return false
 	}
@@ -1586,15 +1589,20 @@ func userMessageIsToolResultsOnly(msg types.Message) bool {
 	if err := json.Unmarshal(msg.Content, &blocks); err != nil || len(blocks) == 0 {
 		return false
 	}
+	hasTool := false
 	for _, b := range blocks {
 		switch b.Type {
 		case "tool_result", "advisor_tool_result":
-			// ok
+			hasTool = true
+		case "text":
+			if strings.TrimSpace(b.Text) != "" {
+				return false
+			}
 		default:
 			return false
 		}
 	}
-	return true
+	return hasTool
 }
 
 func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
@@ -1604,7 +1612,8 @@ func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	if messagerow.VerboseToolOutputEnabled() {
 		return false
 	}
-	return userMessageIsToolResultsOnly(msg)
+	msg = messagerow.NormalizeMessageJSON(msg)
+	return userMessageIsOmittableToolResultStub(msg)
 }
 
 // withUserPromptPointerIfNeeded prepends TS HighlightedThinkingText-style figures.pointer before the first body line.

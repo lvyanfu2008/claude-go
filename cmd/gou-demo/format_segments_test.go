@@ -76,3 +76,21 @@ func TestMeasureMessageRows_keepsUserToolResultWithText(t *testing.T) {
 		t.Fatalf("measureMessageRows = %d, want >=1", got)
 	}
 }
+
+func TestMeasureMessageRows_skipsUserWithEmptyTextPlusToolResult(t *testing.T) {
+	m := &model{uiScreen: gouDemoScreenPrompt, store: &conversation.Store{ConversationID: "c"}}
+	raw := `[{"type":"text","text":""},{"type":"tool_result","tool_use_id":"call_x","content":"ok"}]`
+	msg := types.Message{Type: types.MessageTypeUser, UUID: "u3", Content: []byte(raw)}
+	if got := m.measureMessageRows(msg, 80); got != 0 {
+		t.Fatalf("measureMessageRows = %d, want 0", got)
+	}
+}
+
+func TestMeasureMessageRows_skipsUserToolResultFromMessageField(t *testing.T) {
+	m := &model{uiScreen: gouDemoScreenPrompt, store: &conversation.Store{ConversationID: "c"}}
+	inner := `{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_x","content":"ok"}]}`
+	msg := types.Message{Type: types.MessageTypeUser, UUID: "u4", Message: []byte(inner)}
+	if got := m.measureMessageRows(msg, 80); got != 0 {
+		t.Fatalf("measureMessageRows = %d, want 0 (normalize message→content)", got)
+	}
+}
