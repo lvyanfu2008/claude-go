@@ -53,7 +53,8 @@ func TestApply_usageAccumulates(t *testing.T) {
 	}
 }
 
-func TestApply_toolResultCollapsesReadSearchTail(t *testing.T) {
+func TestApply_toolResultCollapsesReadSearchTailWhenOptIn(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL", "1")
 	st := &conversation.Store{ConversationID: "t"}
 	Apply(st, StreamEvent{Type: "tool_use", ID: "r1", Name: "Read", Input: map[string]any{"file_path": "/tmp/a.txt"}})
 	Apply(st, StreamEvent{Type: "tool_result", ToolUseID: "r1", Content: "body"})
@@ -62,6 +63,19 @@ func TestApply_toolResultCollapsesReadSearchTail(t *testing.T) {
 	}
 	if st.Messages[0].Type != types.MessageTypeCollapsedReadSearch {
 		t.Fatalf("type=%s", st.Messages[0].Type)
+	}
+}
+
+func TestApply_toolResultDoesNotCollapseByDefault(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL", "")
+	st := &conversation.Store{ConversationID: "t"}
+	Apply(st, StreamEvent{Type: "tool_use", ID: "r1", Name: "Read", Input: map[string]any{"file_path": "/tmp/a.txt"}})
+	Apply(st, StreamEvent{Type: "tool_result", ToolUseID: "r1", Content: "body"})
+	if len(st.Messages) != 2 {
+		t.Fatalf("want 2 top-level messages without tail collapse, got %d", len(st.Messages))
+	}
+	if st.Messages[0].Type != types.MessageTypeAssistant || st.Messages[1].Type != types.MessageTypeUser {
+		t.Fatalf("types %s / %s", st.Messages[0].Type, st.Messages[1].Type)
 	}
 }
 

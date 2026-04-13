@@ -3,6 +3,7 @@ package ccbstream
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -10,6 +11,14 @@ import (
 	"goc/gou/messagerow"
 	"goc/types"
 )
+
+// collapseReadSearchTailFromEnv mirrors TS tail collapse into collapsed_read_search.
+// Default off: merging removes individual Read/Grep/Glob rows from the main list (nested only),
+// which reads like "history cleared" in gou-demo. Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 to enable.
+func collapseReadSearchTailFromEnv() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
 
 // Apply updates store from one stream event (assistant_delta, tool_use, tool_result, turn_complete, error).
 func Apply(store *conversation.Store, ev StreamEvent) {
@@ -47,7 +56,9 @@ func Apply(store *conversation.Store, ev StreamEvent) {
 			UUID:    fmt.Sprintf("tr-%d", time.Now().UnixNano()),
 			Content: raw,
 		})
-		messagerow.CollapseReadSearchTail(&store.Messages)
+		if collapseReadSearchTailFromEnv() {
+			messagerow.CollapseReadSearchTail(&store.Messages)
+		}
 	case "turn_complete":
 		flushStreamingAssistant(store)
 		// Always clear buffer after a turn (flush may no-op on empty trim but buffer had whitespace-only).
