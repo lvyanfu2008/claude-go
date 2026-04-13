@@ -44,9 +44,13 @@ func gouDemoMouseCellMotionEnabled() bool {
 }
 
 // gouDemoMessageScrollbarStrip draws a one-column TUI scrollbar beside the message list when content overflows.
-// Opt out with GOU_DEMO_NO_SCROLLBAR=1 (alternate screen has no host scrollback; this is an in-app position hint).
+// Default off (plain bubbles/viewport like go-tui). Opt in with GOU_DEMO_MESSAGE_SCROLLBAR=1.
+// GOU_DEMO_NO_SCROLLBAR=1 still forces the strip off (e.g. legacy scripts).
 func gouDemoMessageScrollbarStrip() bool {
-	return !gouDemoEnvTruthy("GOU_DEMO_NO_SCROLLBAR")
+	if gouDemoEnvTruthy("GOU_DEMO_NO_SCROLLBAR") {
+		return false
+	}
+	return gouDemoEnvTruthy("GOU_DEMO_MESSAGE_SCROLLBAR")
 }
 
 func sanitizeWindowTitle(s string) string {

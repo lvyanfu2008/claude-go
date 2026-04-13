@@ -14,8 +14,18 @@ import (
 	"goc/types"
 )
 
+// gouDemoBubblesViewport defaults on (bubbles/viewport for the prompt message pane, same scrolling style as go-tui).
+// Use legacy virtual list only with GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1, or disable viewport with
+// GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no.
 func gouDemoBubblesViewport() bool {
-	return gouDemoEnvTruthy("GOU_DEMO_BUBBLES_VIEWPORT")
+	if gouDemoEnvTruthy("GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL") {
+		return false
+	}
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_BUBBLES_VIEWPORT")))
+	if v == "0" || v == "false" || v == "off" || v == "no" {
+		return false
+	}
+	return true
 }
 
 func gouDemoViewportMaxLines() int {
@@ -231,7 +241,7 @@ func (m *model) handleMsgViewportScrollKey(s string) {
 	}
 }
 
-// messagePaneViewportBlock renders the message list using bubbles/viewport (prompt + GOU_DEMO_BUBBLES_VIEWPORT only).
+// messagePaneViewportBlock renders the message list using bubbles/viewport (prompt screen when viewport mode is on).
 // Caller must run msgViewportSyncGeometry + applyMsgViewportContentFromView first.
 func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	msgArea := m.msgViewport.View()
