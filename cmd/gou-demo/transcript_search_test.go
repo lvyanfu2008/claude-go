@@ -52,6 +52,30 @@ func TestTranscriptCtrlNLineDown(t *testing.T) {
 	}
 }
 
+func TestTranscriptHomeEndTopBottom(t *testing.T) {
+	t.Parallel()
+	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
+	m := &model{
+		store: st, uiScreen: gouDemoScreenTranscript, transcriptFreezeN: 1,
+		height: 40, width: 100, cols: 80, titleH: 1, scrollTop: 42,
+	}
+	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyHome})
+	if !handled {
+		t.Fatal("expected home handled")
+	}
+	if m.scrollTop != 0 || m.sticky {
+		t.Fatalf("home: scrollTop=%d sticky=%v", m.scrollTop, m.sticky)
+	}
+	m.scrollTop = 0
+	handled2, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyEnd})
+	if !handled2 {
+		t.Fatal("expected end handled")
+	}
+	if !m.sticky || m.scrollTop != 1<<30 {
+		t.Fatalf("end: scrollTop=%d sticky=%v", m.scrollTop, m.sticky)
+	}
+}
+
 func TestTranscriptSearchOpenDisablesPagerArrows(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c1", Messages: []types.Message{{UUID: "a"}}}
 	m := &model{

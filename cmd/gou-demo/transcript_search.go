@@ -235,6 +235,10 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			m.sticky = false
 			m.scrollTop += listViewportH(m) / 2
 			return true, nil
+		case "home":
+			m.sticky = false
+			m.scrollTop = 0
+			return true, nil
 		case "end":
 			m.sticky = true
 			m.scrollTop = 1 << 30
