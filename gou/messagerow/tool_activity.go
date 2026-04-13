@@ -46,8 +46,8 @@ func truncateToolSummary(s string) string {
 	return b.String()
 }
 
-// displayPathForActivity approximates TS getDisplayPath: prefer path relative to cwd when safe.
-func displayPathForActivity(p string) string {
+// DisplayPathForActivity approximates TS getDisplayPath: prefer path relative to cwd when safe.
+func DisplayPathForActivity(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {
 		return ""
@@ -99,7 +99,7 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 		if fp == "" {
 			return "Reading file"
 		}
-		return "Reading " + truncateToolSummary(displayPathForActivity(fp))
+		return "Reading " + truncateToolSummary(DisplayPathForActivity(fp))
 	case "Bash":
 		cmd := strFromMap(m, "command")
 		if cmd == "" {
@@ -141,19 +141,19 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 		if fp == "" {
 			return "Writing file"
 		}
-		return "Writing " + truncateToolSummary(displayPathForActivity(fp))
+		return "Writing " + truncateToolSummary(DisplayPathForActivity(fp))
 	case "Edit":
 		fp := strFromMap(m, "file_path")
 		if fp == "" {
 			return "Editing file"
 		}
-		return "Editing " + truncateToolSummary(displayPathForActivity(fp))
+		return "Editing " + truncateToolSummary(DisplayPathForActivity(fp))
 	case "NotebookEdit":
 		np := strFromMap(m, "notebook_path")
 		if np == "" {
 			return "Editing notebook"
 		}
-		return "Editing notebook " + truncateToolSummary(displayPathForActivity(np))
+		return "Editing notebook " + truncateToolSummary(DisplayPathForActivity(np))
 	case "Agent", "Task":
 		d := strFromMap(m, "description")
 		if strings.TrimSpace(d) == "" {
@@ -194,5 +194,9 @@ func ActivitySegmentForToolBlock(b types.MessageContentBlock, kind SegmentKind) 
 		}
 		line = formatNamedTool(k, b.Name, b.ID, b.Input)
 	}
-	return []Segment{{Kind: kind, Text: line}}
+	facing, paren, hint := ToolChromeParts(b.Name, b.Input)
+	if facing == "" {
+		return []Segment{{Kind: kind, Text: line, ToolUseID: b.ID}}
+	}
+	return []Segment{{Kind: kind, Text: line, ToolUseID: b.ID, ToolFacing: facing, ToolParen: paren, ToolHint: hint}}
 }

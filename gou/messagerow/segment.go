@@ -34,6 +34,11 @@ type Segment struct {
 	Text string
 	// Num is used when Kind == SegSkillListingAvailable (TS bold skillCount + " skills available").
 	Num int
+	// ToolUseID / ToolFacing / ToolParen / ToolHint mirror TS AssistantToolUseMessage + ⎿ hint row.
+	ToolUseID  string
+	ToolFacing string
+	ToolParen  string
+	ToolHint   string
 	// IsToolError is set for tool_result / advisor blocks when TS is_error is true (OutputLine error styling).
 	IsToolError bool
 }

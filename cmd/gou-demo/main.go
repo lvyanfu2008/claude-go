@@ -40,6 +40,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -523,6 +524,10 @@ type model struct {
 	transcriptSearchQuery  string
 	transcriptSearchHits   []int
 	transcriptSearchCursor int
+
+	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
+	resolvedToolIDs   map[string]struct{}
+	lastMainLoopModel string
 }
 
 func main() {
@@ -642,12 +647,18 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		}
 	}
 
+	lm := strings.TrimSpace(modelenv.FirstNonEmpty())
+	if lm == "" {
+		lm = pui.DefaultMainLoopModelForDemo()
+	}
 	return &model{
 		store:                st,
 		pr:                   pr,
 		sticky:               true,
 		heightCache:          make(map[string]int),
 		skillListingSent:     make(map[string]struct{}),
+		resolvedToolIDs:      make(map[string]struct{}),
+		lastMainLoopModel:    lm,
 		titleH:               1,
 		streamH:              4,
 		mcpCommandsJSONPath:  mcpCommandsJSONPath,
@@ -766,6 +777,9 @@ func (m *model) Init() tea.Cmd {
 
 func (m *model) inputAreaHeight() int {
 	n := m.pr.LineCount() + 2
+	if m.uiScreen != gouDemoScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
+		n++
+	}
 	if n < 4 {
 		n = 4
 	}
@@ -1007,6 +1021,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else if m := modelenv.FirstNonEmpty(); m != "" {
 							mainLoopModel = m
 						}
+						m.lastMainLoopModel = mainLoopModel
 						gouOpts := commands.GouDemoSystemOpts{
 							EnabledToolNames:       commands.EnabledToolNames(names),
 							SkillToolCommands:      skillListing,
@@ -1335,6 +1350,7 @@ func (m *model) statusLineString() string {
 }
 
 func (m *model) rebuildHeightCache() {
+	m.resolvedToolIDs = messagerow.CollectResolvedToolUseIDs(m.store.Messages)
 	keys := m.store.ItemKeys()
 	virtualscroll.PruneHeightCache(m.heightCache, keys)
 	cols := m.cols
@@ -1363,7 +1379,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int) int {
 	if msg.Type != types.MessageTypeAttachment {
 		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint())
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
@@ -1500,6 +1516,10 @@ func (m *model) View() string {
 		foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
 		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))
 	} else {
+		if s := m.builtinStatusLineView(); s != "" {
+			b.WriteString(s)
+			b.WriteByte('\n')
+		}
 		promptView := m.pr.View()
 		hintText := replChromeFooterHint(narrow)
 		if frag := replChromePermissionFragment(m.permissionMode, narrow); frag != "" {
@@ -1532,7 +1552,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
 	if msg.Type != types.MessageTypeAttachment {
 		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint())
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
@@ -1545,19 +1565,56 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
 	return strings.Join(rows, "\n")
 }
 
+func toolRowLeadPrefix() string {
+	glyph := "\u25cf " // ● — TS figures.BLACK_CIRCLE non-darwin
+	if runtime.GOOS == "darwin" {
+		glyph = "\u23fa " // ⏺ — TS figures.BLACK_CIRCLE on darwin
+	}
+	return lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(glyph)
+}
+
+func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
+	if resolved == nil || toolUseID == "" {
+		return false
+	}
+	_, ok := resolved[toolUseID]
+	return ok
+}
+
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
-func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool) string {
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}) string {
 	var parts []string
 	for _, seg := range segs {
 		switch seg.Kind {
 		case messagerow.SegTextMarkdown:
 			parts = append(parts, styleMarkdownTokens(markdown.CachedLexer(seg.Text), cols))
 		case messagerow.SegToolUse:
-			line := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + seg.Text)
-			if toolUseCtrlOHint {
-				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			if seg.ToolFacing != "" {
+				row1 := toolRowLeadPrefix()
+				row1 += lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render(seg.ToolFacing)
+				if p := strings.TrimSpace(seg.ToolParen); p != "" {
+					row1 += " (" + p + ")"
+				}
+				parts = append(parts, row1)
+				if !toolUseResolved(resolved, seg.ToolUseID) {
+					if act := strings.TrimSpace(seg.Text); act != "" {
+						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(act + "…")
+						if toolUseCtrlOHint {
+							actLine += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+						}
+						parts = append(parts, actLine)
+					}
+					if h := strings.TrimSpace(seg.ToolHint); h != "" {
+						parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(h)))
+					}
+				}
+			} else {
+				line := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + seg.Text)
+				if toolUseCtrlOHint {
+					line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+				}
+				parts = append(parts, line)
 			}
-			parts = append(parts, line)
 		case messagerow.SegToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.DimMuted())
 			if seg.IsToolError {
@@ -1571,11 +1628,32 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 		case messagerow.SegDisplayHint:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(seg.Text)))
 		case messagerow.SegServerToolUse:
-			line := lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + seg.Text)
-			if toolUseCtrlOHint {
-				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			if seg.ToolFacing != "" {
+				row1 := toolRowLeadPrefix()
+				row1 += lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render(seg.ToolFacing)
+				if p := strings.TrimSpace(seg.ToolParen); p != "" {
+					row1 += " (" + p + ")"
+				}
+				parts = append(parts, row1)
+				if !toolUseResolved(resolved, seg.ToolUseID) {
+					if act := strings.TrimSpace(seg.Text); act != "" {
+						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(act + "…")
+						if toolUseCtrlOHint {
+							actLine += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+						}
+						parts = append(parts, actLine)
+					}
+					if h := strings.TrimSpace(seg.ToolHint); h != "" {
+						parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(h)))
+					}
+				}
+			} else {
+				line := lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + seg.Text)
+				if toolUseCtrlOHint {
+					line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+				}
+				parts = append(parts, line)
 			}
-			parts = append(parts, line)
 		case messagerow.SegAdvisorToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.AdvisorAccent())
 			if seg.IsToolError {
