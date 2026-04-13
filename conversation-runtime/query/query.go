@@ -124,7 +124,8 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		LogQueryUserContextIfEnabled("before_prepend", params.UserContext)
 		msgs := PrependUserContext(work, params.UserContext)
 
-		fullSystem := AppendSystemContext(params.SystemPrompt, params.SystemContext)
+		fullSystem := StripSystemPromptDynamicBoundaryForAPI(
+			AppendSystemContext(params.SystemPrompt, params.SystemContext))
 		cwd, _ := os.Getwd()
 		in := &CallModelInput{
 			Messages:       msgs,
