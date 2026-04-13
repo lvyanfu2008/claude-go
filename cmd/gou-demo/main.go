@@ -1390,7 +1390,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int) int {
 	if msg.Type != types.MessageTypeAttachment {
 		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1594,7 +1594,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int) string {
 	if msg.Type != types.MessageTypeAttachment {
 		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1616,6 +1616,19 @@ func toolRowLeadPrefix() string {
 	return lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(glyph)
 }
 
+// prefixToolGlyphFirstLine prepends the dim tool lead (⏺ / ●) to the first line of rendered assistant text.
+func prefixToolGlyphFirstLine(body string) string {
+	if body == "" {
+		return toolRowLeadPrefix()
+	}
+	p := toolRowLeadPrefix()
+	i := strings.IndexByte(body, '\n')
+	if i < 0 {
+		return p + body
+	}
+	return p + body[:i] + body[i:]
+}
+
 func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 	if resolved == nil || toolUseID == "" {
 		return false
@@ -1625,12 +1638,19 @@ func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 }
 
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
-func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}) string {
+// assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool) string {
 	var parts []string
+	assistantTextLeadDone := false
 	for _, seg := range segs {
 		switch seg.Kind {
 		case messagerow.SegTextMarkdown:
-			parts = append(parts, styleMarkdownTokens(markdown.CachedLexer(seg.Text), cols))
+			md := styleMarkdownTokens(markdown.CachedLexer(seg.Text), cols)
+			if assistantLeadGlyph && !assistantTextLeadDone && strings.TrimSpace(seg.Text) != "" {
+				assistantTextLeadDone = true
+				md = prefixToolGlyphFirstLine(md)
+			}
+			parts = append(parts, md)
 		case messagerow.SegToolUse:
 			if seg.ToolFacing != "" {
 				row1 := toolRowLeadPrefix()
@@ -1638,19 +1658,21 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				if p := strings.TrimSpace(seg.ToolParen); p != "" {
 					row1 += " (" + p + ")"
 				}
-				parts = append(parts, row1)
+				var toolLines []string
+				toolLines = append(toolLines, row1)
 				if !toolUseResolved(resolved, seg.ToolUseID) {
 					if act := strings.TrimSpace(seg.Text); act != "" {
 						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(act + "…")
 						if toolUseCtrlOHint {
 							actLine += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 						}
-						parts = append(parts, actLine)
+						toolLines = append(toolLines, actLine)
 					}
 					if h := strings.TrimSpace(seg.ToolHint); h != "" {
-						parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(h)))
+						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(h)))
 					}
 				}
+				parts = append(parts, strings.Join(toolLines, "\n"))
 			} else {
 				line := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + seg.Text)
 				if toolUseCtrlOHint {
@@ -1681,19 +1703,21 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				if p := strings.TrimSpace(seg.ToolParen); p != "" {
 					row1 += " (" + p + ")"
 				}
-				parts = append(parts, row1)
+				var toolLines []string
+				toolLines = append(toolLines, row1)
 				if !toolUseResolved(resolved, seg.ToolUseID) {
 					if act := strings.TrimSpace(seg.Text); act != "" {
 						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(act + "…")
 						if toolUseCtrlOHint {
 							actLine += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 						}
-						parts = append(parts, actLine)
+						toolLines = append(toolLines, actLine)
 					}
 					if h := strings.TrimSpace(seg.ToolHint); h != "" {
-						parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(h)))
+						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(h)))
 					}
 				}
+				parts = append(parts, strings.Join(toolLines, "\n"))
 			} else {
 				line := lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + seg.Text)
 				if toolUseCtrlOHint {
@@ -1731,7 +1755,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(seg.Text)))
 		}
 	}
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
 // styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).
