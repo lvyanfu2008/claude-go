@@ -24,7 +24,7 @@ Reference: [`claude-code/src/screens/REPL.tsx`](../../../claude-code/src/screens
 2. **Scroll up** with arrows; press **ctrl+o** again → returns to prompt with **restored** scroll position from before step 1.
 3. In transcript, **Esc**, **ctrl+c**, and **q** each return to prompt **without** exiting the app (when search bar is not open).
 4. In transcript, **ctrl+e** toggles expanded rows for collapsed/grouped messages (and footer shows expand on/off).
-5. In transcript, press **`/`**, type a substring (e.g. `seed`), confirm status shows matches and **`n`/`N`** jumps between hits; **`Esc`** in the bar clears search; resize terminal clears search.
+5. In transcript, press **`/`**, type a substring (e.g. `seed`), confirm status shows matches and **`n`/`N`** jumps between hits; while **not** in **`[`** dump mode, matching substrings in the message pane should show **search highlight** (lipgloss background on hits, same intent as TS `useSearchHighlight`). **`Esc`** in the bar clears search; resize terminal clears search.
 6. With search bar **closed**, **home** / **end** and **ctrl+home** / **ctrl+end** jump to top / bottom, **space** page-downs one viewport, **ctrl+n** / **ctrl+p** move one line (TS `modalPagerAction` + `scroll:top`/`scroll:bottom`). With search bar **open**, **arrows** and those pager keys do **not** scroll (TS `isModal={!searchOpen}`).
 7. **`[`** (search bar closed): footer switches to dump hint; with default alt-screen, plain transcript prints to **scrollback**; **`/`** / **`n`/`N`** and **pager keys** are inactive until exit transcript (TS `!dumpMode` / no `ScrollKeybindingHandler`). **`v`** writes temp file and runs **`$VISUAL`/`$EDITOR`** (blocking `tea.ExecProcess`); empty env shows **wrote … · no $VISUAL/$EDITOR set**.
 8. Trigger a **streaming** turn (fake stream or real query): while in transcript, the pane must **not** jump to new assistant chunks; exit transcript to see live tail.
@@ -41,6 +41,10 @@ Transcript-focused cases in `cmd/gou-demo` (non-exhaustive): pager (**space**, *
 - Loading / spinner / tool activity vs TS: [gou-demo-loading-ui-parity.md](./gou-demo-loading-ui-parity.md).
 - REPL tool permissions vs TS: [go-repl-permissions-parity.md](./go-repl-permissions-parity.md).
 - ReplBridge non-goal: [gou-demo-repl-bridge-scope.md](./gou-demo-repl-bridge-scope.md).
+
+### Deferred optional (after transcript milestone)
+
+Smaller next steps are usually **loading / tool-row chrome** ([gou-demo-loading-ui-parity.md](./gou-demo-loading-ui-parity.md): spinner tips, `GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL`, etc.). **Per-inner-call REPL permissions** ([go-repl-permissions-parity.md](./go-repl-permissions-parity.md) Future work) is a larger, separate change—only schedule it if you need stricter alignment with TS `permissions.ts` for nested tools.
 
 ## Phase 3 (optional)
 

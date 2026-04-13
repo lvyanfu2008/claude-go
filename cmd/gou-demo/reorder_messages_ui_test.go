@@ -45,6 +45,56 @@ func TestReorderMessagesInUI_toolUseThenPreThenResultThenPost(t *testing.T) {
 	}
 }
 
+func TestReorderMessagesInUI_apiErrorsMiddleDroppedFinalKept(t *testing.T) {
+	st := func(s string) *string { return &s }
+	msgs := []types.Message{
+		{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(`[{"type":"text","text":"hi"}]`)},
+		{Type: types.MessageTypeSystem, UUID: "e1", Subtype: st("api_error")},
+		{Type: types.MessageTypeSystem, UUID: "e2", Subtype: st("api_error")},
+		{Type: types.MessageTypeUser, UUID: "u2", Content: []byte(`[{"type":"text","text":"after"}]`)},
+		{Type: types.MessageTypeSystem, UUID: "e3", Subtype: st("api_error")},
+	}
+	got := ReorderMessagesInUI(msgs)
+	if len(got) != 3 {
+		t.Fatalf("len=%d want [u1,u2,e3] only: %v", len(got), uuids(got))
+	}
+	if got[0].UUID != "u1" || got[1].UUID != "u2" || got[2].UUID != "e3" {
+		t.Fatalf("got %v", uuids(got))
+	}
+	if got[2].Subtype == nil || *got[2].Subtype != "api_error" {
+		t.Fatalf("last system row should be api_error, got subtype=%v", got[2].Subtype)
+	}
+}
+
+// Orphan Pre/Post hook attachments (no matching assistant tool_use in the slice) are skipped in the
+// second pass (same structure as TS grouping: hooks only render with their tool group).
+func TestReorderMessagesInUI_orphanHookAttachmentDropped(t *testing.T) {
+	preAtt, _ := json.Marshal(map[string]any{
+		"type": "hook", "hookEvent": "PreToolUse", "toolUseId": "missing_id", "detail": "orphan",
+	})
+	msgs := []types.Message{
+		{Type: types.MessageTypeAttachment, UUID: "orph", Attachment: preAtt},
+	}
+	got := ReorderMessagesInUI(msgs)
+	if len(got) != 0 {
+		t.Fatalf("orphan hook only: want empty, got %v", uuids(got))
+	}
+}
+
+func TestReorderMessagesInUI_orphanHookBeforeUserKeepsUserOnly(t *testing.T) {
+	preAtt, _ := json.Marshal(map[string]any{
+		"type": "hook", "hookEvent": "PreToolUse", "toolUseId": "ghost", "detail": "orphan",
+	})
+	msgs := []types.Message{
+		{Type: types.MessageTypeAttachment, UUID: "orph", Attachment: preAtt},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(`[{"type":"text","text":"ok"}]`)},
+	}
+	got := ReorderMessagesInUI(msgs)
+	if len(got) != 1 || got[0].UUID != "u1" {
+		t.Fatalf("got %v", uuids(got))
+	}
+}
+
 func uuids(ms []types.Message) []string {
 	out := make([]string, len(ms))
 	for i := range ms {

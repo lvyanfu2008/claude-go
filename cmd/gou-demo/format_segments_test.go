@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
 	"goc/gou/conversation"
 	"goc/gou/messagerow"
 	"goc/types"
@@ -35,6 +38,33 @@ func TestFormatMessageSegments_leadGlyphOnToolWhenNoPriorText(t *testing.T) {
 	out := formatMessageSegments(segs, 80, true, nil, true, "")
 	if n := countToolLeadGlyphs(out); n < 1 {
 		t.Fatalf("tool-only message should keep lead on tool row, got %d in:\n%s", n, out)
+	}
+}
+
+func TestFormatMessageSegments_searchHighlightInsertsANSI(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	segs := []messagerow.Segment{
+		{Kind: messagerow.SegToolUse, Text: "alpha BETA gamma", ToolUseID: "id1"},
+	}
+	out := formatMessageSegments(segs, 80, true, nil, true, "beta")
+	if !strings.Contains(out, "BETA") && !strings.Contains(out, "beta") {
+		t.Fatalf("expected original casing preserved in visible text: %q", out)
+	}
+	if !strings.Contains(out, "\x1b[") {
+		t.Fatalf("expected lipgloss ANSI from search highlight + styles, got %q", out)
+	}
+}
+
+func TestFormatMessageSegments_searchHighlightEmptyNeedleNoExtraFromHL(t *testing.T) {
+	segs := []messagerow.Segment{
+		{Kind: messagerow.SegToolUse, Text: "plain tool title", ToolUseID: "id2"},
+	}
+	out := formatMessageSegments(segs, 80, true, nil, true, "")
+	outHL := formatMessageSegments(segs, 80, true, nil, true, "   ")
+	if out != outHL {
+		t.Fatalf("whitespace-only searchHL should behave like no highlight: %q vs %q", out, outHL)
 	}
 }
 
