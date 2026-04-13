@@ -70,8 +70,6 @@ Any variable already non-empty in the process environment is left unchanged (she
 
 On each `tool_use`, **`Session.RunTurn`** validates the model’s `input` against the matching entry in the turn’s `tools` list (`input_schema`) **before** invoking `ToolRunner` (so in bridge mode, before emitting **`execute_tool`**). Validation uses [`github.com/santhosh-tekuri/jsonschema/v6`](https://github.com/santhosh-tekuri/jsonschema) with **draft-07** as the default when `$schema` is absent. On failure the engine appends a **`tool_result`** with `is_error` and does not call the runner.
 
-- **Opt out** (e.g. debugging or schemas that don’t round-trip): set **`CCB_ENGINE_SKIP_TOOL_INPUT_SCHEMA=1`**.
-
 ### Optional Go allowlist (`permission_context`)
 
 When **`CCB_ENGINE_ENFORCE_ALLOWED_TOOLS=1`**, the engine requires **`SubmitUserTurn` payload `permission_context`** JSON with a non-empty **`allowedTools`** string array. If the model’s `tool_use.name` is not in that list, the engine appends an error **`tool_result`** and does **not** emit **`execute_tool`**. When a tool passes both schema and allowlist, **`execute_tool`** includes optional **`policy`**: `{ "decision":"allow", "source":"ccb-engine" }` so the TS client can use a trust-only execution path (see `docs/plans/go-policy-ts-pure-execution.md`, `goc/ccb-engine/internal/toolpolicy`).

@@ -9,11 +9,6 @@ import (
 	"goc/internal/toolvalidator"
 )
 
-// SkipValidation returns true when CCB_ENGINE_SKIP_TOOL_INPUT_SCHEMA=1 (escape hatch).
-func SkipValidation() bool {
-	return toolvalidator.SkipValidation()
-}
-
 func findInputSchema(tools []anthropic.ToolDefinition, name string) any {
 	for _, t := range tools {
 		if t.Name == name {

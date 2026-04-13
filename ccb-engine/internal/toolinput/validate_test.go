@@ -28,11 +28,3 @@ func TestValidateAgainstTools_echoStubInvalid(t *testing.T) {
 		t.Fatal("expected validation error for missing required field")
 	}
 }
-
-func TestValidateAgainstTools_skipEnv(t *testing.T) {
-	t.Setenv("CCB_ENGINE_SKIP_TOOL_INPUT_SCHEMA", "1")
-	tools := anthropic.DefaultStubTools()
-	if err := ValidateAgainstTools(tools, "echo_stub", json.RawMessage(`{}`)); err != nil {
-		t.Fatal(err)
-	}
-}

@@ -11,9 +11,6 @@ import (
 // registers the tool, use Zog + toolrefine; otherwise JSON Schema from schema + toolrefine (legacy).
 // schema may be nil (caller should pass nil only when skipping — same as prior call sites).
 func ValidateInput(toolName string, schema any, input json.RawMessage) error {
-	if SkipValidation() {
-		return nil
-	}
 	if schema == nil {
 		return nil
 	}

@@ -94,7 +94,7 @@ Union by `type`:
 - `turn_complete` — `{ "type":"turn_complete", "state_rev": n, "stop_reason": "..." }`
 - `response_end` — `{ "type":"response_end", "id":"..." }` — terminates the NDJSON stream for one `SubmitUserTurn` request (`id` matches the request envelope).
 - `error` — `{ "type":"error", "code":"...", "message":"..." }`
-- `execute_tool` — `{ "type":"execute_tool", "call_id":"...", "tool_use_id":"...", "name":"...", "input":{}, "state_rev": n, "policy": { ... }? }` — client must reply with one **ToolResult** line on the same connection before the turn continues. Optional **`policy`** is set when **`CCB_ENGINE_ENFORCE_ALLOWED_TOOLS=1`** after the allowlist pass (e.g. `{ "decision":"allow", "source":"ccb-engine" }`) so the TS client can skip interactive `canUseTool` and use a trust-only execution path. **Note:** the engine may reject `input` earlier using JSON Schema (`tools[].input_schema`) or policy and emit a **`tool_result`** event without sending `execute_tool` (see ccb-engine README: `CCB_ENGINE_SKIP_TOOL_INPUT_SCHEMA`).
+- `execute_tool` — `{ "type":"execute_tool", "call_id":"...", "tool_use_id":"...", "name":"...", "input":{}, "state_rev": n, "policy": { ... }? }` — client must reply with one **ToolResult** line on the same connection before the turn continues. Optional **`policy`** is set when **`CCB_ENGINE_ENFORCE_ALLOWED_TOOLS=1`** after the allowlist pass (e.g. `{ "decision":"allow", "source":"ccb-engine" }`) so the TS client can skip interactive `canUseTool` and use a trust-only execution path. **Note:** the engine may reject `input` earlier using JSON Schema (`tools[].input_schema`) or policy and emit a **`tool_result`** event without sending `execute_tool`.
 
 ## ExecuteTool (Go → TS, `serve` mode)
 

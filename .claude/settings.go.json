@@ -25,7 +25,8 @@
     "CCB_ENGINE_DIAG_TO_STDERR":"0",
     "GOU_DEMO_STREAMING_TOOL_EXECUTION":"1",
     "GOU_TOOLEXEC_BASH_SANDBOX_1B":"1",
-    "GOU_QUERY_LOG_USER_CONTEXT":"0"
+    "GOU_QUERY_LOG_USER_CONTEXT":"0",
+    "GO_TOOL_INPUT_VALIDATOR":"zog"
   },
   "hooks": {
     "UserPromptSubmit": [
