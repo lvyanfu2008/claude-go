@@ -1,6 +1,6 @@
 # gou — Go TUI 基础库（对话流 + 虚拟滚动）
 
-**权威产品架构**（Go：TUI、消息处理、skill 加载、LLM 编排；Bun/TS：工具与遗留入口）见 **[`docs/plans/architecture-go-orchestration.md`](../../docs/plans/architecture-go-orchestration.md)**。
+**权威产品架构**（Go：TUI、消息处理、skill 加载、LLM 编排）见 **[`docs/plans/architecture-go-orchestration.md`](../../docs/plans/architecture-go-orchestration.md)**。`goc` **默认构建与运行不依赖** Bun/Node 执行 TS；仓库内嵌入数据与注释中的 TS 路径不算运行时依赖（与根目录 [`CLAUDE.md`](../CLAUDE.md)「No TypeScript runtime dependency」一致）。
 
 本目录承载终端 UI 迁移的 **Go 实现骨架**，命名对齐 `src/types/message.ts`、`useVirtualScroll.ts`、`Messages.tsx`（见 `docs/plans/go-tui-message-stream-virtual-scroll.md`）。
 
@@ -96,16 +96,18 @@ cd goc && go run ./cmd/gou-demo
 cd goc && go run ./cmd/gou-demo -fake-stream
 ```
 
-`ccbstream.Apply` 不绘制 **`execute_tool`** 行。纯管道回放 NDJSON 时若事件里含需客户端回写的 `execute_tool`，录制流仍可能不完整。
+**`execute_tool`**：`ccbstream.Apply` 不会执行客户端工具，但会追加一条 **system** 占位说明（工具名、`tool_use_id`），便于管道/回放时看见流里曾有过待执行工具；完整对话形状仍需在同一条 NDJSON 流中提供对应的 **`tool_result`**（或由宿主注入）。
 
 ### Go `init.ts` 对齐（进行中）
 
 **`GOU_DEMO_GO_INIT=1`**：gou-demo 入口使用 [`goc/claudeinit`](../claudeinit) 的 **`Init`**（内含 `settingsfile.EnsureProjectClaudeEnvOnce`），替代「仅 Ensure」路径。矩阵与缺口见 **[`docs/plans/go-init-port.md`](../../docs/plans/go-init-port.md)**。
 
-对照工具：`bun run dump-init-state`、`goc/cmd/claude-init-dump`、`scripts/compare-init-dumps.sh`。
+对照：`goc/cmd/claude-init-dump`（**Go-only**，适合 CI）。若本地另有 `claude-code` 检出，可 **人工** 运行其 `dump-init-state` + `scripts/compare-init-dumps.sh` 做差异对照（**非** `goc` 必需步骤）。
 
 ### 全量 TS system prompt / commands / tools（已移除 Bun 启动快照）
 
 原先的 **`GOU_DEMO_TS_CONTEXT_BRIDGE`** + **`bun run go-context-bridge`**（`claude-code/scripts/go-context-bridge.ts`）已删除。gou-demo 默认使用 **Go 侧** `querycontext` / `commands` 拼装与 **`GOU_DEMO_USE_EMBEDDED_TOOLS_API`**（或 MCP JSON）对齐工具元数据；单元测试仍可向 `pui.DemoConfig.TSContextBridge` / `querycontext.FetchOpts.TSSnapshot` 注入内存中的 [`tscontext.Snapshot`](../tscontext/snapshot.go)。
 
-**Bundled / 无磁盘 `SkillRoot` 的 `/` 命令**：gou-demo 在 [`pui/slash_resolve_demo.go`](pui/slash_resolve_demo.go) 中通过 **`bun run scripts/slash-resolve-bridge.ts`** 解析（[`goc/slashresolve`](../slashresolve)）。该路径**每次 slash 执行一次 Bun**（`bootstrapGoContext` + 按名查找 `Command` + **`getPromptForCommand`**），与启动快照分离；`commandJson` 仅回显，不参与解析。
+**Bundled / 磁盘 skill 的 `/` 命令**：gou-demo 在 [`pui/slash_resolve_demo.go`](pui/slash_resolve_demo.go) 中 **进程内** 解析——**磁盘** skill 走 [`goc/slashresolve`](../slashresolve) **`ResolveDiskSkill`**（`SkillRoot` + `SKILL.md`），**bundled** prompt 走 **`ResolveBundledSkill`**（嵌入 markdown）；与 [`goc/commands`](../commands) 加载的 `Command` 列表一致，**不**起 Bun/Node。
+
+**未知斜杠（TS 对齐可选）**：默认将未识别的 `/name` 整行当作普通用户 prompt（`ShouldQuery` 走 `ProcessTextPrompt`）。设置 **`GOU_DEMO_SLASH_STRICT_UNKNOWN=1`** 时，对「看起来像合法命令名」且根路径 **`/name`** 不是已存在文件系统节点的情况，返回 **`Unknown skill: name`** 且不调模型（对齐 `processSlashCommand.tsx` 的 `looksLikeCommand` 分支）。

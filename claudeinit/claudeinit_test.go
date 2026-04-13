@@ -20,6 +20,18 @@ func TestInit_idempotent(t *testing.T) {
 	}
 }
 
+func TestRunCleanupsReverseOrder(t *testing.T) {
+	var order []int
+	RegisterCleanup(func() { order = append(order, 1) })
+	RegisterCleanup(func() { order = append(order, 2) })
+	RegisterCleanup(func() { order = append(order, 3) })
+	RunCleanups()
+	if len(order) != 3 || order[0] != 3 || order[1] != 2 || order[2] != 1 {
+		t.Fatalf("got %v want [3 2 1]", order)
+	}
+	RunCleanups() // second call: no-op
+}
+
 func TestParseGitRemote(t *testing.T) {
 	cases := []struct {
 		in   string

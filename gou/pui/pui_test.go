@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -292,10 +293,10 @@ func TestBuildDemoParams_TSContextBridge_skillListingFromSnapshot(t *testing.T) 
 	st := &conversation.Store{}
 	skillJSON := `[{"type":"prompt","name":"ts_skill_only","description":"d","loadedFrom":"bundled"}]`
 	snap := &tscontext.Snapshot{
-		Commands:            json.RawMessage(`[{"type":"prompt","name":"full","description":"x"}]`),
-		Tools:               json.RawMessage(`[{"name":"t","description":"d","input_schema":{"type":"object"}}]`),
-		SkillToolCommands:   json.RawMessage(skillJSON),
-		MainLoopModel:       "m",
+		Commands:          json.RawMessage(`[{"type":"prompt","name":"full","description":"x"}]`),
+		Tools:             json.RawMessage(`[{"name":"t","description":"d","input_schema":{"type":"object"}}]`),
+		SkillToolCommands: json.RawMessage(skillJSON),
+		MainLoopModel:     "m",
 	}
 	p, err := BuildDemoParams("hi", st, DemoConfig{
 		SkipCommands:    true,
@@ -360,5 +361,56 @@ func TestSlashResolve_unknownSlashBecomesPrompt(t *testing.T) {
 	}
 	if !r.ShouldQuery {
 		t.Fatalf("unknown slash should fall through to prompt: shouldQuery=%v messages=%d", r.ShouldQuery, len(r.Messages))
+	}
+}
+
+func TestSlashResolve_strictUnknownSkill(t *testing.T) {
+	t.Setenv("GOU_DEMO_SLASH_STRICT_UNKNOWN", "1")
+	st := &conversation.Store{ConversationID: "t"}
+	p, err := BuildDemoParams("/zzzunknownskill999-plus abc", st, DemoConfig{SkipCommands: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ProcessSlashCommand = NewSlashResolveProcessSlashCommand(SlashResolveHandlerOptions{SessionID: "t"})
+	r, err := processuserinput.ProcessUserInput(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ShouldQuery {
+		t.Fatalf("strict unknown: want shouldQuery=false")
+	}
+	raw, err := json.Marshal(r.Messages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	if !strings.Contains(s, "Unknown skill") || !strings.Contains(s, "zzzunknownskill999-plus") {
+		t.Fatalf("want Unknown skill + name in %s", s)
+	}
+	if !strings.Contains(s, "Args from unknown skill") || !strings.Contains(s, "abc") {
+		t.Fatalf("want args warning in %s", s)
+	}
+}
+
+func TestSlashResolve_strictUnknown_existingRootPathFallsThrough(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("root path exists check is POSIX-only")
+	}
+	if _, err := os.Stat("/tmp"); err != nil {
+		t.Skip("no /tmp on this system")
+	}
+	t.Setenv("GOU_DEMO_SLASH_STRICT_UNKNOWN", "1")
+	st := &conversation.Store{ConversationID: "t"}
+	p, err := BuildDemoParams("/tmp", st, DemoConfig{SkipCommands: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ProcessSlashCommand = NewSlashResolveProcessSlashCommand(SlashResolveHandlerOptions{SessionID: "t"})
+	r, err := processuserinput.ProcessUserInput(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.ShouldQuery {
+		t.Fatalf("/tmp exists at root: want fall-through prompt with shouldQuery=true, got messages=%d", len(r.Messages))
 	}
 }

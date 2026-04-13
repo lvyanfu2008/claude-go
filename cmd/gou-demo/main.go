@@ -23,7 +23,7 @@
 //
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End sticky-to-bottom, q quit, Enter send prompt (Ctrl+J / Alt+Enter newline; Shift+↑↓ move line in prompt). F2 toggles slash-command picker (type to filter when open). When GOU_QUERY_ASK_STRATEGY is unset, tool permission asks use a modal (Y/N).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
-// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition.
+// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
@@ -420,6 +420,7 @@ func main() {
 		if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
 			log.Fatalf("gou-demo: claudeinit (GOU_DEMO_GO_INIT): %v", err)
 		}
+		defer claudeinit.RunCleanups()
 	} else {
 		if err := settingsfile.EnsureProjectClaudeEnvOnce(); err != nil {
 			log.Fatalf("gou-demo: project settings: %v", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	processuserinput "goc/conversation-runtime/process-user-input"
@@ -65,9 +66,13 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		cmd := processuserinput.FindCommand(parsed.CommandName, p.Commands)
 		if cmd == nil {
-			// TS processSlashCommand: unknown names that do not "look like" commands fall through to a
-			// normal user prompt with shouldQuery. Gou-demo additionally treats unknown short names as
-			// plain prompts so `/ask …` and `/res …` reach the model instead of a dead "Unknown command".
+			// TS processSlashCommand: if looksLikeCommand && !isFilePath → Unknown skill, shouldQuery false.
+			// Default gou-demo: fall through to a normal prompt (strict mode: GOU_DEMO_SLASH_STRICT_UNKNOWN=1).
+			if strictSlashUnknown() &&
+				processuserinput.LooksLikeSlashCommandName(parsed.CommandName) &&
+				!rootSlashPathExists(parsed.CommandName) {
+				return unknownSkillSlashResult(parsed, attachmentMessages), nil
+			}
 			return slashResultToBase(types.SlashResolveResult{
 				UserText: strings.TrimSpace(inputString),
 				Source:   types.SlashResolveUnknown,
@@ -95,7 +100,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			res, err := slashresolve.ResolveDiskSkill(*cmd, parsed.Args, sid)
 			if err != nil {
 				return &processuserinput.ProcessUserInputBaseResult{
-					Messages: []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (disk): %v", err))},
+					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (disk): %v", err))},
 					ShouldQuery: false,
 				}, nil
 			}
@@ -120,6 +125,32 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				cmd.Name))},
 			ShouldQuery: false,
 		}, nil
+	}
+}
+
+func strictSlashUnknown() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_SLASH_STRICT_UNKNOWN")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+// rootSlashPathExists mirrors TS getFsImplementation().stat(`/${commandName}`) for unknown-command handling.
+func rootSlashPathExists(commandName string) bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	_, err := os.Stat("/" + commandName)
+	return err == nil
+}
+
+func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attachmentMessages []types.Message) *processuserinput.ProcessUserInputBaseResult {
+	msgs := append([]types.Message(nil), attachmentMessages...)
+	msgs = append(msgs, SystemNotice(fmt.Sprintf("Unknown skill: %s", parsed.CommandName)))
+	if a := strings.TrimSpace(parsed.Args); a != "" {
+		msgs = append(msgs, SystemNotice(fmt.Sprintf("Args from unknown skill: %s", a)))
+	}
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    msgs,
+		ShouldQuery: false,
 	}
 }
 
@@ -153,8 +184,8 @@ func slashResultToBase(
 		}
 	}
 	out := &processuserinput.ProcessUserInputBaseResult{
-		Messages:    tp.Messages,
-		ShouldQuery: tp.ShouldQuery,
+		Messages:     tp.Messages,
+		ShouldQuery:  tp.ShouldQuery,
 		AllowedTools: append([]string(nil), res.AllowedTools...),
 	}
 	if res.Model != nil {

@@ -68,7 +68,23 @@ func Apply(store *conversation.Store, ev StreamEvent) {
 			Content:   raw,
 			Timestamp: &ts,
 		})
-	case "usage", "execute_tool":
+	case "usage":
+	case "execute_tool":
+		// Client must run the tool and write tool_result; we only surface a placeholder for replay visibility.
+		flushStreamingAssistant(store)
+		name := strings.TrimSpace(ev.Name)
+		tuid := strings.TrimSpace(ev.ToolUseID)
+		cid := strings.TrimSpace(ev.CallID)
+		txt := fmt.Sprintf("[ccbstream] execute_tool pending (no client execution): name=%q tool_use_id=%q call_id=%q", name, tuid, cid)
+		rawJSON, err := json.Marshal([]map[string]string{{"type": "text", "text": txt}})
+		if err != nil {
+			return
+		}
+		store.AppendMessage(types.Message{
+			Type:    types.MessageTypeSystem,
+			UUID:    fmt.Sprintf("et-%d", time.Now().UnixNano()),
+			Content: rawJSON,
+		})
 	default:
 	}
 }

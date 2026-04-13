@@ -36,6 +36,25 @@ func ParseSlashCommand(input string) *ParsedSlashCommand {
 	return &ParsedSlashCommand{CommandName: commandName, Args: args, IsMcp: isMcp}
 }
 
+// LooksLikeSlashCommandName mirrors processSlashCommand.tsx looksLikeCommand: only letters,
+// digits, colon, hyphen, underscore (otherwise treated as path-like / free text).
+func LooksLikeSlashCommandName(commandName string) bool {
+	if commandName == "" {
+		return false
+	}
+	for _, r := range commandName {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == ':', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // GetCommandName mirrors src/types/command.ts getCommandName (no userFacingName in Go).
 func GetCommandName(cmd types.Command) string {
 	return cmd.Name

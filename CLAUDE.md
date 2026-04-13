@@ -2,6 +2,10 @@
 
 This file orients contributors and automation when working in **`claude-go/`** (Go module **`goc`**).
 
+## No TypeScript runtime dependency
+
+**`goc` builds and tests must not spawn Bun, Node, or `claude-code` `.ts` entrypoints** to implement product behavior (no `exec` of those in `go test`, `go run ./cmd/gou-demo`, or library defaults). Embedded JSON, markdown, and generated literals copied from the TS product are **static assets**, not a runtime dependency. Comments may cite TS paths for parity. Optional **manual** comparisons (e.g. a sibling checkout running `dump-init-state`) are out of band and not required for CI.
+
 ## Layout
 
 - **`toolparity/`** — Curated TS built-in list vs Go parity: edit **`catalog.json`**, then run **`go run ./cmd/gen-tool-parity`** (or **`go generate ./toolparity`**) to refresh **`TS_GO_TOOL_PARITY.md`**.

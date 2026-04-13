@@ -23,4 +23,7 @@ type StreamEvent struct {
 	OutputTokens int `json:"output_tokens,omitempty"`
 
 	IsError bool `json:"is_error,omitempty"`
+
+	// Policy is optional on execute_tool (protocol-v1); ignored by Apply except for future use.
+	Policy map[string]any `json:"policy,omitempty"`
 }

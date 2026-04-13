@@ -42,3 +42,20 @@ func TestApply_toolUse(t *testing.T) {
 		t.Fatalf("messages %d", len(st.Messages))
 	}
 }
+
+func TestApply_executeToolPlaceholder(t *testing.T) {
+	st := &conversation.Store{ConversationID: "t"}
+	Apply(st, StreamEvent{
+		Type:      "execute_tool",
+		Name:      "Bash",
+		ToolUseID: "tu-1",
+		CallID:    "c1",
+	})
+	if len(st.Messages) != 1 {
+		t.Fatalf("messages %d", len(st.Messages))
+	}
+	raw := string(st.Messages[0].Content)
+	if !strings.Contains(raw, "execute_tool") || !strings.Contains(raw, "Bash") || !strings.Contains(raw, "tu-1") {
+		t.Fatalf("placeholder content: %s", raw)
+	}
+}
