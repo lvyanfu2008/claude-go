@@ -40,6 +40,7 @@ When **`GO_TOOL_INPUT_VALIDATOR=zog`** (see [`internal/toolvalidator/mode.go`](i
 - The usual **`Bash`** tool row still comes from embed **`tools_api.json`** (JSON Schema + [`toolrefine`](internal/toolrefine)) like other tools.
 - A second tool **`BashZog`** is added (same shell execution as `Bash` in the Go runner). Its **`description` / `input_schema`** come from the checked-in snapshot [`ccb-engine/bashzog/bash_tool.json`](ccb-engine/bashzog/bash_tool.json); **Zog** validates **`BashZog`** input in [`zoglayer`](internal/zoglayer) plus `toolrefine`, aligned with the TS `fullInputSchema` **wire** (including optional `_simulatedSedEdit`). The snapshot stays model-facing on purpose and can omit internal-only keys.
 - **[`toolpool.AssembleToolPoolFromEmbedded`](toolpool/assemble_embedded.go)** appends the **`BashZog`** [`types.ToolSpec`](types/tool.go) after the built-in list; **[`anthropic.GouParityToolList`](ccb-engine/internal/anthropic/canonical_demo_tools.go)** appends the matching tool definition for tests and parity runners.
+- **Diff / parity:** checked-in [`ccb-engine/bashzog/bash_zog_tool_export.json`](ccb-engine/bashzog/bash_zog_tool_export.json) is the API-shaped **`BashZog`** row (pretty JSON). Regenerate from `claude-go`: `go run ./cmd/export-bashzog-json` (or `-stdout` to pipe to `diff` / `jq`).
 
 Default (unset or any value other than `zog`) omits **`BashZog`** and keeps only **`Bash`** from the export pipeline.
 

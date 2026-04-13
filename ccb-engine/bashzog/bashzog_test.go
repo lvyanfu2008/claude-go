@@ -1,10 +1,27 @@
 package bashzog
 
 import (
+	"bytes"
+	_ "embed"
 	"encoding/json"
 	"strings"
 	"testing"
 )
+
+//go:embed bash_zog_tool_export.json
+var bashZogExportGolden []byte
+
+func TestExportBashZogToolJSON_matchesGoldenFile(t *testing.T) {
+	got, err := ExportBashZogToolJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := bytes.TrimSpace(bashZogExportGolden)
+	got = bytes.TrimSpace(got)
+	if !bytes.Equal(got, want) {
+		t.Fatal("export drift: from claude-go run: go run ./cmd/export-bashzog-json")
+	}
+}
 
 func TestLoadAPIData_hasCommandProperty(t *testing.T) {
 	d, err := LoadAPIData()
