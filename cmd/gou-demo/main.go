@@ -1391,13 +1391,22 @@ func (m *model) statusLineString() string {
 func (m *model) rebuildHeightCache() {
 	m.resolvedToolIDs = messagerow.CollectResolvedToolUseIDs(m.store.Messages)
 	keys := m.store.ItemKeys()
-	virtualscroll.PruneHeightCache(m.heightCache, keys)
+	streamKeys := m.transcriptStreamingToolScrollKeys()
+	live := slices.Clone(keys)
+	live = append(live, streamKeys...)
+	virtualscroll.PruneHeightCache(m.heightCache, live)
 	cols := m.cols
 	if cols < 1 {
 		cols = 40
 	}
 	for i := range m.store.Messages {
 		m.heightCache[keys[i]] = m.measureMessageRows(m.store.Messages[i], cols)
+	}
+	for i, sk := range streamKeys {
+		st := m.transcriptStreamingToolsForView()
+		if i < len(st) {
+			m.heightCache[sk] = m.measureTranscriptStreamingToolRow(st[i], cols)
+		}
 	}
 }
 
@@ -1445,13 +1454,64 @@ func (m *model) measureMessageRows(msg types.Message, cols int) int {
 	return max(1, r)
 }
 
+func (m *model) measureTranscriptStreamingToolRow(tu conversation.StreamingToolUse, cols int) int {
+	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+tu.Name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+	block := head + "\n" + toolLine
+	if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+		maxW := cols * 4
+		if maxW < 80 {
+			maxW = 80
+		}
+		block += "\n" + lipgloss.NewStyle().Faint(true).Render(previewForTrace(s, maxW))
+	}
+	return max(1, layout.WrappedRowCount(block, cols))
+}
+
+func (m *model) renderTranscriptStreamingToolRow(tu conversation.StreamingToolUse, cols, h int) string {
+	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+tu.Name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+	var b strings.Builder
+	b.WriteString(head)
+	b.WriteByte('\n')
+	b.WriteString(toolLine)
+	if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+		b.WriteByte('\n')
+		maxW := cols * 4
+		if maxW < 80 {
+			maxW = 80
+		}
+		b.WriteString(lipgloss.NewStyle().Faint(true).Render(previewForTrace(s, maxW)))
+	}
+	out := b.String()
+	lines := strings.Split(out, "\n")
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	if len(lines) > h && h > 0 {
+		lines = lines[:h]
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
 	cols := m.cols
 	if cols < 1 {
 		return
 	}
+	msgN := m.transcriptEffectiveN()
+	st := m.transcriptStreamingToolsForView()
 	for i := start; i < end && i < n; i++ {
-		m.heightCache[keys[i]] = m.measureMessageRows(m.store.Messages[i], cols)
+		if i < msgN {
+			m.heightCache[keys[i]] = m.measureMessageRows(m.store.Messages[i], cols)
+			continue
+		}
+		ti := i - msgN
+		if ti >= 0 && ti < len(st) {
+			m.heightCache[keys[i]] = m.measureTranscriptStreamingToolRow(st[ti], cols)
+		} else {
+			m.heightCache[keys[i]] = 1
+		}
 	}
 }
 
@@ -1518,11 +1578,22 @@ func (m *model) View() string {
 	}
 
 	cols := m.cols
+	msgN := m.transcriptEffectiveN()
+	stRows := m.transcriptStreamingToolsForView()
 	for i := vr.Start; i < vr.End && i < n; i++ {
-		msg := m.store.Messages[i]
 		key := keys[i]
 		h := m.heightCache[key]
-		block := m.renderMessageRow(msg, cols, h)
+		var block string
+		if i < msgN {
+			msg := m.store.Messages[i]
+			block = m.renderMessageRow(msg, cols, h)
+		} else {
+			ti := i - msgN
+			if ti < 0 || ti >= len(stRows) {
+				continue
+			}
+			block = m.renderTranscriptStreamingToolRow(stRows[ti], cols, h)
+		}
 		if strings.TrimSpace(block) == "" && h <= 0 {
 			continue
 		}

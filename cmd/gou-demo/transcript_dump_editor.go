@@ -85,6 +85,16 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 		b.WriteByte('\n')
 		b.WriteString(transcriptPlainBodyFromMessage(msg, opts, wrapCols))
 	}
+	for _, tu := range m.transcriptStreamingToolsForView() {
+		b.WriteByte('\n')
+		b.WriteString(string(types.MessageTypeAssistant))
+		b.WriteByte('\n')
+		line := "⚙ " + tu.Name + " · streaming"
+		if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+			line += "\n" + s
+		}
+		b.WriteString(strings.TrimRight(layout.WrapForViewport(line, wrapCols), "\n"))
+	}
 	return stripTranscriptExportTrailingSpaces(b.String())
 }
 

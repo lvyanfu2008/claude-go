@@ -22,7 +22,7 @@
 // # Screen / transcript (TS Screen, ctrl+o, frozen tail)
 //
 //   - gou-demo: gouDemoScreenPrompt | gouDemoScreenTranscript (cmd/gou-demo/transcript_screen.go)
-//   - Enter/exit transcript, frozen snapshot: enterTranscriptScreen, exitTranscriptScreen, transcriptFrozen (*frozenTranscriptSnapshot); streaming tail length from conversation.Store.StreamingToolUses (TS streamingToolUses), filled during HTTP streaming via query.QueryDeps.OnStreamingToolUses → gou-demo Bubble Tea msg
+//   - Enter/exit transcript, frozen snapshot: enterTranscriptScreen, exitTranscriptScreen, transcriptFrozen (*frozenTranscriptSnapshot); streaming tail length from conversation.Store.StreamingToolUses (TS streamingToolUses), filled during HTTP streaming via query.QueryDeps.OnStreamingToolUses → gou-demo Bubble Tea msg; transcript list appends frozen-prefix streaming tool rows (scroll keys gou-st-tool:*, search/export)
 //   - View split: cmd/gou-demo/main.go View, listViewportH, scrollItemKeys
 //   - Parity checklist: docs/plans/gou-demo-transcript-ts-parity.md
 //

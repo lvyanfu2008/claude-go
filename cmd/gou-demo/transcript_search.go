@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"goc/gou/conversation"
 	"goc/gou/messagerow"
 	"goc/types"
 )
@@ -74,8 +75,14 @@ func plainMessageSearchText(msg types.Message) string {
 	}
 }
 
+func plainTranscriptStreamingToolSearchText(tu conversation.StreamingToolUse) string {
+	return strings.ToLower(strings.TrimSpace(tu.Name) + " " + strings.TrimSpace(tu.ToolUseID) + " " + tu.UnparsedInput)
+}
+
 func (m *model) rebuildTranscriptSearchMatches() {
-	n := m.transcriptEffectiveN()
+	msgN := m.transcriptEffectiveN()
+	st := m.transcriptStreamingToolsForView()
+	rowN := msgN + len(st)
 	q := strings.TrimSpace(m.transcriptSearchQuery)
 	if q == "" {
 		m.transcriptSearchHits = nil
@@ -84,8 +91,14 @@ func (m *model) rebuildTranscriptSearchMatches() {
 	}
 	needle := strings.ToLower(q)
 	var hits []int
-	for i := 0; i < n; i++ {
-		if strings.Contains(plainMessageSearchText(m.store.Messages[i]), needle) {
+	for i := 0; i < rowN; i++ {
+		var hay string
+		if i < msgN {
+			hay = plainMessageSearchText(m.store.Messages[i])
+		} else {
+			hay = plainTranscriptStreamingToolSearchText(st[i-msgN])
+		}
+		if strings.Contains(hay, needle) {
 			hits = append(hits, i)
 		}
 	}

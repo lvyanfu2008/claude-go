@@ -48,13 +48,44 @@ func (m *model) transcriptEffectiveN() int {
 	return clampTranscriptFreeze(m.transcriptFrozen.MessagesLen, len(m.store.Messages))
 }
 
-func (m *model) scrollItemKeys() []string {
-	n := m.transcriptEffectiveN()
-	keys := make([]string, n)
-	for i := 0; i < n; i++ {
-		keys[i] = conversation.ItemKey(m.store.Messages[i], m.store.ConversationID)
+// transcriptStreamToolScrollKey is a virtual-scroll key for in-transcript streaming tool rows (TS transcriptStreamingToolUses).
+func transcriptStreamToolScrollKey(convID string, idx int) string {
+	return fmt.Sprintf("gou-st-tool:%d:%s", idx, convID)
+}
+
+// transcriptStreamingToolsForView returns streamingToolUses.slice(0, frozen.StreamingToolUsesLen) while in transcript (REPL.tsx).
+func (m *model) transcriptStreamingToolsForView() []conversation.StreamingToolUse {
+	if m.uiScreen != gouDemoScreenTranscript || m.transcriptFrozen == nil {
+		return nil
 	}
+	capN := m.transcriptFrozen.StreamingToolUsesLen
+	if capN <= 0 {
+		return nil
+	}
+	u := m.store.StreamingToolUses
+	if len(u) > capN {
+		u = u[:capN]
+	}
+	return u
+}
+
+func (m *model) scrollItemKeys() []string {
+	msgN := m.transcriptEffectiveN()
+	keys := make([]string, 0, msgN+len(m.transcriptStreamingToolsForView()))
+	for i := 0; i < msgN; i++ {
+		keys = append(keys, conversation.ItemKey(m.store.Messages[i], m.store.ConversationID))
+	}
+	keys = append(keys, m.transcriptStreamingToolScrollKeys()...)
 	return keys
+}
+
+func (m *model) transcriptStreamingToolScrollKeys() []string {
+	tools := m.transcriptStreamingToolsForView()
+	out := make([]string, len(tools))
+	for i := range tools {
+		out[i] = transcriptStreamToolScrollKey(m.store.ConversationID, i)
+	}
+	return out
 }
 
 func (m *model) enterTranscriptScreen() {

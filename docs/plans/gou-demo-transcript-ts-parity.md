@@ -15,6 +15,7 @@ Reference: [`claude-code/src/screens/REPL.tsx`](../../../claude-code/src/screens
 | Search `/`, bar `Esc` / `Enter`, `n`/`N`, resize clears | **`/`** opens search bar; **`Esc`** in bar clears search state (stay in transcript); **`Enter`** closes bar but keeps query for **`n`/`N`**; **`n`/`N`** step matches when bar closed and query non-empty; **column change** clears search | Plain-text substring match over frozen messages (no TS highlight overlay) |
 | `[` dump mode, `v` external editor | **`[`** sets dump + show-all, exits alt-screen when enabled, **`tea.Printf`** plain export to scrollback; **`v`** writes frozen transcript to temp (width `max(80, cols−6)`), strips trailing line spaces, **`tea.ExecProcess`** `$VISUAL`/`$EDITOR` (status + 4s clear like TS) | Go uses Bubble Tea scrollback + exec; TS Ink unwrap + `renderMessagesToPlainText` |
 | New model events while in transcript | **No auto-scroll** to tail | TS frozen slice ignores new tail until exit |
+| `transcriptStreamingToolUses` synthetic rows in list | **Ported**: virtual-scroll keys append `gou-st-tool:*` after frozen messages; `View` / height cache / `[`/`v` plain export include `transcriptStreamingToolsForView()` slice (`slice(0, frozen.StreamingToolUsesLength)` of live store list); search includes tool name/id/input |
 
 ## Acceptance (manual)
 

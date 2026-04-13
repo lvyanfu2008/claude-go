@@ -43,6 +43,56 @@ func TestScrollItemKeysTranscriptSubset(t *testing.T) {
 	}
 }
 
+func TestScrollItemKeys_transcript_appendsStreamingToolKeys(t *testing.T) {
+	st := &conversation.Store{
+		ConversationID: "c1",
+		Messages:       []types.Message{{UUID: "m1"}},
+		StreamingToolUses: []conversation.StreamingToolUse{
+			{Index: 0, ToolUseID: "t1", Name: "Bash", UnparsedInput: `{"x":1}`},
+			{Index: 1, ToolUseID: "t2", Name: "Read", UnparsedInput: ""},
+		},
+	}
+	m := &model{
+		store:    st,
+		uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{
+			MessagesLen:          1,
+			StreamingToolUsesLen: 2,
+		},
+	}
+	keys := m.scrollItemKeys()
+	if len(keys) != 3 {
+		t.Fatalf("want 1 msg + 2 stream keys, got %d: %v", len(keys), keys)
+	}
+	if keys[1] != transcriptStreamToolScrollKey("c1", 0) {
+		t.Fatalf("stream key0: %q", keys[1])
+	}
+	if keys[2] != transcriptStreamToolScrollKey("c1", 1) {
+		t.Fatalf("stream key1: %q", keys[2])
+	}
+}
+
+func TestTranscriptStreamingToolsForView_capsByFrozenLen(t *testing.T) {
+	st := &conversation.Store{
+		ConversationID: "c1",
+		StreamingToolUses: []conversation.StreamingToolUse{
+			{ToolUseID: "a"}, {ToolUseID: "b"}, {ToolUseID: "c"},
+		},
+	}
+	m := &model{
+		store:    st,
+		uiScreen: gouDemoScreenTranscript,
+		transcriptFrozen: &frozenTranscriptSnapshot{
+			MessagesLen:          0,
+			StreamingToolUsesLen: 2,
+		},
+	}
+	v := m.transcriptStreamingToolsForView()
+	if len(v) != 2 || v[0].ToolUseID != "a" || v[1].ToolUseID != "b" {
+		t.Fatalf("got %+v", v)
+	}
+}
+
 func TestHandleTranscriptKeySwallowsUnknown(t *testing.T) {
 	m := &model{store: &conversation.Store{ConversationID: "x"}, uiScreen: gouDemoScreenTranscript}
 	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
