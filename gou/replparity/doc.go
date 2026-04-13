@@ -2,6 +2,18 @@
 // gou-demo stack mirrors claude-code/src/screens/REPL.tsx (Ink) so reviewers
 // can “抄” the mapping instead of re-reading 6k lines of TS.
 //
+// Human-readable feature catalog (major vs secondary): docs/repl-tsx-features.md
+//
+// # Expectation: this is not the TS REPL shell
+//
+// Splitting Go across packages does not produce the same thing as REPL.tsx. gou-demo
+// uses Bubble Tea + lipgloss, a smaller layout, fewer components, and a subset of
+// keybindings and modals. You should not expect pixel-level or full behavioral
+// reproduction of the Ink product UI here. These packages target engine-adjacent
+// parity (messages, stream apply, virtual scroll, local tools, transcript subset).
+// For the real shell, run the TypeScript/Ink app; closing the UX gap to Ink would be
+// a separate, large effort (layout spec, theme tokens, keybinding matrix, dialogs).
+//
 // # Canonical TS path
 //
 //	claude-code/src/screens/REPL.tsx — Screen = 'prompt' | 'transcript', prompt
