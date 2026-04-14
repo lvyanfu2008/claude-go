@@ -96,20 +96,9 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 	st := r.ReadFileState
 	switch name {
 	case "Read":
-		s, isErr, err := localtools.ReadFromJSON(input, roots, st, nil)
-		if err != nil || isErr {
-			return s, isErr, err
-		}
-		memCwd := strings.TrimSpace(r.WorkDir)
-		if memCwd == "" && len(roots) > 0 {
-			memCwd = roots[0]
-		}
-		opts := localtools.ReadToolResultMapOptsForToolInput(input, roots, memCwd, r.MainLoopModel)
-		mapped, mErr := localtools.MapReadToolResultToAssistantText(s, opts)
-		if mErr != nil {
-			return "", true, mErr
-		}
-		return mapped, false, nil
+		// Return raw tool output JSON (TS tool.call `data`). toolexecution maps to tool_result.content
+		// while embedding this string as structured toolUseResult (see syntheticToolMessageAfterInvoke).
+		return localtools.ReadFromJSON(input, roots, st, nil)
 	case "Write":
 		return localtools.WriteFromJSON(input, roots, st)
 	case "Edit":
@@ -125,4 +114,22 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		return `{"note":"Go local runner: discover-skills is not implemented; use the Skill tool with a skill name, or enable the TS socket worker for full tool parity."}`, false, nil
 	}
 	return r.DemoToolRunner.Run(ctx, name, toolUseID, input)
+}
+
+// ToolReadMappingRoots supplies absolute roots for Read tool_result mapping (engine.Session).
+func (r *ParityToolRunner) ToolReadMappingRoots() []string {
+	return r.roots()
+}
+
+// ToolReadMappingMemCWD supplies cwd for auto-memory freshness in Read formatter (engine.Session).
+func (r *ParityToolRunner) ToolReadMappingMemCWD() string {
+	wd := strings.TrimSpace(r.WorkDir)
+	if wd != "" {
+		return wd
+	}
+	rs := r.roots()
+	if len(rs) > 0 {
+		return rs[0]
+	}
+	return ""
 }

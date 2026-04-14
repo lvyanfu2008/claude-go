@@ -14,6 +14,7 @@ import (
 	"goc/ccb-engine/internal/toolinput"
 	"goc/ccb-engine/internal/toolpolicy"
 	"goc/ccb-engine/internal/toolsearch"
+	"goc/ccb-engine/localtools"
 	"goc/modelenv"
 )
 
@@ -202,6 +203,8 @@ func (s *Session) RunTurn(ctx context.Context, completer llm.TurnCompleter, tool
 				if err != nil {
 					content = err.Error()
 					isErr = true
+				} else if !isErr && b.Name == "Read" {
+					content = mapReadToolResultForModel(content, b.Input, modelID, runner)
 				}
 			}
 			s.emit(protocol.ToolResult(b.ID, content, isErr))
@@ -237,4 +240,37 @@ func (s *Session) RunTurn(ctx context.Context, completer llm.TurnCompleter, tool
 
 	s.emit(protocol.ErrEvent("invalid_request", "max tool rounds exceeded"))
 	return fmt.Errorf("max tool rounds (%d) exceeded", maxToolRounds)
+}
+
+// mapReadToolResultForModel mirrors toolexecution syntheticToolMessageAfterInvoke Read branch:
+// ParityToolRunner returns raw Read JSON; the model sees mapToolResultToToolResultBlockParam output.
+func mapReadToolResultForModel(content string, input json.RawMessage, modelID string, runner ToolRunner) string {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" || !json.Valid([]byte(trimmed)) {
+		return content
+	}
+	var probe struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal([]byte(trimmed), &probe) != nil {
+		return content
+	}
+	if probe.Type != "text" && probe.Type != "file_unchanged" {
+		return content
+	}
+	var roots []string
+	var memCwd string
+	if v, ok := runner.(interface {
+		ToolReadMappingRoots() []string
+		ToolReadMappingMemCWD() string
+	}); ok {
+		roots = v.ToolReadMappingRoots()
+		memCwd = v.ToolReadMappingMemCWD()
+	}
+	opts := localtools.ReadToolResultMapOptsForToolInput(input, roots, memCwd, modelID)
+	mapped, err := localtools.MapReadToolResultToAssistantText(trimmed, opts)
+	if err != nil {
+		return content
+	}
+	return mapped
 }

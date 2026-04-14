@@ -154,7 +154,7 @@ func finishCheckPermissionsWithToolCall(
 			um := syntheticToolResult(deps, toolUseID, ierr.Error(), true, assistant.UUID)
 			return []types.Message{um}, nil
 		}
-		um := syntheticToolMessageAfterInvoke(deps, tool.Name(), toolUseID, content, isErr, assistant.UUID)
+		um := syntheticToolMessageAfterInvoke(deps, tool.Name(), toolUseID, input, content, isErr, assistant.UUID)
 		return []types.Message{um}, nil
 	}
 	res, err := tool.Call(ctx, toolUseID, input, tcxUse, canUseTool, assistant, nil)

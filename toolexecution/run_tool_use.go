@@ -90,7 +90,7 @@ func RunToolUseChan(
 				content = err.Error()
 				isErr = true
 			}
-			m := syntheticToolMessageAfterInvoke(deps, block.Name, block.ID, content, isErr, assistant.UUID)
+			m := syntheticToolMessageAfterInvoke(deps, block.Name, block.ID, block.Input, content, isErr, assistant.UUID)
 			ch <- streamingtool.ToolRunUpdate{Message: &m}
 			return
 		}
@@ -207,8 +207,24 @@ func syntheticToolResultMapped(deps ExecutionDeps, toolUseID, toolResultBlockCon
 
 // syntheticToolMessageAfterInvoke mirrors toolExecution.ts addToolResult: tool_result.content
 // comes from mapToolResultToToolResultBlockParam while toolUseResult stays the tool's native Output object.
-func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID, body string, isErr bool, assistantUUID string) types.Message {
+func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID string, input json.RawMessage, body string, isErr bool, assistantUUID string) types.Message {
 	body = strings.TrimSpace(body)
+	if !isErr && toolName == "Read" && body != "" && json.Valid([]byte(body)) {
+		var probe struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal([]byte(body), &probe) == nil {
+			switch probe.Type {
+			case "text", "file_unchanged":
+				opts := localtools.ReadToolResultMapOptsForToolInput(input, deps.ReadToolRoots, deps.ReadToolMemCWD, deps.MainLoopModel)
+				mapped, mErr := localtools.MapReadToolResultToAssistantText(body, opts)
+				if mErr != nil {
+					return syntheticToolResult(deps, toolUseID, mErr.Error(), true, assistantUUID)
+				}
+				return syntheticToolResultMapped(deps, toolUseID, mapped, body, false, assistantUUID)
+			}
+		}
+	}
 	if !isErr && toolName == "Grep" && body != "" {
 		if block, err := localtools.MapGrepToolOutputToToolResultContent(body); err == nil {
 			return syntheticToolResultMapped(deps, toolUseID, block, body, false, assistantUUID)

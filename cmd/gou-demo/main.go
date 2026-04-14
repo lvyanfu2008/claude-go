@@ -1234,6 +1234,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								ProjectRoot:      toolProjectRoot,
 								LocalBashDefault: true,
 								AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
+								MainLoopModel:    mainLoopModel,
 							}
 							if gouDemoPreferQueryStreamingParity() {
 								var userCtx map[string]string
@@ -1245,7 +1246,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									tcx = params.RuntimeContext.ToolUseContext
 								}
 								qdeps := query.ProductionDeps()
-								te := toolexecution.ExecutionDeps{InvokeTool: runner.Run}
+								te := toolexecution.ExecutionDeps{
+									InvokeTool:     runner.Run,
+									MainLoopModel:  mainLoopModel,
+									ReadToolRoots:  runner.ToolReadMappingRoots(),
+									ReadToolMemCWD: runner.ToolReadMappingMemCWD(),
+								}
 								// Opt-in TS permissions.ts 1b: whole-tool alwaysAsk on Bash skipped when input looks sandboxed (see toolexecution.BashSandboxRule1b).
 								if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
 									te.SandboxingEnabled = true

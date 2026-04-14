@@ -116,6 +116,9 @@ func runStreamingParityModelLoop(
 		}()
 		port := newQueryToolUseContextPort(toolAbortRoot)
 		depsCopy := deps.ToolexecutionDeps
+		if strings.TrimSpace(depsCopy.MainLoopModel) == "" {
+			depsCopy.MainLoopModel = strings.TrimSpace(params.ToolUseContext.Options.MainLoopModel)
+		}
 		if params.ToolPermissionContext != nil {
 			pc := *params.ToolPermissionContext
 			types.NormalizeToolPermissionContextData(&pc)

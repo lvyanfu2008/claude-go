@@ -30,6 +30,12 @@ type ExecutionDeps struct {
 	// whole-tool alwaysAsk on [BashToolName] is skipped when [BashInputUsesSandboxForRule1b] is true (see [WholeToolAskSkippedForBash1b]).
 	SandboxingEnabled                      bool
 	AutoAllowBashWholeToolAskWhenSandboxed bool
+
+	// MainLoopModel and ReadTool* supply context for Read → tool_result.content mapping
+	// (mirrors TS FileReadTool.mapToolResultToToolResultBlockParam + memory freshness roots).
+	MainLoopModel  string
+	ReadToolRoots  []string
+	ReadToolMemCWD string
 }
 
 // WithExecutionDeps attaches deps for [DepsFromContext] (used by check_permissions path).
