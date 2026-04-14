@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"goc/ccb-engine/localtools"
 	"goc/conversation-runtime/streamingtool"
 	"goc/types"
 )
@@ -89,7 +90,7 @@ func RunToolUseChan(
 				content = err.Error()
 				isErr = true
 			}
-			m := syntheticToolResult(deps, block.ID, content, isErr, assistant.UUID)
+			m := syntheticToolMessageAfterInvoke(deps, block.Name, block.ID, content, isErr, assistant.UUID)
 			ch <- streamingtool.ToolRunUpdate{Message: &m}
 			return
 		}
@@ -193,6 +194,27 @@ func syntheticToolResult(deps ExecutionDeps, toolUseID, content string, isErr bo
 		"is_error":    isErr,
 		"tool_use_id": toolUseID,
 	}}, content, assistantUUID)
+}
+
+func syntheticToolResultMapped(deps ExecutionDeps, toolUseID, toolResultBlockContent, toolUseResultRaw string, isErr bool, assistantUUID string) types.Message {
+	return CreateUserMessage(deps, []map[string]any{{
+		"type":        "tool_result",
+		"content":     toolResultBlockContent,
+		"is_error":    isErr,
+		"tool_use_id": toolUseID,
+	}}, toolUseResultRaw, assistantUUID)
+}
+
+// syntheticToolMessageAfterInvoke mirrors toolExecution.ts addToolResult: tool_result.content
+// comes from mapToolResultToToolResultBlockParam while toolUseResult stays the tool's native Output object.
+func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID, body string, isErr bool, assistantUUID string) types.Message {
+	body = strings.TrimSpace(body)
+	if !isErr && toolName == "Grep" && body != "" {
+		if block, err := localtools.MapGrepToolOutputToToolResultContent(body); err == nil {
+			return syntheticToolResultMapped(deps, toolUseID, block, body, false, assistantUUID)
+		}
+	}
+	return syntheticToolResult(deps, toolUseID, body, isErr, assistantUUID)
 }
 
 func toolRunResultString(res *types.ToolRunResult) (content string, isErr bool) {
