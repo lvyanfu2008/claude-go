@@ -20,13 +20,18 @@ type ParityToolRunner struct {
 	ExtraRoots []string
 	// ProjectRoot is the repo / project directory (for .claude paths: todos, cron, plan mode, task files).
 	ProjectRoot string
+	// ReadFileState mirrors TS toolUseContext.readFileState (nil → lazy per runner; gou-demo sets a session-scoped pointer on model).
+	ReadFileState *localtools.ReadFileState
+	UserModified  bool
 	// AskAutoFirst makes AskUserQuestion pick the first option per question (gou-demo default).
 	AskAutoFirst bool
 	// LocalBashDefault enables Bash without CCB_ENGINE_LOCAL_BASH (gou-demo aligns with TS; opt out via GOU_DEMO_NO_LOCAL_BASH).
 	LocalBashDefault bool
+	// MainLoopModel is optional; when set it drives Read tool_result cyber-risk mitigation (TS shouldIncludeFileReadMitigation).
+	MainLoopModel string
 }
 
-func (r ParityToolRunner) roots() []string {
+func (r *ParityToolRunner) roots() []string {
 	m := map[string]struct{}{}
 	add := func(s string) {
 		s = strings.TrimSpace(s)
@@ -57,14 +62,14 @@ func (r ParityToolRunner) roots() []string {
 }
 
 // Run implements [engine.ToolRunner].
-func (r ParityToolRunner) Run(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
+func (r *ParityToolRunner) Run(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
 	if name == "REPL" {
 		return r.runREPLTool(ctx, toolUseID, input)
 	}
 	return r.dispatchTool(ctx, name, toolUseID, input)
 }
 
-func (r ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
+func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
 	roots := r.roots()
 	wd := strings.TrimSpace(r.WorkDir)
 	if wd == "" && len(roots) > 0 {
@@ -85,13 +90,30 @@ func (r ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID stri
 	if perr == nil || !paritytools.IsNotHandled(perr) {
 		return s, isErr, perr
 	}
+	if r.ReadFileState == nil {
+		r.ReadFileState = localtools.NewReadFileState()
+	}
+	st := r.ReadFileState
 	switch name {
 	case "Read":
-		return localtools.ReadFromJSON(input, roots)
+		s, isErr, err := localtools.ReadFromJSON(input, roots, st, nil)
+		if err != nil || isErr {
+			return s, isErr, err
+		}
+		memCwd := strings.TrimSpace(r.WorkDir)
+		if memCwd == "" && len(roots) > 0 {
+			memCwd = roots[0]
+		}
+		opts := localtools.ReadToolResultMapOptsForToolInput(input, roots, memCwd, r.MainLoopModel)
+		mapped, mErr := localtools.MapReadToolResultToAssistantText(s, opts)
+		if mErr != nil {
+			return "", true, mErr
+		}
+		return mapped, false, nil
 	case "Write":
-		return localtools.WriteFromJSON(input, roots)
+		return localtools.WriteFromJSON(input, roots, st)
 	case "Edit":
-		return localtools.EditFromJSON(input, roots)
+		return localtools.EditFromJSON(input, roots, st, r.UserModified)
 	case "Glob":
 		return localtools.GlobFromJSON(ctx, input, roots)
 	case "Grep":

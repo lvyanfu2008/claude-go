@@ -98,6 +98,31 @@ func GetTeamMemPath(originalCwd string) string {
 	return filepath.Join(auto, "team") + string(filepath.Separator)
 }
 
+// IsAutoMemPath mirrors src/memdir/paths.ts isAutoMemPath: absolute file path lies under
+// GetAutoMemPath(originalCwd) (project-scoped auto-memory directory).
+func IsAutoMemPath(absFilePath, originalCwd string) bool {
+	if !IsAutoMemoryEnabled() {
+		return false
+	}
+	p := strings.TrimSpace(absFilePath)
+	if p == "" {
+		return false
+	}
+	memRoot := strings.TrimSuffix(filepath.Clean(GetAutoMemPath(originalCwd)), string(filepath.Separator))
+	if memRoot == "" || memRoot == "." {
+		return false
+	}
+	abs := filepath.Clean(p)
+	if !filepath.IsAbs(abs) {
+		return false
+	}
+	rel, err := filepath.Rel(memRoot, abs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 func expandTildeMemoryDir(raw string) string {
 	s := strings.TrimSpace(raw)
 	if strings.HasPrefix(s, "~/") || strings.HasPrefix(s, `~\`) {
