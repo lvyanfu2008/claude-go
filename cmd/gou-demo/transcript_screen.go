@@ -114,6 +114,7 @@ func (m *model) transcriptStreamingToolScrollKeys() []string {
 }
 
 func (m *model) enterTranscriptScreen() tea.Cmd {
+	m.clearMsgLineCopyMode()
 	m.clearTranscriptSearchState()
 	m.promptSavedScrollTop = m.scrollTop
 	m.promptSavedSticky = m.sticky

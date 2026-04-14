@@ -175,7 +175,7 @@ func replChromeFooterHint(narrow bool) string {
 	if narrow {
 		s := "Shift+Enter newline · F2 · q"
 		if gouDemoBubblesViewport() {
-			s += " · ctrl+y"
+			s += " · ctrl+y · ctrl+;"
 		}
 		if gouDemoMouseCellMotionEnabled() {
 			s = "Sh+drag · ^C copy · " + s
@@ -184,7 +184,7 @@ func replChromeFooterHint(narrow bool) string {
 	}
 	s := "Shift+Enter / Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
 	if gouDemoBubblesViewport() {
-		s += " · ctrl+y fold pane (bubbles viewport)"
+		s += " · ctrl+y fold pane · ctrl+; / f3 line copy (test_ignore.go)"
 	}
 	if gouDemoMouseCellMotionEnabled() {
 		s = "Shift+drag · Ctrl+C copy (msg pane) · Esc clear sel · " + s

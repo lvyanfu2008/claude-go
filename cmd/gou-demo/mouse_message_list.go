@@ -101,6 +101,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 		if m.msgViewportWanted() && gouDemoMsgHistoryBrowseReleaseEnabled() && gouDemoMouseCellMotionEnabled() &&
 			msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonWheelUp && !ev.Shift && m.msgViewport.AtTop() {
 			m.clearMsgSelection()
+			m.clearMsgLineCopyMode()
 			m.msgHistoryBrowseMouseOff = true
 			return true, tea.Sequence(
 				tea.DisableMouse,

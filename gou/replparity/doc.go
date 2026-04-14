@@ -36,6 +36,7 @@
 //   - Wheel / drag-to-scroll on the message list: cmd/gou-demo/mouse_message_list.go (tea.WithMouseCellMotion when enabled).
 //     Bubbles viewport prompt pane: keyboard scroll is delegated through viewport.Update with a gou-demo KeyMap (go-tui/main pattern);
 //     at viewport top, wheel-up in-pane can tea.DisableMouse for host scrollback (test.go); GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0 disables.
+//     Keyboard line-range copy (go-tui/main/test_ignore.go): ctrl+; or f3 toggles mode, ↑/↓/j/k moves anchor, c copies lines, ctrl+a copies full pane, space/esc exits (cmd/gou-demo/message_viewport_linecopy.go).
 //     TS CLAUDE_CODE_DISABLE_MOUSE / GOU_DEMO_DISABLE_MOUSE omits SGR mouse so the host terminal can select/copy;
 //     optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1 (GOU_DEMO_NO_SCROLLBAR=1 forces off).
 //     Default: normal terminal buffer (no tea.WithAltScreen) to keep shell scrollback. Optional GOU_DEMO_ALT_SCREEN=1
