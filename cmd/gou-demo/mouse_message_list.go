@@ -104,7 +104,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 			m.msgHistoryBrowseMouseOff = true
 			return true, tea.Sequence(
 				tea.DisableMouse,
-				tea.Println("\n📜 History browse: terminal mouse wheel scrolls host buffer; press any key to return…"),
+				tea.Println("\n📜 History browse: mouse wheel uses host buffer; you can drag-select to copy like go-tui test.go; press any key to return…"),
 			)
 		}
 		m.clearMsgSelection()
