@@ -113,7 +113,7 @@ func (m *model) transcriptStreamingToolScrollKeys() []string {
 	return out
 }
 
-func (m *model) enterTranscriptScreen() {
+func (m *model) enterTranscriptScreen() tea.Cmd {
 	m.clearTranscriptSearchState()
 	m.promptSavedScrollTop = m.scrollTop
 	m.promptSavedSticky = m.sticky
@@ -127,6 +127,7 @@ func (m *model) enterTranscriptScreen() {
 	m.uiScreen = gouDemoScreenTranscript
 	m.sticky = true
 	m.scrollTop = 1 << 30
+	return m.maybeTeaResetHistoryBrowseMouse()
 }
 
 func (m *model) exitTranscriptScreen() {

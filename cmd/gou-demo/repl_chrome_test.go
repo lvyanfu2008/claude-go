@@ -45,6 +45,17 @@ func TestGouDemoVirtualScrollDisabled(t *testing.T) {
 	}
 }
 
+func TestGouDemoMsgHistoryBrowseReleaseEnabled(t *testing.T) {
+	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "")
+	if !gouDemoMsgHistoryBrowseReleaseEnabled() {
+		t.Fatal("default should enable history mouse release (go-tui test.go parity)")
+	}
+	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "0")
+	if gouDemoMsgHistoryBrowseReleaseEnabled() {
+		t.Fatal("0 should disable")
+	}
+}
+
 func TestGouDemoAltScreenEnabled(t *testing.T) {
 	t.Setenv("GOU_DEMO_ALT_SCREEN", "")
 	if gouDemoAltScreenEnabled() {

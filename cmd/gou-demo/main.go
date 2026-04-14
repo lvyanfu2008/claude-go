@@ -26,7 +26,7 @@
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
 // Prompt message list uses [bubbles/viewport] by default (same scrolling style as go-tui: full-document scroll + ctrl+y fold-all). Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no, or use legacy virtualscroll only with GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. Exceeding GOU_DEMO_VIEWPORT_MAX_LINES (default 20000 wrapped rows) falls back to classic virtualscroll. Transcript mode always uses the legacy pane.
-// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: native pbcopy/xclip when available, tmux load-buffer in tmux, plus OSC 52 to the tty (see selection_clipboard.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1; GOU_DEMO_NO_SCROLLBAR=1 forces it off. Alternate screen (tea.WithAltScreen): GOU_DEMO_ALT_SCREEN=1.
+// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: native pbcopy/xclip when available, tmux load-buffer in tmux, plus OSC 52 to the tty (see selection_clipboard.go). Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1; GOU_DEMO_NO_SCROLLBAR=1 forces it off. Alternate screen (tea.WithAltScreen): GOU_DEMO_ALT_SCREEN=1. Bubbles viewport (default): go-tui/main/test.go style at-top wheel-up runs tea.DisableMouse for host scrollback; any key runs EnableMouseCellMotion+ClearScreen; opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
@@ -565,6 +565,9 @@ type model struct {
 	msgFoldAll          bool
 	msgFoldRev          int
 	msgViewportFallback bool
+	// msgHistoryBrowseMouseOff mirrors go-tui/main/test.go: at viewport top, wheel-up disables SGR mouse so the
+	// terminal scrollback wheel works; any key runs EnableMouseCellMotion + ClearScreen (see Update).
+	msgHistoryBrowseMouseOff bool
 
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
@@ -900,11 +903,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		if m.tryHandleMessageListMouse(msg) {
+		if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
 			return m, nil
+		}
+		if handled, cmd := m.tryHandleMessageListMouse(msg); handled {
+			return m, cmd
 		}
 
 	case tea.KeyMsg:
+		if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
+			m.clearMsgSelection()
+			m.msgHistoryBrowseMouseOff = false
+			return m, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen)
+		}
 		if m.permAsk != nil && msg.String() == "ctrl+c" {
 			m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
 			return m, tea.Quit
@@ -938,10 +949,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
-			m.enterTranscriptScreen()
 			m.slashPick = nil
 			m.rebuildHeightCache()
-			return m, nil
+			return m, m.enterTranscriptScreen()
 		}
 		if handled, cmd := m.handleTranscriptKey(msg); handled {
 			return m, cmd
@@ -950,8 +960,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clearMsgSelection()
 		}
 		if m.msgViewportWanted() && isListViewportScrollKey(msg.String()) {
-			m.handleMsgViewportScrollKey(msg.String())
-			return m, nil
+			return m, m.handleMsgViewportScrollKey(msg)
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":

@@ -78,23 +78,34 @@ func (m *model) clampScrollTopForVirtualList() {
 }
 
 // tryHandleMessageListMouse maps wheel to virtual scroll and Shift+left-drag to in-app selection (TS selection + wheel clears).
-// Plain left-drag scrolls the list. Returns true if the event was consumed.
-func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
+// Plain left-drag scrolls the list. go-tui/main/test.go: when bubbles viewport is at top, wheel-up in the pane can
+// disable SGR mouse so the terminal scrollback wheel works (GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE).
+// Returns whether the event was consumed and an optional tea.Cmd (e.g. DisableMouse sequence).
+func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 	if gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE_SCROLL") {
-		return false
+		return false, nil
 	}
 	if m.permAsk != nil || m.slashPick != nil {
-		return false
+		return false, nil
 	}
 	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptSearchOpen || m.transcriptDumpMode) {
-		return false
+		return false, nil
 	}
 
 	ev := tea.MouseEvent(msg)
 
 	if ev.IsWheel() {
 		if !m.mouseYInMessageListPane(msg.Y) {
-			return false
+			return false, nil
+		}
+		if m.msgViewportWanted() && gouDemoMsgHistoryBrowseReleaseEnabled() && gouDemoMouseCellMotionEnabled() &&
+			msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonWheelUp && !ev.Shift && m.msgViewport.AtTop() {
+			m.clearMsgSelection()
+			m.msgHistoryBrowseMouseOff = true
+			return true, tea.Sequence(
+				tea.DisableMouse,
+				tea.Println("\n📜 History browse: terminal mouse wheel scrolls host buffer; press any key to return…"),
+			)
 		}
 		m.clearMsgSelection()
 		if m.msgViewportWanted() {
@@ -112,9 +123,9 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 					m.msgViewport.HalfPageDown()
 				}
 			default:
-				return false
+				return false, nil
 			}
-			return true
+			return true, nil
 		}
 		step := max(1, listViewportH(m)/6)
 		m.sticky = false
@@ -128,9 +139,9 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 		case tea.MouseButtonWheelRight:
 			m.scrollTop += listViewportH(m) / 2
 		default:
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	}
 
 	switch msg.Action {
@@ -142,14 +153,14 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 				m.selAnchorR, m.selAnchorC = pr, pc
 				m.selFocusR, m.selFocusC = pr, pc
 				m.msgListMouseDragging = false
-				return true
+				return true, nil
 			}
 		}
 		if msg.Button == tea.MouseButtonLeft && !ev.Shift {
 			if m.mouseYInMessageListPane(msg.Y) {
 				m.msgListMouseDragging = true
 				m.msgListMouseLastY = msg.Y
-				return true
+				return true, nil
 			}
 			m.msgListMouseDragging = false
 		}
@@ -157,7 +168,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 		if m.selDragging && ev.Shift && msg.Button == tea.MouseButtonLeft {
 			if pr, pc, ok := m.msgPaneCell(msg); ok {
 				m.selFocusR, m.selFocusC = pr, pc
-				return true
+				return true, nil
 			}
 		}
 		if m.msgListMouseDragging && msg.Button == tea.MouseButtonLeft && !ev.Shift {
@@ -179,18 +190,18 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) bool {
 				}
 				m.msgListMouseLastY = msg.Y
 			}
-			return true
+			return true, nil
 		}
 	case tea.MouseActionRelease:
 		if m.selDragging {
 			m.selDragging = false
 			m.selHas = true
-			return true
+			return true, nil
 		}
 		if m.msgListMouseDragging {
 			m.msgListMouseDragging = false
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }

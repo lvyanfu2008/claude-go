@@ -51,6 +51,17 @@ func gouDemoAltScreenEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_ALT_SCREEN")
 }
 
+// gouDemoMsgHistoryBrowseReleaseEnabled is go-tui/main/test.go style release: when the bubbles message viewport is
+// at the top, one wheel-up in the pane runs tea.DisableMouse so the host can scroll terminal history; any key
+// restores tea.EnableMouseCellMotion. Opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
+func gouDemoMsgHistoryBrowseReleaseEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE")))
+	if v == "0" || v == "false" || v == "off" || v == "no" {
+		return false
+	}
+	return true
+}
+
 // gouDemoMessageScrollbarStrip draws a one-column TUI scrollbar beside the message list when content overflows.
 // Default off (plain bubbles/viewport like go-tui). Opt in with GOU_DEMO_MESSAGE_SCROLLBAR=1.
 // GOU_DEMO_NO_SCROLLBAR=1 still forces the strip off (e.g. legacy scripts).

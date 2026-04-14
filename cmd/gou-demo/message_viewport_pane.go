@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"goc/gou/markdown"
@@ -52,6 +54,39 @@ func (m *model) messagePaneContentSig() string {
 	return fmt.Sprintf("%d|%d|%d|%v|%d", len(m.store.Messages), len(m.store.StreamingToolUses), chunk, m.msgFoldAll, m.msgFoldRev)
 }
 
+// gouDemoMsgViewportKeyMap aligns bubbles/viewport keybindings with handleMsgViewportScrollKey (pager keys, not h/l).
+func gouDemoMsgViewportKeyMap() viewport.KeyMap {
+	def := viewport.DefaultKeyMap()
+	return viewport.KeyMap{
+		PageDown: key.NewBinding(
+			key.WithKeys("ctrl+f", "ctrl+n"),
+			key.WithHelp("ctrl+f", "page down"),
+		),
+		PageUp: key.NewBinding(
+			key.WithKeys("ctrl+b", "ctrl+p"),
+			key.WithHelp("ctrl+b", "page up"),
+		),
+		HalfPageDown: key.NewBinding(
+			key.WithKeys("pgdown", " ", "ctrl+d"),
+			key.WithHelp("pgdn", "½ page down"),
+		),
+		HalfPageUp: key.NewBinding(
+			key.WithKeys("pgup", "b", "ctrl+u"),
+			key.WithHelp("pgup", "½ page up"),
+		),
+		Up: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "down"),
+		),
+		Left:  def.Left,
+		Right: def.Right,
+	}
+}
+
 func (m *model) msgViewportSyncGeometry() {
 	if !m.msgViewportWanted() {
 		return
@@ -72,6 +107,8 @@ func (m *model) msgViewportSyncGeometry() {
 			m.msgViewport.Width = w
 			m.msgViewport.Height = h
 		}
+		m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
+		m.msgViewport.MouseWheelEnabled = false
 		m.lastVpGeom = sig
 		m.vpNeedResizeContent = true
 	}
@@ -215,30 +252,34 @@ func (m *model) applyMsgViewportContentFromView() {
 	}
 }
 
-func (m *model) handleMsgViewportScrollKey(s string) {
-	switch s {
+// maybeTeaResetHistoryBrowseMouse clears go-tui/test.go history-browse mode and re-enables SGR mouse if needed.
+func (m *model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
+	if !m.msgHistoryBrowseMouseOff {
+		return nil
+	}
+	m.msgHistoryBrowseMouseOff = false
+	return tea.EnableMouseCellMotion
+}
+
+// handleMsgViewportScrollKey forwards list keys through bubbles/viewport.Update (go-tui/main pattern) plus
+// GotoTop/GotoBottom bindings not in the default viewport keymap.
+func (m *model) handleMsgViewportScrollKey(msg tea.KeyMsg) tea.Cmd {
+	var cmd tea.Cmd
+	m.msgViewport, cmd = m.msgViewport.Update(msg)
+	switch msg.String() {
 	case "end", "G", "shift+g", "ctrl+end":
 		m.sticky = true
 		m.msgViewport.GotoBottom()
-		return
-	case "up", "k":
-		m.msgViewport.ScrollUp(1)
-	case "down", "j":
-		m.msgViewport.ScrollDown(1)
-	case "pgup", "b", "ctrl+u":
-		m.msgViewport.HalfPageUp()
-	case "pgdown", " ", "ctrl+d":
-		m.msgViewport.HalfPageDown()
-	case "ctrl+b", "ctrl+p":
-		m.msgViewport.PageUp()
-	case "ctrl+f", "ctrl+n":
-		m.msgViewport.PageDown()
+		return cmd
 	case "home", "g", "ctrl+home":
 		m.msgViewport.GotoTop()
+		m.sticky = false
+		return cmd
 	}
 	if !m.msgViewport.AtBottom() {
 		m.sticky = false
 	}
+	return cmd
 }
 
 // messagePaneViewportBlock renders the message list using bubbles/viewport (prompt screen when viewport mode is on).
