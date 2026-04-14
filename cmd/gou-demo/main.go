@@ -1815,6 +1815,9 @@ func (m *model) View() string {
 		if frag := replChromePermissionFragment(m.permissionMode, narrow); frag != "" {
 			hintText = frag + " · " + hintText
 		}
+		if cs := strings.TrimSpace(m.copyStatus); cs != "" {
+			hintText = hintText + " · " + cs
+		}
 		hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintText)
 		b.WriteString(promptView)
 		b.WriteByte('\n')

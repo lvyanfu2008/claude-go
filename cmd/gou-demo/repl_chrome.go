@@ -159,17 +159,24 @@ func replChromeTranscriptTopBar(narrow bool) string {
 }
 
 // replChromeFooterHint is the faint line under the prompt.
+// When SGR mouse is on (gouDemoMouseCellMotionEnabled), message-pane copy is in-app: Shift+left-drag then Ctrl+C (Esc clears).
 func replChromeFooterHint(narrow bool) string {
 	if narrow {
 		s := "Shift+Enter newline · F2 · q"
 		if gouDemoBubblesViewport() {
 			s += " · ctrl+y"
 		}
+		if gouDemoMouseCellMotionEnabled() {
+			s = "Sh+drag · ^C copy · " + s
+		}
 		return s
 	}
 	s := "Shift+Enter / Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
 	if gouDemoBubblesViewport() {
 		s += " · ctrl+y fold pane (bubbles viewport)"
+	}
+	if gouDemoMouseCellMotionEnabled() {
+		s = "Shift+drag · Ctrl+C copy (msg pane) · Esc clear sel · " + s
 	}
 	return s
 }

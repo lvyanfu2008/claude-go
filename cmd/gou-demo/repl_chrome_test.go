@@ -56,6 +56,24 @@ func TestGouDemoAltScreenEnabled(t *testing.T) {
 	}
 }
 
+func TestReplChromeFooterHint_inPaneCopyWhenMouseOn(t *testing.T) {
+	t.Setenv("GOU_DEMO_DISABLE_MOUSE", "")
+	t.Setenv("CLAUDE_CODE_DISABLE_MOUSE", "")
+	wide := replChromeFooterHint(false)
+	if !strings.Contains(wide, "Shift+drag") || !strings.Contains(wide, "Ctrl+C copy") {
+		t.Fatalf("wide footer should advertise msg-pane copy: %q", wide)
+	}
+	narrow := replChromeFooterHint(true)
+	if !strings.Contains(narrow, "Sh+drag") || !strings.Contains(narrow, "^C copy") {
+		t.Fatalf("narrow footer should advertise msg-pane copy: %q", narrow)
+	}
+	t.Setenv("GOU_DEMO_DISABLE_MOUSE", "1")
+	wideOff := replChromeFooterHint(false)
+	if strings.Contains(wideOff, "Shift+drag") {
+		t.Fatalf("mouse disabled should omit drag-copy hint: %q", wideOff)
+	}
+}
+
 func TestOscSetWindowTitle_kittyST(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("OSC title skipped on windows")

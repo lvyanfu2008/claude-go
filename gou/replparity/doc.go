@@ -38,8 +38,8 @@
 //     optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1 (GOU_DEMO_NO_SCROLLBAR=1 forces off).
 //     Default: normal terminal buffer (no tea.WithAltScreen) to keep shell scrollback. Optional GOU_DEMO_ALT_SCREEN=1
 //     enables tea.WithAltScreen for in-pane wheel focus; Shift+drag + Ctrl+C in-app copy unchanged (message_selection.go).
-//   - In-app selection (Shift+left-drag) + Ctrl+C copy + OSC 52 / pbcopy / tmux load-buffer: cmd/gou-demo/message_selection.go,
-//     selection_clipboard.go (subset of TS useSelection + setClipboard).
+//   - In-app selection (Shift+left-drag) + Ctrl+C copy (Esc clears) + OSC 52 / pbcopy / tmux load-buffer: cmd/gou-demo/message_selection.go,
+//     selection_clipboard.go (subset of TS useSelection + setClipboard). Prompt footer (replChromeFooterHint) names the gesture when mouse tracking is on; copyStatus also flashes on that footer line after copy.
 //   - Row body: goc/gou/messagerow (SegmentsFromMessage*, tool chrome, collapsed_read_search)
 //   - Render/stitch: cmd/gou-demo/main.go formatMessageSegments, renderMessageRow, measureMessageRows
 //
