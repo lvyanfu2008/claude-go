@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -35,9 +36,6 @@ func osc52ClipboardSequence(text string) string {
 }
 
 func copyNativeFireAndForget(text string) {
-	if strings.TrimSpace(os.Getenv("SSH_CONNECTION")) != "" {
-		return
-	}
 	go func(t string) {
 		switch runtime.GOOS {
 		case "darwin":
@@ -89,30 +87,53 @@ func gouDemoClipboardPathKind() int {
 	return 2 // osc52
 }
 
-// selectionCopyToClipboardCmd mirrors TS setClipboard: native + tmux buffer + OSC 52 to the tty.
+// gouDemoKeyIsCtrlC matches Ctrl+C / ETX for in-app copy (some stacks use KeyRunes for byte 3).
+func gouDemoKeyIsCtrlC(msg tea.KeyMsg) bool {
+	if msg.Type == tea.KeyCtrlC || msg.Type == tea.KeyBreak {
+		return true
+	}
+	if msg.Type == tea.KeyRunes && !msg.Paste && len(msg.Runes) == 1 && msg.Runes[0] == '\x03' {
+		return true
+	}
+	return false
+}
+
+// selectionCopyToClipboardCmd mirrors TS setClipboard and go-tui/main/test_ignore.go: atotto/clipboard first,
+// then native exec fallbacks, tmux load-buffer, and OSC 52 via tea.Printf when not on alt-screen (Printf is a no-op there).
 func (m *model) selectionCopyToClipboardCmd(text string) tea.Cmd {
 	if text == "" {
 		return nil
 	}
-	copyNativeFireAndForget(text)
+	atOK := clipboard.WriteAll(text) == nil
+	if !atOK {
+		copyNativeFireAndForget(text)
+	}
 	tmuxLoadBufferFireAndForget(text)
 	seq := osc52ClipboardSequence(text)
 	if strings.TrimSpace(os.Getenv("TMUX")) != "" {
 		seq = tmuxPassthroughClipboard(seq)
 	}
 	n := utf8.RuneCountInString(text)
-	switch gouDemoClipboardPathKind() {
-	case 0:
+	if atOK {
 		m.copyStatus = "copied " + strconv.Itoa(n) + " chars"
-	case 1:
-		m.copyStatus = "copied " + strconv.Itoa(n) + " chars · tmux: prefix + ]"
-	default:
-		m.copyStatus = "sent " + strconv.Itoa(n) + " chars (OSC 52)"
+	} else {
+		switch gouDemoClipboardPathKind() {
+		case 0:
+			m.copyStatus = "copied " + strconv.Itoa(n) + " chars"
+		case 1:
+			m.copyStatus = "copied " + strconv.Itoa(n) + " chars · tmux: prefix + ]"
+		default:
+			m.copyStatus = "sent " + strconv.Itoa(n) + " chars (OSC 52)"
+		}
+	}
+	tick := tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return gouDemoCopyStatusClearMsg{}
+	})
+	if gouDemoAltScreenEnabled() {
+		return tick
 	}
 	return tea.Batch(
 		tea.Printf("%s", seq),
-		tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-			return gouDemoCopyStatusClearMsg{}
-		}),
+		tick,
 	)
 }
