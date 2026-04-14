@@ -45,6 +45,17 @@ func TestGouDemoVirtualScrollDisabled(t *testing.T) {
 	}
 }
 
+func TestGouDemoAltScreenEnabled(t *testing.T) {
+	t.Setenv("GOU_DEMO_ALT_SCREEN", "")
+	if gouDemoAltScreenEnabled() {
+		t.Fatal("empty env should be false")
+	}
+	t.Setenv("GOU_DEMO_ALT_SCREEN", "1")
+	if !gouDemoAltScreenEnabled() {
+		t.Fatal("truthy GOU_DEMO_ALT_SCREEN should enable alt screen")
+	}
+}
+
 func TestOscSetWindowTitle_kittyST(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("OSC title skipped on windows")

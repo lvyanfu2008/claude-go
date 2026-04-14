@@ -43,6 +43,14 @@ func gouDemoMouseCellMotionEnabled() bool {
 	return true
 }
 
+// gouDemoAltScreenEnabled opts into tea.WithAltScreen: the TUI uses the terminal alternate buffer so the host
+// scrollback is not mixed with redraws; the wheel targets the in-app message pane more reliably. On exit the
+// previous screen is restored. Copy: Shift+left-drag + Ctrl+C (in-app) as in mouse_message_list.go; many
+// terminals also allow Shift+drag for host selection while SGR mouse is on.
+func gouDemoAltScreenEnabled() bool {
+	return gouDemoEnvTruthy("GOU_DEMO_ALT_SCREEN")
+}
+
 // gouDemoMessageScrollbarStrip draws a one-column TUI scrollbar beside the message list when content overflows.
 // Default off (plain bubbles/viewport like go-tui). Opt in with GOU_DEMO_MESSAGE_SCROLLBAR=1.
 // GOU_DEMO_NO_SCROLLBAR=1 still forces the strip off (e.g. legacy scripts).
