@@ -1,9 +1,11 @@
 package sessiontranscript
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -222,18 +224,57 @@ func appendJSONL(path string, obj map[string]any) error {
 	return nil
 }
 
+// removeAllLastPromptJSONLRows drops every JSONL object with top-level "type":"last-prompt".
+// New messages are always appended after the previous tail last-prompt, so stripping only EOF
+// would miss older last-prompt rows. TS readLiteMetadata uses findLast on the tail; we keep a
+// single canonical row at EOF after each RecordTranscript batch.
+func removeAllLastPromptJSONLRows(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	trimmed := bytes.TrimRight(data, "\n\r")
+	if len(trimmed) == 0 {
+		return nil
+	}
+	lines := bytes.Split(trimmed, []byte("\n"))
+	var kept [][]byte
+	for _, line := range lines {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var m map[string]any
+		if err := json.Unmarshal(line, &m); err != nil {
+			kept = append(kept, line)
+			continue
+		}
+		if typ, _ := m["type"].(string); typ == "last-prompt" {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	mode := fs.FileMode(0o600)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode() & fs.ModePerm
+	}
+	if len(kept) == 0 {
+		return os.WriteFile(path, nil, mode)
+	}
+	out := append(bytes.Join(kept, []byte("\n")), '\n')
+	return os.WriteFile(path, out, mode)
+}
+
 func writeMetadataLines(path, sessionID string, meta *SessionMetadata) error {
 	if meta == nil {
 		return nil
 	}
-	type kv struct {
-		key string
-		obj map[string]any
-	}
 	var lines []map[string]any
-	if meta.LastPrompt != "" {
-		lines = append(lines, map[string]any{"type": "last-prompt", "lastPrompt": meta.LastPrompt, "sessionId": sessionID})
-	}
+	// last-prompt is written once at EOF by RecordTranscript (see removeAllLastPromptJSONLRows),
+	// not here — avoids duplicate rows when InitialMetadata.LastPrompt is set.
 	if meta.CustomTitle != "" {
 		lines = append(lines, map[string]any{"type": "custom-title", "customTitle": meta.CustomTitle, "sessionId": sessionID})
 	}
@@ -422,6 +463,9 @@ func (s *Store) RecordTranscript(ctx context.Context, messages []types.Message, 
 		s.currentSessionLastPrompt = FlattenLastPromptCache(text)
 	}
 	if len(newMsgs) > 0 && strings.TrimSpace(s.currentSessionLastPrompt) != "" {
+		if err := removeAllLastPromptJSONLRows(path); err != nil {
+			return "", err
+		}
 		if err := appendJSONL(path, map[string]any{
 			"type":       "last-prompt",
 			"lastPrompt": s.currentSessionLastPrompt,

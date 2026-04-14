@@ -105,6 +105,104 @@ func TestRecordTranscript_incrementalAndParent(t *testing.T) {
 	}
 }
 
+func countJSONLType(t *testing.T, path, wantType string) int {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, ln := range strings.Split(string(raw), "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		var row map[string]any
+		if err := json.Unmarshal([]byte(ln), &row); err != nil {
+			continue
+		}
+		if row["type"] == wantType {
+			n++
+		}
+	}
+	return n
+}
+
+func TestRemoveAllLastPromptJSONLRows_removesRun(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "strip.jsonl")
+	sid := "11111111-2222-3333-4444-555555555555"
+	lines := []string{
+		`{"type":"user","uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}`,
+		`{"type":"last-prompt","lastPrompt":"a","sessionId":"` + sid + `"}`,
+		`{"type":"last-prompt","lastPrompt":"b","sessionId":"` + sid + `"}`,
+	}
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeAllLastPromptJSONLRows(p); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(p)
+	got := strings.TrimSpace(string(raw))
+	want := lines[0]
+	if got != want {
+		t.Fatalf("after strip want %q got %q", want, got)
+	}
+}
+
+func TestRecordTranscript_twoBatches_oneLastPromptLine(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "twice.jsonl")
+	sid := "11111111-2222-3333-4444-555555555555"
+	st := &Store{
+		SessionID:      sid,
+		OriginalCwd:    "/proj/foo",
+		ConfigHome:     filepath.Join(dir, "claude"),
+		Cwd:            "/proj/foo",
+		UserType:       "external",
+		TranscriptFile: path,
+		InitialMetadata: &SessionMetadata{
+			LastPrompt:  "seed",
+			CustomTitle: "t",
+		},
+	}
+	u1 := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	u2 := "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+	m1 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    u1,
+		Message: json.RawMessage(`{"role":"user","content":"hello"}`),
+	}
+	m2 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    u2,
+		Message: json.RawMessage(`{"role":"user","content":"world"}`),
+	}
+	if _, err := st.RecordTranscript(context.Background(), []types.Message{m1}, RecordOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.RecordTranscript(context.Background(), []types.Message{m2}, RecordOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := countJSONLType(t, path, "last-prompt"); n != 1 {
+		t.Fatalf("want exactly 1 last-prompt row, got %d", n)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	var tail map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &tail); err != nil {
+		t.Fatal(err)
+	}
+	if tail["type"] != "last-prompt" || tail["lastPrompt"] != "world" {
+		t.Fatalf("tail last-prompt: %#v", tail)
+	}
+}
+
 func TestRecordTranscript_invalidSessionID(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "")
 	st := &Store{
