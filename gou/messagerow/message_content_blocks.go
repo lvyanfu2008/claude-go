@@ -1,5 +1,7 @@
 // Helpers to decode assistant/user content blocks from top-level Content or nested message.content
-// (after NormalizeMessageJSON). Prefer scanning for tool_use / tool_result instead of assuming blocks[0].
+// (after NormalizeMessageJSON). Collapse logic follows TS getFirstContentItem: only the first block
+// decides collapsible tool_use / text breaker / thinking skip; tail rollup still requires a single
+// tool_use with that tool_use as blocks[0].
 package messagerow
 
 import (
@@ -31,115 +33,56 @@ func MessageContentBlocks(msg types.Message) []types.MessageContentBlock {
 	return blocks
 }
 
-// FirstToolUseBlock returns the first tool_use block with name and id (scan order).
-func FirstToolUseBlock(msg types.Message) (types.MessageContentBlock, bool) {
-	for _, b := range MessageContentBlocks(msg) {
-		if b.Type != "tool_use" {
-			continue
-		}
-		if strings.TrimSpace(b.Name) == "" || strings.TrimSpace(b.ID) == "" {
-			continue
-		}
-		return b, true
+// FirstContentBlock returns blocks[0] when present (TS getFirstContentItem).
+func FirstContentBlock(msg types.Message) (types.MessageContentBlock, bool) {
+	blocks := MessageContentBlocks(msg)
+	if len(blocks) == 0 {
+		return types.MessageContentBlock{}, false
 	}
-	return types.MessageContentBlock{}, false
+	return blocks[0], true
 }
 
-// AssistantHasToolUse reports whether any tool_use block exists (with name and id).
-func AssistantHasToolUse(msg types.Message) bool {
-	_, ok := FirstToolUseBlock(msg)
-	return ok
-}
-
-// AssistantHasNonEmptyText reports whether any text block has non-whitespace content.
-func AssistantHasNonEmptyText(msg types.Message) bool {
-	for _, b := range MessageContentBlocks(msg) {
-		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
-			return true
-		}
+// assistantSingleToolUse returns the tool_use when blocks[0] is the only valid tool_use in content
+// (TS tail pair: text or thinking before tool_use breaks the suffix).
+func assistantSingleToolUse(msg types.Message) (types.MessageContentBlock, bool) {
+	blocks := MessageContentBlocks(msg)
+	if len(blocks) == 0 {
+		return types.MessageContentBlock{}, false
 	}
-	return false
-}
-
-// FirstNonEmptyTextBlock returns the first text block with non-empty trimmed body.
-func FirstNonEmptyTextBlock(msg types.Message) (types.MessageContentBlock, bool) {
-	for _, b := range MessageContentBlocks(msg) {
-		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
-			return b, true
-		}
+	b0 := blocks[0]
+	if b0.Type != "tool_use" || strings.TrimSpace(b0.Name) == "" || strings.TrimSpace(b0.ID) == "" {
+		return types.MessageContentBlock{}, false
 	}
-	return types.MessageContentBlock{}, false
-}
-
-// CountToolUseBlocks counts tool_use blocks with non-empty id (non-grouped assistant turns).
-func CountToolUseBlocks(msg types.Message) int {
 	n := 0
-	for _, b := range MessageContentBlocks(msg) {
-		if b.Type == "tool_use" && strings.TrimSpace(b.ID) != "" {
+	for _, b := range blocks {
+		if b.Type == "tool_use" && strings.TrimSpace(b.Name) != "" && strings.TrimSpace(b.ID) != "" {
 			n++
 		}
 	}
-	return n
-}
-
-// AllToolUseIDsFromAssistant collects tool_use ids in block order.
-func AllToolUseIDsFromAssistant(msg types.Message) []string {
-	var ids []string
-	for _, b := range MessageContentBlocks(msg) {
-		if b.Type == "tool_use" {
-			id := strings.TrimSpace(b.ID)
-			if id != "" {
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids
-}
-
-// assistantSingleToolUse returns the sole tool_use block when exactly one valid tool_use exists in content.
-func assistantSingleToolUse(msg types.Message) (types.MessageContentBlock, bool) {
-	blocks := MessageContentBlocks(msg)
-	var found *types.MessageContentBlock
-	n := 0
-	for i := range blocks {
-		b := blocks[i]
-		if b.Type != "tool_use" {
-			continue
-		}
-		if strings.TrimSpace(b.Name) == "" || strings.TrimSpace(b.ID) == "" {
-			continue
-		}
-		n++
-		if found == nil {
-			found = &blocks[i]
-		}
-	}
-	if n != 1 || found == nil {
+	if n != 1 {
 		return types.MessageContentBlock{}, false
 	}
-	return *found, true
+	return b0, true
 }
 
-// userSingleToolResult returns the sole tool_result block when exactly one valid tool_result exists in content.
+// userSingleToolResult returns the tool_result when blocks[0] is the only valid tool_result in content.
 func userSingleToolResult(msg types.Message) (types.MessageContentBlock, bool) {
 	blocks := MessageContentBlocks(msg)
-	var found *types.MessageContentBlock
-	n := 0
-	for i := range blocks {
-		b := blocks[i]
-		if b.Type != "tool_result" {
-			continue
-		}
-		if strings.TrimSpace(b.ToolUseID) == "" {
-			continue
-		}
-		n++
-		if found == nil {
-			found = &blocks[i]
-		}
-	}
-	if n != 1 || found == nil {
+	if len(blocks) == 0 {
 		return types.MessageContentBlock{}, false
 	}
-	return *found, true
+	b0 := blocks[0]
+	if b0.Type != "tool_result" || strings.TrimSpace(b0.ToolUseID) == "" {
+		return types.MessageContentBlock{}, false
+	}
+	n := 0
+	for _, b := range blocks {
+		if b.Type == "tool_result" && strings.TrimSpace(b.ToolUseID) != "" {
+			n++
+		}
+	}
+	if n != 1 {
+		return types.MessageContentBlock{}, false
+	}
+	return b0, true
 }

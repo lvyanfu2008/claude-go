@@ -36,8 +36,11 @@ func TestCollapseReadSearchTail_thinkingThenToolUseInSameMessage(t *testing.T) {
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
 	}
 	CollapseReadSearchTail(&msgs)
-	if len(msgs) != 1 || msgs[0].Type != types.MessageTypeCollapsedReadSearch {
-		t.Fatalf("got %+v", msgs)
+	if len(msgs) != 2 {
+		t.Fatalf("tail should not merge when blocks[0] is not tool_use, got len=%d", len(msgs))
+	}
+	if msgs[0].Type == types.MessageTypeCollapsedReadSearch {
+		t.Fatal("unexpected tail collapse")
 	}
 }
 
