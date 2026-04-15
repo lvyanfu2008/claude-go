@@ -1808,43 +1808,53 @@ func userMessageHasPromptText(msg types.Message) bool {
 	return false
 }
 
-// userMessageIsOmittableToolResultStub is true when the user row would render only folded tool_result
-// stubs (no visible user text). Empty text blocks and whitespace-only text are ignored so
-// [{"type":"text","text":""},{"type":"tool_result",...}] still omits. Call after [messagerow.NormalizeMessageJSON]
-// so API-shaped rows with content only in Message.{role,content} match.
-func userMessageIsOmittableToolResultStub(msg types.Message) bool {
-	if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
+// userMessageRendersOnlyFoldedToolStubs is true when this user row would render only folded
+// tool_result/advisor_tool_result stubs (ToolBodyOmitted), with no other visible segments.
+// Matches actual [SegmentsFromMessageOpts] output so unknown content block types or API quirks
+// do not leave a lone "↩ tool_result tool_use_id=…" line under assistant ⎿ summaries.
+func (m *model) userMessageRendersOnlyFoldedToolStubs(msg types.Message) bool {
+	if msg.Type != types.MessageTypeUser {
 		return false
 	}
-	var blocks []types.MessageContentBlock
-	if err := json.Unmarshal(msg.Content, &blocks); err != nil || len(blocks) == 0 {
+	msg = messagerow.NormalizeMessageJSON(msg)
+	if len(msg.Content) == 0 {
 		return false
 	}
-	hasTool := false
-	for _, b := range blocks {
-		switch b.Type {
-		case "tool_result", "advisor_tool_result":
-			hasTool = true
-		case "text":
-			if strings.TrimSpace(b.Text) != "" {
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
+	if len(segs) == 0 {
+		return false
+	}
+	hasFoldedTool := false
+	for _, s := range segs {
+		switch s.Kind {
+		case messagerow.SegTextMarkdown:
+			if strings.TrimSpace(s.Text) != "" {
+				return false
+			}
+		case messagerow.SegToolResult, messagerow.SegAdvisorToolResult:
+			if !s.ToolBodyOmitted {
+				return false
+			}
+			hasFoldedTool = true
+		case messagerow.SegThinking:
+			if strings.TrimSpace(s.Text) != "" {
 				return false
 			}
 		default:
 			return false
 		}
 	}
-	return hasTool
+	return hasFoldedTool
 }
 
-// skipOmittableToolResultUserRow hides user messages that only contain tool_result/advisor_tool_result
-// when those blocks are rendered as folded stubs (prompt always; transcript unless ctrl+e show-all or dump).
-// The assistant tool_use row already shows the summary; omitting avoids duplicate ↩ tool_result walls of text.
+// skipOmittableToolResultUserRow hides user messages that only render folded tool_result stubs
+// (prompt always; transcript unless ctrl+e show-all or dump).
+// The assistant tool_use row already shows the summary; omitting avoids duplicate ↩ tool_result lines.
 func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	if messagerow.VerboseToolOutputEnabled() {
 		return false
 	}
-	msg = messagerow.NormalizeMessageJSON(msg)
-	if !userMessageIsOmittableToolResultStub(msg) {
+	if !m.userMessageRendersOnlyFoldedToolStubs(msg) {
 		return false
 	}
 	if m.uiScreen == gouDemoScreenPrompt {
