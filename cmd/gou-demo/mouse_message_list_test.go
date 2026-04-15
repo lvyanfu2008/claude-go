@@ -106,6 +106,7 @@ func TestTryHandleMessageListMouse_viewportTopWheelUpReleasesMouse(t *testing.T)
 	t.Setenv("GOU_DEMO_DISABLE_MOUSE_SCROLL", "")
 	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "1")
 	t.Setenv("GOU_DEMO_DISABLE_MOUSE", "")
+	t.Setenv("GOU_DEMO_DISALLOW_DISABLE_MOUSE", "")
 	m := &model{
 		store:               &conversation.Store{ConversationID: "c"},
 		height:              40,
@@ -132,8 +133,39 @@ func TestTryHandleMessageListMouse_viewportTopWheelUpReleasesMouse(t *testing.T)
 	}
 }
 
+func TestTryHandleMessageListMouse_disallowDisableMouseSkipsHistoryRelease(t *testing.T) {
+	t.Setenv("GOU_DEMO_DISABLE_MOUSE_SCROLL", "")
+	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "1")
+	t.Setenv("GOU_DEMO_DISALLOW_DISABLE_MOUSE", "1")
+	m := &model{
+		store:               &conversation.Store{ConversationID: "c"},
+		height:              40,
+		width:               100,
+		cols:                96,
+		titleH:              1,
+		streamH:             4,
+		uiScreen:            gouDemoScreenPrompt,
+		useMsgViewport:      true,
+		msgViewportFallback: false,
+	}
+	m.msgViewport = viewport.New(80, listViewportH(m))
+	m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
+	m.msgViewport.MouseWheelEnabled = false
+	m.msgViewport.SetContent(strings.Repeat("x\n", 200))
+	m.msgViewport.GotoTop()
+	y := m.titleH + 2
+	handled, cmd := m.tryHandleMessageListMouse(tea.MouseMsg{Y: y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	if !handled || cmd != nil {
+		t.Fatalf("expected viewport scroll only, handled=%v cmd=%v", handled, cmd)
+	}
+	if m.msgHistoryBrowseMouseOff {
+		t.Fatal("history browse must not run when DISALLOW_DISABLE_MOUSE is set")
+	}
+}
+
 func TestTryHandleMessageListMouse_viewportTopWheelUpDisabledByEnv(t *testing.T) {
 	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "0")
+	t.Setenv("GOU_DEMO_DISALLOW_DISABLE_MOUSE", "")
 	m := &model{
 		store:               &conversation.Store{ConversationID: "c"},
 		height:              40,

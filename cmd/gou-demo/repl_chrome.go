@@ -33,10 +33,19 @@ func gouDemoVirtualScrollDisabled() bool {
 	return gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL")
 }
 
+// gouDemoDisallowDisableMouse when true forces SGR mouse on: CLAUDE_CODE_DISABLE_MOUSE and GOU_DEMO_DISABLE_MOUSE
+// are ignored, and viewport-top history-browse (tea.DisableMouse) is disabled so the user cannot turn off mouse.
+func gouDemoDisallowDisableMouse() bool {
+	return gouDemoEnvTruthy("GOU_DEMO_DISALLOW_DISABLE_MOUSE")
+}
+
 // gouDemoMouseCellMotionEnabled mirrors TS isMouseTrackingEnabled (fullscreen.ts): when false, the program
 // does not enable SGR mouse tracking (DEC 1006), so terminal-native drag-to-select / copy-on-select keeps working.
-// Set CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 (same semantics as TS).
+// Set CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 (same semantics as TS), unless gouDemoDisallowDisableMouse.
 func gouDemoMouseCellMotionEnabled() bool {
+	if gouDemoDisallowDisableMouse() {
+		return true
+	}
 	if gouDemoEnvTruthy("CLAUDE_CODE_DISABLE_MOUSE") || gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE") {
 		return false
 	}
@@ -53,7 +62,11 @@ func gouDemoAltScreenEnabled() bool {
 // gouDemoMsgHistoryBrowseReleaseEnabled is go-tui/main/test.go style release: when the bubbles message viewport is
 // at the top, one wheel-up in the pane runs tea.DisableMouse so the host can scroll terminal history; any key
 // restores tea.EnableMouseCellMotion. Opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
+// gouDemoDisallowDisableMouse also disables this path (mouse stays on).
 func gouDemoMsgHistoryBrowseReleaseEnabled() bool {
+	if gouDemoDisallowDisableMouse() {
+		return false
+	}
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE")))
 	if v == "0" || v == "false" || v == "off" || v == "no" {
 		return false

@@ -48,12 +48,25 @@ func TestGouDemoVirtualScrollDisabled(t *testing.T) {
 
 func TestGouDemoMsgHistoryBrowseReleaseEnabled(t *testing.T) {
 	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "")
+	t.Setenv("GOU_DEMO_DISALLOW_DISABLE_MOUSE", "")
 	if !gouDemoMsgHistoryBrowseReleaseEnabled() {
 		t.Fatal("default should enable history mouse release (go-tui test.go parity)")
 	}
 	t.Setenv("GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE", "0")
 	if gouDemoMsgHistoryBrowseReleaseEnabled() {
 		t.Fatal("0 should disable")
+	}
+}
+
+func TestGouDemoDisallowDisableMouse_overridesDisableEnvs(t *testing.T) {
+	t.Setenv("GOU_DEMO_DISALLOW_DISABLE_MOUSE", "1")
+	t.Setenv("CLAUDE_CODE_DISABLE_MOUSE", "1")
+	t.Setenv("GOU_DEMO_DISABLE_MOUSE", "1")
+	if !gouDemoMouseCellMotionEnabled() {
+		t.Fatal("DISALLOW should force mouse cell motion on")
+	}
+	if gouDemoMsgHistoryBrowseReleaseEnabled() {
+		t.Fatal("DISALLOW should disable history-browse mouse release (no tea.DisableMouse path)")
 	}
 }
 
