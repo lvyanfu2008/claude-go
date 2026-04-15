@@ -37,10 +37,16 @@ func NormalizeToolResultContentJSON(raw json.RawMessage) json.RawMessage {
 }
 
 // CollectToolResultContentByToolUseID maps tool_use_id → tool_result content JSON (last wins if duplicated).
+// User rows from [toolexecution.CreateUserMessage] store blocks in Message.{role,content} with top-level Content empty
+// until [NormalizeMessageJSON] runs — same normalization as rendering.
 func CollectToolResultContentByToolUseID(msgs []types.Message) map[string]json.RawMessage {
 	out := make(map[string]json.RawMessage)
 	for _, msg := range msgs {
-		if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
+		if msg.Type != types.MessageTypeUser {
+			continue
+		}
+		msg = NormalizeMessageJSON(msg)
+		if len(msg.Content) == 0 {
 			continue
 		}
 		var blocks []types.MessageContentBlock

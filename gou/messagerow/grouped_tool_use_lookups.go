@@ -47,7 +47,11 @@ func BuildGroupedAgentLookups(messages []types.Message) *GroupedAgentLookups {
 		}
 
 		// Build tool result lookup and resolved/errored sets
-		if msg.Type == types.MessageTypeUser && len(msg.Content) > 0 {
+		if msg.Type == types.MessageTypeUser {
+			msg = NormalizeMessageJSON(msg)
+			if len(msg.Content) == 0 {
+				continue
+			}
 			var blocks []struct {
 				Type      string `json:"type"`
 				ToolUseID string `json:"tool_use_id"`

@@ -54,3 +54,28 @@ func TestCollectToolResultContentByToolUseID(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestCollectToolResultContentByToolUseID_userMessageFieldOnly(t *testing.T) {
+	// toolexecution.CreateUserMessage sets Message.{role,content}, leaves Content empty until NormalizeMessageJSON.
+	inner, err := json.Marshal(map[string]any{
+		"role": "user",
+		"content": []map[string]any{{
+			"type": "tool_result", "tool_use_id": "call_1",
+			"content":        `{"type":"text","file":{"filePath":"/a.go","content":"x","numLines":42,"startLine":1,"totalLines":99}}`,
+			"is_error": false,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []types.Message{{Type: types.MessageTypeUser, Message: inner}}
+	got := CollectToolResultContentByToolUseID(msgs)
+	raw, ok := got["call_1"]
+	if !ok || len(raw) == 0 {
+		t.Fatalf("expected tool result for call_1, got %v", got)
+	}
+	h, _ := TranscriptResolvedHintExtra("Read", raw)
+	if h != "Read 42 lines" {
+		t.Fatalf("hint=%q", h)
+	}
+}

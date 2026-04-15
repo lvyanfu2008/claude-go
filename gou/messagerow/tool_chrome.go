@@ -192,7 +192,11 @@ func intFromMapAny(m map[string]any, key string) (int, bool) {
 func CollectResolvedToolUseIDs(msgs []types.Message) map[string]struct{} {
 	out := make(map[string]struct{})
 	for _, msg := range msgs {
-		if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
+		if msg.Type != types.MessageTypeUser {
+			continue
+		}
+		msg = NormalizeMessageJSON(msg)
+		if len(msg.Content) == 0 {
 			continue
 		}
 		var blocks []types.MessageContentBlock
