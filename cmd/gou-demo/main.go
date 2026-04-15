@@ -1672,6 +1672,9 @@ func (m *model) View() string {
 			msgPane.WriteString(block)
 		}
 		if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
+			if msgPane.Len() > 0 && streamGapAfterUserMessage(msgView) {
+				msgPane.WriteByte('\n')
+			}
 			for _, tu := range m.store.StreamingToolUses {
 				if msgPane.Len() > 0 {
 					msgPane.WriteByte('\n')

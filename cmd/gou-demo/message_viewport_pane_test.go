@@ -11,6 +11,30 @@ import (
 	"goc/types"
 )
 
+func TestTryBuildFullMessagePaneContent_userThenStreamingToolBlankLine(t *testing.T) {
+	st := &conversation.Store{ConversationID: "c"}
+	st.Messages = []types.Message{
+		{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(`[{"type":"text","text":"hi"}]`)},
+	}
+	st.StreamingToolUses = []conversation.StreamingToolUse{{Name: "Grep", UnparsedInput: "{}"}}
+	m := newModel(st, "", "", nil)
+	m.width = 80
+	m.height = 40
+	m.cols = 76
+	m.titleH = 1
+	m.streamH = 4
+	m.uiScreen = gouDemoScreenPrompt
+	m.useMsgViewport = true
+	m.rebuildHeightCache()
+	s, ok := m.tryBuildFullMessagePaneContent()
+	if !ok {
+		t.Fatal("tryBuildFullMessagePaneContent failed")
+	}
+	if !strings.Contains(s, "\n\n") {
+		t.Fatalf("expected blank line between last user message and first streaming tool row, got %q", s)
+	}
+}
+
 func TestTryBuildFullMessagePaneContent_userThenStreamingTextBlankLine(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c"}
 	st.Messages = []types.Message{

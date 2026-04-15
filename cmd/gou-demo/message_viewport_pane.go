@@ -215,6 +215,15 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	}
 
 	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
+		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
+		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
+		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
+			if lineCnt+1 > maxL {
+				return "", false
+			}
+			b.WriteByte('\n')
+			lineCnt++
+		}
 		for _, tu := range m.store.StreamingToolUses {
 			var sb strings.Builder
 			head := lipglossStyleAssistantHead()
