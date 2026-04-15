@@ -15,6 +15,10 @@ type ScrollListOpts struct {
 	VirtualScrollEnabled bool
 	// Verbose is TS verbose mode (skips grouping, renders tools as single blocks).
 	Verbose bool
+	// ResolvedToolUseIDs lists tool_use_id values that already have a user tool_result.
+	// When non-nil, CollapseReadSearchGroupsInList skips creating collapsed_read_search for any group
+	// that still contains an unresolved tool_use_id (in-flight tools stay expanded).
+	ResolvedToolUseIDs map[string]struct{}
 }
 
 // MessagesForScrollList returns UI-ordered messages for virtual scroll, search haystack,
@@ -30,6 +34,6 @@ func MessagesForScrollList(messages []types.Message, o ScrollListOpts) []types.M
 	work = ReorderMessagesInUI(work)
 	work = maybeTranscriptTail(work, o.TranscriptMode, o.ShowAllInTranscript, o.VirtualScrollEnabled)
 	work = ApplyGrouping(work, o.Verbose)
-	work = messagerow.CollapseReadSearchGroupsInList(work)
+	work = messagerow.CollapseReadSearchGroupsInList(work, o.ResolvedToolUseIDs)
 	return work
 }

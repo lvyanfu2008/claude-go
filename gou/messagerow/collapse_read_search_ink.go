@@ -483,7 +483,19 @@ func createCollapsedGroupInk(group *groupAccumulatorInk) types.Message {
 	return out
 }
 
-func collapseReadSearchGroupsInk(messages []types.Message) []types.Message {
+func groupToolUsesAllResolved(toolUseIds map[string]struct{}, resolved map[string]struct{}) bool {
+	if resolved == nil || len(toolUseIds) == 0 {
+		return true
+	}
+	for id := range toolUseIds {
+		if _, ok := resolved[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func collapseReadSearchGroupsInk(messages []types.Message, resolvedToolUseIDs map[string]struct{}) []types.Message {
 	var result []types.Message
 	current := createEmptyGroupInk()
 	var deferred []types.Message
@@ -492,9 +504,16 @@ func collapseReadSearchGroupsInk(messages []types.Message) []types.Message {
 		if len(current.messages) == 0 {
 			return
 		}
-		result = append(result, createCollapsedGroupInk(current))
-		for _, d := range deferred {
-			result = append(result, d)
+		if resolvedToolUseIDs != nil && !groupToolUsesAllResolved(current.toolUseIds, resolvedToolUseIDs) {
+			result = append(result, current.messages...)
+			for _, d := range deferred {
+				result = append(result, d)
+			}
+		} else {
+			result = append(result, createCollapsedGroupInk(current))
+			for _, d := range deferred {
+				result = append(result, d)
+			}
 		}
 		deferred = nil
 		current = createEmptyGroupInk()

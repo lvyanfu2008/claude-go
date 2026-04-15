@@ -13,7 +13,7 @@ func TestCollapseReadSearchGroupsInList_envOffNoop(t *testing.T) {
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
 	}
-	got := CollapseReadSearchGroupsInList(msgs)
+	got := CollapseReadSearchGroupsInList(msgs, nil)
 	if len(got) != 2 {
 		t.Fatalf("len=%d want 2", len(got))
 	}
@@ -27,7 +27,7 @@ func TestCollapseReadSearchGroupsInList_twoPairs(t *testing.T) {
 		{Type: types.MessageTypeAssistant, UUID: "a2", Content: toolUseContent("t2", "Read", map[string]any{"file_path": "/b"})},
 		{Type: types.MessageTypeUser, UUID: "u2", Content: toolResultContent("t2", "ok")},
 	}
-	got := CollapseReadSearchGroupsInList(msgs)
+	got := CollapseReadSearchGroupsInList(msgs, nil)
 	if len(got) != 1 {
 		t.Fatalf("len=%d want 1", len(got))
 	}
@@ -46,7 +46,7 @@ func TestCollapseReadSearchGroupsInList_thinkingAndToolUseSameAssistantMessage(t
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: raw},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
 	}
-	got := CollapseReadSearchGroupsInList(msgs)
+	got := CollapseReadSearchGroupsInList(msgs, nil)
 	// TS getFirstContentItem: first block is thinking → not collapsible; whole message is skippable/pushed.
 	if len(got) != 2 {
 		t.Fatalf("len=%d want 2 (no collapsed_read_search when first block is not tool_use)", len(got))
@@ -66,7 +66,7 @@ func TestCollapseReadSearchGroupsInList_textFirstThenToolUseSameAssistantMessage
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: raw},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
 	}
-	got := CollapseReadSearchGroupsInList(msgs)
+	got := CollapseReadSearchGroupsInList(msgs, nil)
 	if len(got) != 2 {
 		t.Fatalf("len=%d want 2 (text breaker first block)", len(got))
 	}
@@ -83,7 +83,7 @@ func TestCollapseReadSearchGroupsInList_thinkingDeferredAfterCollapsed(t *testin
 		{Type: types.MessageTypeAssistant, UUID: "think", Content: thinkingRaw},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
 	}
-	got := CollapseReadSearchGroupsInList(msgs)
+	got := CollapseReadSearchGroupsInList(msgs, nil)
 	if len(got) != 2 {
 		t.Fatalf("len=%d want collapsed + deferred thinking", len(got))
 	}
@@ -95,6 +95,33 @@ func TestCollapseReadSearchGroupsInList_thinkingDeferredAfterCollapsed(t *testin
 	}
 }
 
+func TestCollapseReadSearchGroupsInList_skipCollapseWhenUnresolved(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
+	}
+	got := CollapseReadSearchGroupsInList(msgs, map[string]struct{}{})
+	if len(got) != 2 {
+		t.Fatalf("len=%d want 2 expanded", len(got))
+	}
+	if got[0].Type == types.MessageTypeCollapsedReadSearch {
+		t.Fatal("should not collapse when t1 not in resolved map")
+	}
+}
+
+func TestCollapseReadSearchGroupsInList_collapseWhenAllResolved(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
+	}
+	got := CollapseReadSearchGroupsInList(msgs, map[string]struct{}{"t1": {}})
+	if len(got) != 1 || got[0].Type != types.MessageTypeCollapsedReadSearch {
+		t.Fatalf("want 1 collapsed, got %+v", got)
+	}
+}
+
 func TestCollapseReadSearchGroupsInList_prefixUnchanged(t *testing.T) {
 	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	textRaw, _ := json.Marshal([]map[string]string{{"type": "text", "text": "hi"}})
@@ -103,7 +130,7 @@ func TestCollapseReadSearchGroupsInList_prefixUnchanged(t *testing.T) {
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Grep", map[string]any{"pattern": "x"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "{}")},
 	}
-	got := CollapseReadSearchGroupsInList(msgs)
+	got := CollapseReadSearchGroupsInList(msgs, nil)
 	if len(got) != 2 {
 		t.Fatalf("len=%d", len(got))
 	}
