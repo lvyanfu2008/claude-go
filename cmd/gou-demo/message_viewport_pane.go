@@ -237,6 +237,13 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	}
 
 	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
+		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
+			if lineCnt+1 > maxL {
+				return "", false
+			}
+			b.WriteByte('\n')
+			lineCnt++
+		}
 		var sb strings.Builder
 		sb.WriteString(lipglossStyleAssistantHead())
 		sb.WriteByte('\n')

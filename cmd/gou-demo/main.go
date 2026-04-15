@@ -1645,7 +1645,14 @@ func (m *model) View() string {
 			}
 		}
 		if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
-			msgPane.WriteByte('\n')
+			if msgPane.Len() > 0 {
+				msgPane.WriteByte('\n')
+				if streamGapAfterUserMessage(msgView) {
+					msgPane.WriteByte('\n')
+				}
+			} else {
+				msgPane.WriteByte('\n')
+			}
 			head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 			msgPane.WriteString(head)
 			msgPane.WriteByte('\n')
@@ -1726,6 +1733,12 @@ func (m *model) showToolUseCtrlOExpandHint() bool {
 func userAssistantPairBlankLine(a, b types.Message) bool {
 	u, aType := types.MessageTypeUser, types.MessageTypeAssistant
 	return (a.Type == u && b.Type == aType) || (a.Type == aType && b.Type == u)
+}
+
+// streamGapAfterUserMessage is true when the StreamingText tail should be separated from the
+// message list by the same blank line as user↔assistant rows (last scroll message is user).
+func streamGapAfterUserMessage(msgView []types.Message) bool {
+	return len(msgView) > 0 && msgView[len(msgView)-1].Type == types.MessageTypeUser
 }
 
 func userMessageHasPromptText(msg types.Message) bool {
