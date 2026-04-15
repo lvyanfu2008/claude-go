@@ -128,6 +128,31 @@ func TestCollapseReadSearchTail_bashListCollapsesWithRead(t *testing.T) {
 	}
 }
 
+func TestCollapseReadSearchTail_collapseAllBash_gitAndRead(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_ALL_BASH", "1")
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "b1", Content: toolUseContent("tb", "Bash", map[string]any{"command": "git status"})},
+		{Type: types.MessageTypeUser, UUID: "ub", Content: toolResultContent("tb", "out")},
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/f"})},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "x")},
+	}
+	CollapseReadSearchTail(&msgs)
+	if len(msgs) != 1 {
+		t.Fatalf("len=%d want 1", len(msgs))
+	}
+	m := msgs[0]
+	if m.BashCount == nil || *m.BashCount != 1 {
+		t.Fatalf("bashCount=%v", m.BashCount)
+	}
+	if m.ReadCount != 1 {
+		t.Fatalf("read=%d", m.ReadCount)
+	}
+	summary := SearchReadSummaryTextFromMessage(false, m)
+	if summary != "Read 1 file, ran 1 bash command" {
+		t.Fatalf("summary=%q", summary)
+	}
+}
+
 func TestCollapseReadSearchTail_mismatchedIDNoCollapse(t *testing.T) {
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/f"})},

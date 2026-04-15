@@ -3,6 +3,7 @@
 package messagerow
 
 import (
+	"os"
 	"regexp"
 	"strings"
 
@@ -29,6 +30,13 @@ var (
 		"echo": {}, "printf": {}, "true": {}, "false": {}, ":": {},
 	}
 )
+
+// CollapseAllBashFromEnv enables TS fullscreen-equivalent rollup: any Bash/BashZog tool_use + tool_result pair
+// may merge into collapsed_read_search; commands that are not search/read/list increment bashCount (see CollapsedReadSearchContent.tsx).
+func CollapseAllBashFromEnv() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_COLLAPSE_ALL_BASH")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
 
 // joinBashContinuationLines mirrors TS splitCommandWithOperators backslash-newline join (odd count of \ before \n).
 func joinBashContinuationLines(command string) string {

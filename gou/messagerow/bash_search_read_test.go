@@ -16,6 +16,9 @@ func TestIsSearchOrReadBashCommand(t *testing.T) {
 		{"echo hi", false, false, false},
 		{"git status", false, false, false},
 		{"npm install", false, false, false},
+		// Redirects: first simple command word still classifies (mirrors TS splitCommandWithOperators + loop).
+		{"grep foo > /tmp/out", true, false, false},
+		{"cat x > /tmp/out", false, true, false},
 	}
 	for _, tc := range cases {
 		gotS, gotR, gotL := IsSearchOrReadBashCommand(tc.cmd)

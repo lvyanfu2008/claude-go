@@ -12,11 +12,12 @@ import (
 // CtrlOToExpandHint is the static transcript-expand hint (gou-demo: ctrl+o opens transcript; ctrl+e uses [RenderOpts.ShowAllInTranscript] to expand rows; hint still matches Ink CtrlOToExpand wording).
 const CtrlOToExpandHint = " (ctrl+o to expand)"
 
-// SearchReadSummaryText builds a comma-separated summary like TS getSearchReadSummaryText.
+// SearchReadSummaryText builds a comma-separated summary like TS getSearchReadSummaryText,
+// plus bashCount wording aligned with CollapsedReadSearchContent.tsx ("Ran N bash commands").
 // Pass nil team* pointers when those counts are absent (JSON omitempty).
 func SearchReadSummaryText(
 	isActive bool,
-	searchCount, readCount, listCount, replCount int,
+	searchCount, readCount, listCount, replCount, bashCount int,
 	memoryReadCount, memorySearchCount, memoryWriteCount int,
 	teamMemoryReadCount, teamMemorySearchCount, teamMemoryWriteCount *int,
 ) string {
@@ -45,6 +46,9 @@ func SearchReadSummaryText(
 	if replCount > 0 {
 		parts = append(parts, replSummaryPart(isActive, replCount))
 	}
+	if bashCount > 0 {
+		parts = append(parts, bashSummaryPart(isActive, len(parts) == 0, bashCount))
+	}
 
 	text := strings.Join(parts, ", ")
 	if isActive && text != "" {
@@ -55,9 +59,13 @@ func SearchReadSummaryText(
 
 // SearchReadSummaryTextFromMessage reads counts from types.Message (collapsed_read_search row).
 func SearchReadSummaryTextFromMessage(isActive bool, msg types.Message) string {
+	bc := 0
+	if msg.BashCount != nil {
+		bc = *msg.BashCount
+	}
 	return SearchReadSummaryText(
 		isActive,
-		msg.SearchCount, msg.ReadCount, msg.ListCount, msg.ReplCount,
+		msg.SearchCount, msg.ReadCount, msg.ListCount, msg.ReplCount, bc,
 		msg.MemoryReadCount, msg.MemorySearchCount, msg.MemoryWriteCount,
 		msg.TeamMemoryReadCount, msg.TeamMemorySearchCount, msg.TeamMemoryWriteCount,
 	)
@@ -157,6 +165,15 @@ func replSummaryPart(isActive bool, replCount int) string {
 		noun = "time"
 	}
 	return fmt.Sprintf("%s %d %s", verb, replCount, noun)
+}
+
+func bashSummaryPart(isActive, firstInLine bool, bashCount int) string {
+	verb := pickVerb(isActive, firstInLine, "Running", "running", "Ran", "ran")
+	noun := "commands"
+	if bashCount == 1 {
+		noun = "command"
+	}
+	return fmt.Sprintf("%s %d bash %s", verb, bashCount, noun)
 }
 
 func pickVerb(isActive, firstInLine bool, activeFirst, activeRest, doneFirst, doneRest string) string {

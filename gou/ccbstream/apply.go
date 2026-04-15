@@ -15,6 +15,7 @@ import (
 // collapseReadSearchTailFromEnv mirrors TS tail collapse into collapsed_read_search.
 // Default off: merging removes individual Read/Grep/Glob rows from the main list (nested only),
 // which reads like "history cleared" in gou-demo. Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 to enable.
+// Optional GOU_DEMO_COLLAPSE_ALL_BASH=1: see messagerow.CollapseAllBashFromEnv (rollup any Bash; generic Bash → bashCount).
 func collapseReadSearchTailFromEnv() bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL")))
 	return v == "1" || v == "true" || v == "yes" || v == "on"

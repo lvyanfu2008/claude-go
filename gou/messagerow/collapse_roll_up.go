@@ -11,7 +11,7 @@ import (
 )
 
 // CollapseReadSearchTail replaces the longest trailing suffix of
-// [assistant: single tool_use][user: single tool_result] pairs (Read, Grep, Glob, Bash when TS-classified search/read/list)
+// [assistant: single tool_use][user: single tool_result] pairs (Read, Grep, Glob, Bash when TS-classified search/read/list, or any Bash when GOU_DEMO_COLLAPSE_ALL_BASH=1)
 // with one collapsed_read_search message. No-op if fewer than one complete pair.
 func CollapseReadSearchTail(msgs *[]types.Message) {
 	if msgs == nil || len(*msgs) < 2 {
@@ -51,13 +51,16 @@ func CollapseReadSearchTail(msgs *[]types.Message) {
 	*msgs = out
 }
 
-// canRollupAssistantToolPair mirrors TS getToolSearchOrReadInfo collapsible (non-fullscreen: Bash only when search/read/list).
+// canRollupAssistantToolPair mirrors TS getToolSearchOrReadInfo collapsible; optional GOU_DEMO_COLLAPSE_ALL_BASH=1 matches TS fullscreen (any Bash rolls up).
 func canRollupAssistantToolPair(tu types.MessageContentBlock) bool {
 	name := strings.TrimSpace(tu.Name)
 	switch name {
 	case "Read", "Grep", "Glob":
 		return true
 	case "Bash", "BashZog":
+		if CollapseAllBashFromEnv() {
+			return true
+		}
 		m := decodeToolInputMap(tu.Input)
 		cmd, _ := m["command"].(string)
 		isS, isR, isL := IsSearchOrReadBashCommand(cmd)
@@ -98,6 +101,7 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 
 	searchCount := 0
 	listCount := 0
+	bashCount := 0
 	readPathSet := make(map[string]struct{})
 	readOpCount := 0
 	var searchArgs []string
@@ -127,13 +131,15 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 		case "Bash", "BashZog":
 			cmd := strFromMap(m, "command")
 			isS, isR, isL := IsSearchOrReadBashCommand(cmd)
-			// TS collapseReadSearchGroups: isList branch before isSearch before read ops.
+			// TS collapseReadSearchGroups: isList before isSearch before read; generic Bash only in fullscreen (here: CollapseAllBashFromEnv).
 			if isL {
 				listCount++
 			} else if isS {
 				searchCount++
 			} else if isR {
 				readOpCount++
+			} else if CollapseAllBashFromEnv() {
+				bashCount++
 			}
 			if strings.TrimSpace(cmd) != "" {
 				latestHint = strPtr(commandAsHintBody(cmd))
@@ -163,6 +169,10 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 		LatestDisplayHint: latestHint,
 		Messages:          nested,
 		DisplayMessage:    &dm,
+	}
+	if bashCount > 0 {
+		bc := bashCount
+		out.BashCount = &bc
 	}
 	if first.Timestamp != nil {
 		ts := *first.Timestamp
