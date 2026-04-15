@@ -45,8 +45,7 @@ func gouDemoMouseCellMotionEnabled() bool {
 
 // gouDemoAltScreenEnabled opts into tea.WithAltScreen: the TUI uses the terminal alternate buffer so the host
 // scrollback is not mixed with redraws; the wheel targets the in-app message pane more reliably. On exit the
-// previous screen is restored. Copy: Shift+left-drag + Ctrl+C (in-app) as in mouse_message_list.go; many
-// terminals also allow Shift+drag for host selection while SGR mouse is on.
+// previous screen is restored.
 func gouDemoAltScreenEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_ALT_SCREEN")
 }
@@ -156,9 +155,9 @@ func permissionModeSymbol(mode types.PermissionMode) string {
 // replChromeTopBar returns the single-line header (TS isNarrow uses columns < 80).
 func replChromeTopBar(narrow bool) string {
 	if narrow {
-		return "gou-demo  ↑↓ Pg F2 Ctrl+l Sh+drag Ctrl+C Enter Shift+Enter q"
+		return "gou-demo  ↑↓ Pg F2 Ctrl+l Enter Shift+Enter q"
 	}
-	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Ctrl+l redraw  Shift+drag select · Ctrl+C copy  Enter send  Shift+Enter/Ctrl+J/Alt+Enter newline  q or Esc quit"
+	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Ctrl+l redraw  Enter send  Shift+Enter/Ctrl+J/Alt+Enter newline  q or Esc quit"
 }
 
 // replChromeTranscriptTopBar is the header line while TS-style transcript mode is active.
@@ -169,35 +168,19 @@ func replChromeTranscriptTopBar(narrow bool) string {
 	return "TRANSCRIPT — j/k line · g top · G End bottom · ctrl+u/d half-page · ctrl+b/f page · b page up · PgUpDn · / search · ctrl+l redraw · ctrl+o · ctrl+e · Esc"
 }
 
-// replChromeFooterHint is the faint line under the prompt.
-// When SGR mouse is on (gouDemoMouseCellMotionEnabled), message-pane copy is in-app: Shift+left-drag then Ctrl+C (Esc clears).
+// replChromeFooterHint is reserved for a faint line under the prompt; shortcuts are omitted by design.
 func replChromeFooterHint(narrow bool) string {
-	if narrow {
-		s := "Shift+Enter newline · F2 · q"
-		if gouDemoBubblesViewport() {
-			s += " · ctrl+y · ctrl+;"
-		}
-		if gouDemoMouseCellMotionEnabled() {
-			s = "Sh+drag · ^C copy · " + s
-		}
-		return s
-	}
-	s := "Shift+Enter / Ctrl+J / Alt+Enter newline · Shift+↑↓ line · F2 commands · q or Esc quit"
-	if gouDemoBubblesViewport() {
-		s += " · ctrl+y fold pane · ctrl+; / f3 line copy (test_ignore.go)"
-	}
-	if gouDemoMouseCellMotionEnabled() {
-		s = "Shift+drag · Ctrl+C copy (msg pane) · Esc clear sel · " + s
-	}
-	return s
+	_ = narrow
+	return ""
 }
 
-// replChromePermissionFragment returns a short permission pill (empty when default in narrow).
+// replChromePermissionFragment returns a short permission pill (empty when mode is default).
 func replChromePermissionFragment(mode types.PermissionMode, narrow bool) string {
+	_ = narrow
 	if mode == "" {
 		mode = types.PermissionDefault
 	}
-	if narrow && mode == types.PermissionDefault {
+	if mode == types.PermissionDefault {
 		return ""
 	}
 	sym := permissionModeSymbol(mode)

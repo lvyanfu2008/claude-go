@@ -114,7 +114,6 @@ func (m *model) transcriptStreamingToolScrollKeys() []string {
 }
 
 func (m *model) enterTranscriptScreen() tea.Cmd {
-	m.clearMsgLineCopyMode()
 	m.clearTranscriptSearchState()
 	m.promptSavedScrollTop = m.scrollTop
 	m.promptSavedSticky = m.sticky
@@ -169,9 +168,9 @@ func transcriptFooterLines(narrow, showAll, dumpMode bool) []string {
 		}
 		return []string{line}
 	}
-	line := fmt.Sprintf("Transcript · %s toggle · ctrl+l redraw · ctrl+e %s · Sh+drag select · Ctrl+C copy · jk gG ctrl+udbf · / search · [ v · Esc/q/ctrl+c", toggle, showAllHint)
+	line := fmt.Sprintf("Transcript · %s toggle · ctrl+l redraw · ctrl+e %s · jk gG ctrl+udbf · / search · [ v · Esc/q/ctrl+c", toggle, showAllHint)
 	if narrow {
-		line = fmt.Sprintf("Transcript · %s · ctrl+l · ctrl+e %s · Sh+drag · Ctrl+C · jk · / · [ v · Esc", toggle, showAllHint)
+		line = fmt.Sprintf("Transcript · %s · ctrl+l · ctrl+e %s · jk · / · [ v · Esc", toggle, showAllHint)
 	}
 	return []string{line}
 }

@@ -245,8 +245,6 @@ func (m *model) applyMsgViewportContentFromView() {
 		return
 	}
 	m.msgViewport.SetContent(s)
-	m.msgVpPlainDoc = s
-	m.clearMsgLineCopyMode()
 	m.lastVpContentSig = sig
 	m.vpNeedResizeContent = false
 	if m.sticky {
@@ -294,13 +292,6 @@ func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	}
 	if len(lines) > vpH {
 		lines = lines[:vpH]
-	}
-	m.cachePaneLinesForSelection(lines, bodyCols)
-	if m.selDragging || m.msgSelectionActive() {
-		lines = applyMsgSelectionVisualHighlight(lines, bodyCols, vpH, m.selAnchorR, m.selAnchorC, m.selFocusR, m.selFocusC)
-	}
-	if lo, hi, ok := m.msgLineCopyHighlightRange(); ok {
-		applyMsgLineCopyRowHighlight(lines, m.msgViewport.YOffset, lo, hi)
 	}
 	totalH := m.msgViewport.TotalLineCount()
 	if totalH < vpH {

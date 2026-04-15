@@ -26,8 +26,8 @@
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e expands collapsed/grouped except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript view shows full blocks when opened. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
-// Prompt message list uses [bubbles/viewport] by default (same scrolling style as go-tui: full-document scroll + ctrl+y fold-all). Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no, or use legacy virtualscroll only with GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. Exceeding GOU_DEMO_VIEWPORT_MAX_LINES (default 20000 wrapped rows) falls back to classic virtualscroll. Transcript mode always uses the legacy pane. Keyboard line copy (go-tui/main/test_ignore.go style): ctrl+; or f3 toggles; in mode ↑/↓/j/k move, c copies selected lines, ctrl+a copies entire message document, space or esc exits (see message_viewport_linecopy.go).
-// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list; Shift+left-drag selects a rectangle for in-app copy (TS ScrollKeybindingHandler selection + Ctrl+C copy path). Ctrl+C copies when a selection exists; Esc clears the selection. Clipboard: go-tui/main/test_ignore.go style: github.com/atotto/clipboard WriteAll first, then pbcopy/xclip fallbacks, tmux load-buffer, and OSC 52 via tea.Printf when not on alt-screen (Printf is a no-op in alt-screen; GOU_DEMO_ALT_SCREEN=1 still copies via atotto/native). See selection_clipboard.go. Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1; GOU_DEMO_NO_SCROLLBAR=1 forces it off. Alternate screen (tea.WithAltScreen): GOU_DEMO_ALT_SCREEN=1. Bubbles viewport (default): go-tui/main/test.go style at-top wheel-up runs tea.DisableMouse for host scrollback; any key runs EnableMouseCellMotion+ClearScreen; opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
+// Prompt message list uses [bubbles/viewport] by default (same scrolling style as go-tui: full-document scroll + ctrl+y fold-all). Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no, or use legacy virtualscroll only with GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. Exceeding GOU_DEMO_VIEWPORT_MAX_LINES (default 20000 wrapped rows) falls back to classic virtualscroll. Transcript mode always uses the legacy pane.
+// Mouse: tea.WithMouseCellMotion enables wheel + plain left-drag scroll on the message list. Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app while mouse mode may still be on. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse so the terminal can use native selection/copy (keyboard scroll still works). Optional one-column TUI scrollbar: GOU_DEMO_MESSAGE_SCROLLBAR=1; GOU_DEMO_NO_SCROLLBAR=1 forces it off. Alternate screen (tea.WithAltScreen): GOU_DEMO_ALT_SCREEN=1. Bubbles viewport (default): go-tui/main/test.go style at-top wheel-up runs tea.DisableMouse for host scrollback; any key runs EnableMouseCellMotion+ClearScreen; opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
@@ -548,15 +548,6 @@ type model struct {
 	msgListMouseDragging bool
 	msgListMouseLastY    int
 
-	// In-app selection (Shift+drag in message pane); copy via Ctrl+C when non-empty (TS ScrollKeybindingHandler).
-	selDragging            bool
-	selHas                 bool
-	selAnchorR, selAnchorC int
-	selFocusR, selFocusC   int
-	lastMsgPaneLines       []string
-	lastMsgPaneBodyCols    int
-	copyStatus             string
-
 	// Bubbles/viewport message pane (default on, prompt only); see message_viewport_pane.go.
 	useMsgViewport      bool
 	msgViewport         viewport.Model
@@ -569,12 +560,6 @@ type model struct {
 	// msgHistoryBrowseMouseOff mirrors go-tui/main/test.go: at viewport top, wheel-up disables SGR mouse so the
 	// terminal scrollback wheel works; any key runs EnableMouseCellMotion + ClearScreen (see Update).
 	msgHistoryBrowseMouseOff bool
-
-	// msgVpPlainDoc + line copy: go-tui/main/test_ignore.go style keyboard range copy (ctrl+;/f3 toggle).
-	msgVpPlainDoc    string
-	msgLineCopyMode  bool
-	msgLineCopyStart int
-	msgLineCopyEnd   int
 
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
@@ -887,10 +872,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouTranscriptEditorClearStatusMsg:
 		return m, m.handleTranscriptEditorChainMsg(msg)
 
-	case gouDemoCopyStatusClearMsg:
-		m.copyStatus = ""
-		return m, nil
-
 	case tea.MouseMsg:
 		if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
 			return m, nil
@@ -901,7 +882,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
-			m.clearMsgSelection()
 			m.msgHistoryBrowseMouseOff = false
 			return m, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen)
 		}
@@ -920,28 +900,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+l" {
 			return m, teaGlobalRedrawCmd()
 		}
-		// TS ScrollKeybindingHandler: Ctrl+C copies when a selection exists (terminals often send \x03 without shift).
-		if m.msgSelectionActive() && gouDemoKeyIsCtrlC(msg) {
-			t := m.selectionTextForCopy()
-			if t != "" {
-				return m, m.selectionCopyToClipboardCmd(t)
-			}
-			return m, nil
-		}
-		if msg.String() == "esc" && (m.selDragging || m.msgSelectionActive()) {
-			m.clearMsgSelection()
-			return m, nil
-		}
 		if m.msgViewportWanted() && msg.String() == "ctrl+y" {
-			m.clearMsgLineCopyMode()
 			m.msgFoldAll = !m.msgFoldAll
 			m.msgFoldRev++
 			return m, nil
-		}
-		if m.msgViewportWanted() {
-			if cmd, ok := m.handleMsgViewportLineCopyKeys(msg); ok {
-				return m, cmd
-			}
 		}
 		if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
 			m.slashPick = nil
@@ -950,9 +912,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if handled, cmd := m.handleTranscriptKey(msg); handled {
 			return m, cmd
-		}
-		if m.uiScreen == gouDemoScreenPrompt && isListViewportScrollKey(msg.String()) {
-			m.clearMsgSelection()
 		}
 		if m.msgViewportWanted() && isListViewportScrollKey(msg.String()) {
 			return m, m.handleMsgViewportScrollKey(msg)
@@ -1380,9 +1339,6 @@ func (m *model) statusLineString() string {
 	vk := len(m.store.ItemKeys())
 	s := fmt.Sprintf("theme=%s msgs=%d items=%d cols=%d sticky=%v",
 		theme.ActiveTheme(), n, vk, m.cols, m.sticky)
-	if strings.TrimSpace(m.copyStatus) != "" {
-		s += " · " + m.copyStatus
-	}
 	return lipgloss.NewStyle().Faint(true).Render(s)
 }
 
@@ -1686,10 +1642,6 @@ func (m *model) View() string {
 				lines = lines[:vpH]
 			}
 		}
-		m.cachePaneLinesForSelection(lines, bodyCols)
-		if m.selDragging || m.msgSelectionActive() {
-			lines = applyMsgSelectionVisualHighlight(lines, bodyCols, vpH, m.selAnchorR, m.selAnchorC, m.selFocusR, m.selFocusC)
-		}
 		totalScroll := m.messageScrollContentHeight()
 		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalScroll, m.scrollTop, m.msgScrollbarW))
 		b.WriteByte('\n')
@@ -1714,17 +1666,23 @@ func (m *model) View() string {
 			b.WriteByte('\n')
 		}
 		promptView := m.pr.View()
-		hintText := replChromeFooterHint(narrow)
-		if frag := replChromePermissionFragment(m.permissionMode, narrow); frag != "" {
-			hintText = frag + " · " + hintText
+		hintText := strings.TrimSpace(replChromeFooterHint(narrow))
+		frag := strings.TrimSpace(replChromePermissionFragment(m.permissionMode, narrow))
+		var hintLine string
+		switch {
+		case frag != "" && hintText != "":
+			hintLine = frag + " · " + hintText
+		case frag != "":
+			hintLine = frag
+		default:
+			hintLine = hintText
 		}
-		if cs := strings.TrimSpace(m.copyStatus); cs != "" {
-			hintText = hintText + " · " + cs
-		}
-		hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintText)
 		b.WriteString(promptView)
-		b.WriteByte('\n')
-		b.WriteString(hint)
+		if hintLine != "" {
+			hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintLine)
+			b.WriteByte('\n')
+			b.WriteString(hint)
+		}
 	}
 	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
 	if m.permAsk != nil {
