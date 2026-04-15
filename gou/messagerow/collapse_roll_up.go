@@ -1,5 +1,5 @@
-// CollapseReadSearchTail merges a trailing run of Read/Grep/Glob tool_use + tool_result pairs
-// into one collapsed_read_search row (TS collapseReadSearchGroups tail behavior; MVP: no Bash/memory).
+// CollapseReadSearchTail merges a trailing run of Read/Grep/Glob (+ collapsible Bash) tool_use + tool_result pairs
+// into one collapsed_read_search row (TS collapseReadSearchGroups tail subset; no memory/MCP/hooks).
 package messagerow
 
 import (
@@ -11,7 +11,7 @@ import (
 )
 
 // CollapseReadSearchTail replaces the longest trailing suffix of
-// [assistant: single tool_use][user: single tool_result] pairs (Read, Grep, Glob only)
+// [assistant: single tool_use][user: single tool_result] pairs (Read, Grep, Glob, Bash when TS-classified search/read/list)
 // with one collapsed_read_search message. No-op if fewer than one complete pair.
 func CollapseReadSearchTail(msgs *[]types.Message) {
 	if msgs == nil || len(*msgs) < 2 {
@@ -26,7 +26,7 @@ func CollapseReadSearchTail(msgs *[]types.Message) {
 			break
 		}
 		tu, okA := assistantSingleToolUse(a)
-		if !okA || !collapsibleRollupToolName(tu.Name) {
+		if !okA || !canRollupAssistantToolPair(tu) {
 			break
 		}
 		tr, okU := userSingleToolResult(u)
@@ -51,10 +51,17 @@ func CollapseReadSearchTail(msgs *[]types.Message) {
 	*msgs = out
 }
 
-func collapsibleRollupToolName(name string) bool {
+// canRollupAssistantToolPair mirrors TS getToolSearchOrReadInfo collapsible (non-fullscreen: Bash only when search/read/list).
+func canRollupAssistantToolPair(tu types.MessageContentBlock) bool {
+	name := strings.TrimSpace(tu.Name)
 	switch name {
 	case "Read", "Grep", "Glob":
 		return true
+	case "Bash", "BashZog":
+		m := decodeToolInputMap(tu.Input)
+		cmd, _ := m["command"].(string)
+		isS, isR, isL := IsSearchOrReadBashCommand(cmd)
+		return isS || isR || isL
 	default:
 		return false
 	}
@@ -90,6 +97,7 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 	copy(nested, tail)
 
 	searchCount := 0
+	listCount := 0
 	readPathSet := make(map[string]struct{})
 	readOpCount := 0
 	var searchArgs []string
@@ -99,7 +107,7 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 		a := tail[i]
 		tu, _ := assistantSingleToolUse(a)
 		m := decodeToolInputMap(tu.Input)
-		switch tu.Name {
+		switch strings.TrimSpace(tu.Name) {
 		case "Read":
 			fp := strFromMap(m, "file_path")
 			if fp != "" {
@@ -115,6 +123,20 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 			if pat != "" {
 				searchArgs = append(searchArgs, pat)
 				latestHint = strPtr(`"` + pat + `"`)
+			}
+		case "Bash", "BashZog":
+			cmd := strFromMap(m, "command")
+			isS, isR, isL := IsSearchOrReadBashCommand(cmd)
+			// TS collapseReadSearchGroups: isList branch before isSearch before read ops.
+			if isL {
+				listCount++
+			} else if isS {
+				searchCount++
+			} else if isR {
+				readOpCount++
+			}
+			if strings.TrimSpace(cmd) != "" {
+				latestHint = strPtr(commandAsHintBody(cmd))
 			}
 		}
 	}
@@ -135,6 +157,7 @@ func buildCollapsedReadSearch(tail []types.Message) types.Message {
 		UUID:              "collapsed-" + first.UUID,
 		SearchCount:       searchCount,
 		ReadCount:         readCount,
+		ListCount:         listCount,
 		ReadFilePaths:     readPaths,
 		SearchArgs:        searchArgs,
 		LatestDisplayHint: latestHint,

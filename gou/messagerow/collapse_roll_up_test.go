@@ -92,8 +92,9 @@ func TestCollapseReadSearchTail_prefixUnchanged(t *testing.T) {
 }
 
 func TestCollapseReadSearchTail_bashBreaksSuffix(t *testing.T) {
+	// Non-collapsible Bash (git is not in BASH_* sets) breaks the rollup; only Read tail collapses.
 	msgs := []types.Message{
-		{Type: types.MessageTypeAssistant, UUID: "b1", Content: toolUseContent("tb", "Bash", map[string]any{"command": "ls"})},
+		{Type: types.MessageTypeAssistant, UUID: "b1", Content: toolUseContent("tb", "Bash", map[string]any{"command": "git status"})},
 		{Type: types.MessageTypeUser, UUID: "ub", Content: toolResultContent("tb", "out")},
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/f"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "x")},
@@ -104,6 +105,26 @@ func TestCollapseReadSearchTail_bashBreaksSuffix(t *testing.T) {
 	}
 	if msgs[2].Type != types.MessageTypeCollapsedReadSearch {
 		t.Fatalf("last type=%s", msgs[2].Type)
+	}
+}
+
+func TestCollapseReadSearchTail_bashListCollapsesWithRead(t *testing.T) {
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "b1", Content: toolUseContent("tb", "Bash", map[string]any{"command": "ls"})},
+		{Type: types.MessageTypeUser, UUID: "ub", Content: toolResultContent("tb", "out")},
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/f"})},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "x")},
+	}
+	CollapseReadSearchTail(&msgs)
+	if len(msgs) != 1 {
+		t.Fatalf("len=%d want 1", len(msgs))
+	}
+	m := msgs[0]
+	if m.Type != types.MessageTypeCollapsedReadSearch {
+		t.Fatalf("type=%s", m.Type)
+	}
+	if m.ListCount != 1 || m.ReadCount != 1 || m.SearchCount != 0 {
+		t.Fatalf("list=%d read=%d search=%d", m.ListCount, m.ReadCount, m.SearchCount)
 	}
 }
 
