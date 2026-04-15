@@ -1395,12 +1395,14 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 			FoldToolResultBody:        true,
 			CollapsedReadSearchActive: active,
 			GroupedAgentLookups:       m.groupedAgentLookups,
+			ResolvedToolUseIDs:      m.resolvedToolIDs,
 		}
 	}
 	if m.uiScreen == gouDemoScreenTranscript {
 		ro := &messagerow.RenderOpts{
 			GroupedAgentLookups:        m.groupedAgentLookups,
 			VerboseCollapsedReadSearch: true,
+			ResolvedToolUseIDs:         m.resolvedToolIDs,
 		}
 		if m.transcriptShowAll || m.transcriptDumpMode {
 			ro.ShowAllInTranscript = true
@@ -1408,7 +1410,8 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 		return ro
 	}
 	return &messagerow.RenderOpts{
-		GroupedAgentLookups: m.groupedAgentLookups,
+		GroupedAgentLookups:  m.groupedAgentLookups,
+		ResolvedToolUseIDs:   m.resolvedToolIDs,
 	}
 }
 
@@ -2044,6 +2047,12 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ "+withHL(seg.Text)))
 		case messagerow.SegCollapsedReadSearch:
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
+		case messagerow.SegToolUseSummaryLine:
+			line := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			if !toolUseResolved(resolved, seg.ToolUseID) && toolUseCtrlOHint {
+				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+			}
+			parts = append(parts, line)
 		case messagerow.SegSkillListingAvailable:
 			n := seg.Num
 			if n < 1 {

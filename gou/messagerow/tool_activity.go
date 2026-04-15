@@ -25,6 +25,16 @@ func VerboseToolOutputEnabled() bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
+// ToolUseSummaryLineEnabled enables one-line SearchRead-style summaries for standalone Grep/Glob/Read
+// (default on; set GOU_DEMO_TOOL_USE_SUMMARY_LINE=0 to show facing row + activity + ⎿).
+func ToolUseSummaryLineEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_TOOL_USE_SUMMARY_LINE")))
+	if v == "" {
+		return true
+	}
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
 func truncateToolSummary(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -177,14 +187,31 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 	}
 }
 
+// grepGlobReadSummaryLine returns one line matching SearchReadSummaryText parts for a single search/read op.
+func grepGlobReadSummaryLine(toolName string, isActive bool) string {
+	switch strings.TrimSpace(toolName) {
+	case "Grep", "Glob":
+		return searchSummaryPart(isActive, true, 1)
+	case "Read":
+		return readSummaryPart(isActive, true, 1)
+	default:
+		return ""
+	}
+}
+
 // ActivitySegmentForToolBlock builds SegToolUse / SegServerToolUse text like TS activity line.
-func ActivitySegmentForToolBlock(b types.MessageContentBlock, kind SegmentKind) []Segment {
+func ActivitySegmentForToolBlock(b types.MessageContentBlock, kind SegmentKind, opts *RenderOpts) []Segment {
 	if VerboseToolOutputEnabled() {
 		k := "tool_use"
 		if kind == SegServerToolUse {
 			k = "server_tool_use"
 		}
 		return []Segment{{Kind: kind, Text: formatNamedTool(k, b.Name, b.ID, b.Input)}}
+	}
+	if ToolUseSummaryLineEnabled() && kind == SegToolUse {
+		if sl := grepGlobReadSummaryLine(b.Name, toolUseIsActiveForSummary(b.ID, opts)); sl != "" {
+			return []Segment{{Kind: SegToolUseSummaryLine, Text: sl, ToolUseID: b.ID}}
+		}
 	}
 	line := ActivityLineForToolUse(b.Name, b.Input)
 	if line == "" {
@@ -199,4 +226,16 @@ func ActivitySegmentForToolBlock(b types.MessageContentBlock, kind SegmentKind) 
 		return []Segment{{Kind: kind, Text: line, ToolUseID: b.ID}}
 	}
 	return []Segment{{Kind: kind, Text: line, ToolUseID: b.ID, ToolFacing: facing, ToolParen: paren, ToolHint: hint}}
+}
+
+func toolUseIsActiveForSummary(toolUseID string, opts *RenderOpts) bool {
+	id := strings.TrimSpace(toolUseID)
+	if id == "" {
+		return true
+	}
+	if opts == nil || opts.ResolvedToolUseIDs == nil {
+		return true
+	}
+	_, ok := opts.ResolvedToolUseIDs[id]
+	return !ok
 }

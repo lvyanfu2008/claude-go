@@ -22,6 +22,8 @@ const (
 	SegAdvisorToolResult
 	SegGroupedToolUse
 	SegCollapsedReadSearch
+	// SegToolUseSummaryLine is a single dim line for standalone Grep/Glob/Read (SearchReadSummaryText-style).
+	SegToolUseSummaryLine
 	SegDisplayHint
 	SegSkillListingAvailable // Num = skill count; TS AttachmentMessage skill_listing
 	SegUnknown
@@ -58,6 +60,8 @@ type RenderOpts struct {
 	CollapsedReadSearchActive bool
 	// GroupedAgentLookups provides resolved/error states for grouped_tool_use items.
 	GroupedAgentLookups *GroupedAgentLookups
+	// ResolvedToolUseIDs is tool_use_id values that already have a user tool_result (for summary-line active/past tense).
+	ResolvedToolUseIDs map[string]struct{}
 }
 
 // SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
@@ -243,9 +247,9 @@ func segmentFromBlock(b types.MessageContentBlock, opts *RenderOpts) []Segment {
 		}
 		return []Segment{{Kind: SegTextMarkdown, Text: b.Text}}
 	case "tool_use":
-		return ActivitySegmentForToolBlock(b, SegToolUse)
+		return ActivitySegmentForToolBlock(b, SegToolUse, opts)
 	case "server_tool_use":
-		return ActivitySegmentForToolBlock(b, SegServerToolUse)
+		return ActivitySegmentForToolBlock(b, SegServerToolUse, opts)
 	case "advisor_tool_result":
 		var sb strings.Builder
 		sb.WriteString("advisor_tool_result")
