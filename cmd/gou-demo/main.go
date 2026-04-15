@@ -32,7 +32,7 @@
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
-// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] so each assistant/tool_result yield is logged incrementally (deduped by message UUID); turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
+// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] to RecordTranscript with a growing turn prefix (same as TS recordTranscript(messages)) so parentUuid chains; each yield is deduped by message UUID; turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
 // Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
@@ -1200,6 +1200,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								m.installAskResolver(&te)
 								qdeps.ToolexecutionDeps = te
+								// Snapshot matches qp.Messages (TS QueryEngine messages at callModel): includes skill_listing row if appended above.
+								msgsForQ := slices.Clone(m.store.Messages)
 								if send := m.ccbSend; send != nil {
 									qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
 										send(gouStreamingToolUsesMsg{Uses: uses})
@@ -1208,18 +1210,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								if m.transcript != nil && gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
 									tr := m.transcript
-									store := m.store
+									// Mirror TS recordTranscript(messages): each yield appends to the same turn prefix so
+									// sessiontranscript dedup sees already-recorded user (and prior yields) before new rows.
+									turnPrefix := slices.Clone(msgsForQ)
 									qdeps.OnQueryYield = func(ctx context.Context, y query.QueryYield) error {
 										if y.Message == nil {
 											return nil
 										}
-										all := slices.Clone(store.Messages)
-										all = append(all, *y.Message)
-										_, err := tr.RecordTranscript(ctx, []types.Message{*y.Message}, sessiontranscript.RecordOpts{AllMessages: all})
+										turnPrefix = append(turnPrefix, *y.Message)
+										_, err := tr.RecordTranscript(ctx, turnPrefix, sessiontranscript.RecordOpts{AllMessages: turnPrefix})
 										return err
 									}
 								}
-								msgsForQ := slices.Clone(m.store.Messages)
 								qp := query.QueryParams{
 									Messages:        msgsForQ,
 									SystemPrompt:    query.AsSystemPrompt([]string{guidance}),
@@ -1395,11 +1397,15 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 			GroupedAgentLookups:       m.groupedAgentLookups,
 		}
 	}
-	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptShowAll || m.transcriptDumpMode) {
-		return &messagerow.RenderOpts{
-			ShowAllInTranscript: true,
-			GroupedAgentLookups: m.groupedAgentLookups,
+	if m.uiScreen == gouDemoScreenTranscript {
+		ro := &messagerow.RenderOpts{
+			GroupedAgentLookups:        m.groupedAgentLookups,
+			VerboseCollapsedReadSearch: true,
 		}
+		if m.transcriptShowAll || m.transcriptDumpMode {
+			ro.ShowAllInTranscript = true
+		}
+		return ro
 	}
 	return &messagerow.RenderOpts{
 		GroupedAgentLookups: m.groupedAgentLookups,

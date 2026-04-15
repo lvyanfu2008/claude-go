@@ -74,3 +74,25 @@ func TestMessagesForScrollList_noTailWhenVirtualOn(t *testing.T) {
 		t.Fatalf("len=%d want full list when virtual on", len(got))
 	}
 }
+
+func TestMessagesForScrollList_fullCollapseReadSearch(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
+	raw, _ := json.Marshal([]map[string]any{{
+		"type": "tool_use", "id": "t1", "name": "Read",
+		"input": map[string]any{"file_path": "/x"},
+	}})
+	raw2, _ := json.Marshal([]map[string]any{{
+		"type": "tool_result", "tool_use_id": "t1", "content": "ok",
+	}})
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: raw},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: raw2},
+	}
+	got := MessagesForScrollList(msgs, ScrollListOpts{})
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1 collapsed", len(got))
+	}
+	if got[0].Type != types.MessageTypeCollapsedReadSearch {
+		t.Fatalf("type=%s", got[0].Type)
+	}
+}

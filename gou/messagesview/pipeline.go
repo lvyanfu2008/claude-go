@@ -1,6 +1,9 @@
 package messagesview
 
-import "goc/types"
+import (
+	"goc/gou/messagerow"
+	"goc/types"
+)
 
 // ScrollListOpts configures MessagesForScrollList (TS Messages.tsx list inputs).
 type ScrollListOpts struct {
@@ -27,5 +30,6 @@ func MessagesForScrollList(messages []types.Message, o ScrollListOpts) []types.M
 	work = ReorderMessagesInUI(work)
 	work = maybeTranscriptTail(work, o.TranscriptMode, o.ShowAllInTranscript, o.VirtualScrollEnabled)
 	work = ApplyGrouping(work, o.Verbose)
+	work = messagerow.CollapseReadSearchGroupsInList(work)
 	return work
 }

@@ -50,6 +50,8 @@ const maxDisplayNest = 8
 type RenderOpts struct {
 	// ShowAllInTranscript expands collapsed_read_search and grouped_tool_use bodies (gou-demo ctrl+e in transcript).
 	ShowAllInTranscript bool
+	// VerboseCollapsedReadSearch renders nested assistant/user tool rows inside collapsed_read_search (TS verbose || isTranscriptMode).
+	VerboseCollapsedReadSearch bool
 	// FoldToolResultBody hides tool_result / advisor_tool_result payload in the main prompt (gou-demo: ctrl+o opens transcript to read).
 	FoldToolResultBody bool
 	// CollapsedReadSearchActive is true only for the in-flight tail collapsed_read_search row (TS MessageRow isActiveCollapsedGroup).
@@ -110,6 +112,9 @@ func segmentsGroupedToolUse(msg types.Message, depth int, opts *RenderOpts) []Se
 func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts) []Segment {
 	isActive := opts != nil && opts.CollapsedReadSearchActive
 	summary := SearchReadSummaryTextFromMessage(isActive, msg)
+	if opts != nil && opts.VerboseCollapsedReadSearch && len(msg.Messages) > 0 {
+		return segmentsCollapsedReadSearchVerbose(msg, depth, opts, isActive, summary)
+	}
 	if opts != nil && opts.ShowAllInTranscript {
 		var parts []string
 		if strings.TrimSpace(summary) != "" {
@@ -162,6 +167,30 @@ func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts)
 	}
 	if msg.DisplayMessage != nil {
 		out = append(out, segmentsFromMessageDepthOpts(*msg.DisplayMessage, depth+1, opts)...)
+	}
+	return out
+}
+
+// segmentsCollapsedReadSearchVerbose mirrors CollapsedReadSearchContent.tsx verbose / transcript tool lines.
+func segmentsCollapsedReadSearchVerbose(msg types.Message, depth int, opts *RenderOpts, isActive bool, summary string) []Segment {
+	if strings.TrimSpace(summary) == "" {
+		summary = "…"
+	}
+	line := summary + CtrlOToExpandHint
+	out := []Segment{{Kind: SegCollapsedReadSearch, Text: line}}
+	if isActive && msg.LatestDisplayHint != nil {
+		h := strings.TrimSpace(*msg.LatestDisplayHint)
+		if h != "" {
+			h = strings.ReplaceAll(h, "\r\n", "\n")
+			h = strings.ReplaceAll(h, "\n", " ")
+			if len(h) > 400 {
+				h = h[:400] + "…"
+			}
+			out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + h})
+		}
+	}
+	for i := range msg.Messages {
+		out = append(out, segmentsFromMessageDepthOpts(msg.Messages[i], depth+1, opts)...)
 	}
 	return out
 }
