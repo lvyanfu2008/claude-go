@@ -9,6 +9,7 @@ import (
 	"goc/gou/layout"
 	"goc/gou/messagerow"
 	"goc/gou/virtualscroll"
+	"goc/types"
 )
 
 // messageBodyColsForLayout returns wrap width for message rows (excludes TUI scrollbar column when active).
@@ -106,13 +107,21 @@ func (m *model) fillMessageHeightCache(cols int, hl string) {
 	msgView := m.messagesForScroll()
 	for i := range msgView {
 		k := conversation.ItemKey(msgView[i], m.store.ConversationID)
-		m.heightCache[k] = m.measureMessageRows(msgView[i], cols, hl)
+		h := m.measureMessageRows(msgView[i], cols, hl)
+		if i > 0 && userAssistantPairBlankLine(msgView[i-1], msgView[i]) {
+			h++
+		}
+		m.heightCache[k] = h
 	}
 	streamKeys := m.transcriptStreamingToolScrollKeys()
 	st := m.transcriptStreamingToolsForView()
 	for i, sk := range streamKeys {
 		if i < len(st) {
-			m.heightCache[sk] = m.measureTranscriptStreamingToolRow(st[i], cols, hl)
+			h := m.measureTranscriptStreamingToolRow(st[i], cols, hl)
+			if i == 0 && len(msgView) > 0 && msgView[len(msgView)-1].Type == types.MessageTypeUser {
+				h++
+			}
+			m.heightCache[sk] = h
 		}
 	}
 }

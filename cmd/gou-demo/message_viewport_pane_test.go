@@ -11,6 +11,31 @@ import (
 	"goc/types"
 )
 
+func TestTryBuildFullMessagePaneContent_userAssistantBlankLine(t *testing.T) {
+	st := &conversation.Store{ConversationID: "c"}
+	st.Messages = []types.Message{
+		{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(`[{"type":"text","text":"hi"}]`)},
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: []byte(`[{"type":"text","text":"yo"}]`)},
+	}
+	m := newModel(st, "", "", nil)
+	m.width = 80
+	m.height = 40
+	m.cols = 76
+	m.titleH = 1
+	m.streamH = 4
+	m.uiScreen = gouDemoScreenPrompt
+	m.useMsgViewport = true
+	m.rebuildHeightCache()
+	s, ok := m.tryBuildFullMessagePaneContent()
+	if !ok {
+		t.Fatal("tryBuildFullMessagePaneContent failed")
+	}
+	// One blank line between user block and assistant block (two consecutive newlines in raw string).
+	if !strings.Contains(s, "\n\n") {
+		t.Fatalf("expected blank line between user and assistant in pane content, got %q", s)
+	}
+}
+
 func TestTryBuildFullMessagePaneContent_fold(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c"}
 	st.Messages = []types.Message{{

@@ -1485,12 +1485,20 @@ func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
 	st := m.transcriptStreamingToolsForView()
 	for i := start; i < end && i < n; i++ {
 		if i < msgN {
-			m.heightCache[keys[i]] = m.measureMessageRows(msgView[i], cols, hl)
+			h := m.measureMessageRows(msgView[i], cols, hl)
+			if i > 0 && userAssistantPairBlankLine(msgView[i-1], msgView[i]) {
+				h++
+			}
+			m.heightCache[keys[i]] = h
 			continue
 		}
 		ti := i - msgN
 		if ti >= 0 && ti < len(st) {
-			m.heightCache[keys[i]] = m.measureTranscriptStreamingToolRow(st[ti], cols, hl)
+			h := m.measureTranscriptStreamingToolRow(st[ti], cols, hl)
+			if ti == 0 && msgN > 0 && msgView[msgN-1].Type == types.MessageTypeUser {
+				h++
+			}
+			m.heightCache[keys[i]] = h
 		} else {
 			m.heightCache[keys[i]] = 1
 		}
@@ -1602,6 +1610,17 @@ func (m *model) View() string {
 			}
 			if msgPane.Len() > 0 {
 				msgPane.WriteByte('\n')
+				if i > vr.Start {
+					needExtra := false
+					if i < msgN {
+						needExtra = userAssistantPairBlankLine(msgView[i-1], msgView[i])
+					} else if i == msgN && msgN > 0 {
+						needExtra = msgView[msgN-1].Type == types.MessageTypeUser
+					}
+					if needExtra {
+						msgPane.WriteByte('\n')
+					}
+				}
 			}
 			msgPane.WriteString(block)
 		}
@@ -1700,6 +1719,13 @@ func (m *model) View() string {
 
 func (m *model) showToolUseCtrlOExpandHint() bool {
 	return m.uiScreen == gouDemoScreenPrompt && !m.transcriptDumpMode
+}
+
+// userAssistantPairBlankLine is true when the UI inserts one empty line between adjacent
+// user and assistant scroll rows (either order).
+func userAssistantPairBlankLine(a, b types.Message) bool {
+	u, aType := types.MessageTypeUser, types.MessageTypeAssistant
+	return (a.Type == u && b.Type == aType) || (a.Type == aType && b.Type == u)
 }
 
 func userMessageHasPromptText(msg types.Message) bool {

@@ -163,10 +163,28 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				default:
 					line = fmt.Sprintf("%s  %s  [folded]", msg.Type, u)
 				}
+				if i > 0 && userAssistantPairBlankLine(msgView[i-1], msg) {
+					if lineCnt > 0 {
+						if lineCnt+1 > maxL {
+							return "", false
+						}
+						b.WriteByte('\n')
+						lineCnt++
+					}
+				}
 				if !addBlock(line) {
 					return "", false
 				}
 				continue
+			}
+			if i > 0 && userAssistantPairBlankLine(msgView[i-1], msg) {
+				if lineCnt > 0 {
+					if lineCnt+1 > maxL {
+						return "", false
+					}
+					b.WriteByte('\n')
+					lineCnt++
+				}
 			}
 			h := m.measureMessageRows(msg, bodyCols, hl)
 			block := m.renderMessageRow(msg, bodyCols, h, hl)
@@ -182,6 +200,15 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		}
 		h := m.measureTranscriptStreamingToolRow(st[ti], bodyCols, hl)
 		block := m.renderTranscriptStreamingToolRow(st[ti], bodyCols, h, hl)
+		if ti == 0 && len(msgView) > 0 && msgView[len(msgView)-1].Type == types.MessageTypeUser {
+			if lineCnt > 0 {
+				if lineCnt+1 > maxL {
+					return "", false
+				}
+				b.WriteByte('\n')
+				lineCnt++
+			}
+		}
 		if !addBlock(block) {
 			return "", false
 		}
