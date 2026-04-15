@@ -44,30 +44,56 @@ func ResolvedLogPath() string {
 	return logPath()
 }
 
-// MaybePrintDiag prints resolved path and flag state to stderr when CLAUDE_CODE_APILOG_DIAG is truthy.
+// MaybePrintDiag records resolved path and flag state when CLAUDE_CODE_APILOG_DIAG is truthy.
+// It appends to the same file as [ResolvedLogPath] / LLM API body logs (~/.claude/debug/<session>.txt
+// by default) so TTY sessions are not spammed; if the path is empty or the write fails, it falls back to stderr.
 func MaybePrintDiag() {
 	if !envTruthy("CLAUDE_CODE_APILOG_DIAG") {
 		return
 	}
 	path := ResolvedLogPath()
-	fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: CLAUDE_CODE_LOG_API_REQUEST_BODY=%v CLAUDE_CODE_LOG_API_RESPONSE_BODY=%v\n",
+	var b strings.Builder
+	fmt.Fprintf(&b, "[ccb-engine apilog] diag: CLAUDE_CODE_LOG_API_REQUEST_BODY=%v CLAUDE_CODE_LOG_API_RESPONSE_BODY=%v\n",
 		envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY"), envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY"))
-	fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: resolved log path: %q\n", path)
+	fmt.Fprintf(&b, "[ccb-engine apilog] diag: resolved log path: %q\n", path)
 	if lp := debugpath.LatestLinkPathFor(path); lp != "" {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: latest symlink (same log): %q\n", lp)
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: latest symlink (same log): %q\n", lp)
 	}
 	if path == "" {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: path empty — check HOME; or set CLAUDE_CODE_DEBUG_LOG_FILE / CLAUDE_CODE_DEBUG_LOGS_DIR\n")
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: path empty — check HOME; or set CLAUDE_CODE_DEBUG_LOG_FILE / CLAUDE_CODE_DEBUG_LOGS_DIR\n")
 	}
 	if !ApiBodyLoggingEnabled() {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: logging flags off → PrepareIfEnabled does nothing → no debug log file created\n")
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: logging flags off → PrepareIfEnabled does nothing → no debug log file created\n")
 	}
 	if p := settingsfile.UserClaudeSettingsPath(); p != "" {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: user env merge reads %q (override dir: CLAUDE_CONFIG_DIR; project also uses .claude/settings.local.json)\n", p)
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: user env merge reads %q (override dir: CLAUDE_CONFIG_DIR; project also uses .claude/settings.local.json)\n", p)
 	}
 	if root := settingsfile.ProjectRootLastResolved(); root != "" {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] diag: project root for Go .claude/settings.go.json (and local): %q (set CCB_ENGINE_PROJECT_ROOT to override)\n", root)
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: project root for Go .claude/settings.go.json (and local): %q (set CCB_ENGINE_PROJECT_ROOT to override)\n", root)
 	}
+	body := b.String()
+	if path != "" {
+		if err := appendDiagToLog(path, body); err == nil {
+			debugpath.MaybeUpdateLatestSymlink(path)
+			return
+		}
+	}
+	_, _ = fmt.Fprint(os.Stderr, body)
+}
+
+func appendDiagToLog(path, body string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	ts := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = fmt.Fprintf(f, "%s [APILOG_DIAG]\n%s", ts, body)
+	return err
 }
 
 // PrepareIfEnabled creates the log file and its parent directories when either

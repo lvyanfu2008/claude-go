@@ -107,7 +107,7 @@ Format: `timestamp [API_REQUEST_BODY|API_RESPONSE_BODY] <label>\nllmRequest-N<co
 
 **`gou-demo` caveat:** use **`-fake-stream`** (or **`GOU_DEMO_USE_FAKE_STREAM=1`**, or **`GOU_DEMO_CCB_INLINE=0`**) only when you want a simulated stream with **no** LLM. For real HTTP + apilog bodies, set **Anthropic** (or configured provider) keys and **`GOU_QUERY_STREAMING_PARITY=1`** or **`GOU_DEMO_STREAMING_TOOL_EXECUTION=1`**.
 
-**Empty `~/.claude/debug/`:** if **`CLAUDE_CODE_LOG_API_REQUEST_BODY`** / **`CLAUDE_CODE_LOG_API_RESPONSE_BODY`** are not set, **`PrepareIfEnabled` does not create** the session log or `latest` (the directory may still exist from another tool). Set one or both flags in the shell or in **project** `.claude/settings.go.json` `env`. Run with **`CLAUDE_CODE_APILOG_DIAG=1`** to print the resolved path, **`latest`** path, and flag state to stderr.
+**Empty `~/.claude/debug/`:** if **`CLAUDE_CODE_LOG_API_REQUEST_BODY`** / **`CLAUDE_CODE_LOG_API_RESPONSE_BODY`** are not set, **`PrepareIfEnabled` does not create** the session log or `latest` (the directory may still exist from another tool). Set one or both flags in the shell or in **project** `.claude/settings.go.json` `env`. Run with **`CLAUDE_CODE_APILOG_DIAG=1`** to append a diagnostic block (resolved path, **`latest`** path, flag state, settings paths) to the same file as **`CLAUDE_CODE_DEBUG_LOG_FILE`** / default **`~/.claude/debug/<sessionId>.txt`** (line tagged **`[APILOG_DIAG]`**); **`latest`** is updated when that path resolves. If no log path can be resolved or the write fails, diagnostics fall back to **stderr**.
 
 ## Hooks (command)
 
