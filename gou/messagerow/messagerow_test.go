@@ -34,6 +34,22 @@ func TestSegments_mergeConsecutiveReadSummaryLines(t *testing.T) {
 	}
 }
 
+func TestSegments_suppressToolUseSummaryLineShowsFullChrome(t *testing.T) {
+	t.Setenv("GOU_DEMO_VERBOSE_TOOL_OUTPUT", "")
+	t.Setenv("GOU_DEMO_TOOL_USE_SUMMARY_LINE", "1")
+	raw, _ := json.Marshal([]map[string]any{
+		{"type": "tool_use", "id": "g1", "name": "Grep", "input": map[string]any{"pattern": "foo", "path": "/p"}},
+	})
+	msg := types.Message{Type: types.MessageTypeAssistant, Content: raw}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{SuppressToolUseSummaryLine: true})
+	if len(segs) != 1 || segs[0].Kind != SegToolUse {
+		t.Fatalf("want full tool row, got %+v", segs)
+	}
+	if segs[0].ToolFacing != "Search" {
+		t.Fatalf("want Search chrome, got facing=%q", segs[0].ToolFacing)
+	}
+}
+
 func TestSegments_mergeGrepAndReadSummaryOneLine(t *testing.T) {
 	t.Setenv("GOU_DEMO_VERBOSE_TOOL_OUTPUT", "")
 	t.Setenv("GOU_DEMO_TOOL_USE_SUMMARY_LINE", "1")

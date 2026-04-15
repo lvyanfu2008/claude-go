@@ -66,6 +66,8 @@ type RenderOpts struct {
 	ResolvedToolUseIDs map[string]struct{}
 	// TranscriptMode is gou-demo transcript screen (ctrl+o): omit ctrl+o hint on collapsed_read_search; prefer full tool chrome over one-line summary.
 	TranscriptMode bool
+	// SuppressToolUseSummaryLine forces full Grep/Glob/Read tool rows instead of merged one-line SearchRead summary (gou-demo: delay before compact line).
+	SuppressToolUseSummaryLine bool
 }
 
 // SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
@@ -232,6 +234,9 @@ func toolUseBlockEligibleForSummaryLine(b types.MessageContentBlock, opts *Rende
 		return false
 	}
 	if VerboseToolOutputEnabled() {
+		return false
+	}
+	if opts != nil && opts.SuppressToolUseSummaryLine {
 		return false
 	}
 	if opts != nil && opts.TranscriptMode {

@@ -22,6 +22,7 @@
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
 // Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 // Read/Grep/Glob stream tail: default keeps each tool_use + tool_result as separate rows (avoids looking like history was cleared). Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 for TS-style merge into collapsed_read_search (gou/ccbstream/apply.go).
+// Prompt: merged one-line Grep/Glob/Read summaries (GOU_DEMO_TOOL_USE_SUMMARY_LINE) wait GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS after each assistant message first appears (default 2000 ms) while full Search/Read rows are shown; set to 0 to collapse immediately.
 //
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom, Enter send (Shift+Enter / Ctrl+J / Alt+Enter newline; Shift+↑↓ move line). F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e show-all expands collapsed/grouped + full tool_result bodies except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript (compact): same omission + tool_result folded on user rows; assistant rows show ⏺+⎿ summaries. Ctrl+e show-all or [ dump shows full blocks. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
@@ -566,6 +567,11 @@ type model struct {
 
 	// rebuildHeightCacheCalls increments in rebuildHeightCache (tests: streaming skip policy).
 	rebuildHeightCacheCalls int
+
+	// msgFirstShownAt records when each message UUID first appeared (for GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS).
+	msgFirstShownAt map[string]time.Time
+	// msgLastAssistantContentLen tracks len(Content) per assistant UUID so streaming bumps reset the summary delay window.
+	msgLastAssistantContentLen map[string]int
 }
 
 func main() {
@@ -811,7 +817,10 @@ func seedDemo(s *conversation.Store) {
 }
 
 func (m *model) Init() tea.Cmd {
-	return nil
+	if gouDemoToolUseSummaryDelay() <= 0 {
+		return nil
+	}
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} })
 }
 
 // teaGlobalRedrawCmd mirrors TS useGlobalKeybindings app:redraw (ctrl+l): clear the terminal
@@ -1307,6 +1316,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamTick:
 		return m.handleUpdateStreamTick(msg)
 
+	case gouToolSummaryDelayTickMsg:
+		return m.handleUpdateToolSummaryDelayTick(msg)
+
 	case ccbstream.Msg:
 		return m.handleUpdateCCBStream(msg)
 	}
@@ -1345,7 +1357,8 @@ func (m *model) statusLineString() string {
 
 func (m *model) rebuildHeightCache() {
 	m.rebuildHeightCacheCalls++
-	
+	m.syncMsgFirstShownAt()
+
 	m.groupedAgentLookups = messagerow.BuildGroupedAgentLookups(m.store.Messages)
 	
 	// Convert bool map to struct{} map for existing formatMessageSegments logic
@@ -1392,10 +1405,11 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 			msg.Type == types.MessageTypeCollapsedReadSearch &&
 			strings.TrimSpace(m.store.StreamingText) == ""
 		return &messagerow.RenderOpts{
-			FoldToolResultBody:        true,
-			CollapsedReadSearchActive: active,
-			GroupedAgentLookups:       m.groupedAgentLookups,
-			ResolvedToolUseIDs:      m.resolvedToolIDs,
+			FoldToolResultBody:         true,
+			CollapsedReadSearchActive:  active,
+			GroupedAgentLookups:        m.groupedAgentLookups,
+			ResolvedToolUseIDs:         m.resolvedToolIDs,
+			SuppressToolUseSummaryLine: m.suppressToolUseSummaryLine(msg),
 		}
 	}
 	if m.uiScreen == gouDemoScreenTranscript {
