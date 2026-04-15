@@ -8,7 +8,7 @@ import (
 	"goc/types"
 )
 
-func TestNormalizeMessagesForAPI_foldsLeadingPrependedUserContextMetaIntoTrailingPlainUser(t *testing.T) {
+func TestNormalizeMessagesForAPI_leadingMetaUserStaysSeparateFromTailUser(t *testing.T) {
 	t.Parallel()
 	meta := true
 	sr := "<system-reminder>\n# cwd\n/proj\n\nIMPORTANT: ignore unless relevant.\n</system-reminder>\n"
@@ -24,27 +24,26 @@ func TestNormalizeMessagesForAPI_foldsLeadingPrependedUserContextMetaIntoTrailin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 2 {
-		t.Fatalf("want meta folded into tail user (2 API rows), got len=%d", len(out))
+	if len(out) != 3 {
+		t.Fatalf("want meta, assistant, tail user as three rows (no fold across assistant), got len=%d", len(out))
 	}
-	if out[0].Type != types.MessageTypeAssistant {
-		t.Fatalf("first row want assistant, got %v", out[0].Type)
+	if out[0].Type != types.MessageTypeUser || out[0].UUID != "meta1" {
+		t.Fatalf("first row want meta user, got %#v", out[0])
 	}
-	if out[1].Type != types.MessageTypeUser || out[1].UUID != "u1" {
-		t.Fatalf("tail user %#v", out[1])
+	if out[1].Type != types.MessageTypeAssistant {
+		t.Fatalf("second row want assistant, got %v", out[1].Type)
 	}
-	inner, _ := getInner(&out[1])
+	if out[2].Type != types.MessageTypeUser || out[2].UUID != "u1" {
+		t.Fatalf("tail user %#v", out[2])
+	}
+	inner, _ := getInner(&out[2])
 	blocks, err := parseContentArrayOrString(inner.Content)
-	if err != nil || len(blocks) < 2 {
-		t.Fatalf("merged user should have SR + hi as separate text blocks; blocks=%v err=%v", blocks, err)
+	if err != nil || len(blocks) != 1 {
+		t.Fatalf("tail user should stay plain hi only; blocks=%v err=%v", blocks, err)
 	}
 	t0, _ := blocks[0]["text"].(string)
-	if !strings.Contains(t0, "<system-reminder>") {
-		t.Fatalf("first block should carry SR, got %q", t0)
-	}
-	t1, _ := blocks[len(blocks)-1]["text"].(string)
-	if t1 != "hi" && !strings.Contains(t1, "hi") {
-		t.Fatalf("want tail text hi, last block=%q", t1)
+	if t0 != "hi" {
+		t.Fatalf("tail text want hi, got %q", t0)
 	}
 }
 

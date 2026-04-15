@@ -64,8 +64,8 @@ func LogQueryUserContextIfEnabled(tag string, context map[string]string) {
 var SkipUserContextInTest bool
 
 // PrependUserContext prepends a meta user message when context is non-empty (same slice order as TS).
-// For [meta, …, assistant, …, plain user], [messagesapi.NormalizeMessagesForAPI] folds that meta into the
-// trailing plain user using the same mergeUserMessages/joinTextAtSeam behavior as TS.
+// [messagesapi.NormalizeMessagesForAPI] only merges consecutive user rows (mergeUserMessages); it does not
+// move a leading meta user across assistant boundaries onto the trailing user (TS normalize does not either).
 func PrependUserContext(messages []types.Message, context map[string]string) []types.Message {
 	if SkipUserContextInTest {
 		out := make([]types.Message, len(messages))
