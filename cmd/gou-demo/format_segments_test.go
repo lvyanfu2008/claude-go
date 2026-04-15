@@ -128,6 +128,31 @@ func TestMeasureMessageRows_skipsToolResultOnlyUserOnPrompt(t *testing.T) {
 	}
 }
 
+func TestMeasureMessageRows_skipsToolResultOnlyUserInTranscriptCompact(t *testing.T) {
+	m := &model{
+		uiScreen: gouDemoScreenTranscript,
+		store:    &conversation.Store{ConversationID: "c"},
+	}
+	raw := `[{"type":"tool_result","tool_use_id":"call_x","content":"ok"}]`
+	msg := types.Message{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(raw)}
+	if got := m.measureMessageRows(msg, 80, ""); got != 0 {
+		t.Fatalf("measureMessageRows = %d, want 0 (compact transcript omits tool-only user rows)", got)
+	}
+}
+
+func TestMeasureMessageRows_keepsToolResultOnlyUserInTranscriptShowAll(t *testing.T) {
+	m := &model{
+		uiScreen:          gouDemoScreenTranscript,
+		transcriptShowAll: true,
+		store:             &conversation.Store{ConversationID: "c"},
+	}
+	raw := `[{"type":"tool_result","tool_use_id":"call_x","content":"ok"}]`
+	msg := types.Message{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(raw)}
+	if got := m.measureMessageRows(msg, 80, ""); got < 1 {
+		t.Fatalf("measureMessageRows = %d, want >=1 when show-all", got)
+	}
+}
+
 func TestMeasureMessageRows_keepsUserToolResultWithText(t *testing.T) {
 	m := &model{uiScreen: gouDemoScreenPrompt, store: &conversation.Store{ConversationID: "c"}}
 	raw := `[{"type":"text","text":"hi"},{"type":"tool_result","tool_use_id":"x","content":"ok"}]`
