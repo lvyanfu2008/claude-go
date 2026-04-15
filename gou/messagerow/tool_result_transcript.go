@@ -9,6 +9,33 @@ import (
 	"goc/types"
 )
 
+// NormalizeToolResultContentJSON unwraps common tool_result.content shapes: a JSON string holding JSON,
+// or a top-level array (first element), so Read/Grep summaries can parse like TS.
+func NormalizeToolResultContentJSON(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	s := strings.TrimSpace(string(raw))
+	if len(s) >= 2 && s[0] == '"' {
+		var inner string
+		if err := json.Unmarshal([]byte(s), &inner); err != nil {
+			return raw
+		}
+		inner = strings.TrimSpace(inner)
+		if len(inner) > 0 && (inner[0] == '{' || inner[0] == '[') {
+			return NormalizeToolResultContentJSON(json.RawMessage(inner))
+		}
+		return raw
+	}
+	if s[0] == '[' {
+		var arr []json.RawMessage
+		if json.Unmarshal(raw, &arr) == nil && len(arr) > 0 {
+			return NormalizeToolResultContentJSON(arr[0])
+		}
+	}
+	return raw
+}
+
 // CollectToolResultContentByToolUseID maps tool_use_id → tool_result content JSON (last wins if duplicated).
 func CollectToolResultContentByToolUseID(msgs []types.Message) map[string]json.RawMessage {
 	out := make(map[string]json.RawMessage)
@@ -40,6 +67,7 @@ func TranscriptResolvedHintExtra(toolFacing string, resultJSON json.RawMessage) 
 	if len(resultJSON) == 0 {
 		return "", ""
 	}
+	resultJSON = NormalizeToolResultContentJSON(resultJSON)
 	switch toolFacing {
 	case "Read":
 		return readResultTranscriptLines(resultJSON)
@@ -61,13 +89,17 @@ func readResultTranscriptLines(raw json.RawMessage) (hint, extra string) {
 	case "text":
 		var o struct {
 			File struct {
-				NumLines int `json:"numLines"`
+				NumLines int    `json:"numLines"`
+				Content  string `json:"content"`
 			} `json:"file"`
 		}
 		if err := json.Unmarshal(raw, &o); err != nil {
 			return "", ""
 		}
 		n := o.File.NumLines
+		if n < 1 && strings.TrimSpace(o.File.Content) != "" {
+			n = strings.Count(o.File.Content, "\n") + 1
+		}
 		if n < 1 {
 			return "", ""
 		}

@@ -16,6 +16,26 @@ func TestTranscriptResolvedHintExtra_readText(t *testing.T) {
 	}
 }
 
+func TestTranscriptResolvedHintExtra_readTextDoubleEncodedJSONString(t *testing.T) {
+	inner := `{"type":"text","file":{"filePath":"/x.go","content":"a","numLines":5,"startLine":1,"totalLines":10}}`
+	wrapped, err := json.Marshal(inner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, x := TranscriptResolvedHintExtra("Read", json.RawMessage(wrapped))
+	if h != "Read 5 lines" || x != "" {
+		t.Fatalf("h=%q x=%q", h, x)
+	}
+}
+
+func TestTranscriptResolvedHintExtra_readTextInferLineCount(t *testing.T) {
+	raw := json.RawMessage(`{"type":"text","file":{"filePath":"/x.go","content":"a\nb\nc","numLines":0,"startLine":1,"totalLines":10}}`)
+	h, x := TranscriptResolvedHintExtra("Read", raw)
+	if h != "Read 3 lines" || x != "" {
+		t.Fatalf("h=%q x=%q", h, x)
+	}
+}
+
 func TestTranscriptResolvedHintExtra_grepContent(t *testing.T) {
 	raw := json.RawMessage(`{"mode":"content","numFiles":0,"filenames":[],"content":"p.go:1:foo","numLines":1}`)
 	h, x := TranscriptResolvedHintExtra("Search", raw)

@@ -1928,6 +1928,26 @@ func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 	return ok
 }
 
+// toolUseResolvedForDisplay treats a tool as resolved if it is in the resolved map, or (transcript only)
+// if we already have tool_result payload for that id — avoids stale resolved maps skipping ⏺+⎿ stats.
+func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, toolUseID string, transcriptDetail bool) bool {
+	if toolUseID == "" {
+		return false
+	}
+	if resolved != nil {
+		if _, ok := resolved[toolUseID]; ok {
+			return true
+		}
+	}
+	if transcriptDetail && toolResultByID != nil {
+		raw, ok := toolResultByID[toolUseID]
+		if ok && len(raw) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
 // One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
 func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
@@ -1977,7 +1997,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				var toolLines []string
 				toolLines = append(toolLines, row1)
-				res := toolUseResolved(resolved, seg.ToolUseID)
+				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptResolvedDetail)
 				if transcriptResolvedDetail && res {
 					var raw json.RawMessage
 					if toolResultByID != nil {
@@ -2038,7 +2058,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				var toolLines []string
 				toolLines = append(toolLines, row1)
-				res := toolUseResolved(resolved, seg.ToolUseID)
+				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptResolvedDetail)
 				if transcriptResolvedDetail && res {
 					var raw json.RawMessage
 					if toolResultByID != nil {
@@ -2088,7 +2108,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
 		case messagerow.SegToolUseSummaryLine:
 			line := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			if !toolUseResolved(resolved, seg.ToolUseID) && toolUseCtrlOHint {
+			if !toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptResolvedDetail) && toolUseCtrlOHint {
 				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 			}
 			parts = append(parts, line)

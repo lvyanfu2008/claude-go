@@ -84,6 +84,21 @@ func TestFormatMessageSegments_resolvedToolOmitsActivityAndHint(t *testing.T) {
 	}
 }
 
+func TestFormatMessageSegments_transcriptStatsWhenResolvedIDMapEmptyButToolResultPresent(t *testing.T) {
+	resultJSON := json.RawMessage(`{"type":"text","file":{"filePath":"/x.go","content":"x","numLines":12,"startLine":1,"totalLines":20}}`)
+	byID := map[string]json.RawMessage{"tid": resultJSON}
+	segs := []messagerow.Segment{
+		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "x.go", ToolHint: "x.go", Text: "Reading x.go", ToolUseID: "tid"},
+	}
+	out := formatMessageSegments(segs, 80, false, nil, true, "", byID, true)
+	if strings.Contains(out, "Reading") {
+		t.Fatalf("should not show in-flight activity when tool_result payload is present: %s", out)
+	}
+	if !strings.Contains(out, "Read 12 lines") {
+		t.Fatalf("want Read 12 lines: %s", out)
+	}
+}
+
 func TestFormatMessageSegments_transcriptResolvedReadShowsResultSummary(t *testing.T) {
 	resultJSON := json.RawMessage(`{"type":"text","file":{"filePath":"/x.go","content":"x","numLines":30,"startLine":1,"totalLines":100}}`)
 	byID := map[string]json.RawMessage{"t1": resultJSON}
