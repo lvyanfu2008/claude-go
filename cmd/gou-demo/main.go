@@ -1399,7 +1399,11 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	}
 	var header string
 	if msg.Type != types.MessageTypeAttachment {
-		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+		switch msg.Type {
+		case types.MessageTypeUser, types.MessageTypeAssistant:
+		default:
+			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+		}
 	}
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL)
 	body = withUserPromptPointerIfNeeded(msg, body)
@@ -1790,7 +1794,14 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
 	var header string
 	if msg.Type != types.MessageTypeAttachment {
-		header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+		switch msg.Type {
+		case types.MessageTypeUser:
+			// No "user" title row: "> " on the first body line only (withUserPromptPointerIfNeeded).
+		case types.MessageTypeAssistant:
+			// No "assistant" title row — body starts directly (⏺/● lead still from formatMessageSegments).
+		default:
+			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+		}
 	}
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL)
 	body = withUserPromptPointerIfNeeded(msg, body)

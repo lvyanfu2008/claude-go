@@ -154,7 +154,15 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				if len(u) > 12 {
 					u = u[:12] + "…"
 				}
-				line := fmt.Sprintf("%s  %s  [folded]", msg.Type, u)
+				var line string
+				switch msg.Type {
+				case types.MessageTypeUser:
+					line = fmt.Sprintf(">  %s  [folded]", u)
+				case types.MessageTypeAssistant:
+					line = fmt.Sprintf("%s  [folded]", u)
+				default:
+					line = fmt.Sprintf("%s  %s  [folded]", msg.Type, u)
+				}
 				if !addBlock(line) {
 					return "", false
 				}

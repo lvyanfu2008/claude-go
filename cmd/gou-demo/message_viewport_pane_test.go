@@ -32,7 +32,7 @@ func TestTryBuildFullMessagePaneContent_fold(t *testing.T) {
 	if !ok {
 		t.Fatal("tryBuildFullMessagePaneContent failed")
 	}
-	if !strings.Contains(s, "[folded]") || !strings.Contains(s, string(types.MessageTypeUser)) {
+	if !strings.Contains(s, "[folded]") || !strings.Contains(s, ">") || !strings.Contains(s, "u1") {
 		t.Fatalf("unexpected folded output: %q", s)
 	}
 }
