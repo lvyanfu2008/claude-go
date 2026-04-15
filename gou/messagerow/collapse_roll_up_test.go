@@ -26,6 +26,21 @@ func toolResultContent(toolUseID string, content string) json.RawMessage {
 	return raw
 }
 
+func TestCollapseReadSearchTail_thinkingThenToolUseInSameMessage(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]any{
+		{"type": "thinking", "thinking": "..."},
+		{"type": "tool_use", "id": "t1", "name": "Read", "input": map[string]any{"file_path": "/proj/README.md"}},
+	})
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: raw},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
+	}
+	CollapseReadSearchTail(&msgs)
+	if len(msgs) != 1 || msgs[0].Type != types.MessageTypeCollapsedReadSearch {
+		t.Fatalf("got %+v", msgs)
+	}
+}
+
 func TestCollapseReadSearchTail_oneRead(t *testing.T) {
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/proj/README.md"})},

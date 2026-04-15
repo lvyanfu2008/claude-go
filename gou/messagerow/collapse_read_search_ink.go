@@ -29,43 +29,6 @@ func commandAsHintInk(command string) string {
 	return cleaned
 }
 
-func rawMessageContent(msg types.Message) json.RawMessage {
-	if len(msg.Content) > 0 {
-		return msg.Content
-	}
-	var env struct {
-		Content json.RawMessage `json:"content"`
-	}
-	if json.Unmarshal(msg.Message, &env) == nil && len(env.Content) > 0 {
-		return env.Content
-	}
-	return nil
-}
-
-func assistantContentBlocks(msg types.Message) []types.MessageContentBlock {
-	raw := rawMessageContent(msg)
-	if len(raw) == 0 {
-		return nil
-	}
-	var blocks []types.MessageContentBlock
-	if json.Unmarshal(raw, &blocks) != nil {
-		return nil
-	}
-	return blocks
-}
-
-func allContentBlocks(msg types.Message) []types.MessageContentBlock {
-	return assistantContentBlocks(msg)
-}
-
-func firstContentBlock(msg types.Message) (types.MessageContentBlock, bool) {
-	blocks := assistantContentBlocks(msg)
-	if len(blocks) == 0 {
-		return types.MessageContentBlock{}, false
-	}
-	return blocks[0], true
-}
-
 func attachmentType(msg types.Message) string {
 	if len(msg.Attachment) == 0 {
 		return ""
@@ -82,8 +45,8 @@ func attachmentType(msg types.Message) string {
 func getCollapsibleToolInfoGo(msg types.Message) (name string, input map[string]any, info searchOrReadResult, ok bool) {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
-		b, okb := firstContentBlock(msg)
-		if !okb || b.Type != "tool_use" || strings.TrimSpace(b.Name) == "" {
+		b, okb := FirstToolUseBlock(msg)
+		if !okb {
 			return "", nil, searchOrReadResult{}, false
 		}
 		in := decodeToolInputMap(b.Input)
@@ -96,8 +59,8 @@ func getCollapsibleToolInfoGo(msg types.Message) (name string, input map[string]
 		if len(msg.Messages) == 0 {
 			return "", nil, searchOrReadResult{}, false
 		}
-		b, okb := firstContentBlock(msg.Messages[0])
-		if !okb || b.Type != "tool_use" {
+		b, okb := FirstToolUseBlock(msg.Messages[0])
+		if !okb {
 			return "", nil, searchOrReadResult{}, false
 		}
 		in := decodeToolInputMap(b.Input)
@@ -116,18 +79,15 @@ func isTextBreakerInk(msg types.Message) bool {
 	if msg.Type != types.MessageTypeAssistant {
 		return false
 	}
-	b, ok := firstContentBlock(msg)
-	if !ok || b.Type != "text" {
-		return false
-	}
-	return strings.TrimSpace(b.Text) != ""
+	_, ok := FirstNonEmptyTextBlock(msg)
+	return ok
 }
 
 func isNonCollapsibleToolUseInk(msg types.Message) bool {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
-		b, ok := firstContentBlock(msg)
-		if !ok || b.Type != "tool_use" {
+		b, ok := FirstToolUseBlock(msg)
+		if !ok {
 			return false
 		}
 		name := strings.TrimSpace(b.Name)
@@ -137,8 +97,8 @@ func isNonCollapsibleToolUseInk(msg types.Message) bool {
 		if len(msg.Messages) == 0 {
 			return false
 		}
-		b, ok := firstContentBlock(msg.Messages[0])
-		if !ok || b.Type != "tool_use" {
+		b, ok := FirstToolUseBlock(msg.Messages[0])
+		if !ok {
 			return false
 		}
 		name := strings.TrimSpace(msg.ToolName)
@@ -164,8 +124,11 @@ func isPreToolHookSummaryMsg(msg types.Message) bool {
 
 func shouldSkipMessageInk(msg types.Message) bool {
 	if msg.Type == types.MessageTypeAssistant {
-		b, ok := firstContentBlock(msg)
-		if ok && (b.Type == "thinking" || b.Type == "redacted_thinking") {
+		if AssistantHasToolUse(msg) || AssistantHasNonEmptyText(msg) {
+			return false
+		}
+		blocks := MessageContentBlocks(msg)
+		if len(blocks) > 0 && (blocks[0].Type == "thinking" || blocks[0].Type == "redacted_thinking") {
 			return true
 		}
 	}
@@ -187,7 +150,7 @@ func isCollapsibleToolResultInk(msg types.Message, toolUseIDs map[string]struct{
 	if msg.Type != types.MessageTypeUser || len(toolUseIDs) == 0 {
 		return false
 	}
-	blocks := allContentBlocks(msg)
+	blocks := MessageContentBlocks(msg)
 	var toolResults []types.MessageContentBlock
 	for _, c := range blocks {
 		if c.Type == "tool_result" && strings.TrimSpace(c.ToolUseID) != "" {
@@ -208,15 +171,11 @@ func isCollapsibleToolResultInk(msg types.Message, toolUseIDs map[string]struct{
 func getToolUseIdsFromMessageInk(msg types.Message) []string {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
-		b, ok := firstContentBlock(msg)
-		if ok && b.Type == "tool_use" && strings.TrimSpace(b.ID) != "" {
-			return []string{strings.TrimSpace(b.ID)}
-		}
+		return AllToolUseIDsFromAssistant(msg)
 	case types.MessageTypeGroupedToolUse:
 		var ids []string
 		for _, m := range msg.Messages {
-			blocks := assistantContentBlocks(m)
-			for _, b := range blocks {
+			for _, b := range MessageContentBlocks(m) {
 				if b.Type == "tool_use" && strings.TrimSpace(b.ID) != "" {
 					ids = append(ids, strings.TrimSpace(b.ID))
 				}
@@ -231,20 +190,24 @@ func countToolUsesInk(msg types.Message) int {
 	if msg.Type == types.MessageTypeGroupedToolUse {
 		return len(msg.Messages)
 	}
+	if n := CountToolUseBlocks(msg); n > 0 {
+		return n
+	}
 	return 1
 }
 
 func getFilePathsFromReadMessageInk(msg types.Message) []string {
 	var paths []string
 	collect := func(m types.Message) {
-		b, ok := firstContentBlock(m)
-		if !ok || b.Type != "tool_use" || strings.TrimSpace(b.Name) != "Read" {
-			return
-		}
-		in := decodeToolInputMap(b.Input)
-		fp := strFromMap(in, "file_path")
-		if strings.TrimSpace(fp) != "" {
-			paths = append(paths, fp)
+		for _, b := range MessageContentBlocks(m) {
+			if b.Type != "tool_use" || strings.TrimSpace(b.Name) != "Read" {
+				continue
+			}
+			in := decodeToolInputMap(b.Input)
+			fp := strFromMap(in, "file_path")
+			if strings.TrimSpace(fp) != "" {
+				paths = append(paths, fp)
+			}
 		}
 	}
 	switch msg.Type {
@@ -260,30 +223,30 @@ func getFilePathsFromReadMessageInk(msg types.Message) []string {
 
 // groupAccumulatorInk mirrors TS GroupAccumulator.
 type groupAccumulatorInk struct {
-	messages              []types.Message
-	searchCount           int
-	readFilePaths         map[string]struct{}
-	readOperationCount    int
-	listCount             int
-	toolUseIds            map[string]struct{}
-	memorySearchCount     int
-	memoryReadFilePaths   map[string]struct{}
-	memoryWriteCount      int
-	nonMemSearchArgs      []string
-	latestDisplayHint     *string
-	mcpCallCount          int
-	mcpServerNames        map[string]struct{}
-	bashCount             int
-	bashCommands          map[string]string
-	commits               []types.GitCommitEntry
-	pushes                []types.GitPushEntry
-	branches              []types.GitBranchEntry
-	prs                   []types.GitPrEntry
-	gitOpBashCount        int
-	hookTotalMs           int64
-	hookCount             int
-	hookInfos             []types.StopHookInfo
-	relevantMemories      []types.MemoryAttachment
+	messages            []types.Message
+	searchCount         int
+	readFilePaths       map[string]struct{}
+	readOperationCount  int
+	listCount           int
+	toolUseIds          map[string]struct{}
+	memorySearchCount   int
+	memoryReadFilePaths map[string]struct{}
+	memoryWriteCount    int
+	nonMemSearchArgs    []string
+	latestDisplayHint   *string
+	mcpCallCount        int
+	mcpServerNames      map[string]struct{}
+	bashCount           int
+	bashCommands        map[string]string
+	commits             []types.GitCommitEntry
+	pushes              []types.GitPushEntry
+	branches            []types.GitBranchEntry
+	prs                 []types.GitPrEntry
+	gitOpBashCount      int
+	hookTotalMs         int64
+	hookCount           int
+	hookInfos           []types.StopHookInfo
+	relevantMemories    []types.MemoryAttachment
 }
 
 func createEmptyGroupInk() *groupAccumulatorInk {
@@ -388,7 +351,7 @@ func scanBashResultForGitOpsInk(msg types.Message, g *groupAccumulatorInk) {
 	}
 	_ = json.Unmarshal(msg.ToolUseResult, &out)
 	combined := out.Stdout + "\n" + out.Stderr
-	for _, c := range allContentBlocks(msg) {
+	for _, c := range MessageContentBlocks(msg) {
 		if c.Type != "tool_result" || strings.TrimSpace(c.ToolUseID) == "" {
 			continue
 		}

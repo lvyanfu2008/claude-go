@@ -3,7 +3,6 @@
 package messagerow
 
 import (
-	"encoding/json"
 	"sort"
 	"strings"
 
@@ -68,30 +67,6 @@ func canRollupAssistantToolPair(tu types.MessageContentBlock) bool {
 	default:
 		return false
 	}
-}
-
-func assistantSingleToolUse(msg types.Message) (types.MessageContentBlock, bool) {
-	var blocks []types.MessageContentBlock
-	if err := json.Unmarshal(msg.Content, &blocks); err != nil || len(blocks) != 1 {
-		return types.MessageContentBlock{}, false
-	}
-	b := blocks[0]
-	if b.Type != "tool_use" || strings.TrimSpace(b.Name) == "" || strings.TrimSpace(b.ID) == "" {
-		return types.MessageContentBlock{}, false
-	}
-	return b, true
-}
-
-func userSingleToolResult(msg types.Message) (types.MessageContentBlock, bool) {
-	var blocks []types.MessageContentBlock
-	if err := json.Unmarshal(msg.Content, &blocks); err != nil || len(blocks) != 1 {
-		return types.MessageContentBlock{}, false
-	}
-	b := blocks[0]
-	if b.Type != "tool_result" || strings.TrimSpace(b.ToolUseID) == "" {
-		return types.MessageContentBlock{}, false
-	}
-	return b, true
 }
 
 func buildCollapsedReadSearch(tail []types.Message) types.Message {
