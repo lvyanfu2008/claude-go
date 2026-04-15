@@ -84,6 +84,25 @@ type Message struct {
 	TeamMemoryWriteCount  *int               `json:"teamMemoryWriteCount,omitempty"`
 }
 
+// SyncAssistantMessageID sets MessageID from the nested JSON in Message (field "id") when MessageID is nil.
+// Mirrors assistant message.message.id (see claude.ts message_start → partialMessage.id).
+func SyncAssistantMessageID(m *Message) {
+	if m == nil || m.MessageID != nil {
+		return
+	}
+	if len(m.Message) == 0 {
+		return
+	}
+	var env struct {
+		ID string `json:"id"`
+	}
+	if json.Unmarshal(m.Message, &env) != nil || env.ID == "" {
+		return
+	}
+	id := env.ID
+	m.MessageID = &id
+}
+
 // UserMessage mirrors src/types/message.ts UserMessage (type "user").
 type UserMessage Message
 

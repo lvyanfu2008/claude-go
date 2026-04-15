@@ -43,6 +43,7 @@ func TestStreamingParity_textOnly(t *testing.T) {
 	}
 
 	var got []types.MessageType
+	var firstAsst *types.Message
 	ctx := context.Background()
 	for y, err := range Query(ctx, QueryParams{
 		Messages: []types.Message{{
@@ -67,6 +68,10 @@ func TestStreamingParity_textOnly(t *testing.T) {
 		}
 		if y.Message != nil {
 			got = append(got, y.Message.Type)
+			if y.Message.Type == types.MessageTypeAssistant && firstAsst == nil {
+				cp := *y.Message
+				firstAsst = &cp
+			}
 		}
 		if y.Terminal != nil {
 			break
@@ -77,6 +82,9 @@ func TestStreamingParity_textOnly(t *testing.T) {
 	}
 	if len(got) < 1 || got[0] != types.MessageTypeAssistant {
 		t.Fatalf("got %#v", got)
+	}
+	if firstAsst == nil || firstAsst.MessageID == nil || *firstAsst.MessageID != "msg_1" {
+		t.Fatalf("assistant MessageID: %#v", firstAsst)
 	}
 }
 

@@ -35,6 +35,7 @@ func TestAssistantStreamAccumulator_multiTextBlocks(t *testing.T) {
 	}
 	var wrap struct {
 		Role    string `json:"role"`
+		ID      string `json:"id"`
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -42,6 +43,9 @@ func TestAssistantStreamAccumulator_multiTextBlocks(t *testing.T) {
 	}
 	if err := json.Unmarshal(inner, &wrap); err != nil {
 		t.Fatal(err)
+	}
+	if wrap.ID != "msg_1" {
+		t.Fatalf("id=%q want msg_1", wrap.ID)
 	}
 	if wrap.Role != "assistant" || len(wrap.Content) != 2 {
 		t.Fatalf("role=%q content=%d", wrap.Role, len(wrap.Content))

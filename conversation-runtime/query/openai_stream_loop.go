@@ -160,6 +160,7 @@ func runOpenAIStreamingParityModelLoop(
 			UUID:    asstUUID,
 			Message: inner,
 		}
+		types.SyncAssistantMessageID(&asst)
 		if !yieldStreamingParity(ctx, deps, QueryYield{Message: &asst}, yield) {
 			ex.Discard()
 			return context.Canceled

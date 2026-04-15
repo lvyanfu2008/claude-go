@@ -16,6 +16,8 @@ type assistantStreamAccumulator struct {
 	stopReason   string
 	inputTokens  int
 	outputTokens int
+	// apiMessageID is message.message.id from message_start (Anthropic API message id).
+	apiMessageID string
 }
 
 type accBlock struct {
@@ -34,6 +36,15 @@ func newAssistantStreamAccumulator() *assistantStreamAccumulator {
 func (a *assistantStreamAccumulator) OnEvent(ev anthropicmessages.MessageStreamEvent) error {
 	switch ev.Type {
 	case "message_start":
+		var wrap struct {
+			Message struct {
+				ID string `json:"id"`
+			} `json:"message"`
+		}
+		_ = json.Unmarshal(ev.Raw, &wrap)
+		if id := strings.TrimSpace(wrap.Message.ID); id != "" {
+			a.apiMessageID = id
+		}
 		return nil
 	case "content_block_start":
 		var wrap struct {
@@ -152,10 +163,14 @@ func (a *assistantStreamAccumulator) AssistantWire(uuid string) (inner json.RawM
 			})
 		}
 	}
-	inner, err = json.Marshal(map[string]any{
+	innerObj := map[string]any{
 		"role":    "assistant",
 		"content": content,
-	})
+	}
+	if id := strings.TrimSpace(a.apiMessageID); id != "" {
+		innerObj["id"] = id
+	}
+	inner, err = json.Marshal(innerObj)
 	if err != nil {
 		return nil, err
 	}
