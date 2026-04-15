@@ -1,4 +1,5 @@
 // Command gou-demo is a minimal Bubble Tea full-screen UI: virtualscroll + markdown + tool blocks (Phase 4 messagerow).
+// Extracted [model.Update] branches: update_streaming.go (query yield / NDJSON / fake stream), update_layout.go (window resize).
 // Model replies appear inside the TUI. By default the program redraws in the normal buffer so shell scrollback above the session stays available (no tea.WithAltScreen). Set GOU_DEMO_ALT_SCREEN=1 to use the alternate screen (reliable in-pane mouse wheel; previous terminal contents restored on exit).
 // With GOU_DEMO_LOG=1, trace uses the same path rules as TS debug log (see goc/ccb-engine/debugpath); on TTY without GOU_DEMO_LOG_FILE, trace goes to that file, not stderr.
 //
@@ -867,25 +868,7 @@ func (m *model) bottomChromeHeight() int {
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		oldCols := m.cols
-		oldH := m.height
-		m.width = msg.Width
-		m.height = msg.Height
-		m.cols = max(12, msg.Width-4)
-		_ = m.pr.Update(msg)
-		if m.uiScreen == gouDemoScreenTranscript && oldCols > 0 && oldCols != m.cols {
-			m.clearTranscriptSearchState()
-		}
-		// Always rebuild (not ScaleHeightCache only): message wrap width may be m.cols-1 when the TUI scrollbar strip is shown.
-		if oldCols != m.cols || oldH != m.height || len(m.heightCache) == 0 {
-			m.rebuildHeightCache()
-		}
-		if m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback {
-			m.vpNeedResizeContent = true
-			m.lastVpContentSig = ""
-			m.lastVpGeom = ""
-		}
-		return m, nil
+		return m.handleUpdateWindowSize(msg)
 
 	case gouPermissionAskMsg:
 		m.permAsk = &permissionAskOverlay{
@@ -1350,129 +1333,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case gouQueryYieldMsg:
-		m.store.AppendMessage(msg.Message)
-		m.rebuildHeightCache()
-		if m.uiScreen != gouDemoScreenTranscript {
-			m.sticky = true
-			m.scrollTop = 1 << 30
-		}
-		return m, nil
+		return m.handleUpdateGouQueryYield(msg)
 
 	case gouStreamingToolUsesMsg:
-		if msg.Uses == nil {
-			m.store.ClearStreamingToolUses()
-		} else {
-			m.store.ClearStreamingToolUses()
-			for _, u := range msg.Uses {
-				m.store.AppendStreamingToolUse(conversation.StreamingToolUse{
-					Index:         u.Index,
-					ToolUseID:     u.ToolUseID,
-					Name:          u.Name,
-					UnparsedInput: u.UnparsedInput,
-				})
-			}
-		}
-		// Transcript scroll keys include gou-st-tool:* rows; prompt renders live tools outside virtual keys.
-		if m.uiScreen == gouDemoScreenTranscript {
-			m.rebuildHeightCache()
-		}
-		if m.uiScreen != gouDemoScreenTranscript {
-			m.sticky = true
-			m.scrollTop = 1 << 30
-		}
-		return m, nil
+		return m.handleUpdateGouStreamingToolUses(msg)
 
 	case gouSpinnerTickMsg:
-		if !m.queryBusy {
-			return m, nil
-		}
-		m.spinnerFrame++
-		return m, spinnerTickCmd()
+		return m.handleUpdateGouSpinnerTick(msg)
 
 	case gouQueryDoneMsg:
-		m.queryBusy = false
-		m.endQuerySpinner()
-		m.store.ClearStreamingToolUses()
-		if msg.Err != nil {
-			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
-			m.rebuildHeightCache()
-		} else if gouDemoEnvTruthy("GOU_DEMO_BELL") {
-			fmt.Print("\a")
-		}
-		gouDemoLogStoreMessages("after_query_stream", m.store)
-		if m.transcript != nil {
-			m.maybeRecordTranscript()
-		}
-		m.rebuildHeightCache()
-		if m.uiScreen != gouDemoScreenTranscript {
-			m.sticky = true
-			m.scrollTop = 1 << 30
-		}
-		return m, nil
+		return m.handleUpdateGouQueryDone(msg)
 
 	case streamTick:
-		if len(m.streamChunks) == 0 || m.streamIdx >= len(m.streamChunks) {
-			return m, nil
-		}
-		m.store.AppendStreamingChunk(m.streamChunks[m.streamIdx])
-		m.streamIdx++
-		if m.streamIdx < len(m.streamChunks) {
-			return m, tea.Tick(90*time.Millisecond, func(time.Time) tea.Msg { return streamTick{} })
-		}
-		raw, _ := json.Marshal([]map[string]string{{"type": "text", "text": strings.TrimSpace(m.store.StreamingText)}})
-		m.store.AppendMessage(types.Message{
-			UUID:    fmt.Sprintf("a-%d", time.Now().UnixNano()),
-			Type:    types.MessageTypeAssistant,
-			Content: raw,
-		})
-		m.store.ClearStreaming()
-		m.store.ClearStreamingToolUses()
-		m.streamChunks = nil
-		m.streamIdx = 0
-		m.queryBusy = false
-		m.endQuerySpinner()
-		m.rebuildHeightCache()
-		gouDemoTracef("fake streamTick finished storeMessages=%d", len(m.store.Messages))
-		if m.transcript != nil {
-			m.maybeRecordTranscript()
-		}
-		if m.uiScreen != gouDemoScreenTranscript {
-			m.sticky = true
-			m.scrollTop = 1 << 30
-		}
-		return m, nil
+		return m.handleUpdateStreamTick(msg)
 
 	case ccbstream.Msg:
-		ev := ccbstream.StreamEvent(msg)
-		if gouDemoTrace != nil {
-			switch ev.Type {
-			case "assistant_delta":
-				gouDemoTracef("ui ccbstream.Msg assistant_delta textLen=%d", len(ev.Text))
-			case "error":
-				gouDemoTracef("ui ccbstream.Msg error code=%q message=%q", ev.Code, ev.Message)
-			default:
-				gouDemoTracef("ui ccbstream.Msg type=%s", ev.Type)
-			}
-		}
-		ccbstream.Apply(m.store, ev)
-		if ev.Type == "turn_complete" || ev.Type == "response_end" {
-			gouDemoLogStoreMessages("after_stream_"+ev.Type, m.store)
-		}
-		if ccbStreamEventNeedsFullHeightRebuild(ev) {
-			m.rebuildHeightCache()
-		}
-		if m.transcript != nil && (ev.Type == "turn_complete" || ev.Type == "response_end") {
-			m.maybeRecordTranscript()
-		}
-		// Model events often arrive while the user has scrolled up; always jump to bottom so the reply is visible.
-		if m.uiScreen != gouDemoScreenTranscript {
-			switch ev.Type {
-			case "assistant_delta", "tool_use", "tool_result", "turn_complete", "error":
-				m.sticky = true
-				m.scrollTop = 1 << 30
-			}
-		}
-		return m, nil
+		return m.handleUpdateCCBStream(msg)
 	}
 
 	if m.uiScreen != gouDemoScreenTranscript {
