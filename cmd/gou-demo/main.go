@@ -561,6 +561,7 @@ type model struct {
 
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
 	resolvedToolIDs   map[string]struct{}
+	groupedAgentLookups *messagerow.GroupedAgentLookups
 	lastMainLoopModel string
 
 	// rebuildHeightCacheCalls increments in rebuildHeightCache (tests: streaming skip policy).
@@ -1342,6 +1343,16 @@ func (m *model) statusLineString() string {
 
 func (m *model) rebuildHeightCache() {
 	m.rebuildHeightCacheCalls++
+	
+	m.groupedAgentLookups = messagerow.BuildGroupedAgentLookups(m.store.Messages)
+	
+	// Convert bool map to struct{} map for existing formatMessageSegments logic
+	m.resolvedToolIDs = make(map[string]struct{})
+	for k, v := range m.groupedAgentLookups.ResolvedToolUseIDs {
+		if v {
+			m.resolvedToolIDs[k] = struct{}{}
+		}
+	}
 	if m.heightCache == nil {
 		m.heightCache = make(map[string]int)
 	}
@@ -1381,12 +1392,18 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 		return &messagerow.RenderOpts{
 			FoldToolResultBody:        true,
 			CollapsedReadSearchActive: active,
+			GroupedAgentLookups:       m.groupedAgentLookups,
 		}
 	}
 	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptShowAll || m.transcriptDumpMode) {
-		return &messagerow.RenderOpts{ShowAllInTranscript: true}
+		return &messagerow.RenderOpts{
+			ShowAllInTranscript: true,
+			GroupedAgentLookups: m.groupedAgentLookups,
+		}
 	}
-	return nil
+	return &messagerow.RenderOpts{
+		GroupedAgentLookups: m.groupedAgentLookups,
+	}
 }
 
 func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string) int {

@@ -15,10 +15,16 @@ func TestSegments_groupedToolUse(t *testing.T) {
 		Content: []byte(`[{"type":"text","text":"Hi"}]`),
 	}
 	msg := types.Message{
-		Type:           types.MessageTypeGroupedToolUse,
-		UUID:           "g1",
-		ToolName:       "Read",
-		Messages:       []types.Message{{Type: types.MessageTypeAssistant, UUID: "m1"}},
+		Type:     types.MessageTypeGroupedToolUse,
+		UUID:     "g1",
+		ToolName: "Agent",
+		Messages: []types.Message{
+			{
+				Type:    types.MessageTypeAssistant,
+				UUID:    "m1",
+				Content: []byte(`[{"type":"tool_use","id":"123","input":{"name":"worker"}}]`),
+			},
+		},
 		Results:        []types.Message{{Type: types.MessageTypeUser, UUID: "r1"}},
 		DisplayMessage: &disp,
 	}
@@ -26,7 +32,7 @@ func TestSegments_groupedToolUse(t *testing.T) {
 	if len(segs) < 2 || segs[0].Kind != SegGroupedToolUse {
 		t.Fatalf("%+v", segs)
 	}
-	if !strings.Contains(segs[0].Text, "Read") {
+	if !strings.Contains(segs[0].Text, "Running 1 agents…") {
 		t.Fatal(segs[0].Text)
 	}
 }

@@ -4,7 +4,6 @@ package messagerow
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -55,6 +54,8 @@ type RenderOpts struct {
 	FoldToolResultBody bool
 	// CollapsedReadSearchActive is true only for the in-flight tail collapsed_read_search row (TS MessageRow isActiveCollapsedGroup).
 	CollapsedReadSearchActive bool
+	// GroupedAgentLookups provides resolved/error states for grouped_tool_use items.
+	GroupedAgentLookups *GroupedAgentLookups
 }
 
 // SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
@@ -85,25 +86,25 @@ func segmentsFromMessageDepthOpts(msg types.Message, depth int, opts *RenderOpts
 }
 
 func segmentsGroupedToolUse(msg types.Message, depth int, opts *RenderOpts) []Segment {
-	var sb strings.Builder
-	sb.WriteString("grouped_tool_use")
-	if msg.ToolName != "" {
-		sb.WriteString(" · ")
-		sb.WriteString(msg.ToolName)
-	}
-	sb.WriteString(fmt.Sprintf(" · %d assistant · %d results", len(msg.Messages), len(msg.Results)))
-	out := []Segment{{Kind: SegGroupedToolUse, Text: strings.TrimSpace(sb.String())}}
 	if opts != nil && opts.ShowAllInTranscript {
+		var out []Segment
+		out = append(out, Segment{Kind: SegGroupedToolUse, Text: "grouped_tool_use"})
 		for i := range msg.Messages {
 			out = append(out, segmentsFromMessageDepthOpts(msg.Messages[i], depth+1, opts)...)
 		}
 		for i := range msg.Results {
 			out = append(out, segmentsFromMessageDepthOpts(msg.Results[i], depth+1, opts)...)
 		}
-	} else if msg.DisplayMessage != nil {
-		out = append(out, segmentsFromMessageDepthOpts(*msg.DisplayMessage, depth+1, opts)...)
+		return out
 	}
-	return out
+	
+	// Format as multiple line segments or summary using FormatGroupedAgentToolUse
+	var lookups *GroupedAgentLookups
+	if opts != nil {
+		lookups = opts.GroupedAgentLookups
+	}
+	
+	return FormatGroupedAgentToolUse(msg, lookups)
 }
 
 func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts) []Segment {

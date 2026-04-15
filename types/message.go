@@ -41,6 +41,8 @@ type Message struct {
 	Content                   json.RawMessage `json:"content,omitempty"`
 	// Data is set for type "progress" (see ProgressMessage in TS).
 	Data json.RawMessage `json:"data,omitempty"`
+	// ParentToolUseID is used by progress messages to link back to their tool_use block.
+	ParentToolUseID *string `json:"parentToolUseID,omitempty"`
 	// Subtype / Level / Timestamp are used by system messages (informational, local_command, …).
 	Subtype   *string `json:"subtype,omitempty"`
 	Level     *string `json:"level,omitempty"`
@@ -51,6 +53,7 @@ type Message struct {
 	Messages       []Message `json:"messages,omitempty"`
 	Results        []Message `json:"results,omitempty"`
 	DisplayMessage *Message  `json:"displayMessage,omitempty"`
+	MessageID      *string   `json:"messageId,omitempty"`
 
 	// --- collapsed_read_search (CollapsedReadSearchGroup ∩ Message) ---
 	// Note: TS uses timestamp?: unknown; Message.Timestamp *string shares json "timestamp" when it is a string.

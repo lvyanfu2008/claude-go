@@ -10,6 +10,8 @@ type ScrollListOpts struct {
 	ShowAllInTranscript bool
 	// VirtualScrollEnabled is TS virtualScrollRuntimeGate (scrollRef present && !CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL).
 	VirtualScrollEnabled bool
+	// Verbose is TS verbose mode (skips grouping, renders tools as single blocks).
+	Verbose bool
 }
 
 // MessagesForScrollList returns UI-ordered messages for virtual scroll, search haystack,
@@ -24,5 +26,6 @@ func MessagesForScrollList(messages []types.Message, o ScrollListOpts) []types.M
 	work = FilterShouldShowUserMessage(work, o.TranscriptMode)
 	work = ReorderMessagesInUI(work)
 	work = maybeTranscriptTail(work, o.TranscriptMode, o.ShowAllInTranscript, o.VirtualScrollEnabled)
+	work = ApplyGrouping(work, o.Verbose)
 	return work
 }

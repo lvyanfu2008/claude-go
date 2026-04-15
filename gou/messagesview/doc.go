@@ -11,9 +11,10 @@
 //   - filter shouldShowUserMessage            → ShouldShowUserMessage
 //   - reorderMessagesInUI(…)                  → ReorderMessagesInUI
 //   - transcript && !showAll && !virtual gate → last N cap (see MaxTranscriptMessagesWithoutVirtualScroll)
+//   - applyGrouping(…)                        → ApplyGrouping
 //
 // Not ported here (still in stream/store/messagerow or future work):
-// normalizeMessages splitting, getMessagesAfterCompactBoundary, applyGrouping,
+// normalizeMessages splitting, getMessagesAfterCompactBoundary,
 // collapse* chains, brief-only filters, computeSliceStart for non-virtual
 // fullscreen cap, buildMessageLookups.
 package messagesview
