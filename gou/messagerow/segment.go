@@ -36,7 +36,9 @@ type Segment struct {
 	// Num is used when Kind == SegSkillListingAvailable (TS bold skillCount + " skills available").
 	Num int
 	// ToolUseID / ToolFacing / ToolParen / ToolHint mirror TS AssistantToolUseMessage + ⎿ hint row.
-	ToolUseID  string
+	ToolUseID string
+	// ToolUseIDs is set when SegToolUseSummaryLine merges consecutive Grep/Glob/Read tool_use blocks (ctrl+o hides only if all resolve).
+	ToolUseIDs []string
 	ToolFacing string
 	ToolParen  string
 	ToolHint   string
@@ -225,6 +227,39 @@ func compactJoin(ss []string, maxN, maxRunes int) string {
 	return compactJSON(s, maxRunes)
 }
 
+func toolUseBlockEligibleForSummaryLine(b types.MessageContentBlock, opts *RenderOpts) bool {
+	if strings.TrimSpace(b.Type) != "tool_use" {
+		return false
+	}
+	if VerboseToolOutputEnabled() {
+		return false
+	}
+	if opts != nil && opts.TranscriptMode {
+		return false
+	}
+	if !ToolUseSummaryLineEnabled() {
+		return false
+	}
+	switch strings.TrimSpace(b.Name) {
+	case "Grep", "Glob", "Read":
+		return true
+	default:
+		return false
+	}
+}
+
+func anyToolUseActiveForSummary(ids []string, opts *RenderOpts) bool {
+	if len(ids) == 0 {
+		return toolUseIsActiveForSummary("", opts)
+	}
+	for _, id := range ids {
+		if toolUseIsActiveForSummary(id, opts) {
+			return true
+		}
+	}
+	return false
+}
+
 func segmentsFromContentArray(msg types.Message, opts *RenderOpts) []Segment {
 	if len(msg.Content) == 0 {
 		if msg.Type == types.MessageTypeUser || msg.Type == types.MessageTypeAssistant {
@@ -240,8 +275,32 @@ func segmentsFromContentArray(msg types.Message, opts *RenderOpts) []Segment {
 		return []Segment{{Kind: SegTextMarkdown, Text: "[" + string(msg.Type) + "]"}}
 	}
 	var out []Segment
-	for _, b := range blocks {
+	i := 0
+	for i < len(blocks) {
+		b := blocks[i]
+		if toolUseBlockEligibleForSummaryLine(b, opts) {
+			searchCount, readCount := 0, 0
+			var ids []string
+			j := i
+			for j < len(blocks) && toolUseBlockEligibleForSummaryLine(blocks[j], opts) {
+				bj := blocks[j]
+				switch strings.TrimSpace(bj.Name) {
+				case "Grep", "Glob":
+					searchCount++
+				case "Read":
+					readCount++
+				}
+				ids = append(ids, bj.ID)
+				j++
+			}
+			isActive := anyToolUseActiveForSummary(ids, opts)
+			text := SearchReadSummaryText(isActive, searchCount, readCount, 0, 0, 0, 0, 0, 0, nil, nil, nil)
+			out = append(out, Segment{Kind: SegToolUseSummaryLine, Text: text, ToolUseIDs: ids})
+			i = j
+			continue
+		}
 		out = append(out, segmentFromBlock(b, opts)...)
+		i++
 	}
 	if len(out) == 0 && (msg.Type == types.MessageTypeAssistant || msg.Type == types.MessageTypeUser) {
 		// e.g. content: [{type:"text",text:""}] or only unrecognized blocks — avoid a blank body under the role header.

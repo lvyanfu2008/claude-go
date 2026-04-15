@@ -1952,6 +1952,20 @@ func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[
 	return false
 }
 
+// toolUseSummaryLineResolvedForDisplay is true when every merged tool_use id in a SegToolUseSummaryLine has a result (or resolved map entry).
+func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, seg messagerow.Segment, transcriptDetail bool) bool {
+	ids := seg.ToolUseIDs
+	if len(ids) == 0 {
+		return toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptDetail)
+	}
+	for _, id := range ids {
+		if !toolUseResolvedForDisplay(resolved, toolResultByID, id, transcriptDetail) {
+			return false
+		}
+	}
+	return true
+}
+
 // priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
 // One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
 func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
@@ -2112,7 +2126,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
 		case messagerow.SegToolUseSummaryLine:
 			line := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			if !toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptResolvedDetail) && toolUseCtrlOHint {
+			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, transcriptResolvedDetail) && toolUseCtrlOHint {
 				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 			}
 			parts = append(parts, line)
