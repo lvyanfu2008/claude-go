@@ -1430,7 +1430,9 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	var header string
 	if msg.Type != types.MessageTypeAttachment {
 		switch msg.Type {
-		case types.MessageTypeUser, types.MessageTypeAssistant:
+		case types.MessageTypeUser, types.MessageTypeAssistant,
+			types.MessageTypeCollapsedReadSearch, types.MessageTypeGroupedToolUse:
+			// Body-only like assistant — no "collapsed_read_search" / "grouped_tool_use" title row (TS MessageRow).
 		default:
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
@@ -1881,6 +1883,8 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 			// No "user" title row: "> " on the first body line only (withUserPromptPointerIfNeeded).
 		case types.MessageTypeAssistant:
 			// No "assistant" title row — body starts directly (⏺/● lead still from formatMessageSegments).
+		case types.MessageTypeCollapsedReadSearch, types.MessageTypeGroupedToolUse:
+			// Same as assistant — no raw type label (TS compact collapsed row).
 		default:
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}

@@ -138,7 +138,8 @@ func searchSummaryPart(isActive, firstInLine bool, searchCount int) string {
 }
 
 func readSummaryPart(isActive, firstInLine bool, readCount int) string {
-	verb := pickVerb(isActive, firstInLine, "Reading", "reading", "Read", "read")
+	// Past tense: capitalize "Read" in continuation clauses ("Searched for …, Read …") for readability.
+	verb := pickVerb(isActive, firstInLine, "Reading", "reading", "Read", "Read")
 	noun := "files"
 	if readCount == 1 {
 		noun = "file"

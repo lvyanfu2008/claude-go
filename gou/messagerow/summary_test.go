@@ -11,7 +11,7 @@ func TestSearchReadSummaryText_readOnly(t *testing.T) {
 
 func TestSearchReadSummaryText_searchAndRead(t *testing.T) {
 	got := SearchReadSummaryText(false, 1, 2, 0, 0, 0, 0, 0, 0, nil, nil, nil)
-	if got != "Searched for 1 pattern, read 2 files" {
+	if got != "Searched for 1 pattern, Read 2 files" {
 		t.Fatalf("got %q", got)
 	}
 }

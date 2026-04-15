@@ -57,8 +57,8 @@ func TestSegments_collapsedReadSearch(t *testing.T) {
 	if segs[0].Kind != SegCollapsedReadSearch {
 		t.Fatalf("%+v", segs[0])
 	}
-	// TS uses lowercase continuation verbs after the first clause ("searched for …, read …").
-	if !strings.Contains(segs[0].Text, "read 3 files") || !strings.Contains(segs[0].Text, "Searched for 1 pattern") {
+	// Past-tense read clause is capitalized after the comma for readability.
+	if !strings.Contains(segs[0].Text, "Read 3 files") || !strings.Contains(segs[0].Text, "Searched for 1 pattern") {
 		t.Fatalf("want TS-style summary (search then read), got %q", segs[0].Text)
 	}
 	if !strings.HasPrefix(segs[0].Text, "Searched for 1 pattern") {

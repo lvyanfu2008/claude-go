@@ -174,9 +174,7 @@ func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts)
 			out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + h})
 		}
 	}
-	if msg.DisplayMessage != nil {
-		out = append(out, segmentsFromMessageDepthOpts(*msg.DisplayMessage, depth+1, opts)...)
-	}
+	// TS CollapsedReadSearchContent non-verbose: one summary line + CtrlO + optional ⎿ hint — no replay of displayMessage.
 	return out
 }
 
