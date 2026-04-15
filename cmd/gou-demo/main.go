@@ -1451,7 +1451,8 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), m.uiScreen == gouDemoScreenTranscript)
+	// Resolved Read/Search ⎿ stats (Found N lines, read preview) match transcript; not transcript-screen-only.
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1903,7 +1904,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), m.uiScreen == gouDemoScreenTranscript)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1946,9 +1947,9 @@ func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 	return ok
 }
 
-// toolUseResolvedForDisplay treats a tool as resolved if it is in the resolved map, or (transcript only)
-// if we already have tool_result payload for that id — avoids stale resolved maps skipping ⏺+⎿ stats.
-func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, toolUseID string, transcriptDetail bool) bool {
+// toolUseResolvedForDisplay treats a tool as resolved if it is in the resolved map, or (when detail is on)
+// if tool_result payload exists for that id — avoids stale resolved maps skipping ⏺+⎿ stats.
+func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, toolUseID string, allowResultPayloadAsResolved bool) bool {
 	if toolUseID == "" {
 		return false
 	}
@@ -1957,7 +1958,7 @@ func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[
 			return true
 		}
 	}
-	if transcriptDetail && toolResultByID != nil {
+	if allowResultPayloadAsResolved && toolResultByID != nil {
 		raw, ok := toolResultByID[toolUseID]
 		if ok && len(raw) > 0 {
 			return true
@@ -1967,13 +1968,13 @@ func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[
 }
 
 // toolUseSummaryLineResolvedForDisplay is true when every merged tool_use id in a SegToolUseSummaryLine has a result (or resolved map entry).
-func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, seg messagerow.Segment, transcriptDetail bool) bool {
+func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, seg messagerow.Segment, allowResultPayloadAsResolved bool) bool {
 	ids := seg.ToolUseIDs
 	if len(ids) == 0 {
-		return toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptDetail)
+		return toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, allowResultPayloadAsResolved)
 	}
 	for _, id := range ids {
-		if !toolUseResolvedForDisplay(resolved, toolResultByID, id, transcriptDetail) {
+		if !toolUseResolvedForDisplay(resolved, toolResultByID, id, allowResultPayloadAsResolved) {
 			return false
 		}
 	}
@@ -1994,7 +1995,8 @@ func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
 // assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
 // searchHL applies transcript search highlight to visible plain substrings (TS useSearchHighlight).
-func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, transcriptResolvedDetail bool) string {
+// showResolvedToolStats enables ⎿ TranscriptResolvedHintExtra for resolved Search/Read when tool_result JSON is available (prompt + transcript).
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, showResolvedToolStats bool) string {
 	hlSt := transcriptSearchHLStyle()
 	withHL := func(s string) string {
 		if strings.TrimSpace(searchHL) == "" {
@@ -2029,8 +2031,8 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				var toolLines []string
 				toolLines = append(toolLines, row1)
-				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptResolvedDetail)
-				if transcriptResolvedDetail && res {
+				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, showResolvedToolStats)
+				if showResolvedToolStats && res {
 					var raw json.RawMessage
 					if toolResultByID != nil {
 						raw = toolResultByID[seg.ToolUseID]
@@ -2090,8 +2092,8 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				var toolLines []string
 				toolLines = append(toolLines, row1)
-				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, transcriptResolvedDetail)
-				if transcriptResolvedDetail && res {
+				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, showResolvedToolStats)
+				if showResolvedToolStats && res {
 					var raw json.RawMessage
 					if toolResultByID != nil {
 						raw = toolResultByID[seg.ToolUseID]
@@ -2140,7 +2142,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
 		case messagerow.SegToolUseSummaryLine:
 			line := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, transcriptResolvedDetail) && toolUseCtrlOHint {
+			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, showResolvedToolStats) && toolUseCtrlOHint {
 				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 			}
 			parts = append(parts, line)
