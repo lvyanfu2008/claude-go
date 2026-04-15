@@ -6,6 +6,8 @@ import (
 	"iter"
 	"os"
 	"strings"
+
+	"goc/ccb-engine/diaglog"
 )
 
 // CommandLifecycleNotifier mirrors notifyCommandLifecycle('completed', uuid) after queryLoop (query.ts tail).
@@ -137,14 +139,25 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			ModelID:        strings.TrimSpace(params.ToolUseContext.Options.MainLoopModel),
 		}
 		if useStream {
+			openAI := StreamingUsesOpenAIChat()
+			openAINoStream := openAI && OpenAIChatNoStreamEnabled()
+			var streamPath string
+			switch {
+			case openAINoStream:
+				streamPath = "openai chat/completions JSON (GOU_QUERY_OPENAI_CHAT_NO_STREAM)"
+			case openAI:
+				streamPath = "openai chat/completions SSE"
+			default:
+				streamPath = "anthropic messages SSE"
+			}
+			diaglog.Line("[query] streaming parity: %s (model=%s)", streamPath, strings.TrimSpace(in.ModelID))
 			var streamErr error
-			if StreamingUsesOpenAIChat() {
-				if OpenAIChatNoStreamEnabled() {
-					streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
-				} else {
-					streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
-				}
-			} else {
+			switch {
+			case openAINoStream:
+				streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+			case openAI:
+				streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+			default:
 				streamErr = runStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
 			}
 			if streamErr != nil {
