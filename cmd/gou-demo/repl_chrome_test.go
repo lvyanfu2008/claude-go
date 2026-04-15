@@ -135,6 +135,19 @@ func TestUserMessageHasPromptText(t *testing.T) {
 	}
 }
 
+func TestUserMessageHasPromptText_messageEnvelopeOnly(t *testing.T) {
+	// API-shaped row: Content empty, body in Message.{role,content} string (same as messagerow.NormalizeMessageJSON).
+	inner := `{"role":"user","content":"你好"}`
+	m := types.Message{Type: types.MessageTypeUser, Message: []byte(inner)}
+	if !userMessageHasPromptText(m) {
+		t.Fatal("expected true after normalizing Message envelope into Content")
+	}
+	out := withUserPromptPointerIfNeeded(m, "你好")
+	if !strings.Contains(out, UserPromptPointerGlyph()) {
+		t.Fatalf("expected > prefix on body line: %q", out)
+	}
+}
+
 func TestWithUserPromptPointerIfNeeded(t *testing.T) {
 	raw, _ := json.Marshal([]map[string]string{{"type": "text", "text": "hello"}})
 	m := types.Message{Type: types.MessageTypeUser, Content: raw}

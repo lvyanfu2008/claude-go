@@ -1703,7 +1703,11 @@ func (m *model) showToolUseCtrlOExpandHint() bool {
 }
 
 func userMessageHasPromptText(msg types.Message) bool {
-	if msg.Type != types.MessageTypeUser || len(msg.Content) == 0 {
+	if msg.Type != types.MessageTypeUser {
+		return false
+	}
+	msg = messagerow.NormalizeMessageJSON(msg)
+	if len(msg.Content) == 0 {
 		return false
 	}
 	var blocks []types.MessageContentBlock
