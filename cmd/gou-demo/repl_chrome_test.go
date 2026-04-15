@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"goc/gou/prompt"
 	"goc/types"
 )
 
@@ -116,7 +117,7 @@ func TestPermissionModeSymbolPlan(t *testing.T) {
 }
 
 func TestUserPromptPointerGlyph(t *testing.T) {
-	if UserPromptPointerGlyph() != "\u276f" {
+	if UserPromptPointerGlyph() != ">" {
 		t.Fatalf("pointer glyph")
 	}
 }
@@ -143,5 +144,17 @@ func TestWithUserPromptPointerIfNeeded(t *testing.T) {
 	}
 	if !strings.Contains(out, UserPromptPointerGlyph()) {
 		t.Fatalf("missing pointer: %q", out)
+	}
+}
+
+func TestUserInputViewWithPromptPrefix_firstLine(t *testing.T) {
+	m := &model{pr: prompt.New()}
+	m.pr.SetValue("hi")
+	v := userInputViewWithPromptPrefix(m)
+	if !strings.Contains(v, ">") || !strings.Contains(v, "hi") {
+		t.Fatalf("want > prefix on same line as text: %q", v)
+	}
+	if strings.HasPrefix(v, "hi") {
+		t.Fatalf("expected prefix before body: %q", v)
 	}
 }

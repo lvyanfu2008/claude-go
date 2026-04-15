@@ -16,9 +16,9 @@ const (
 	oscST = "\x1b\\" // OSC string terminator (Kitty; TS uses ST instead of BEL)
 )
 
-// UserPromptPointerGlyph matches npm figures.pointer in HighlightedThinkingText.tsx (user prompt line).
+// UserPromptPointerGlyph is the character before user-authored text in the message list and input area (same line, one space after).
 func UserPromptPointerGlyph() string {
-	return "\u276f" // HEAVY RIGHT-POINTING ANGLE BRACKET ORNAMENT
+	return ">"
 }
 
 // gouDemoTerminalTitleDisabled mirrors CLAUDE_CODE_DISABLE_TERMINAL_TITLE in REPL.tsx.

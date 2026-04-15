@@ -13,6 +13,8 @@ func (m *model) handleUpdateWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cm
 	m.height = msg.Height
 	m.cols = max(12, msg.Width-4)
 	_ = m.pr.Update(msg)
+	// Reserve two columns for the "> " prefix on the first line of the multiline input (see userInputViewWithPromptPrefix).
+	m.pr.SetWidth(max(8, m.cols-2))
 	if m.uiScreen == gouDemoScreenTranscript && oldCols > 0 && oldCols != m.cols {
 		m.clearTranscriptSearchState()
 	}

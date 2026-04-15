@@ -172,13 +172,13 @@ func setupGouDemoTrace() (cleanup func()) {
 			return func() {}
 		}
 		debugpath.MaybeUpdateLatestSymlink(p)
+		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
 		lp := debugpath.LatestLinkPathFor(p)
 		if lp != "" {
-			fmt.Fprintf(os.Stderr, "[gou-demo] trace -> %s points to %s (TTY: stderr+TUI garbles; or GOU_DEMO_LOG_FILE=...)\n", lp, p)
+			gouDemoTrace.Printf("trace -> %s points to %s (TTY: stderr+TUI garbles; or GOU_DEMO_LOG_FILE=...)", lp, p)
 		} else {
-			fmt.Fprintf(os.Stderr, "[gou-demo] trace -> %s (TTY: stderr+TUI garbles output; use this file or GOU_DEMO_LOG_FILE=...)\n", p)
+			gouDemoTrace.Printf("trace -> %s (TTY: stderr+TUI garbles output; use this file or GOU_DEMO_LOG_FILE=...)", p)
 		}
-		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
 		return func() { _ = f.Close() }
 	}
 	gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
@@ -454,14 +454,12 @@ func (m *model) promptBottomStreamRows() []string {
 		out := append([]string{row0, row1}, tailLines...)
 		return padStreamRows(out, h)
 	}
-	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
-	var streamBody string
-	if m.store.StreamingText != "" {
-		toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-		streamBody = styleMarkdownTokens(toks, m.cols)
-	} else {
-		streamBody = lipgloss.NewStyle().Faint(true).Render("(idle)")
+	if strings.TrimSpace(m.store.StreamingText) == "" {
+		return padStreamRows(nil, h)
 	}
+	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
+	toks := markdown.CachedLexerStreaming(m.store.StreamingText)
+	streamBody := styleMarkdownTokens(toks, m.cols)
 	streamWrapped := layout.WrapForViewport(streamLabel+streamBody, w)
 	streamRows := strings.Split(streamWrapped, "\n")
 	return padStreamRows(streamRows, h)
@@ -1665,7 +1663,7 @@ func (m *model) View() string {
 			b.WriteString(s)
 			b.WriteByte('\n')
 		}
-		promptView := m.pr.View()
+		promptView := userInputViewWithPromptPrefix(m)
 		hintText := strings.TrimSpace(replChromeFooterHint(narrow))
 		frag := strings.TrimSpace(replChromePermissionFragment(m.permissionMode, narrow))
 		var hintLine string
@@ -1755,12 +1753,28 @@ func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	return userMessageIsOmittableToolResultStub(msg)
 }
 
-// withUserPromptPointerIfNeeded prepends TS HighlightedThinkingText-style figures.pointer before the first body line.
+func userPromptPrefixStyled() string {
+	return lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted()).Render(UserPromptPointerGlyph() + " ")
+}
+
+// userInputViewWithPromptPrefix prepends the same dim "> " as user rows on the first line of the bottom input.
+func userInputViewWithPromptPrefix(m *model) string {
+	v := m.pr.View()
+	prefix := userPromptPrefixStyled()
+	lines := strings.Split(v, "\n")
+	if len(lines) == 0 {
+		return prefix
+	}
+	lines[0] = prefix + lines[0]
+	return strings.Join(lines, "\n")
+}
+
+// withUserPromptPointerIfNeeded prepends dim "> " before the first body line of user messages (same line as text).
 func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 	if msg.Type != types.MessageTypeUser || !userMessageHasPromptText(msg) || body == "" {
 		return body
 	}
-	prefix := lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted()).Render(UserPromptPointerGlyph() + " ")
+	prefix := userPromptPrefixStyled()
 	lines := strings.Split(body, "\n")
 	if len(lines) == 0 {
 		return prefix
