@@ -105,6 +105,63 @@ func TestRecordTranscript_incrementalAndParent(t *testing.T) {
 	}
 }
 
+// TestRecordTranscript_streamingPrefixParity mirrors TS QueryEngine recordTranscript(messages):
+// pass the full turn prefix (already-recorded user + new assistant) with no StartingParentUUID;
+// dedup advances startingParent so the new assistant row gets parentUuid.
+func TestRecordTranscript_streamingPrefixParity(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prefix.jsonl")
+	st := &Store{
+		SessionID:      "11111111-2222-3333-4444-555555555555",
+		OriginalCwd:    "/proj/foo",
+		ConfigHome:     filepath.Join(dir, "claude"),
+		Cwd:            "/proj/foo",
+		UserType:       "external",
+		TranscriptFile: path,
+	}
+	u1 := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	u2 := "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+	m1 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    u1,
+		Message: json.RawMessage(`{"role":"user","content":"hello"}`),
+	}
+	m2 := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    u2,
+		Message: json.RawMessage(`{"role":"assistant","content":"yo"}`),
+	}
+	if _, err := st.RecordTranscript(context.Background(), []types.Message{m1}, RecordOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.RecordTranscript(context.Background(), []types.Message{m1, m2}, RecordOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var assistantRow map[string]any
+	for i := len(lines) - 1; i >= 0; i-- {
+		var row map[string]any
+		if err := json.Unmarshal([]byte(lines[i]), &row); err != nil {
+			continue
+		}
+		if row["type"] == "assistant" {
+			assistantRow = row
+			break
+		}
+	}
+	if assistantRow == nil {
+		t.Fatalf("no assistant row in %v", lines)
+	}
+	if assistantRow["parentUuid"] != u1 {
+		t.Fatalf("assistant parentUuid: %#v want %q", assistantRow["parentUuid"], u1)
+	}
+}
+
 func countJSONLType(t *testing.T, path, wantType string) int {
 	t.Helper()
 	raw, err := os.ReadFile(path)

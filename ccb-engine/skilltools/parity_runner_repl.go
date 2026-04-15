@@ -59,7 +59,7 @@ func (in *replToolInput) normalizedSteps() []replStep {
 
 // runREPLTool executes one or more REPL_ONLY primitives (TS: inside REPL VM).
 // Input shapes: {"tool":"Read","input":{...}} or {"batch":[{"name":"Read","input":{...}}, ...]}.
-func (r ParityToolRunner) runREPLTool(ctx context.Context, toolUseID string, input json.RawMessage) (string, bool, error) {
+func (r *ParityToolRunner) runREPLTool(ctx context.Context, toolUseID string, input json.RawMessage) (string, bool, error) {
 	var in replToolInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", true, err

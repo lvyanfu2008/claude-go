@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"goc/anthropicmessages"
 	"goc/ccb-engine/apilog"
+	"goc/ccb-engine/diaglog"
 	"goc/ccb-engine/toolsearchwire"
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
@@ -32,6 +34,7 @@ func runOpenAINonStreamingParityModelLoop(
 	if deps == nil {
 		return fmt.Errorf("query: nil deps")
 	}
+	logOpenAINonStreamWorkIfEnabled("runOpenAINonStreamingParityModelLoop(work)", work)
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if apiKey == "" {
 		return fmt.Errorf("query openai non-stream: set OPENAI_API_KEY")
@@ -49,7 +52,7 @@ func runOpenAINonStreamingParityModelLoop(
 	cur := append([]types.Message(nil), work...)
 
 	for round := 0; round < maxRounds; round++ {
-		msgsJSON, err := ccbhydrate.MessagesJSONNormalized(cur, nil, messagesapi.DefaultOptions())
+		msgsJSON, err := ccbhydrate.MessagesJSONNormalized(cur, nil, messagesapi.OptionsFromEnv())
 		if err != nil {
 			return err
 		}
@@ -194,4 +197,26 @@ func runOpenAINonStreamingParityModelLoop(
 		cur = append(cur, toolMsgs...)
 	}
 	return fmt.Errorf("openai non-stream parity: max rounds %d exceeded", maxRounds)
+}
+
+// logOpenAINonStreamWorkIfEnabled writes work (initial [types.Message] slice from queryLoop) as one line to the
+// Claude diagnostic log ([diaglog.Line]: CLAUDE_CODE_DIAG_LOG_FILE or debug log path; or stderr when CCB_ENGINE_DIAG_TO_STDERR=1)
+// when GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK is truthy (1/true/yes/on). Payload truncated after 32KiB like other diag JSON lines.
+func logOpenAINonStreamWorkIfEnabled(tag string, work []types.Message) {
+	if !envTruthy("GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK") {
+		return
+	}
+	const maxJSON = 32 << 10
+	raw, err := json.Marshal(work)
+	if err != nil {
+		diaglog.Line("[query openai non-stream work %s] json.Marshal err=%v len=%d", tag, err, len(work))
+		return
+	}
+	s := string(raw)
+	trunc := ""
+	if len(s) > maxJSON {
+		s = s[:maxJSON]
+		trunc = fmt.Sprintf(" [truncated from %d bytes]", len(raw))
+	}
+	diaglog.Line("[query openai non-stream work %s] count=%d json=%s%s", tag, len(work), s, trunc)
 }

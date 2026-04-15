@@ -28,7 +28,7 @@ func TestRunToolUseChan_replWithParityRunnerInGouDemoStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner := skilltools.ParityToolRunner{
+	runner := &skilltools.ParityToolRunner{
 		DemoToolRunner:   skilltools.DemoToolRunner{},
 		WorkDir:          dir,
 		LocalBashDefault: true,

@@ -24,7 +24,8 @@
 //     [runOpenAINonStreamingParityModelLoop]: one non-streaming JSON response per round, replayed
 //     through [ReplayOpenAINonStreamChatResponse] into the same accumulator path (no SSE).
 //   - Debug: GOU_QUERY_LOG_USER_CONTEXT=1 logs [QueryParams.UserContext] JSON to stderr before [PrependUserContext]
-//     (see [LogQueryUserContextIfEnabled]).
+//     (see [LogQueryUserContextIfEnabled]). GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK=1 logs the initial work slice
+//     JSON via [ccb-engine/diaglog.Line] at the start of [runOpenAINonStreamingParityModelLoop] (truncated at 32KiB).
 //   - [QueryParams.CanUseTool] is [toolexecution.QueryCanUseToolFn] ([toolexecution.PermissionDecision] + error); [NewStreamingToolExecutor]
 //     receives it so [streamingtool.StreamingToolExecutor]'s canUseTool path matches TS wiring.
 //   - After [runAutocompact], [applyAutocompactSideEffects] applies [AutocompactResult.UpdatedTracking] /

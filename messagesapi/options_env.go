@@ -67,5 +67,9 @@ func OptionsFromEnv() Options {
 	} else {
 		o.ToolSearchEnabled = tstenv.ToolSearchEnabledOptimistic()
 	}
+	// ChairSermon mirrors tengu_chair_sermon: final mergeAdjacentUserMessages + smooshSystemReminderSiblings
+	// (see messages.ts normalizeMessagesForAPI tail). Default on when unset so multi-round tool loops
+	// and orphan-thinking drops do not leave split user rows vs TS; opt out with CLAUDE_CODE_GO_CHAIR_SERMON=0|false|no|off.
+	o.ChairSermon = !envDefinedFalsy("CLAUDE_CODE_GO_CHAIR_SERMON")
 	return o
 }

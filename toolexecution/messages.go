@@ -18,14 +18,6 @@ func randomUUID(deps ExecutionDeps) string {
 	return hex.EncodeToString(b[:])
 }
 
-func mustJSONString(s string) []byte {
-	b, err := json.Marshal(s)
-	if err != nil {
-		return []byte(`""`)
-	}
-	return b
-}
-
 // CreateUserMessage mirrors createUserMessage from src/utils/messages.ts for synthetic tool_result rows.
 func CreateUserMessage(deps ExecutionDeps, content []map[string]any, toolUseResult, sourceAssistantUUID string) types.Message {
 	inner, err := json.Marshal(map[string]any{"role": "user", "content": content})
@@ -37,7 +29,7 @@ func CreateUserMessage(deps ExecutionDeps, content []map[string]any, toolUseResu
 		Type:                    types.MessageTypeUser,
 		UUID:                    randomUUID(deps),
 		Message:                 inner,
-		ToolUseResult:           json.RawMessage(mustJSONString(toolUseResult)),
+		ToolUseResult:           types.ToolUseResultJSONBytes(toolUseResult),
 		SourceToolAssistantUUID: &src,
 	}
 }

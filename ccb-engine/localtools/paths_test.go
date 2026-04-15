@@ -1,6 +1,7 @@
 package localtools
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,11 +42,15 @@ func TestReadFromJSON_lineSlice(t *testing.T) {
 	}
 	roots := []string{dir}
 	raw := []byte(`{"file_path":"f.txt","offset":2,"limit":2}`)
-	s, isErr, err := ReadFromJSON(raw, roots)
+	s, isErr, err := ReadFromJSON(raw, roots, NewReadFileState(), nil)
 	if err != nil || isErr {
 		t.Fatalf("err=%v isErr=%v", err, isErr)
 	}
-	if s != "b\nc" {
-		t.Fatalf("got %q", s)
+	var got ReadTextOutput
+	if err := json.Unmarshal([]byte(s), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != "text" || got.File.Content != "b\nc" || got.File.StartLine != 2 || got.File.NumLines != 2 {
+		t.Fatalf("got %+v / raw %q", got, s)
 	}
 }

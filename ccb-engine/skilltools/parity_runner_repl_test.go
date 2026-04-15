@@ -21,7 +21,7 @@ func TestParityToolRunner_REPL_singleRead(t *testing.T) {
 			"file_path": p,
 		},
 	})
-	r := ParityToolRunner{DemoToolRunner: DemoToolRunner{}, WorkDir: dir, LocalBashDefault: true}
+	r := &ParityToolRunner{DemoToolRunner: DemoToolRunner{}, WorkDir: dir, LocalBashDefault: true}
 	out, isErr, err := r.Run(context.Background(), "REPL", "repl-1", raw)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestParityToolRunner_REPL_rejectsOuterSkill(t *testing.T) {
 		"tool":  "Skill",
 		"input": map[string]any{"skill": "x"},
 	})
-	r := ParityToolRunner{DemoToolRunner: DemoToolRunner{}, WorkDir: dir, LocalBashDefault: true}
+	r := &ParityToolRunner{DemoToolRunner: DemoToolRunner{}, WorkDir: dir, LocalBashDefault: true}
 	_, _, err := r.Run(context.Background(), "REPL", "repl-2", raw)
 	if err == nil {
 		t.Fatal("expected error for Skill inside REPL")
@@ -59,7 +59,7 @@ func TestParityToolRunner_REPL_batch(t *testing.T) {
 			{"name": "Read", "input": map[string]any{"file_path": p}},
 		},
 	})
-	r := ParityToolRunner{DemoToolRunner: DemoToolRunner{}, WorkDir: dir, LocalBashDefault: true}
+	r := &ParityToolRunner{DemoToolRunner: DemoToolRunner{}, WorkDir: dir, LocalBashDefault: true}
 	out, isErr, err := r.Run(context.Background(), "REPL", "repl-3", raw)
 	if err != nil || isErr {
 		t.Fatalf("err=%v isErr=%v out=%q", err, isErr, out)

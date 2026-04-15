@@ -72,7 +72,7 @@ func runStreamingParityModelLoop(
 	cur := append([]types.Message(nil), work...)
 
 	for round := 0; round < maxRounds; round++ {
-		msgsJSON, err := ccbhydrate.MessagesJSONNormalized(cur, nil, messagesapi.DefaultOptions())
+		msgsJSON, err := ccbhydrate.MessagesJSONNormalized(cur, nil, messagesapi.OptionsFromEnv())
 		if err != nil {
 			return err
 		}

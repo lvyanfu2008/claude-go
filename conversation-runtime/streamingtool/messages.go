@@ -36,15 +36,7 @@ func createUserMessage(content []map[string]any, toolUseResult string, sourceAss
 		Type:                    types.MessageTypeUser,
 		UUID:                    randomUUID(),
 		Message:                 inner,
-		ToolUseResult:           json.RawMessage(mustJSONString(toolUseResult)),
+		ToolUseResult:           types.ToolUseResultJSONBytes(toolUseResult),
 		SourceToolAssistantUUID: &src,
 	}
-}
-
-func mustJSONString(s string) []byte {
-	b, err := json.Marshal(s)
-	if err != nil {
-		return []byte(`""`)
-	}
-	return b
 }

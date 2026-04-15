@@ -101,15 +101,7 @@ func toolResultUserMessage(toolUseID, errText, assistantUUID string) (types.Mess
 		Type:                    types.MessageTypeUser,
 		UUID:                    randomUUID(),
 		Message:                 inner,
-		ToolUseResult:           json.RawMessage(mustStringJSON(errText)),
+		ToolUseResult:           types.ToolUseResultJSONBytes(errText),
 		SourceToolAssistantUUID: &src,
 	}, nil
-}
-
-func mustStringJSON(s string) []byte {
-	b, err := json.Marshal(s)
-	if err != nil {
-		return []byte(`""`)
-	}
-	return b
 }
