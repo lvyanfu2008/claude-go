@@ -47,6 +47,9 @@ type Message struct {
 	Subtype   *string `json:"subtype,omitempty"`
 	Level     *string `json:"level,omitempty"`
 	Timestamp *string `json:"timestamp,omitempty"`
+	// SystemStopHookSummaryMessage (TS): subtype stop_hook_summary, hookLabel, hookCount, hookInfos, totalDurationMs.
+	HookLabel       *string `json:"hookLabel,omitempty"`
+	TotalDurationMs *int64  `json:"totalDurationMs,omitempty"`
 
 	// --- grouped_tool_use (GroupedToolUseMessage ∩ Message, message.ts) ---
 	ToolName       string    `json:"toolName,omitempty"`

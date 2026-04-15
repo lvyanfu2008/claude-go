@@ -36,6 +36,26 @@ func TestCollapseReadSearchGroupsInList_twoPairs(t *testing.T) {
 	}
 }
 
+func TestCollapseReadSearchGroupsInList_thinkingDeferredAfterCollapsed(t *testing.T) {
+	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
+	thinkingRaw, _ := json.Marshal([]map[string]any{{"type": "thinking", "thinking": "..."}})
+	msgs := []types.Message{
+		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
+		{Type: types.MessageTypeAssistant, UUID: "think", Content: thinkingRaw},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
+	}
+	got := CollapseReadSearchGroupsInList(msgs)
+	if len(got) != 2 {
+		t.Fatalf("len=%d want collapsed + deferred thinking", len(got))
+	}
+	if got[0].Type != types.MessageTypeCollapsedReadSearch {
+		t.Fatalf("first type=%s", got[0].Type)
+	}
+	if got[1].UUID != "think" {
+		t.Fatalf("second should be deferred thinking, got %+v", got[1])
+	}
+}
+
 func TestCollapseReadSearchGroupsInList_prefixUnchanged(t *testing.T) {
 	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	textRaw, _ := json.Marshal([]map[string]string{{"type": "text", "text": "hi"}})
