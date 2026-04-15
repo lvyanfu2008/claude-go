@@ -208,7 +208,7 @@ func ActivitySegmentForToolBlock(b types.MessageContentBlock, kind SegmentKind, 
 		}
 		return []Segment{{Kind: kind, Text: formatNamedTool(k, b.Name, b.ID, b.Input)}}
 	}
-	if ToolUseSummaryLineEnabled() && kind == SegToolUse {
+	if !(opts != nil && opts.TranscriptMode) && ToolUseSummaryLineEnabled() && kind == SegToolUse {
 		if sl := grepGlobReadSummaryLine(b.Name, toolUseIsActiveForSummary(b.ID, opts)); sl != "" {
 			return []Segment{{Kind: SegToolUseSummaryLine, Text: sl, ToolUseID: b.ID}}
 		}

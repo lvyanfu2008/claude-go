@@ -62,6 +62,8 @@ type RenderOpts struct {
 	GroupedAgentLookups *GroupedAgentLookups
 	// ResolvedToolUseIDs is tool_use_id values that already have a user tool_result (for summary-line active/past tense).
 	ResolvedToolUseIDs map[string]struct{}
+	// TranscriptMode is gou-demo transcript screen (ctrl+o): omit ctrl+o hint on collapsed_read_search; prefer full tool chrome over one-line summary.
+	TranscriptMode bool
 }
 
 // SegmentsFromMessage handles message.type + content[] blocks (TS RenderableMessage / MessageRow displayMsg).
@@ -156,6 +158,9 @@ func segmentsCollapsedReadSearch(msg types.Message, depth int, opts *RenderOpts)
 		summary = "…"
 	}
 	line := summary + CtrlOToExpandHint
+	if opts != nil && opts.TranscriptMode {
+		line = summary
+	}
 	out := []Segment{{Kind: SegCollapsedReadSearch, Text: line}}
 	// TS CollapsedReadSearchContent: ⎿ + latestDisplayHint only when isActiveGroup.
 	if isActive && msg.LatestDisplayHint != nil {
@@ -181,6 +186,9 @@ func segmentsCollapsedReadSearchVerbose(msg types.Message, depth int, opts *Rend
 		summary = "…"
 	}
 	line := summary + CtrlOToExpandHint
+	if opts != nil && opts.TranscriptMode {
+		line = summary
+	}
 	out := []Segment{{Kind: SegCollapsedReadSearch, Text: line}}
 	if isActive && msg.LatestDisplayHint != nil {
 		h := strings.TrimSpace(*msg.LatestDisplayHint)

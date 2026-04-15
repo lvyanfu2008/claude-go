@@ -53,6 +53,17 @@ func TestActivitySegmentForToolBlock_grepSummaryLine(t *testing.T) {
 	}
 }
 
+func TestActivitySegmentForToolBlock_transcriptModeUsesFullChrome(t *testing.T) {
+	t.Setenv("GOU_DEMO_VERBOSE_TOOL_OUTPUT", "")
+	t.Setenv("GOU_DEMO_TOOL_USE_SUMMARY_LINE", "1")
+	raw, _ := json.Marshal(map[string]any{"pattern": "x", "path": "/p"})
+	b := types.MessageContentBlock{Type: "tool_use", Name: "Grep", ID: "tu1", Input: raw}
+	segs := ActivitySegmentForToolBlock(b, SegToolUse, &RenderOpts{TranscriptMode: true})
+	if len(segs) != 1 || segs[0].Kind != SegToolUse || segs[0].ToolFacing != "Search" {
+		t.Fatalf("%+v", segs)
+	}
+}
+
 func TestActivitySegmentForToolBlock_grepSummaryLineResolved(t *testing.T) {
 	t.Setenv("GOU_DEMO_VERBOSE_TOOL_OUTPUT", "")
 	t.Setenv("GOU_DEMO_TOOL_USE_SUMMARY_LINE", "1")

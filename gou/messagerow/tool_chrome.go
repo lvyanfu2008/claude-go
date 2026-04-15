@@ -24,8 +24,8 @@ func ToolChromeParts(toolName string, input json.RawMessage) (facing, paren, hin
 		if fp == "" {
 			return "Read", "", ""
 		}
-		d := DisplayPathForActivity(fp)
-		return "Read", d, d
+		paren, hint := readParenAndHintForReadInput(m)
+		return "Read", paren, hint
 	case "Grep":
 		pat := strFromMap(m, "pattern")
 		if pat == "" {
@@ -132,6 +132,60 @@ func commandAsHintBody(command string) string {
 		out = string([]rune(out)[:maxCommandHintChars-1]) + "…"
 	}
 	return out
+}
+
+// readParenAndHintForReadInput mirrors TS FileReadTool/UI.tsx renderToolUseMessage (display path + optional · lines / pages).
+func readParenAndHintForReadInput(m map[string]any) (paren, hint string) {
+	fp := strFromMap(m, "file_path")
+	if fp == "" {
+		return "", ""
+	}
+	d := DisplayPathForActivity(fp)
+	hint = d
+	pages := strFromMap(m, "pages")
+	if pages != "" {
+		return d + " · pages " + pages, hint
+	}
+	off, hasOff := intFromMapAny(m, "offset")
+	lim, hasLim := intFromMapAny(m, "limit")
+	if !hasOff && !hasLim {
+		return d, hint
+	}
+	startLine := 1
+	if hasOff && off > 0 {
+		startLine = off
+	}
+	if hasLim && lim > 0 {
+		endLine := startLine + lim - 1
+		return fmt.Sprintf("%s · lines %d-%d", d, startLine, endLine), hint
+	}
+	return fmt.Sprintf("%s · from line %d", d, startLine), hint
+}
+
+func intFromMapAny(m map[string]any, key string) (int, bool) {
+	if m == nil {
+		return 0, false
+	}
+	v, ok := m[key]
+	if !ok || v == nil {
+		return 0, false
+	}
+	switch t := v.(type) {
+	case float64:
+		return int(t), true
+	case int:
+		return t, true
+	case int64:
+		return int(t), true
+	case json.Number:
+		i, err := t.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(i), true
+	default:
+		return 0, false
+	}
 }
 
 // CollectResolvedToolUseIDs returns tool_use_id values that already have a user tool_result (TS lookups.resolvedToolUseIDs).

@@ -1403,6 +1403,7 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 			GroupedAgentLookups:        m.groupedAgentLookups,
 			VerboseCollapsedReadSearch: true,
 			ResolvedToolUseIDs:         m.resolvedToolIDs,
+			TranscriptMode:               true,
 		}
 		if m.transcriptShowAll || m.transcriptDumpMode {
 			ro.ShowAllInTranscript = true
@@ -1431,7 +1432,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), m.uiScreen == gouDemoScreenTranscript)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1872,7 +1873,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), m.uiScreen == gouDemoScreenTranscript)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1929,7 +1930,7 @@ func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
 // assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
 // searchHL applies transcript search highlight to visible plain substrings (TS useSearchHighlight).
-func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string) string {
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, transcriptResolvedDetail bool) string {
 	hlSt := transcriptSearchHLStyle()
 	withHL := func(s string) string {
 		if strings.TrimSpace(searchHL) == "" {
@@ -1964,7 +1965,20 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				var toolLines []string
 				toolLines = append(toolLines, row1)
-				if !toolUseResolved(resolved, seg.ToolUseID) {
+				res := toolUseResolved(resolved, seg.ToolUseID)
+				if transcriptResolvedDetail && res {
+					var raw json.RawMessage
+					if toolResultByID != nil {
+						raw = toolResultByID[seg.ToolUseID]
+					}
+					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
+					if hint != "" {
+						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
+						if extra != "" {
+							toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
+						}
+					}
+				} else if !res {
 					if act := strings.TrimSpace(seg.Text); act != "" {
 						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(withHL(act) + "…")
 						if toolUseCtrlOHint {
@@ -2012,7 +2026,20 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				var toolLines []string
 				toolLines = append(toolLines, row1)
-				if !toolUseResolved(resolved, seg.ToolUseID) {
+				res := toolUseResolved(resolved, seg.ToolUseID)
+				if transcriptResolvedDetail && res {
+					var raw json.RawMessage
+					if toolResultByID != nil {
+						raw = toolResultByID[seg.ToolUseID]
+					}
+					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
+					if hint != "" {
+						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
+						if extra != "" {
+							toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
+						}
+					}
+				} else if !res {
 					if act := strings.TrimSpace(seg.Text); act != "" {
 						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(withHL(act) + "…")
 						if toolUseCtrlOHint {

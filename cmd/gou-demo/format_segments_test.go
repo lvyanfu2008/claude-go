@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestFormatMessageSegments_singleLeadGlyphAfterAssistantText(t *testing.T) {
 		{Kind: messagerow.SegTextMarkdown, Text: "我来查看一下项目结构和主要业务。"},
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "README.md", ToolHint: "README.md", Text: "Reading README", ToolUseID: "call_x"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "")
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
 	if n := countToolLeadGlyphs(out); n != 1 {
 		t.Fatalf("want exactly one ⏺/● lead (on assistant text only), got %d in:\n%s", n, out)
 	}
@@ -35,7 +36,7 @@ func TestFormatMessageSegments_leadGlyphOnToolWhenNoPriorText(t *testing.T) {
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "README.md", ToolHint: "README.md", Text: "Reading README", ToolUseID: "call_y"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "")
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
 	if n := countToolLeadGlyphs(out); n < 1 {
 		t.Fatalf("tool-only message should keep lead on tool row, got %d in:\n%s", n, out)
 	}
@@ -48,7 +49,7 @@ func TestFormatMessageSegments_searchHighlightInsertsANSI(t *testing.T) {
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, Text: "alpha BETA gamma", ToolUseID: "id1"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "beta")
+	out := formatMessageSegments(segs, 80, true, nil, true, "beta", nil, false)
 	if !strings.Contains(out, "BETA") && !strings.Contains(out, "beta") {
 		t.Fatalf("expected original casing preserved in visible text: %q", out)
 	}
@@ -61,8 +62,8 @@ func TestFormatMessageSegments_searchHighlightEmptyNeedleNoExtraFromHL(t *testin
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, Text: "plain tool title", ToolUseID: "id2"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "")
-	outHL := formatMessageSegments(segs, 80, true, nil, true, "   ")
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
+	outHL := formatMessageSegments(segs, 80, true, nil, true, "   ", nil, false)
 	if out != outHL {
 		t.Fatalf("whitespace-only searchHL should behave like no highlight: %q vs %q", out, outHL)
 	}
@@ -74,12 +75,41 @@ func TestFormatMessageSegments_resolvedToolOmitsActivityAndHint(t *testing.T) {
 		{Kind: messagerow.SegTextMarkdown, Text: "hello"},
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "a.md", ToolHint: "a.md", Text: "Reading a", ToolUseID: "call_z"},
 	}
-	out := formatMessageSegments(segs, 80, true, resolved, true, "")
+	out := formatMessageSegments(segs, 80, true, resolved, true, "", nil, false)
 	if strings.Contains(out, "⎿") {
 		t.Fatalf("resolved tool should not render ⎿ row, got:\n%s", out)
 	}
 	if strings.Contains(out, "Reading") {
 		t.Fatalf("resolved tool should not render activity line, got:\n%s", out)
+	}
+}
+
+func TestFormatMessageSegments_transcriptResolvedReadShowsResultSummary(t *testing.T) {
+	resultJSON := json.RawMessage(`{"type":"text","file":{"filePath":"/x.go","content":"x","numLines":30,"startLine":1,"totalLines":100}}`)
+	byID := map[string]json.RawMessage{"t1": resultJSON}
+	resolved := map[string]struct{}{"t1": {}}
+	segs := []messagerow.Segment{
+		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "x.go · lines 1-30", ToolHint: "x.go", Text: "Reading x.go", ToolUseID: "t1"},
+	}
+	out := formatMessageSegments(segs, 80, false, resolved, true, "", byID, true)
+	if !strings.Contains(out, "⎿") || !strings.Contains(out, "Read 30 lines") {
+		t.Fatalf("want ⎿ Read 30 lines, got:\n%s", out)
+	}
+}
+
+func TestFormatMessageSegments_transcriptResolvedGrepShowsMatchLine(t *testing.T) {
+	resultJSON := json.RawMessage(`{"mode":"content","numFiles":0,"filenames":[],"content":"conversation-runtime/query/openai_provider.go:14:func UseOpenAIChatProvider() bool {","numLines":1}`)
+	byID := map[string]json.RawMessage{"g1": resultJSON}
+	resolved := map[string]struct{}{"g1": {}}
+	segs := []messagerow.Segment{
+		{Kind: messagerow.SegToolUse, ToolFacing: "Search", ToolParen: `pattern: "func UseOpenAIChatProvider"`, ToolHint: `"func`, ToolUseID: "g1", Text: "Searching"},
+	}
+	out := formatMessageSegments(segs, 80, false, resolved, true, "", byID, true)
+	if !strings.Contains(out, "Found 1 line") {
+		t.Fatalf("want Found 1 line, got:\n%s", out)
+	}
+	if !strings.Contains(out, "openai_provider.go:14") {
+		t.Fatalf("want match preview line, got:\n%s", out)
 	}
 }
 

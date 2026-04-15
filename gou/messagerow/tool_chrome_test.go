@@ -16,6 +16,24 @@ func TestToolChromeParts_grep(t *testing.T) {
 	}
 }
 
+func TestToolChromeParts_readLinesRange(t *testing.T) {
+	raw, _ := json.Marshal(map[string]any{
+		"file_path": "/Users/lvyanfu/Work/claude/claude-go/conversation-runtime/query/streaming_parity_test.go",
+		"offset":    1,
+		"limit":     30,
+	})
+	f, p, h := ToolChromeParts("Read", raw)
+	if f != "Read" {
+		t.Fatalf("f=%q", f)
+	}
+	if !strings.Contains(p, "· lines 1-30") {
+		t.Fatalf("paren=%q want · lines 1-30", p)
+	}
+	if h == "" {
+		t.Fatal("want hint path")
+	}
+}
+
 func TestCollectResolvedToolUseIDs(t *testing.T) {
 	u, _ := json.Marshal([]map[string]any{
 		{"type": "tool_result", "tool_use_id": "a1", "content": "ok"},
