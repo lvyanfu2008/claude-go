@@ -106,6 +106,36 @@ func TestSegments_collapsedReadSearch_activeShowsHintRow(t *testing.T) {
 	}
 }
 
+func TestSegments_collapsedReadSearch_verboseTranscriptOmitsRollupWhenNestedMessages(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]any{{
+		"type": "tool_use", "id": "tu1", "name": "Read",
+		"input": map[string]any{"file_path": "/proj/doc.go"},
+	}})
+	nested := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "na",
+		Content: raw,
+	}
+	msg := types.Message{
+		Type:      types.MessageTypeCollapsedReadSearch,
+		UUID:      "c1",
+		ReadCount: 1,
+		Messages:  []types.Message{nested},
+	}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{
+		VerboseCollapsedReadSearch: true,
+		TranscriptMode:             true,
+	})
+	for _, s := range segs {
+		if s.Kind == SegCollapsedReadSearch {
+			t.Fatalf("transcript verbose with nested tools should omit rollup summary row, got %+v", segs)
+		}
+	}
+	if len(segs) == 0 {
+		t.Fatal("expected nested tool segments")
+	}
+}
+
 func TestSegments_collapsedReadSearch_showAllExpandsPaths(t *testing.T) {
 	disp := types.Message{
 		Type:    types.MessageTypeAssistant,
