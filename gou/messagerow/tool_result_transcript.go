@@ -36,6 +36,58 @@ func NormalizeToolResultContentJSON(raw json.RawMessage) json.RawMessage {
 	return raw
 }
 
+// toolResultBlockHasStatsPayload reports whether raw is JSON suitable for TranscriptResolvedHintExtra
+// (Grep structured object, Read native {type:text,...}), as opposed to Read mapped assistant text (JSON string)
+// or other non-structured tool_result.content values.
+func toolResultBlockHasStatsPayload(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	s := strings.TrimSpace(string(raw))
+	if len(s) == 0 {
+		return false
+	}
+	// Mapped Read / plain errors are JSON strings — no embedded stats object.
+	if s[0] == '"' {
+		return false
+	}
+	n := NormalizeToolResultContentJSON(raw)
+	if len(n) == 0 || n[0] != '{' {
+		return false
+	}
+	var probe struct {
+		Type string `json:"type"`
+		Mode string `json:"mode"`
+	}
+	if json.Unmarshal(n, &probe) != nil {
+		return false
+	}
+	if probe.Mode != "" {
+		return true
+	}
+	switch probe.Type {
+	case "text", "notebook", "image", "pdf", "parts", "file_unchanged":
+		return true
+	default:
+		return false
+	}
+}
+
+// pickToolResultJSONForStats chooses JSON for Read/Grep line-count summaries.
+// Read puts model-facing text in tool_result.content and native output in Message.toolUseResult (TS parity).
+func pickToolResultJSONForStats(blockContent, toolUseResultField json.RawMessage) json.RawMessage {
+	if len(blockContent) > 0 && toolResultBlockHasStatsPayload(blockContent) {
+		return blockContent
+	}
+	if len(toolUseResultField) > 0 {
+		return toolUseResultField
+	}
+	if len(blockContent) > 0 {
+		return blockContent
+	}
+	return nil
+}
+
 // CollectToolResultContentByToolUseID maps tool_use_id → tool_result content JSON (last wins if duplicated).
 // User rows from [toolexecution.CreateUserMessage] store blocks in Message.{role,content} with top-level Content empty
 // until [NormalizeMessageJSON] runs — same normalization as rendering.
@@ -53,15 +105,30 @@ func CollectToolResultContentByToolUseID(msgs []types.Message) map[string]json.R
 		if err := json.Unmarshal(msg.Content, &blocks); err != nil {
 			continue
 		}
+		nTool := 0
+		for i := range blocks {
+			if blocks[i].Type == "tool_result" {
+				nTool++
+			}
+		}
+		// toolUseResult pairs with the native tool output for single–tool_result user rows (Read/Grep path).
+		toolUseField := msg.ToolUseResult
+		if nTool != 1 {
+			toolUseField = nil
+		}
 		for _, b := range blocks {
 			if b.Type != "tool_result" {
 				continue
 			}
 			id := strings.TrimSpace(b.ToolUseID)
-			if id == "" || len(b.Content) == 0 {
+			if id == "" {
 				continue
 			}
-			out[id] = b.Content
+			payload := pickToolResultJSONForStats(b.Content, toolUseField)
+			if len(payload) == 0 {
+				continue
+			}
+			out[id] = payload
 		}
 	}
 	return out

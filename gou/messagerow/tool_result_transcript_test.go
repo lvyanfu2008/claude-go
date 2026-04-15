@@ -55,6 +55,34 @@ func TestCollectToolResultContentByToolUseID(t *testing.T) {
 	}
 }
 
+func TestCollectToolResultContentByToolUseID_readMappedBlockUsesToolUseResult(t *testing.T) {
+	// Block content = mapped assistant text (JSON string); stats live in toolUseResult (native Read JSON).
+	native := `{"type":"text","file":{"filePath":"/a.go","content":"x","numLines":15,"startLine":1,"totalLines":20}}`
+	mapped := "     1→hello\n     2→world"
+	inner, err := json.Marshal(map[string]any{
+		"role": "user",
+		"content": []map[string]any{{
+			"type":        "tool_result",
+			"tool_use_id": "call_read_1",
+			"content":     mapped,
+			"is_error":    false,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []types.Message{{
+		Type:          types.MessageTypeUser,
+		Message:       inner,
+		ToolUseResult: types.ToolUseResultJSONBytes(native),
+	}}
+	got := CollectToolResultContentByToolUseID(msgs)
+	h, _ := TranscriptResolvedHintExtra("Read", got["call_read_1"])
+	if h != "Read 15 lines" {
+		t.Fatalf("hint=%q want Read 15 lines", h)
+	}
+}
+
 func TestCollectToolResultContentByToolUseID_userMessageFieldOnly(t *testing.T) {
 	// toolexecution.CreateUserMessage sets Message.{role,content}, leaves Content empty until NormalizeMessageJSON.
 	inner, err := json.Marshal(map[string]any{
