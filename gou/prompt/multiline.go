@@ -134,6 +134,9 @@ func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
 	case tea.KeyBackspace:
 		m.deleteBefore()
 		return nil
+	case tea.KeySpace:
+		m.insertRune(' ')
+		return nil
 	case tea.KeyDelete, tea.KeyCtrlD:
 		m.deleteAfter()
 		return nil

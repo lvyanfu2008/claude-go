@@ -417,43 +417,27 @@ func padStreamRows(rows []string, h int) []string {
 
 func (m *model) promptBottomStreamRows() []string {
 	h := m.streamH
-	if h < 2 {
-		h = 2
+	if h < 1 {
+		h = 1
 	}
 	w := m.width - 2
 	if w < 8 {
 		w = m.cols
 	}
 	if m.queryBusy {
-		verb := strings.TrimSpace(m.spinnerVerb)
-		if verb == "" {
-			verb = "Working"
-		}
-		frames := []string{"…", ".", "..", "..."}
-		sfx := frames[m.spinnerFrame%len(frames)]
-		row0 := lipgloss.NewStyle().Bold(true).Render(teardropAsterisk + " " + verb + sfx)
-		row1 := ""
-		if gouDemoSpinnerTipsEnabled() && !m.queryBusyStartedAt.IsZero() {
-			if tip := effectiveSpinnerTip(time.Since(m.queryBusyStartedAt), true); tip != "" {
-				row1 = lipgloss.NewStyle().Faint(true).Render("Tip: " + tip)
-			}
-		}
-		restH := h - 2
-		if restH < 0 {
-			restH = 0
-		}
 		var streamTail string
 		if strings.TrimSpace(m.store.StreamingText) != "" {
 			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
 			streamTail = styleMarkdownTokens(toks, m.cols, false)
 		} else {
-			streamTail = lipgloss.NewStyle().Faint(true).Render("(streaming)")
+			streamTail = ""
+		}
+		if streamTail == "" {
+			return padStreamRows(nil, h)
 		}
 		wrapped := layout.WrapForViewport(streamTail, w)
 		tailLines := strings.Split(wrapped, "\n")
-		tailLines = padStreamRows(tailLines, restH)
-		out := append([]string{row0, row1}, tailLines...)
-		return padStreamRows(out, h)
+		return padStreamRows(tailLines, h)
 	}
 	if strings.TrimSpace(m.store.StreamingText) == "" {
 		return padStreamRows(nil, h)
@@ -851,15 +835,18 @@ func teaGlobalRedrawCmd() tea.Cmd {
 }
 
 func (m *model) inputAreaHeight() int {
-	n := m.pr.LineCount() + 2
+	n := m.pr.LineCount()
 	if m.uiScreen != gouDemoScreenTranscript {
-		n++ // horizontal rule above input (model | Context sits above the rule when status is on)
+		n++ // horizontal rule above input
 	}
 	if m.uiScreen != gouDemoScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
-		n++ // builtin: model | Context % (tokens)
+		s := m.builtinStatusLineView()
+		if s != "" {
+			n += strings.Count(s, "\n") + 1
+		}
 	}
-	if n < 4 {
-		n = 4
+	if n < 2 {
+		n = 2
 	}
 	if n > 16 {
 		n = 16
@@ -936,39 +923,46 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.handleMsgViewportScrollKey(msg)
 	}
 	switch msg.String() {
-	case "ctrl+c", "q":
+	case "ctrl+c":
 		return m, tea.Quit
 	case "esc":
 		if m.slashPick != nil {
 			m.slashPick = nil
 			return m, nil
 		}
+		if m.uiScreen == gouDemoScreenTranscript {
+			return m, m.exitTranscriptScreenWithPostCmd()
+		}
 		return m, tea.Quit
 	case "f2":
 		m.toggleSlashPicker()
 		return m, nil
-	case "up":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-1)
-		return m, nil
-	case "down":
-		m.sticky = false
-		m.scrollTop += 1
-		return m, nil
-	case "pgup":
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
-		return m, nil
-	case "pgdown":
-		m.sticky = false
-		m.scrollTop += listViewportH(m) / 2
-		return m, nil
-	case "end":
-		m.sticky = true
-		m.scrollTop = 1 << 30
-		return m, nil
 	}
 	if m.uiScreen == gouDemoScreenTranscript {
+		switch msg.String() {
+		case "q":
+			return m, m.exitTranscriptScreenWithPostCmd()
+		case "up":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-1)
+			return m, nil
+		case "down":
+			m.sticky = false
+			m.scrollTop += 1
+			return m, nil
+		case "pgup":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			return m, nil
+		case "pgdown":
+			m.sticky = false
+			m.scrollTop += listViewportH(m) / 2
+			return m, nil
+		case "end":
+			m.sticky = true
+			m.scrollTop = 1 << 30
+			return m, nil
+		}
 		return m, nil
 	}
 	m.pr.Update(prompt.NormalizeTTYNewlineKey(msg))
@@ -1382,8 +1376,8 @@ func listViewportH(m *model) int {
 	if m.uiScreen == gouDemoScreenTranscript {
 		streamReserve = 0
 	}
-	h := m.height - m.titleH - streamReserve - m.bottomChromeHeight() - 2
-	if gouDemoStatusLineEnabled() {
+	h := m.height - m.titleH - streamReserve - m.bottomChromeHeight() - 1
+	if gouDemoStatusLineEnabled() && m.statusLineString() != "" {
 		h--
 	}
 	if h < 3 {
@@ -1793,8 +1787,10 @@ func (m *model) View() string {
 
 	if m.uiScreen != gouDemoScreenTranscript {
 		streamRows := m.promptBottomStreamRows()
-		b.WriteString(strings.Join(streamRows, "\n"))
-		b.WriteByte('\n')
+		if len(streamRows) > 0 {
+			b.WriteString(strings.Join(streamRows, "\n"))
+			b.WriteByte('\n')
+		}
 	}
 	if s := m.statusLineString(); s != "" {
 		b.WriteString(s)
@@ -1812,23 +1808,7 @@ func (m *model) View() string {
 		b.WriteString(promptAboveInputRuleLine(m.cols))
 		b.WriteByte('\n')
 		promptView := userInputViewWithPromptPrefix(m)
-		hintText := strings.TrimSpace(replChromeFooterHint(narrow))
-		frag := strings.TrimSpace(replChromePermissionFragment(m.permissionMode, narrow))
-		var hintLine string
-		switch {
-		case frag != "" && hintText != "":
-			hintLine = frag + " · " + hintText
-		case frag != "":
-			hintLine = frag
-		default:
-			hintLine = hintText
-		}
 		b.WriteString(promptView)
-		if hintLine != "" {
-			hint := lipgloss.NewStyle().Faint(true).Width(m.cols).Render(hintLine)
-			b.WriteByte('\n')
-			b.WriteString(hint)
-		}
 	}
 	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
 	if m.permAsk != nil {
