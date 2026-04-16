@@ -1337,13 +1337,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleUpdateCCBStream(msg)
 	}
 
-	if m.uiScreen != gouDemoScreenTranscript {
-		if m.uiScreen == gouDemoScreenPrompt && gouDemoPromptEnterSubmits() {
-			if syn, ok := prompt.SyntheticNewlineFromUnknownMsg(msg); ok {
+	if syn, ok := prompt.SyntheticTTYKeyFromUnknownMsg(msg); ok {
+		switch syn.Type {
+		case tea.KeyCtrlC:
+			if m.permAsk != nil {
+				m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
+			}
+			return m, tea.Quit
+		case tea.KeyCtrlJ:
+			if m.uiScreen != gouDemoScreenTranscript && m.uiScreen == gouDemoScreenPrompt && gouDemoPromptEnterSubmits() {
 				m.pr.Update(syn)
 				return m, nil
 			}
 		}
+		return m, nil
+	}
+	if m.uiScreen != gouDemoScreenTranscript {
 		m.pr.Update(msg)
 	}
 	return m, nil

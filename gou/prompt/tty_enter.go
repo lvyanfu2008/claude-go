@@ -3,6 +3,7 @@ package prompt
 import (
 	"bytes"
 	"reflect"
+	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -25,11 +26,52 @@ func NormalizeTTYNewlineKey(k tea.KeyMsg) tea.KeyMsg {
 // for kitty keyboard protocol style modified Enter (e.g. \x1b[13;2u for Alt+Enter) that the
 // library does not map to KeyMsg.
 func SyntheticNewlineFromUnknownMsg(msg tea.Msg) (tea.KeyMsg, bool) {
-	b, ok := bubbleteaUnknownCSIBytes(msg)
-	if !ok || !isKittyModifiedEnterCSI(b) {
+	k, ok := SyntheticTTYKeyFromUnknownMsg(msg)
+	if !ok || k.Type != tea.KeyCtrlJ {
 		return tea.KeyMsg{}, false
 	}
-	return tea.KeyMsg{Type: tea.KeyCtrlJ}, true
+	return k, true
+}
+
+// SyntheticTTYKeyFromUnknownMsg maps bubbletea's unknown CSI (Kitty keyboard protocol) to KeyMsg:
+//   - Ctrl+C → KeyCtrlC (e.g. \x1b[99;5u, key 99 = 'c', modifier 5 = 1+ctrl)
+//   - modified Enter → KeyCtrlJ (newline in REPL prompt)
+func SyntheticTTYKeyFromUnknownMsg(msg tea.Msg) (tea.KeyMsg, bool) {
+	b, ok := bubbleteaUnknownCSIBytes(msg)
+	if !ok {
+		return tea.KeyMsg{}, false
+	}
+	if k, mod, ok := parseKittyCSIKeyU(b); ok && k == 99 && mod == 5 {
+		return tea.KeyMsg{Type: tea.KeyCtrlC}, true
+	}
+	if isKittyModifiedEnterCSI(b) {
+		return tea.KeyMsg{Type: tea.KeyCtrlJ}, true
+	}
+	return tea.KeyMsg{}, false
+}
+
+// parseKittyCSIKeyU parses CSI … u sequences (e.g. \x1b[99;5u or \x1b[99;5:1u).
+func parseKittyCSIKeyU(b []byte) (keyCode int, modEnc int, ok bool) {
+	if len(b) < 7 || b[0] != '\x1b' || b[1] != '[' || !bytes.HasSuffix(b, []byte("u")) {
+		return 0, 0, false
+	}
+	core := b[2 : len(b)-1]
+	semi := bytes.IndexByte(core, ';')
+	if semi < 0 {
+		return 0, 0, false
+	}
+	keyStr := string(core[:semi])
+	rest := core[semi+1:]
+	modPart := rest
+	if colon := bytes.IndexByte(rest, ':'); colon >= 0 {
+		modPart = rest[:colon]
+	}
+	k, err1 := strconv.Atoi(keyStr)
+	m, err2 := strconv.Atoi(string(modPart))
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return k, m, true
 }
 
 func bubbleteaUnknownCSIBytes(msg tea.Msg) ([]byte, bool) {

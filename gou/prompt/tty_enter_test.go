@@ -38,3 +38,18 @@ func TestIsKittyModifiedEnterCSI(t *testing.T) {
 		}
 	}
 }
+
+func TestParseKittyCSIKeyU(t *testing.T) {
+	t.Parallel()
+	k, mod, ok := parseKittyCSIKeyU([]byte("\x1b[99;5u"))
+	if !ok || k != 99 || mod != 5 {
+		t.Fatalf("99;5: ok=%v k=%d mod=%d", ok, k, mod)
+	}
+	k2, mod2, ok2 := parseKittyCSIKeyU([]byte("\x1b[99;5:1u"))
+	if !ok2 || k2 != 99 || mod2 != 5 {
+		t.Fatalf("99;5:1: ok=%v k=%d mod=%d", ok2, k2, mod2)
+	}
+	if _, _, ok3 := parseKittyCSIKeyU([]byte("\x1b[99u")); ok3 {
+		t.Fatal("99 without modifier should not parse as key;mod")
+	}
+}
