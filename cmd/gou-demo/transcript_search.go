@@ -242,6 +242,11 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			}
 		}
 	}
+	if !m.transcriptSearchOpen && !m.transcriptDumpMode {
+		if m.transcriptScrollByKeyType(msg) {
+			return true, nil
+		}
+	}
 	s := msg.String()
 	switch s {
 	case "ctrl+l":
@@ -288,22 +293,27 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "up":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-1)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "down":
 			m.sticky = false
 			m.scrollTop += 1
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "pgup":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "pgdown":
 			m.sticky = false
 			m.scrollTop += listViewportH(m) / 2
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "home", "ctrl+home":
 			m.sticky = false
 			m.scrollTop = 0
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "end", "ctrl+end":
 			m.sticky = true
@@ -313,14 +323,17 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "j":
 			m.sticky = false
 			m.scrollTop += 1
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "k":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-1)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "g":
 			m.sticky = false
 			m.scrollTop = 0
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "G", "shift+g":
 			m.sticky = true
@@ -329,40 +342,98 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "ctrl+u":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+d":
 			m.sticky = false
 			m.scrollTop += listViewportH(m) / 2
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+b":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+f":
 			m.sticky = false
 			m.scrollTop += listViewportH(m)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "b":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case " ":
 			m.sticky = false
 			m.scrollTop += listViewportH(m)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+n":
 			m.sticky = false
 			m.scrollTop += 1
+			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+p":
 			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-1)
+			m.transcriptAfterManualScroll()
 			return true, nil
 		default:
 			return true, nil
 		}
 	}
 	return true, nil
+}
+
+// transcriptAfterManualScroll pins scrollTop after leaving sticky-bottom (sentinel ~1<<30) so virtualscroll
+// stays valid. We only clamp when scrollTop is still in the huge range: without heightCache (e.g. tests),
+// full clamp can pin to 0 and break small scrollTop values; the next View also clamps when !sticky.
+func (m *model) transcriptAfterManualScroll() {
+	if m.sticky {
+		return
+	}
+	if m.scrollTop < 1<<20 {
+		return
+	}
+	m.clampScrollTopForVirtualList()
+}
+
+// transcriptScrollByKeyType handles Kitty / disambiguated keys where msg.String() is not "up"/"down" (see handleTranscriptKey string switch).
+func (m *model) transcriptScrollByKeyType(msg tea.KeyMsg) bool {
+	switch msg.Type {
+	case tea.KeyUp:
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-1)
+		m.transcriptAfterManualScroll()
+		return true
+	case tea.KeyDown:
+		m.sticky = false
+		m.scrollTop += 1
+		m.transcriptAfterManualScroll()
+		return true
+	case tea.KeyPgUp:
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		m.transcriptAfterManualScroll()
+		return true
+	case tea.KeyPgDown:
+		m.sticky = false
+		m.scrollTop += listViewportH(m) / 2
+		m.transcriptAfterManualScroll()
+		return true
+	case tea.KeyHome:
+		m.sticky = false
+		m.scrollTop = 0
+		m.transcriptAfterManualScroll()
+		return true
+	case tea.KeyEnd:
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return true
+	default:
+		return false
+	}
 }
 
 func transcriptSearchStatusLines(m *model) []string {

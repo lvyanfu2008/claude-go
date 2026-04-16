@@ -139,6 +139,9 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 		default:
 			return false, nil
 		}
+		if m.uiScreen == gouDemoScreenTranscript && !m.sticky && m.scrollTop >= 1<<20 {
+			m.clampScrollTopForVirtualList()
+		}
 		return true, nil
 	}
 

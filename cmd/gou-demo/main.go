@@ -874,10 +874,18 @@ func (m *model) bottomChromeHeight() int {
 
 // handleKeyMsg is the tea.KeyMsg branch; also used when SyntheticTTYKeyFromUnknownMsg maps Kitty CSI to KeyMsg.
 func (m *model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
+	if m.msgHistoryBrowseMouseOff {
 		m.msgHistoryBrowseMouseOff = false
-		return m, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen)
+		m2, cmd := m.handleKeyMsgPreserving(msg)
+		if cmd == nil {
+			return m2, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen)
+		}
+		return m2, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen, cmd)
 	}
+	return m.handleKeyMsgPreserving(msg)
+}
+
+func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.permAsk != nil && msg.String() == "ctrl+c" {
 		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
 		return m, tea.Quit
