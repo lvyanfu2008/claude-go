@@ -126,13 +126,14 @@ func (m *model) tryHandleMessageListMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 			return true, nil
 		}
 		step := max(1, listViewportH(m)/6)
-		m.sticky = false
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
+			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-step)
 		case tea.MouseButtonWheelDown:
 			m.scrollTop += step
 		case tea.MouseButtonWheelLeft:
+			m.sticky = false
 			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
 		case tea.MouseButtonWheelRight:
 			m.scrollTop += listViewportH(m) / 2

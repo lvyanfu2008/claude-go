@@ -920,7 +920,6 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
 		m.slashPick = nil
-		m.rebuildHeightCache()
 		return m, m.enterTranscriptScreen()
 	}
 	if handled, cmd := m.handleTranscriptKey(msg); handled {

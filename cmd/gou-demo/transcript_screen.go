@@ -128,6 +128,7 @@ func (m *model) enterTranscriptScreen() tea.Cmd {
 	m.uiScreen = gouDemoScreenTranscript
 	m.sticky = true
 	m.scrollTop = 1 << 30
+	m.rebuildHeightCache()
 	return m.maybeTeaResetHistoryBrowseMouse()
 }
 
