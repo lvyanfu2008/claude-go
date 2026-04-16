@@ -2425,6 +2425,12 @@ func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix strin
 	return b.String()
 }
 
+// headingMarkdownStyle is bold + heading color; level spacing is done with leading spaces (see
+// styleMarkdownTokens heading branch) so deeper ATX headings indent without underline/faint.
+func headingMarkdownStyle(userRow bool) lipgloss.Style {
+	return baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading())
+}
+
 // styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).
 func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 	if len(toks) == 0 {
@@ -2435,11 +2441,13 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 		switch t.Type {
 		case "heading":
 			lv := min(max(t.Level, 1), 6)
-			prefix := strings.Repeat("#", lv) + " "
+			indent := strings.Repeat(" ", (lv-1)*2)
+			prefix := indent + strings.Repeat("#", lv) + " "
+			hst := headingMarkdownStyle(userRow)
 			if len(t.Segments) > 0 {
-				parts = append(parts, baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading()).Render(styleMarkdownInlineSegments(t.Segments, prefix, userRow)))
+				parts = append(parts, hst.Render(styleMarkdownInlineSegments(t.Segments, prefix, userRow)))
 			} else {
-				parts = append(parts, baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading()).Render(prefix+t.Text))
+				parts = append(parts, hst.Render(prefix+t.Text))
 			}
 		case "code":
 			cb := "```" + t.Lang + "\n" + t.Text
