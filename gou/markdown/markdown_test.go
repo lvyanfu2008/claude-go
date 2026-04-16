@@ -75,6 +75,31 @@ func TestCachedLexer_fence(t *testing.T) {
 	}
 }
 
+func TestCachedLexer_fenced_code_in_list_item(t *testing.T) {
+	SetGlobalCacheForTest(NewTokenCache(10))
+	// CommonMark: fenced block under list item is indented (4 spaces from margin for sub-block).
+	md := "- step one\n\n    ```go\n    x := 1\n    ```\n"
+	toks := CachedLexer(md)
+	var sawList, sawCode bool
+	for _, tok := range toks {
+		switch tok.Type {
+		case "list_item":
+			sawList = true
+			if !strings.Contains(tok.Text, "step one") {
+				t.Fatalf("list_item text: %+v", tok)
+			}
+		case "code":
+			sawCode = true
+			if tok.Lang != "go" || !strings.Contains(tok.Text, "x := 1") {
+				t.Fatalf("code token: %+v", tok)
+			}
+		}
+	}
+	if !sawList || !sawCode {
+		t.Fatalf("want list_item + code, got %d toks: %+v", len(toks), toks)
+	}
+}
+
 func TestCachedLexer_inline_code_segments(t *testing.T) {
 	SetGlobalCacheForTest(NewTokenCache(10))
 	toks := CachedLexer("让我查看一下 `openai_stream_gate.go` 文件来了解")

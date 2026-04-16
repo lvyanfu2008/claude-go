@@ -185,8 +185,8 @@ func headingTokenFromHeading(h *ast.Heading, src []byte) []Token {
 	return []Token{{Type: "heading", Level: h.Level, Text: fullTrim, Segments: segs}}
 }
 
-// listItemTokensFromListItem walks all ListItem children (paragraphs + nested lists).
-// Previously only the first paragraph was emitted, so nested bullets under ordered items were dropped.
+// listItemTokensFromListItem walks ListItem children: paragraphs, text blocks, nested lists,
+// and fenced/indented code blocks (CommonMark).
 func listItemTokensFromListItem(li *ast.ListItem, src []byte, ordered bool, listIndex int, nestDepth int) []Token {
 	var out []Token
 	seenPara := false
@@ -255,6 +255,11 @@ func listItemTokensFromListItem(li *ast.ListItem, src []byte, ordered bool, list
 					}
 				}
 			}
+		case *ast.FencedCodeBlock:
+			// CommonMark: list items may contain fenced code blocks (previously dropped).
+			out = append(out, blockTokens(x, src)...)
+		case *ast.CodeBlock:
+			out = append(out, blockTokens(x, src)...)
 		}
 	}
 	if len(out) == 0 {
