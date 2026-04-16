@@ -1510,46 +1510,111 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	return max(1, r)
 }
 
-func (m *model) measureTranscriptStreamingToolRow(tu conversation.StreamingToolUse, cols int, searchHL string) int {
+func extractPartialJSONField(input string, field string) string {
+	marker1 := `"` + field + `":"`
+	marker2 := `"` + field + `": "`
+
+	idx := strings.Index(input, marker2)
+	if idx == -1 {
+		idx = strings.Index(input, marker1)
+		if idx == -1 {
+			return ""
+		}
+		idx += len(marker1)
+	} else {
+		idx += len(marker2)
+	}
+
+	end := strings.IndexByte(input[idx:], '"')
+	if end == -1 {
+		return input[idx:]
+	}
+	return input[idx : idx+end]
+}
+
+func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, cols int, searchHL string) int {
+	if !group.IsGroup {
+		tu := group.Single
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if facing == "" {
+			facing = tu.Name
+		}
+		namePart := facing
+		if strings.TrimSpace(searchHL) != "" {
+			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
+		}
+		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
+		if p := strings.TrimSpace(paren); p != "" {
+			toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
+		}
+		toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+		block := head + "\n" + toolLine
+		return max(1, layout.WrappedRowCount(block, cols))
+	}
+	
 	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-	facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-	if facing == "" {
-		facing = tu.Name
-	}
-	namePart := facing
-	if strings.TrimSpace(searchHL) != "" {
-		namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
-	}
-	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
-	if p := strings.TrimSpace(paren); p != "" {
-		toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
-	}
-	toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+	summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+	toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 	block := head + "\n" + toolLine
+	for _, item := range group.Items {
+		path := extractPartialJSONField(item.UnparsedInput, "file_path")
+		if path == "" {
+			path = extractPartialJSONField(item.UnparsedInput, "path")
+		}
+		if path == "" {
+			path = extractPartialJSONField(item.UnparsedInput, "pattern")
+		}
+		if path == "" {
+			path = "..."
+		}
+		treeLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path)
+		block += "\n" + treeLine
+	}
 	return max(1, layout.WrappedRowCount(block, cols))
 }
 
-func (m *model) renderTranscriptStreamingToolRow(tu conversation.StreamingToolUse, cols, h int, searchHL string) string {
-	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-	facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-	if facing == "" {
-		facing = tu.Name
+func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, cols, h int, searchHL string) string {
+	var block string
+	if !group.IsGroup {
+		tu := group.Single
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if facing == "" {
+			facing = tu.Name
+		}
+		namePart := facing
+		if strings.TrimSpace(searchHL) != "" {
+			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
+		}
+		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
+		if p := strings.TrimSpace(paren); p != "" {
+			toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
+		}
+		toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+		block = head + "\n" + toolLine
+	} else {
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+		block = head + "\n" + toolLine
+		for _, item := range group.Items {
+			path := extractPartialJSONField(item.UnparsedInput, "file_path")
+			if path == "" {
+				path = extractPartialJSONField(item.UnparsedInput, "path")
+			}
+			if path == "" {
+				path = extractPartialJSONField(item.UnparsedInput, "pattern")
+			}
+			if path == "" {
+				path = "..."
+			}
+			treeLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path)
+			block += "\n" + treeLine
+		}
 	}
-	namePart := facing
-	if strings.TrimSpace(searchHL) != "" {
-		namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
-	}
-	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
-	if p := strings.TrimSpace(paren); p != "" {
-		toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
-	}
-	toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
-	var b strings.Builder
-	b.WriteString(head)
-	b.WriteByte('\n')
-	b.WriteString(toolLine)
-	out := b.String()
-	lines := strings.Split(out, "\n")
+	
+	lines := strings.Split(block, "\n")
 	for len(lines) < h {
 		lines = append(lines, "")
 	}
@@ -1717,23 +1782,46 @@ func (m *model) View() string {
 			if msgPane.Len() > 0 && streamGapAfterUserMessage(msgView) {
 				msgPane.WriteByte('\n')
 			}
-			for _, tu := range m.store.StreamingToolUses {
+			grouped := groupStreamingTools(m.store.StreamingToolUses)
+			for _, group := range grouped {
 				if msgPane.Len() > 0 {
 					msgPane.WriteByte('\n')
 				}
 				head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 				msgPane.WriteString(head)
 				msgPane.WriteByte('\n')
-				facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-				if facing == "" {
-					facing = tu.Name
+
+				if !group.IsGroup {
+					tu := group.Single
+					facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+					if facing == "" {
+						facing = tu.Name
+					}
+					toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
+					if p := strings.TrimSpace(paren); p != "" {
+						toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
+					}
+					toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+					msgPane.WriteString(toolTitle)
+				} else {
+					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+					msgPane.WriteString(toolTitle)
+					for _, item := range group.Items {
+						path := extractPartialJSONField(item.UnparsedInput, "file_path")
+						if path == "" {
+							path = extractPartialJSONField(item.UnparsedInput, "path")
+						}
+						if path == "" {
+							path = extractPartialJSONField(item.UnparsedInput, "pattern")
+						}
+						if path == "" {
+							path = "..."
+						}
+						msgPane.WriteByte('\n')
+						msgPane.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
+					}
 				}
-				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
-				if p := strings.TrimSpace(paren); p != "" {
-					toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
-				}
-				toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
-				msgPane.WriteString(toolTitle)
 			}
 		}
 		if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {

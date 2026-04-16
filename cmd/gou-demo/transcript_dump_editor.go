@@ -106,15 +106,38 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 	// ... streaming tools ...
 	// Only export streaming tools if we are in transcript mode (matches UI).
 	if isInTranscript {
-		for _, tu := range m.transcriptStreamingToolsForView() {
-			b.WriteByte('\n')
-			b.WriteString(string(types.MessageTypeAssistant))
-			b.WriteByte('\n')
-			line := "⚙ " + tu.Name + " · streaming"
-			if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-				line += "\n" + s
+		for _, group := range m.transcriptStreamingToolsForView() {
+			if !group.IsGroup {
+				tu := group.Single
+				b.WriteByte('\n')
+				b.WriteString(string(types.MessageTypeAssistant))
+				b.WriteByte('\n')
+				line := "⚙ " + tu.Name + " · streaming"
+				if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+					line += "\n" + s
+				}
+				b.WriteString(strings.TrimRight(layout.WrapForViewport(line, wrapCols), "\n"))
+			} else {
+				b.WriteByte('\n')
+				b.WriteString(string(types.MessageTypeAssistant))
+				b.WriteByte('\n')
+				summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+				line := "⏺ " + summary + messagerow.CtrlOToExpandHint
+				for _, item := range group.Items {
+					path := extractPartialJSONField(item.UnparsedInput, "file_path")
+					if path == "" {
+						path = extractPartialJSONField(item.UnparsedInput, "path")
+					}
+					if path == "" {
+						path = extractPartialJSONField(item.UnparsedInput, "pattern")
+					}
+					if path == "" {
+						path = "..."
+					}
+					line += "\n  ⎿  " + path
+				}
+				b.WriteString(strings.TrimRight(layout.WrapForViewport(line, wrapCols), "\n"))
 			}
-			b.WriteString(strings.TrimRight(layout.WrapForViewport(line, wrapCols), "\n"))
 		}
 	}
 	return stripTranscriptExportTrailingSpaces(b.String())

@@ -226,21 +226,45 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			b.WriteByte('\n')
 			lineCnt++
 		}
-		for _, tu := range m.store.StreamingToolUses {
+		grouped := groupStreamingTools(m.store.StreamingToolUses)
+		for _, group := range grouped {
 			var sb strings.Builder
 			head := lipglossStyleAssistantHead()
 			sb.WriteString(head)
 			sb.WriteByte('\n')
-			facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-			if facing == "" {
-				facing = tu.Name
+
+			if !group.IsGroup {
+				tu := group.Single
+				facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+				if facing == "" {
+					facing = tu.Name
+				}
+				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
+				if p := strings.TrimSpace(paren); p != "" {
+					toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
+				}
+				toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+				sb.WriteString(toolTitle)
+			} else {
+				summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+				toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+				sb.WriteString(toolTitle)
+				for _, item := range group.Items {
+					path := extractPartialJSONField(item.UnparsedInput, "file_path")
+					if path == "" {
+						path = extractPartialJSONField(item.UnparsedInput, "path")
+					}
+					if path == "" {
+						path = extractPartialJSONField(item.UnparsedInput, "pattern")
+					}
+					if path == "" {
+						path = "..."
+					}
+					sb.WriteByte('\n')
+					sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
+				}
 			}
-			toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
-			if p := strings.TrimSpace(paren); p != "" {
-				toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
-			}
-			toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
-			sb.WriteString(toolTitle)
+
 			if !addBlock(sb.String()) {
 				return "", false
 			}

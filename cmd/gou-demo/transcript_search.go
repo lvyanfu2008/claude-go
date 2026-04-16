@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"goc/gou/conversation"
 	"goc/gou/messagerow"
 	"goc/types"
 )
@@ -76,8 +75,21 @@ func plainMessageSearchText(msg types.Message) string {
 	}
 }
 
-func plainTranscriptStreamingToolSearchText(tu conversation.StreamingToolUse) string {
-	return strings.ToLower(strings.TrimSpace(tu.Name) + " " + strings.TrimSpace(tu.ToolUseID) + " " + tu.UnparsedInput)
+func plainTranscriptStreamingToolSearchText(group GroupedStreamingTool) string {
+	if !group.IsGroup {
+		tu := group.Single
+		return strings.ToLower(strings.TrimSpace(tu.Name) + " " + strings.TrimSpace(tu.ToolUseID) + " " + tu.UnparsedInput)
+	}
+	var b strings.Builder
+	for _, tu := range group.Items {
+		b.WriteString(strings.TrimSpace(tu.Name))
+		b.WriteByte(' ')
+		b.WriteString(strings.TrimSpace(tu.ToolUseID))
+		b.WriteByte(' ')
+		b.WriteString(tu.UnparsedInput)
+		b.WriteByte(' ')
+	}
+	return strings.ToLower(b.String())
 }
 
 func transcriptSearchHLStyle() lipgloss.Style {

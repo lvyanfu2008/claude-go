@@ -79,8 +79,52 @@ func transcriptStreamToolScrollKey(convID string, idx int) string {
 	return fmt.Sprintf("gou-st-tool:%d:%s", idx, convID)
 }
 
-// transcriptStreamingToolsForView returns streamingToolUses.slice(0, frozen.StreamingToolUsesLen) while in transcript (REPL.tsx).
-func (m *model) transcriptStreamingToolsForView() []conversation.StreamingToolUse {
+type GroupedStreamingTool struct {
+	IsGroup     bool
+	SearchCount int
+	ReadCount   int
+	ListCount   int
+	Items       []conversation.StreamingToolUse
+	Single      conversation.StreamingToolUse
+}
+
+func groupStreamingTools(uses []conversation.StreamingToolUse) []GroupedStreamingTool {
+	var out []GroupedStreamingTool
+	i := 0
+	for i < len(uses) {
+		tu := uses[i]
+		name := strings.TrimSpace(tu.Name)
+		switch name {
+		case "Grep", "Glob", "Read", "View", "LS", "SemanticSearch":
+			var group GroupedStreamingTool
+			group.IsGroup = true
+			j := i
+			for j < len(uses) {
+				n := strings.TrimSpace(uses[j].Name)
+				if n == "Grep" || n == "Glob" || n == "SemanticSearch" {
+					group.SearchCount++
+				} else if n == "Read" || n == "View" {
+					group.ReadCount++
+				} else if n == "LS" {
+					group.ListCount++
+				} else {
+					break
+				}
+				group.Items = append(group.Items, uses[j])
+				j++
+			}
+			out = append(out, group)
+			i = j
+		default:
+			out = append(out, GroupedStreamingTool{Single: tu})
+			i++
+		}
+	}
+	return out
+}
+
+// transcriptStreamingToolsForView returns grouped streaming tools while in transcript (REPL.tsx).
+func (m *model) transcriptStreamingToolsForView() []GroupedStreamingTool {
 	if m.uiScreen != gouDemoScreenTranscript || m.transcriptFrozen == nil {
 		return nil
 	}
@@ -92,7 +136,7 @@ func (m *model) transcriptStreamingToolsForView() []conversation.StreamingToolUs
 	if len(u) > capN {
 		u = u[:capN]
 	}
-	return u
+	return groupStreamingTools(u)
 }
 
 func (m *model) scrollItemKeys() []string {
