@@ -1,9 +1,9 @@
 // Package prompt holds a minimal multiline prompt model for gou TUI (Bubble Tea).
 //
 // Two input styles (see [Model.SetEnterSubmits]):
-//   - REPL (default): Enter submits; newline via Ctrl+J (LF), Alt+Enter, or terminals that emit "shift+enter".
-//   - Chat: Enter and Shift+Enter insert newline when the terminal sends CR (\r) for both (common in VS Code /
-//     Cursor); Alt+Enter submits. Many terminals cannot distinguish Shift+Enter from Enter — they use the same byte.
+//   - REPL (default): Enter submits; newline via Alt+Enter (Option+Enter on macOS when mapped to Meta), Ctrl+J (LF),
+//     or Shift+Enter when the terminal sends LF instead of CR.
+//   - Chat: Enter inserts newline when the terminal sends CR for both Enter and Shift+Enter; Alt+Enter submits.
 package prompt
 
 import (

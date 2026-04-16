@@ -59,8 +59,8 @@ func gouDemoAltScreenEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_ALT_SCREEN")
 }
 
-// gouDemoPromptEnterSubmits selects REPL-style prompt: Enter sends, Shift+Enter (LF → KeyCtrlJ) / Ctrl+J newline, Alt+Enter newline.
-// Default true. Set GOU_DEMO_REPL_ENTER_SUBMITS=0|false|off|no for chat-style (Enter newline, Alt+Enter send) when the terminal sends CR for both keys.
+// gouDemoPromptEnterSubmits selects REPL-style prompt: Enter sends; newline via Alt+Enter (Option+Enter on macOS when the terminal maps Option to Meta), Ctrl+J, or Shift+Enter when the terminal sends LF.
+// Default true. Set GOU_DEMO_REPL_ENTER_SUBMITS=0|false|off|no for chat-style (Enter newline, Alt+Enter send) when Enter and Shift+Enter are indistinguishable.
 func gouDemoPromptEnterSubmits() bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_REPL_ENTER_SUBMITS")))
 	if v == "0" || v == "false" || v == "off" || v == "no" {
@@ -179,7 +179,7 @@ func permissionModeSymbol(mode types.PermissionMode) string {
 func replChromeTopBar(narrow bool) string {
 	_ = narrow
 	if gouDemoPromptEnterSubmits() {
-		return "gou-demo — ↑↓ scroll   Enter send · Shift+Enter newline"
+		return "gou-demo — ↑↓ scroll   Enter send · Alt/Option+Enter newline"
 	}
 	return "gou-demo — ↑↓ scroll   Enter newline · Alt+Enter send"
 }
