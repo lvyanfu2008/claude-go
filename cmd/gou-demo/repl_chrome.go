@@ -52,11 +52,21 @@ func gouDemoMouseCellMotionEnabled() bool {
 	return true
 }
 
-// gouDemoAltScreenEnabled opts into tea.WithAltScreen: the TUI uses the terminal alternate buffer so the host
-// scrollback is not mixed with redraws; the wheel targets the in-app message pane more reliably. On exit the
-// previous screen is restored.
+// gouDemoAltScreenEnabled opts into tea.WithAltScreen (alternate buffer). Default off: the UI still fills the
+// terminal using WindowSizeMsg on the main buffer; alt screen only changes scrollback isolation and wheel focus.
+// Set GOU_DEMO_ALT_SCREEN=1 to enable the alternate buffer.
 func gouDemoAltScreenEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_ALT_SCREEN")
+}
+
+// gouDemoPromptEnterSubmits selects REPL-style prompt: Enter sends, Shift+Enter (LF → KeyCtrlJ) / Ctrl+J newline, Alt+Enter newline.
+// Default true. Set GOU_DEMO_REPL_ENTER_SUBMITS=0|false|off|no for chat-style (Enter newline, Alt+Enter send) when the terminal sends CR for both keys.
+func gouDemoPromptEnterSubmits() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_REPL_ENTER_SUBMITS")))
+	if v == "0" || v == "false" || v == "off" || v == "no" {
+		return false
+	}
+	return true
 }
 
 // gouDemoMsgHistoryBrowseReleaseEnabled is go-tui/main/test.go style release: when the bubbles message viewport is
@@ -167,10 +177,11 @@ func permissionModeSymbol(mode types.PermissionMode) string {
 
 // replChromeTopBar returns the single-line header (TS isNarrow uses columns < 80).
 func replChromeTopBar(narrow bool) string {
-	if narrow {
-		return "gou-demo  ↑↓ Pg F2 Ctrl+l Enter Shift+Enter q"
+	_ = narrow
+	if gouDemoPromptEnterSubmits() {
+		return "gou-demo — ↑↓ scroll   Enter send · Shift+Enter newline"
 	}
-	return "gou-demo — ↑↓ scroll  PgUp/PgDn  End bottom  F2 slash  Ctrl+l redraw  Enter send  Shift+Enter/Ctrl+J/Alt+Enter newline  q or Esc quit"
+	return "gou-demo — ↑↓ scroll   Enter newline · Alt+Enter send"
 }
 
 // replChromeTranscriptTopBar is the header line while TS-style transcript mode is active.

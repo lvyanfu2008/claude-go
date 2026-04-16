@@ -73,11 +73,22 @@ func TestGouDemoDisallowDisableMouse_overridesDisableEnvs(t *testing.T) {
 func TestGouDemoAltScreenEnabled(t *testing.T) {
 	t.Setenv("GOU_DEMO_ALT_SCREEN", "")
 	if gouDemoAltScreenEnabled() {
-		t.Fatal("empty env should be false")
+		t.Fatal("empty env should not use alt screen (default main buffer)")
 	}
 	t.Setenv("GOU_DEMO_ALT_SCREEN", "1")
 	if !gouDemoAltScreenEnabled() {
 		t.Fatal("truthy GOU_DEMO_ALT_SCREEN should enable alt screen")
+	}
+}
+
+func TestGouDemoPromptEnterSubmits_defaultRepl(t *testing.T) {
+	t.Setenv("GOU_DEMO_REPL_ENTER_SUBMITS", "")
+	if !gouDemoPromptEnterSubmits() {
+		t.Fatal("empty env: default Enter send (REPL)")
+	}
+	t.Setenv("GOU_DEMO_REPL_ENTER_SUBMITS", "0")
+	if gouDemoPromptEnterSubmits() {
+		t.Fatal("0 should enable chat input")
 	}
 }
 

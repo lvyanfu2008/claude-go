@@ -72,3 +72,31 @@ func TestMultiline_altCtrlJ_insertsNewline(t *testing.T) {
 		t.Fatal("alt+ctrl+j must not submit")
 	}
 }
+
+func TestMultiline_chatMode_enterInsertsNewline_altEnterSubmits(t *testing.T) {
+	m := New()
+	m.SetEnterSubmits(false)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.Value(); got != "a\n" {
+		t.Fatalf("value %q", got)
+	}
+	if m.Submitted() {
+		t.Fatal("bare Enter must not submit in chat mode")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	if !m.Submitted() {
+		t.Fatal("alt+enter should submit")
+	}
+}
+
+func TestMultiline_chatMode_shiftEnterSameAsEnter(t *testing.T) {
+	// Same bytes as Enter (\r) in many terminals — both should newline in chat mode.
+	m := New()
+	m.SetEnterSubmits(false)
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.Value(); got != "\n\n" {
+		t.Fatalf("value %q", got)
+	}
+}

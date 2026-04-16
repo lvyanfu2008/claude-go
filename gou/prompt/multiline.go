@@ -1,5 +1,9 @@
 // Package prompt holds a minimal multiline prompt model for gou TUI (Bubble Tea).
-// Enter submits; newline: Ctrl+J, Shift+Enter/LF (KeyCtrlJ), Alt+Enter, or Option+Enter as ESC+LF (bubbletea: alt+ctrl+j); Shift+Up/Down move between lines.
+//
+// Two input styles (see [Model.SetEnterSubmits]):
+//   - REPL (default): Enter submits; newline via Ctrl+J (LF), Alt+Enter, or terminals that emit "shift+enter".
+//   - Chat: Enter and Shift+Enter insert newline when the terminal sends CR (\r) for both (common in VS Code /
+//     Cursor); Alt+Enter submits. Many terminals cannot distinguish Shift+Enter from Enter — they use the same byte.
 package prompt
 
 import (
@@ -16,11 +20,24 @@ type Model struct {
 	width     int
 	focused   bool
 	submitted bool // true after Enter submit; caller clears buffer
+	// enterSubmits: true = Enter (\r) submits, Alt+Enter inserts newline (REPL).
+	// false = Enter/Shift+Enter insert newline when indistinguishable, Alt+Enter submits (chat / IDE terminals).
+	enterSubmits bool
 }
 
-// New returns an empty focused model.
+// New returns an empty focused model (REPL-style: Enter submits).
 func New() Model {
-	return Model{focused: true, width: 60}
+	return Model{focused: true, width: 60, enterSubmits: true}
+}
+
+// SetEnterSubmits sets REPL vs chat input (see package doc). Default true.
+func (m *Model) SetEnterSubmits(replEnterSubmits bool) {
+	m.enterSubmits = replEnterSubmits
+}
+
+// EnterSubmits reports whether bare Enter submits (REPL mode).
+func (m Model) EnterSubmits() bool {
+	return m.enterSubmits
 }
 
 // Focused reports whether the field accepts editing keys.
@@ -73,6 +90,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
+	repl := m.enterSubmits
 	// KeyCtrlJ is LF (\n). Many terminals send Shift+Enter as LF; macOS Option+Enter
 	// often arrives as ESC+LF, which bubbletea reports as KeyCtrlJ with Alt (alt+ctrl+j),
 	// not alt+enter — handle by type before msg.String().
@@ -82,18 +100,33 @@ func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case tea.KeyEnter:
 		if msg.Alt {
-			m.insertRune('\n')
+			if repl {
+				m.insertRune('\n')
+			} else if strings.TrimSpace(m.Value()) != "" {
+				m.submitted = true
+			}
 			return nil
 		}
 	}
 
 	switch msg.String() {
-	case "alt+enter", "shift+enter":
+	case "shift+enter":
 		m.insertRune('\n')
 		return nil
-	case "enter":
-		if strings.TrimSpace(m.Value()) != "" {
+	case "alt+enter":
+		if repl {
+			m.insertRune('\n')
+		} else if strings.TrimSpace(m.Value()) != "" {
 			m.submitted = true
+		}
+		return nil
+	case "enter":
+		if repl {
+			if strings.TrimSpace(m.Value()) != "" {
+				m.submitted = true
+			}
+		} else {
+			m.insertRune('\n')
 		}
 		return nil
 	}

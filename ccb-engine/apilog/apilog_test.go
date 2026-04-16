@@ -27,6 +27,9 @@ func TestLogRequestBody_writesWhenSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(b)
+	if !strings.Contains(s, "LLM API bodies") || !strings.Contains(s, "points to") {
+		t.Fatalf("want apilog announce line in file (not stderr), got: %s", s)
+	}
 	if len(b) < 20 || !strings.Contains(s, "API_REQUEST_BODY") || !strings.Contains(s, `"a"`) {
 		t.Fatalf("unexpected file: %s", s)
 	}

@@ -98,7 +98,7 @@ func appendDiagToLog(path, body string) error {
 
 // PrepareIfEnabled creates the log file and its parent directories when either
 // CLAUDE_CODE_LOG_API_REQUEST_BODY or CLAUDE_CODE_LOG_API_RESPONSE_BODY is truthy,
-// and prints the resolved path once on stderr. Call after project .claude/settings.go.json
+// and writes a one-time "latest points to …" line to that log file (not stderr). Call after project .claude/settings.go.json
 // (and local) env is applied so CLAUDE_CODE_DEBUG_LOG_* from settings take effect.
 //
 // Without this, ~/.claude/debug only appears after the first LLM request when logging is on.
