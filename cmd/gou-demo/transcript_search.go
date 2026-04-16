@@ -248,18 +248,20 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 	}
 	s := msg.String()
-	switch s {
-	case "ctrl+l":
-		return true, teaGlobalRedrawCmd()
-	case "ctrl+o":
-		return true, m.exitTranscriptScreenWithPostCmd()
-	case "ctrl+e":
+	// Match KeyCtrlE by type so Kitty/synthetic KeyMsg still toggles when String() is empty or differs.
+	if s == "ctrl+e" || msg.Type == tea.KeyCtrlE {
 		if m.transcriptDumpMode {
 			return true, nil
 		}
 		m.transcriptShowAll = !m.transcriptShowAll
 		m.rebuildHeightCache()
 		return true, nil
+	}
+	switch s {
+	case "ctrl+l":
+		return true, teaGlobalRedrawCmd()
+	case "ctrl+o":
+		return true, m.exitTranscriptScreenWithPostCmd()
 	case "esc", "q", "ctrl+c":
 		return true, m.exitTranscriptScreenWithPostCmd()
 	case "[":
