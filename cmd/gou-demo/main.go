@@ -1765,15 +1765,26 @@ func (m *model) View() string {
 		}
 
 		lines := strings.Split(msgPane.String(), "\n")
-		for len(lines) < vpH {
-			lines = append(lines, "")
-		}
-		if len(lines) > vpH {
-			if m.sticky {
+		if m.sticky {
+			if len(lines) > vpH {
 				lines = lines[len(lines)-vpH:]
+			}
+		} else {
+			skip := m.scrollTop - vr.TopSpacer
+			if skip < 0 {
+				skip = 0
+			}
+			if skip < len(lines) {
+				lines = lines[skip:]
 			} else {
+				lines = nil
+			}
+			if len(lines) > vpH {
 				lines = lines[:vpH]
 			}
+		}
+		for len(lines) < vpH {
+			lines = append(lines, "")
 		}
 		totalScroll := m.messageScrollContentHeight()
 		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalScroll, m.scrollTop, m.msgScrollbarW))
