@@ -1512,49 +1512,42 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 
 func (m *model) measureTranscriptStreamingToolRow(tu conversation.StreamingToolUse, cols int, searchHL string) int {
 	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-	namePart := tu.Name
+	facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+	if facing == "" {
+		facing = tu.Name
+	}
+	namePart := facing
 	if strings.TrimSpace(searchHL) != "" {
-		namePart = highlightSearchPlain(tu.Name, searchHL, transcriptSearchHLStyle())
+		namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
 	}
-	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
+	if p := strings.TrimSpace(paren); p != "" {
+		toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
+	}
+	toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
 	block := head + "\n" + toolLine
-	if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-		maxW := cols * 4
-		if maxW < 80 {
-			maxW = 80
-		}
-		prev := previewForTrace(s, maxW)
-		if strings.TrimSpace(searchHL) != "" {
-			prev = highlightSearchPlain(prev, searchHL, transcriptSearchHLStyle())
-		}
-		block += "\n" + lipgloss.NewStyle().Faint(true).Render(prev)
-	}
 	return max(1, layout.WrappedRowCount(block, cols))
 }
 
 func (m *model) renderTranscriptStreamingToolRow(tu conversation.StreamingToolUse, cols, h int, searchHL string) string {
 	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-	namePart := tu.Name
-	if strings.TrimSpace(searchHL) != "" {
-		namePart = highlightSearchPlain(tu.Name, searchHL, transcriptSearchHLStyle())
+	facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+	if facing == "" {
+		facing = tu.Name
 	}
-	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+	namePart := facing
+	if strings.TrimSpace(searchHL) != "" {
+		namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
+	}
+	toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
+	if p := strings.TrimSpace(paren); p != "" {
+		toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
+	}
+	toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
 	var b strings.Builder
 	b.WriteString(head)
 	b.WriteByte('\n')
 	b.WriteString(toolLine)
-	if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-		b.WriteByte('\n')
-		maxW := cols * 4
-		if maxW < 80 {
-			maxW = 80
-		}
-		prev := previewForTrace(s, maxW)
-		if strings.TrimSpace(searchHL) != "" {
-			prev = highlightSearchPlain(prev, searchHL, transcriptSearchHLStyle())
-		}
-		b.WriteString(lipgloss.NewStyle().Faint(true).Render(prev))
-	}
 	out := b.String()
 	lines := strings.Split(out, "\n")
 	for len(lines) < h {
@@ -1731,16 +1724,16 @@ func (m *model) View() string {
 				head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 				msgPane.WriteString(head)
 				msgPane.WriteByte('\n')
-				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+tu.Name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
-				msgPane.WriteString(toolTitle)
-				if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-					msgPane.WriteByte('\n')
-					maxW := bodyCols * 4
-					if maxW < 80 {
-						maxW = 80
-					}
-					msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(previewForTrace(s, maxW)))
+				facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+				if facing == "" {
+					facing = tu.Name
 				}
+				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
+				if p := strings.TrimSpace(paren); p != "" {
+					toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
+				}
+				toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+				msgPane.WriteString(toolTitle)
 			}
 		}
 		if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {

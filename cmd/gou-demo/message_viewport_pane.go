@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"goc/gou/markdown"
+	"goc/gou/messagerow"
 	"goc/gou/theme"
 	"goc/types"
 )
@@ -229,16 +231,16 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			head := lipglossStyleAssistantHead()
 			sb.WriteString(head)
 			sb.WriteByte('\n')
-			toolTitle := lipglossStyleStreamingToolTitle(tu.Name)
-			sb.WriteString(toolTitle)
-			if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-				sb.WriteByte('\n')
-				maxW := bodyCols * 4
-				if maxW < 80 {
-					maxW = 80
-				}
-				sb.WriteString(lipglossStyleFaintPreview(previewForTrace(s, maxW)))
+			facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+			if facing == "" {
+				facing = tu.Name
 			}
+			toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
+			if p := strings.TrimSpace(paren); p != "" {
+				toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
+			}
+			toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+			sb.WriteString(toolTitle)
 			if !addBlock(sb.String()) {
 				return "", false
 			}
