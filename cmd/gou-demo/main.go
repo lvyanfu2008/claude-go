@@ -845,8 +845,11 @@ func teaGlobalRedrawCmd() tea.Cmd {
 
 func (m *model) inputAreaHeight() int {
 	n := m.pr.LineCount() + 2
+	if m.uiScreen != gouDemoScreenTranscript {
+		n++ // horizontal rule above input (model | Context sits above the rule when status is on)
+	}
 	if m.uiScreen != gouDemoScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
-		n++
+		n++ // builtin: model | Context % (tokens)
 	}
 	if n < 4 {
 		n = 4
@@ -855,6 +858,15 @@ func (m *model) inputAreaHeight() int {
 		n = 16
 	}
 	return n
+}
+
+// promptAboveInputRuleLine is a faint full-width line between the context row and the multiline prompt.
+func promptAboveInputRuleLine(cols int) string {
+	if cols < 1 {
+		cols = 40
+	}
+	rule := strings.Repeat("─", cols)
+	return lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted()).Width(cols).Render(rule)
 }
 
 // bottomChromeHeight is prompt input height or transcript footer height (TS transcript has no prompt).
@@ -1780,6 +1792,8 @@ func (m *model) View() string {
 			b.WriteString(s)
 			b.WriteByte('\n')
 		}
+		b.WriteString(promptAboveInputRuleLine(m.cols))
+		b.WriteByte('\n')
 		promptView := userInputViewWithPromptPrefix(m)
 		hintText := strings.TrimSpace(replChromeFooterHint(narrow))
 		frag := strings.TrimSpace(replChromePermissionFragment(m.permissionMode, narrow))
@@ -1907,9 +1921,9 @@ func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	return false
 }
 
-// userPromptPrefixStyled renders dim "> "; userMsgRowBg matches user message row gray fill so inner ANSI does not reset the background.
+// userPromptPrefixStyled renders bright "> " for user rows (matches user message body emphasis).
 func userPromptPrefixStyled(userMsgRowBg bool) string {
-	st := lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted())
+	st := lipgloss.NewStyle().Foreground(theme.UserMessageText()).Bold(true)
 	if userMsgRowBg {
 		st = st.Background(theme.UserMessageBackground())
 	}
@@ -2294,10 +2308,19 @@ func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix strin
 		return ""
 	}
 	stCode := baseMsgStyle(userRow).Foreground(theme.MarkdownInlineCode())
-	stPlain := baseMsgStyle(userRow)
-	stBold := baseMsgStyle(userRow).Bold(true)
-	stItalic := baseMsgStyle(userRow).Italic(true)
-	stBoldItalic := baseMsgStyle(userRow).Bold(true).Italic(true)
+	var stPlain, stBold, stItalic, stBoldItalic lipgloss.Style
+	if userRow {
+		ut := theme.UserMessageText()
+		stPlain = baseMsgStyle(userRow).Foreground(ut).Bold(true)
+		stBold = baseMsgStyle(userRow).Foreground(ut).Bold(true)
+		stItalic = baseMsgStyle(userRow).Foreground(ut).Italic(true)
+		stBoldItalic = baseMsgStyle(userRow).Foreground(ut).Bold(true).Italic(true)
+	} else {
+		stPlain = baseMsgStyle(userRow)
+		stBold = baseMsgStyle(userRow).Bold(true)
+		stItalic = baseMsgStyle(userRow).Italic(true)
+		stBoldItalic = baseMsgStyle(userRow).Bold(true).Italic(true)
+	}
 	var b strings.Builder
 	for i, seg := range segs {
 		txt := seg.Text
@@ -2359,6 +2382,8 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 			}
 			if len(t.Segments) > 0 {
 				parts = append(parts, styleMarkdownInlineSegments(t.Segments, prefix, userRow))
+			} else if userRow {
+				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(prefix+t.Text))
 			} else {
 				parts = append(parts, baseMsgStyle(userRow).Render(prefix+t.Text))
 			}
@@ -2367,6 +2392,8 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
 				pref := "> " + strings.ReplaceAll(inner, "\n", "\n> ")
 				parts = append(parts, pref)
+			} else if userRow {
+				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Italic(true).Bold(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
 			} else {
 				parts = append(parts, baseMsgStyle(userRow).Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
 			}
@@ -2377,14 +2404,14 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 				parts = append(parts, styleMarkdownInlineSegments(t.Segments, "", userRow))
 			} else {
 				if userRow {
-					parts = append(parts, baseMsgStyle(userRow).Render(t.Text))
+					parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(t.Text))
 				} else {
 					parts = append(parts, t.Text)
 				}
 			}
 		default:
 			if userRow {
-				parts = append(parts, baseMsgStyle(userRow).Render(t.Text))
+				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(t.Text))
 			} else {
 				parts = append(parts, t.Text)
 			}

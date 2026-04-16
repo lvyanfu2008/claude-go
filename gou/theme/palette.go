@@ -24,6 +24,8 @@ type Palette struct {
 	InlineCode lipgloss.Color // markdown `inline` spans in assistant/user body (TS code color)
 	// UserMessageBackground fills rows behind user-authored text in the gou-demo message list.
 	UserMessageBackground lipgloss.Color
+	// UserMessageText is the primary foreground for user-authored prose (bright; Bold applied in gou-demo).
+	UserMessageText lipgloss.Color
 }
 
 var (
@@ -46,6 +48,7 @@ func defaultPalette() Palette {
 		Heading:               lipgloss.Color("214"),
 		InlineCode:            lipgloss.Color("63"),
 		UserMessageBackground: lipgloss.Color("236"),
+		UserMessageText:       lipgloss.Color("255"),
 	}
 }
 
@@ -65,6 +68,7 @@ func lightPalette() Palette {
 		Heading:               lipgloss.Color("94"),
 		InlineCode:            lipgloss.Color("24"),
 		UserMessageBackground: lipgloss.Color("252"),
+		UserMessageText:       lipgloss.Color("24"),
 	}
 }
 
@@ -153,4 +157,9 @@ func MarkdownInlineCode() lipgloss.Color {
 // UserMessageBackground is the full-width row fill behind user message text in the gou-demo message list.
 func UserMessageBackground() lipgloss.Color {
 	return activePalette.UserMessageBackground
+}
+
+// UserMessageText returns the bright foreground for user-authored message body text in gou-demo.
+func UserMessageText() lipgloss.Color {
+	return activePalette.UserMessageText
 }
