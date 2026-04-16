@@ -21,7 +21,7 @@ type Palette struct {
 	Collapsed lipgloss.Color
 	Server    lipgloss.Color
 	Heading    lipgloss.Color
-	InlineCode lipgloss.Color // markdown `inline` spans in assistant/user body (TS code color)
+	InlineCode lipgloss.Color // markdown `inline` spans — light blue (ANSI 256)
 	// UserMessageBackground fills rows behind user-authored text in the gou-demo message list.
 	UserMessageBackground lipgloss.Color
 	// UserMessageText is the primary foreground for user-authored prose (bright; Bold applied in gou-demo).
@@ -46,7 +46,7 @@ func defaultPalette() Palette {
 		Collapsed: lipgloss.Color("114"),
 		Server:    lipgloss.Color("99"),
 		Heading:               lipgloss.Color("214"),
-		InlineCode:            lipgloss.Color("63"),
+		InlineCode:            lipgloss.Color("117"), // light sky blue on dark bg
 		UserMessageBackground: lipgloss.Color("236"),
 		UserMessageText:       lipgloss.Color("255"),
 	}
@@ -66,7 +66,7 @@ func lightPalette() Palette {
 		Collapsed: lipgloss.Color("64"),
 		Server:    lipgloss.Color("54"),
 		Heading:               lipgloss.Color("94"),
-		InlineCode:            lipgloss.Color("24"),
+		InlineCode:            lipgloss.Color("39"), // dodger blue on light bg (distinct from User 25)
 		UserMessageBackground: lipgloss.Color("252"),
 		UserMessageText:       lipgloss.Color("24"),
 	}
@@ -149,7 +149,7 @@ func MarkdownHeading() lipgloss.Color {
 	return activePalette.Heading
 }
 
-// MarkdownInlineCode is inline `code` span color in markdown body styling (TS parity).
+// MarkdownInlineCode is inline `code` span color in markdown body styling.
 func MarkdownInlineCode() lipgloss.Color {
 	return activePalette.InlineCode
 }
