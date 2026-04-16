@@ -1937,6 +1937,19 @@ func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 	return strings.Join(lines, "\n")
 }
 
+// styleUserMessageLines applies a full-width gray background per row (ANSI-safe; lipgloss pads to cols).
+func styleUserMessageLines(rows []string, cols int) string {
+	st := lipgloss.NewStyle().Background(theme.UserMessageBackground()).Width(cols)
+	var b strings.Builder
+	for i, ln := range rows {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(st.Render(ln))
+	}
+	return b.String()
+}
+
 func withCollapsedSpaceIfNeeded(msg types.Message, body string) string {
 	if msg.Type != types.MessageTypeCollapsedReadSearch || body == "" {
 		return body
@@ -1981,7 +1994,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 		rows = rows[:maxRows]
 	}
 	if msg.Type == types.MessageTypeUser {
-		return strings.Join(rows, "\n") + "\n"
+		return styleUserMessageLines(rows, cols) + "\n"
 	}
 
 	return strings.Join(rows, "\n")
