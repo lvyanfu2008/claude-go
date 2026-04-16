@@ -18,6 +18,30 @@ func countToolLeadGlyphs(s string) int {
 	return strings.Count(s, "\u23fa") + strings.Count(s, "\u25cf")
 }
 
+func TestFormatMessageSegments_mergedSearchReadSummaryOneCommaLine(t *testing.T) {
+	segs := []messagerow.Segment{
+		{Kind: messagerow.SegTextMarkdown, Text: "现在让我查看 UseOpenAIChatProvider 函数："},
+		{Kind: messagerow.SegToolUseSummaryLine, Text: "Searched for 1 pattern, Read 1 file", ToolUseIDs: []string{"g1", "r1"}},
+	}
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
+	if strings.Count(out, "Searched for 1 pattern") != 1 || strings.Count(out, "Read 1 file") != 1 {
+		t.Fatalf("want single line containing both clauses, got:\n%s", out)
+	}
+	if !strings.Contains(out, "\n\n") {
+		t.Fatalf("want blank line between assistant text and summary, got:\n%s", out)
+	}
+	if !strings.Contains(out, "  ") || !strings.Contains(out, "Searched for 1 pattern") {
+		t.Fatalf("want two-space indent before summary line, got:\n%s", out)
+	}
+	idx := strings.Index(out, "Searched for 1 pattern")
+	if idx < 2 || out[idx-1] != ' ' || out[idx-2] != ' ' {
+		t.Fatalf("summary should start after exactly two spaces, got:\n%s", out)
+	}
+	if !strings.Contains(out, "ctrl+o to expand") {
+		t.Fatalf("want ctrl+o when unresolved, got:\n%s", out)
+	}
+}
+
 func TestFormatMessageSegments_singleLeadGlyphAfterAssistantText(t *testing.T) {
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegTextMarkdown, Text: "我来查看一下项目结构和主要业务。"},

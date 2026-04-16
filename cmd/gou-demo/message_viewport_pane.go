@@ -163,7 +163,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				default:
 					line = fmt.Sprintf("%s  %s  [folded]", msg.Type, u)
 				}
-				if i > 0 && userAssistantPairBlankLine(msgView[i-1], msg) {
+				if i > 0 && (userAssistantPairBlankLine(msgView[i-1], msg) || transcriptAssistantPairBlankLine(m, msgView[i-1], msg)) {
 					if lineCnt > 0 {
 						if lineCnt+1 > maxL {
 							return "", false
@@ -177,7 +177,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				}
 				continue
 			}
-			if i > 0 && userAssistantPairBlankLine(msgView[i-1], msg) {
+			if i > 0 && (userAssistantPairBlankLine(msgView[i-1], msg) || transcriptAssistantPairBlankLine(m, msgView[i-1], msg)) {
 				if lineCnt > 0 {
 					if lineCnt+1 > maxL {
 						return "", false

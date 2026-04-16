@@ -106,7 +106,44 @@ func TestSegments_collapsedReadSearch_activeShowsHintRow(t *testing.T) {
 	}
 }
 
-func TestSegments_collapsedReadSearch_verboseTranscriptOmitsRollupWhenNestedMessages(t *testing.T) {
+func TestSegments_collapsedReadSearch_verboseTranscriptGrepPlusReadNestedRollupOneLine(t *testing.T) {
+	grepContent, _ := json.Marshal([]map[string]any{{
+		"type": "tool_use", "id": "g1", "name": "Grep",
+		"input": map[string]any{"pattern": "foo", "path": "/p"},
+	}})
+	readContent, _ := json.Marshal([]map[string]any{{
+		"type": "tool_use", "id": "r1", "name": "Read",
+		"input": map[string]any{"file_path": "/proj/a.go"},
+	}})
+	msg := types.Message{
+		Type:        types.MessageTypeCollapsedReadSearch,
+		UUID:        "c2",
+		SearchCount: 1,
+		ReadCount:   1,
+		Messages: []types.Message{
+			{Type: types.MessageTypeAssistant, UUID: "a1", Content: grepContent},
+			{Type: types.MessageTypeAssistant, UUID: "a2", Content: readContent},
+		},
+	}
+	segs := SegmentsFromMessageOpts(msg, &RenderOpts{
+		VerboseCollapsedReadSearch: true,
+		TranscriptMode:             true,
+	})
+	if len(segs) < 1 || segs[0].Kind != SegCollapsedReadSearch {
+		t.Fatalf("want rollup first, got %+v", segs)
+	}
+	want := "Searched for 1 pattern, Read 1 file"
+	if strings.TrimSpace(segs[0].Text) != want {
+		t.Fatalf("want %q, got %q", want, segs[0].Text)
+	}
+	for _, s := range segs {
+		if s.Kind == SegToolUseSummaryLine {
+			t.Fatalf("should not emit nested SegToolUseSummaryLine, got %+v", segs)
+		}
+	}
+}
+
+func TestSegments_collapsedReadSearch_verboseTranscriptRollupOneLineAndSkipsNestedSummaryLines(t *testing.T) {
 	raw, _ := json.Marshal([]map[string]any{{
 		"type": "tool_use", "id": "tu1", "name": "Read",
 		"input": map[string]any{"file_path": "/proj/doc.go"},
@@ -126,13 +163,20 @@ func TestSegments_collapsedReadSearch_verboseTranscriptOmitsRollupWhenNestedMess
 		VerboseCollapsedReadSearch: true,
 		TranscriptMode:             true,
 	})
-	for _, s := range segs {
-		if s.Kind == SegCollapsedReadSearch {
-			t.Fatalf("transcript verbose with nested tools should omit rollup summary row, got %+v", segs)
+	var rollup *Segment
+	for i := range segs {
+		if segs[i].Kind == SegCollapsedReadSearch {
+			rollup = &segs[i]
+			break
 		}
 	}
-	if len(segs) == 0 {
-		t.Fatal("expected nested tool segments")
+	if rollup == nil || !strings.Contains(rollup.Text, "Read 1 file") {
+		t.Fatalf("want one collapsed_read_search rollup with aggregate summary, got %+v", segs)
+	}
+	for _, s := range segs {
+		if s.Kind == SegToolUseSummaryLine {
+			t.Fatalf("nested per-tool summary lines should be merged into rollup, got %+v", segs)
+		}
 	}
 }
 

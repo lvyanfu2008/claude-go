@@ -561,9 +561,9 @@ type model struct {
 	msgHistoryBrowseMouseOff bool
 
 	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
-	resolvedToolIDs   map[string]struct{}
+	resolvedToolIDs     map[string]struct{}
 	groupedAgentLookups *messagerow.GroupedAgentLookups
-	lastMainLoopModel string
+	lastMainLoopModel   string
 
 	// rebuildHeightCacheCalls increments in rebuildHeightCache (tests: streaming skip policy).
 	rebuildHeightCacheCalls int
@@ -1360,7 +1360,7 @@ func (m *model) rebuildHeightCache() {
 	m.syncMsgFirstShownAt()
 
 	m.groupedAgentLookups = messagerow.BuildGroupedAgentLookups(m.store.Messages)
-	
+
 	// Convert bool map to struct{} map for existing formatMessageSegments logic
 	m.resolvedToolIDs = make(map[string]struct{})
 	for k, v := range m.groupedAgentLookups.ResolvedToolUseIDs {
@@ -1428,8 +1428,8 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 		return ro
 	}
 	return &messagerow.RenderOpts{
-		GroupedAgentLookups:  m.groupedAgentLookups,
-		ResolvedToolUseIDs:   m.resolvedToolIDs,
+		GroupedAgentLookups: m.groupedAgentLookups,
+		ResolvedToolUseIDs:  m.resolvedToolIDs,
 	}
 }
 
@@ -1457,6 +1457,9 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
+	}
+	if msg.Type == types.MessageTypeUser {
+		block = block + "\n"
 	}
 	r := layout.WrappedRowCount(block, cols)
 	if msg.Type == types.MessageTypeAttachment {
@@ -1534,6 +1537,9 @@ func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
 		if i < msgN {
 			h := m.measureMessageRows(msgView[i], cols, hl)
 			if i > 0 && userAssistantPairBlankLine(msgView[i-1], msgView[i]) {
+				h++
+			}
+			if i > 0 && transcriptAssistantPairBlankLine(m, msgView[i-1], msgView[i]) {
 				h++
 			}
 			m.heightCache[keys[i]] = h
@@ -1660,7 +1666,8 @@ func (m *model) View() string {
 				if i > vr.Start {
 					needExtra := false
 					if i < msgN {
-						needExtra = userAssistantPairBlankLine(msgView[i-1], msgView[i])
+						needExtra = userAssistantPairBlankLine(msgView[i-1], msgView[i]) ||
+							transcriptAssistantPairBlankLine(m, msgView[i-1], msgView[i])
 					} else if i == msgN && msgN > 0 {
 						needExtra = msgView[msgN-1].Type == types.MessageTypeUser
 					}
@@ -1782,7 +1789,8 @@ func (m *model) showToolUseCtrlOExpandHint() bool {
 // user and assistant scroll rows (either order).
 func userAssistantPairBlankLine(a, b types.Message) bool {
 	u, aType := types.MessageTypeUser, types.MessageTypeAssistant
-	return (a.Type == u && b.Type == aType) || (a.Type == aType && b.Type == u)
+	c := types.MessageTypeCollapsedReadSearch
+	return a.Type == u && b.Type == aType || a.Type == c && b.Type == aType
 }
 
 // streamGapAfterUserMessage is true when the StreamingText tail should be separated from the
@@ -1899,6 +1907,19 @@ func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 	return strings.Join(lines, "\n")
 }
 
+func withCollapsedSpaceIfNeeded(msg types.Message, body string) string {
+	if msg.Type != types.MessageTypeCollapsedReadSearch || body == "" {
+		return body
+	}
+	prefix := "  "
+	lines := strings.Split(body, "\n")
+	if len(lines) == 0 {
+		return prefix
+	}
+	lines[0] = prefix + lines[0]
+	return strings.Join(lines, "\n")
+}
+
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL string) string {
 	if m.skipFoldedToolResultStubInPrompt(msg) {
 		return ""
@@ -1919,6 +1940,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 	}
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true)
 	body = withUserPromptPointerIfNeeded(msg, body)
+	body = withCollapsedSpaceIfNeeded(msg, body)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
@@ -1928,6 +1950,10 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 	if len(rows) > maxRows {
 		rows = rows[:maxRows]
 	}
+	if msg.Type == types.MessageTypeUser {
+		return strings.Join(rows, "\n") + "\n"
+	}
+
 	return strings.Join(rows, "\n")
 }
 
@@ -1994,6 +2020,23 @@ func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResu
 	return true
 }
 
+// segmentJoinSeparator inserts an extra blank line after assistant prose before a merged Grep/Glob/Read summary line.
+func segmentJoinSeparator(prev, cur messagerow.Segment) string {
+	if prev.Kind == messagerow.SegTextMarkdown && strings.TrimSpace(prev.Text) != "" && cur.Kind == messagerow.SegToolUseSummaryLine {
+		return "\n\n"
+	}
+	return "\n"
+}
+
+// transcriptAssistantPairBlankLine is true when the UI inserts one empty line between consecutive
+// assistant rows in transcript (breathing room before the next ⏺ block).
+func transcriptAssistantPairBlankLine(m *model, a, b types.Message) bool {
+	if m == nil || m.uiScreen != gouDemoScreenTranscript {
+		return false
+	}
+	return a.Type == types.MessageTypeAssistant && b.Type == types.MessageTypeAssistant
+}
+
 // priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
 // One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
 func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
@@ -2017,9 +2060,11 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 		}
 		return highlightSearchPlain(s, searchHL, hlSt)
 	}
-	var parts []string
+	var b strings.Builder
+	var lastSegIdx int = -1
 	assistantTextLeadDone := false
 	for i, seg := range segs {
+		var piece string
 		switch seg.Kind {
 		case messagerow.SegTextMarkdown:
 			textForMd := seg.Text
@@ -2031,7 +2076,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				assistantTextLeadDone = true
 				md = prefixToolGlyphFirstLine(md)
 			}
-			parts = append(parts, md)
+			piece = md
 		case messagerow.SegToolUse:
 			if seg.ToolFacing != "" {
 				row1 := ""
@@ -2069,13 +2114,13 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
 					}
 				}
-				parts = append(parts, strings.Join(toolLines, "\n"))
+				piece = strings.Join(toolLines, "\n")
 			} else {
 				line := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + withHL(seg.Text))
 				if toolUseCtrlOHint {
 					line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 				}
-				parts = append(parts, line)
+				piece = line
 			}
 		case messagerow.SegToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.DimMuted())
@@ -2087,12 +2132,12 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			if seg.ToolBodyOmitted && toolUseCtrlOHint {
 				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 			}
-			parts = append(parts, line)
+			piece = line
 		case messagerow.SegThinking:
 			body := textutil.LinkifyOSC8(seg.Text)
-			parts = append(parts, lipgloss.NewStyle().Bold(true).Render("● "+withHL(body)))
+			piece = lipgloss.NewStyle().Bold(true).Render("● " + withHL(body))
 		case messagerow.SegDisplayHint:
-			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
+			piece = lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 		case messagerow.SegServerToolUse:
 			if seg.ToolFacing != "" {
 				row1 := ""
@@ -2130,13 +2175,13 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
 					}
 				}
-				parts = append(parts, strings.Join(toolLines, "\n"))
+				piece = strings.Join(toolLines, "\n")
 			} else {
 				line := lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + withHL(seg.Text))
 				if toolUseCtrlOHint {
 					line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 				}
-				parts = append(parts, line)
+				piece = line
 			}
 		case messagerow.SegAdvisorToolResult:
 			st := lipgloss.NewStyle().Foreground(theme.AdvisorAccent())
@@ -2148,17 +2193,17 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			if seg.ToolBodyOmitted && toolUseCtrlOHint {
 				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 			}
-			parts = append(parts, line)
+			piece = line
 		case messagerow.SegGroupedToolUse:
-			parts = append(parts, lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ "+withHL(seg.Text)))
+			piece = lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ " + withHL(seg.Text))
 		case messagerow.SegCollapsedReadSearch:
-			parts = append(parts, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
+			piece = lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 		case messagerow.SegToolUseSummaryLine:
 			line := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, showResolvedToolStats) && toolUseCtrlOHint {
 				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
 			}
-			parts = append(parts, line)
+			piece = "  " + line
 		case messagerow.SegSkillListingAvailable:
 			n := seg.Num
 			if n < 1 {
@@ -2168,13 +2213,20 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			if n == 1 {
 				word = "skill"
 			}
-			line := lipgloss.NewStyle().Bold(true).Render(strconv.Itoa(n)) + " " + word + " available"
-			parts = append(parts, line)
+			piece = lipgloss.NewStyle().Bold(true).Render(strconv.Itoa(n)) + " " + word + " available"
 		default:
-			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text))))
+			piece = lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 		}
+		if piece == "" {
+			continue
+		}
+		if b.Len() > 0 && lastSegIdx >= 0 {
+			b.WriteString(segmentJoinSeparator(segs[lastSegIdx], segs[i]))
+		}
+		b.WriteString(piece)
+		lastSegIdx = i
 	}
-	return strings.TrimSpace(strings.Join(parts, "\n"))
+	return strings.TrimSpace(b.String())
 }
 
 // styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).

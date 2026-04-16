@@ -188,9 +188,11 @@ func segmentsCollapsedReadSearchVerbose(msg types.Message, depth int, opts *Rend
 		summary = "…"
 	}
 	var out []Segment
-	// Transcript: nested ⏺/⎿ tool rows already convey counts; omit redundant "Read N files" rollup line.
+	// Transcript + nested: parent already carries aggregate counts in summary (comma-separated).
+	// Expanding each nested assistant used to emit one SegToolUseSummaryLine per Grep/Glob/Read, which
+	// split "Searched…, Read…" across lines; keep the rollup as one row and drop duplicate summary lines.
 	omitRollup := opts != nil && opts.TranscriptMode && len(msg.Messages) > 0
-	if !omitRollup {
+	if omitRollup {
 		line := summary + CtrlOToExpandHint
 		if opts != nil && opts.TranscriptMode {
 			line = summary
@@ -206,6 +208,30 @@ func segmentsCollapsedReadSearchVerbose(msg types.Message, depth int, opts *Rend
 				}
 				out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + h})
 			}
+		}
+		for i := range msg.Messages {
+			for _, seg := range segmentsFromMessageDepthOpts(msg.Messages[i], depth+1, opts) {
+				if seg.Kind != SegToolUseSummaryLine {
+					out = append(out, seg)
+				}
+			}
+		}
+		return out
+	}
+	line := summary + CtrlOToExpandHint
+	if opts != nil && opts.TranscriptMode {
+		line = summary
+	}
+	out = append(out, Segment{Kind: SegCollapsedReadSearch, Text: line})
+	if isActive && msg.LatestDisplayHint != nil {
+		h := strings.TrimSpace(*msg.LatestDisplayHint)
+		if h != "" {
+			h = strings.ReplaceAll(h, "\r\n", "\n")
+			h = strings.ReplaceAll(h, "\n", " ")
+			if len(h) > 400 {
+				h = h[:400] + "…"
+			}
+			out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + h})
 		}
 	}
 	for i := range msg.Messages {

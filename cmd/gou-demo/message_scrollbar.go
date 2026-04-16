@@ -111,6 +111,9 @@ func (m *model) fillMessageHeightCache(cols int, hl string) {
 		if i > 0 && userAssistantPairBlankLine(msgView[i-1], msgView[i]) {
 			h++
 		}
+		if i > 0 && transcriptAssistantPairBlankLine(m, msgView[i-1], msgView[i]) {
+			h++
+		}
 		m.heightCache[k] = h
 	}
 	streamKeys := m.transcriptStreamingToolScrollKeys()
