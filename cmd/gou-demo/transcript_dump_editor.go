@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -75,54 +76,115 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 	if wrapCols < 1 {
 		wrapCols = 80
 	}
-	// Always export full history regardless of current screen mode.
+	// Respect current screen mode for filters (prompt vs transcript).
+	isInTranscript := m.uiScreen == gouDemoScreenTranscript
+	showAll := m.transcriptShowAll || m.transcriptDumpMode
+
 	raw := slices.Clone(m.store.Messages)
+	// VirtualScrollEnabled must be true to avoid 30-message truncation in maybeTranscriptTail.
 	msgView := messagesview.MessagesForScrollList(raw, messagesview.ScrollListOpts{
-		TranscriptMode:       true, // Force transcript mode to use its filters
-		ShowAllInTranscript:  true, // Force show all
-		VirtualScrollEnabled: false,
+		TranscriptMode:       isInTranscript,
+		ShowAllInTranscript:  showAll,
+		VirtualScrollEnabled: true,
 		ResolvedToolUseIDs:   m.resolvedToolIDs,
 	})
-	opts := &messagerow.RenderOpts{
-		ShowAllInTranscript:        true,
-		VerboseCollapsedReadSearch: true,
-		GroupedAgentLookups:        m.groupedAgentLookups,
-		ResolvedToolUseIDs:         m.resolvedToolIDs,
-		TranscriptMode:             true,
-	}
+
 	var b strings.Builder
 	for i := range msgView {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
 		msg := messagerow.NormalizeMessageJSON(msgView[i])
+		if !isInTranscript && m.skipFoldedToolResultStubInPrompt(msg) {
+			continue
+		}
+
 		b.WriteString(string(msg.Type))
 		b.WriteByte('\n')
-		b.WriteString(transcriptPlainBodyFromMessage(msg, opts, wrapCols))
+		b.WriteString(transcriptPlainBodyFromMessage(m, msg, wrapCols))
 	}
 	// ... streaming tools ...
-	for _, tu := range m.transcriptStreamingToolsForView() {
-		b.WriteByte('\n')
-		b.WriteString(string(types.MessageTypeAssistant))
-		b.WriteByte('\n')
-		line := "⚙ " + tu.Name + " · streaming"
-		if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
-			line += "\n" + s
+	// Only export streaming tools if we are in transcript mode (matches UI).
+	if isInTranscript {
+		for _, tu := range m.transcriptStreamingToolsForView() {
+			b.WriteByte('\n')
+			b.WriteString(string(types.MessageTypeAssistant))
+			b.WriteByte('\n')
+			line := "⚙ " + tu.Name + " · streaming"
+			if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
+				line += "\n" + s
+			}
+			b.WriteString(strings.TrimRight(layout.WrapForViewport(line, wrapCols), "\n"))
 		}
-		b.WriteString(strings.TrimRight(layout.WrapForViewport(line, wrapCols), "\n"))
 	}
 	return stripTranscriptExportTrailingSpaces(b.String())
 }
 
-func transcriptPlainBodyFromMessage(msg types.Message, opts *messagerow.RenderOpts, wrapCols int) string {
+func transcriptPlainBodyFromMessage(m *model, msg types.Message, wrapCols int) string {
+	opts := m.messagerowOpts(msg)
 	segs := messagerow.SegmentsFromMessageOpts(msg, opts)
+
+	// Use a simplified plain-text version of formatMessageSegments symbols.
 	var parts []string
+	assistantTextLeadDone := false
 	for _, seg := range segs {
-		if seg.Text != "" {
-			parts = append(parts, seg.Text)
+		var piece string
+		switch seg.Kind {
+		case messagerow.SegTextMarkdown:
+			md := seg.Text
+			if msg.Type == types.MessageTypeAssistant && !assistantTextLeadDone && strings.TrimSpace(seg.Text) != "" {
+				assistantTextLeadDone = true
+				glyph := "● "
+				if runtime.GOOS == "darwin" {
+					glyph = "⏺ "
+				}
+				md = glyph + md
+			}
+			piece = md
+		case messagerow.SegToolUse:
+			if seg.ToolFacing != "" {
+				piece = "⚙ " + seg.ToolFacing
+				if p := strings.TrimSpace(seg.ToolParen); p != "" {
+					piece += " (" + p + ")"
+				}
+				if act := strings.TrimSpace(seg.Text); act != "" {
+					piece += "\n" + act + "…"
+				}
+			} else {
+				piece = "⚙ " + seg.Text
+			}
+		case messagerow.SegToolResult:
+			piece = "↩ " + seg.Text
+		case messagerow.SegThinking:
+			piece = "● " + seg.Text
+		case messagerow.SegServerToolUse:
+			if seg.ToolFacing != "" {
+				piece = "⎈ " + seg.ToolFacing
+			} else {
+				piece = "⎈ " + seg.Text
+			}
+		case messagerow.SegAdvisorToolResult:
+			piece = "✧ " + seg.Text
+		case messagerow.SegGroupedToolUse:
+			piece = "▦ " + seg.Text
+		case messagerow.SegToolUseSummaryLine:
+			piece = "  " + seg.Text
+		default:
+			piece = seg.Text
+		}
+		if piece != "" {
+			parts = append(parts, piece)
 		}
 	}
 	raw := strings.Join(parts, "\n")
+	if msg.Type == types.MessageTypeUser {
+		// Prepend "> " to match UI.
+		lines := strings.Split(raw, "\n")
+		for i, ln := range lines {
+			lines[i] = "> " + ln
+		}
+		raw = strings.Join(lines, "\n")
+	}
 	return strings.TrimRight(layout.WrapForViewport(raw, wrapCols), "\n")
 }
 
