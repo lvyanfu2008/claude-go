@@ -445,7 +445,7 @@ func (m *model) promptBottomStreamRows() []string {
 		var streamTail string
 		if strings.TrimSpace(m.store.StreamingText) != "" {
 			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-			streamTail = styleMarkdownTokens(toks, m.cols)
+			streamTail = styleMarkdownTokens(toks, m.cols, false)
 		} else {
 			streamTail = lipgloss.NewStyle().Faint(true).Render("(streaming)")
 		}
@@ -460,7 +460,7 @@ func (m *model) promptBottomStreamRows() []string {
 	}
 	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
 	toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-	streamBody := styleMarkdownTokens(toks, m.cols)
+	streamBody := styleMarkdownTokens(toks, m.cols, false)
 	streamWrapped := layout.WrapForViewport(streamLabel+streamBody, w)
 	streamRows := strings.Split(streamWrapped, "\n")
 	return padStreamRows(streamRows, h)
@@ -1482,7 +1482,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 		}
 	}
 	// Resolved Read/Search ⎿ stats (Found N lines, read preview) match transcript; not transcript-screen-only.
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true, msg.Type == types.MessageTypeUser)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	block := body
 	if header != "" {
@@ -1743,7 +1743,7 @@ func (m *model) View() string {
 			head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 			msgPane.WriteString(head)
 			msgPane.WriteByte('\n')
-			msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols))
+			msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false))
 		}
 
 		lines := strings.Split(msgPane.String(), "\n")
@@ -1907,14 +1907,19 @@ func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	return false
 }
 
-func userPromptPrefixStyled() string {
-	return lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted()).Render(UserPromptPointerGlyph() + " ")
+// userPromptPrefixStyled renders dim "> "; userMsgRowBg matches user message row gray fill so inner ANSI does not reset the background.
+func userPromptPrefixStyled(userMsgRowBg bool) string {
+	st := lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted())
+	if userMsgRowBg {
+		st = st.Background(theme.UserMessageBackground())
+	}
+	return st.Render(UserPromptPointerGlyph() + " ")
 }
 
 // userInputViewWithPromptPrefix prepends the same dim "> " as user rows on the first line of the bottom input.
-func userInputViewWithPromptPrefix(m *model) string {
+func 	userInputViewWithPromptPrefix(m *model) string {
 	v := m.pr.View()
-	prefix := userPromptPrefixStyled()
+	prefix := userPromptPrefixStyled(false)
 	lines := strings.Split(v, "\n")
 	if len(lines) == 0 {
 		return prefix
@@ -1928,7 +1933,7 @@ func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 	if msg.Type != types.MessageTypeUser || !userMessageHasPromptText(msg) || body == "" {
 		return body
 	}
-	prefix := userPromptPrefixStyled()
+	prefix := userPromptPrefixStyled(true)
 	lines := strings.Split(body, "\n")
 	if len(lines) == 0 {
 		return prefix
@@ -1981,7 +1986,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
 	}
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true, msg.Type == types.MessageTypeUser)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	body = withCollapsedSpaceIfNeeded(msg, body)
 	block := body
@@ -1994,26 +1999,26 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 		rows = rows[:maxRows]
 	}
 	if msg.Type == types.MessageTypeUser {
-		return styleUserMessageLines(rows, cols) + "\n"
+		return "\n" + styleUserMessageLines(rows, cols) + "\n"
 	}
 
 	return strings.Join(rows, "\n")
 }
 
-func toolRowLeadPrefix() string {
+func toolRowLeadPrefix(userRow bool) string {
 	glyph := "\u25cf " // ● — TS figures.BLACK_CIRCLE non-darwin
 	if runtime.GOOS == "darwin" {
 		glyph = "\u23fa " // ⏺ — TS figures.BLACK_CIRCLE on darwin
 	}
-	return lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(glyph)
+	return baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(glyph)
 }
 
 // prefixToolGlyphFirstLine prepends the dim tool lead (⏺ / ●) to the first line of rendered assistant text.
 func prefixToolGlyphFirstLine(body string) string {
 	if body == "" {
-		return toolRowLeadPrefix()
+		return toolRowLeadPrefix(false)
 	}
-	p := toolRowLeadPrefix()
+	p := toolRowLeadPrefix(false)
 	i := strings.IndexByte(body, '\n')
 	if i < 0 {
 		return p + body
@@ -2091,11 +2096,21 @@ func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
 	return false
 }
 
+// baseMsgStyle adds the user-message row background so nested lipgloss.Render calls do not reset ANSI and punch holes in the gray bar.
+func baseMsgStyle(userRow bool) lipgloss.Style {
+	s := lipgloss.NewStyle()
+	if userRow {
+		s = s.Background(theme.UserMessageBackground())
+	}
+	return s
+}
+
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
 // assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
 // searchHL applies transcript search highlight to visible plain substrings (TS useSearchHighlight).
 // showResolvedToolStats enables ⎿ TranscriptResolvedHintExtra for resolved Search/Read when tool_result JSON is available (prompt + transcript).
-func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, showResolvedToolStats bool) string {
+// userRow: when true, all lipgloss spans use the same row background as styleUserMessageLines (user-authored rows).
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, showResolvedToolStats bool, userRow bool) string {
 	hlSt := transcriptSearchHLStyle()
 	withHL := func(s string) string {
 		if strings.TrimSpace(searchHL) == "" {
@@ -2114,7 +2129,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			if strings.TrimSpace(searchHL) != "" {
 				textForMd = highlightSearchPlain(seg.Text, searchHL, hlSt)
 			}
-			md := styleMarkdownTokens(markdown.CachedLexer(textForMd), cols)
+			md := styleMarkdownTokens(markdown.CachedLexer(textForMd), cols, userRow)
 			if assistantLeadGlyph && !assistantTextLeadDone && strings.TrimSpace(seg.Text) != "" {
 				assistantTextLeadDone = true
 				md = prefixToolGlyphFirstLine(md)
@@ -2124,9 +2139,9 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			if seg.ToolFacing != "" {
 				row1 := ""
 				if !priorNonEmptyAssistantText(segs, i) {
-					row1 = toolRowLeadPrefix()
+					row1 = toolRowLeadPrefix(userRow)
 				}
-				row1 += lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render(withHL(seg.ToolFacing))
+				row1 += baseMsgStyle(userRow).Foreground(theme.ToolUseAccent()).Bold(true).Render(withHL(seg.ToolFacing))
 				if p := strings.TrimSpace(seg.ToolParen); p != "" {
 					row1 += " (" + withHL(p) + ")"
 				}
@@ -2140,54 +2155,54 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 					}
 					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
 					if hint != "" {
-						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
 						if extra != "" {
-							toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
+							toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
 						}
 					}
 				} else if !res {
 					if act := strings.TrimSpace(seg.Text); act != "" {
-						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(withHL(act) + "…")
+						actLine := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(withHL(act) + "…")
 						if toolUseCtrlOHint {
-							actLine += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+							actLine += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 						}
 						toolLines = append(toolLines, actLine)
 					}
 					if h := strings.TrimSpace(seg.ToolHint); h != "" {
-						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
 					}
 				}
 				piece = strings.Join(toolLines, "\n")
 			} else {
-				line := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + withHL(seg.Text))
+				line := baseMsgStyle(userRow).Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + withHL(seg.Text))
 				if toolUseCtrlOHint {
-					line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+					line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 				}
 				piece = line
 			}
 		case messagerow.SegToolResult:
-			st := lipgloss.NewStyle().Foreground(theme.DimMuted())
+			st := baseMsgStyle(userRow).Foreground(theme.DimMuted())
 			if seg.IsToolError {
-				st = lipgloss.NewStyle().Foreground(theme.ToolError())
+				st = baseMsgStyle(userRow).Foreground(theme.ToolError())
 			}
 			body := textutil.LinkifyOSC8(seg.Text)
 			line := st.Render("↩ " + withHL(body))
 			if seg.ToolBodyOmitted && toolUseCtrlOHint {
-				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 			}
 			piece = line
 		case messagerow.SegThinking:
 			body := textutil.LinkifyOSC8(seg.Text)
-			piece = lipgloss.NewStyle().Bold(true).Render("● " + withHL(body))
+			piece = baseMsgStyle(userRow).Bold(true).Render("● " + withHL(body))
 		case messagerow.SegDisplayHint:
-			piece = lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 		case messagerow.SegServerToolUse:
 			if seg.ToolFacing != "" {
 				row1 := ""
 				if !priorNonEmptyAssistantText(segs, i) {
-					row1 = toolRowLeadPrefix()
+					row1 = toolRowLeadPrefix(userRow)
 				}
-				row1 += lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render(withHL(seg.ToolFacing))
+				row1 += baseMsgStyle(userRow).Foreground(theme.ServerAccent()).Bold(true).Render(withHL(seg.ToolFacing))
 				if p := strings.TrimSpace(seg.ToolParen); p != "" {
 					row1 += " (" + withHL(p) + ")"
 				}
@@ -2201,50 +2216,50 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 					}
 					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
 					if hint != "" {
-						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
 						if extra != "" {
-							toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
+							toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
 						}
 					}
 				} else if !res {
 					if act := strings.TrimSpace(seg.Text); act != "" {
-						actLine := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(withHL(act) + "…")
+						actLine := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(withHL(act) + "…")
 						if toolUseCtrlOHint {
-							actLine += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+							actLine += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 						}
 						toolLines = append(toolLines, actLine)
 					}
 					if h := strings.TrimSpace(seg.ToolHint); h != "" {
-						toolLines = append(toolLines, lipgloss.NewStyle().Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
 					}
 				}
 				piece = strings.Join(toolLines, "\n")
 			} else {
-				line := lipgloss.NewStyle().Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + withHL(seg.Text))
+				line := baseMsgStyle(userRow).Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + withHL(seg.Text))
 				if toolUseCtrlOHint {
-					line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+					line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 				}
 				piece = line
 			}
 		case messagerow.SegAdvisorToolResult:
-			st := lipgloss.NewStyle().Foreground(theme.AdvisorAccent())
+			st := baseMsgStyle(userRow).Foreground(theme.AdvisorAccent())
 			if seg.IsToolError {
-				st = lipgloss.NewStyle().Foreground(theme.ToolError())
+				st = baseMsgStyle(userRow).Foreground(theme.ToolError())
 			}
 			body := textutil.LinkifyOSC8(seg.Text)
 			line := st.Render("✧ " + withHL(body))
 			if seg.ToolBodyOmitted && toolUseCtrlOHint {
-				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 			}
 			piece = line
 		case messagerow.SegGroupedToolUse:
-			piece = lipgloss.NewStyle().Foreground(theme.GroupedAccent()).Bold(true).Render("▦ " + withHL(seg.Text))
+			piece = baseMsgStyle(userRow).Foreground(theme.GroupedAccent()).Bold(true).Render("▦ " + withHL(seg.Text))
 		case messagerow.SegCollapsedReadSearch:
-			piece = lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 		case messagerow.SegToolUseSummaryLine:
-			line := lipgloss.NewStyle().Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			line := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, showResolvedToolStats) && toolUseCtrlOHint {
-				line += lipgloss.NewStyle().Faint(true).Render(" (ctrl+o to expand)")
+				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 			}
 			piece = "  " + line
 		case messagerow.SegSkillListingAvailable:
@@ -2256,9 +2271,9 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			if n == 1 {
 				word = "skill"
 			}
-			piece = lipgloss.NewStyle().Bold(true).Render(strconv.Itoa(n)) + " " + word + " available"
+			piece = baseMsgStyle(userRow).Bold(true).Render(strconv.Itoa(n)) + baseMsgStyle(userRow).Render(" "+word+" available")
 		default:
-			piece = lipgloss.NewStyle().Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			piece = baseMsgStyle(userRow).Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 		}
 		if piece == "" {
 			continue
@@ -2274,15 +2289,15 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 
 // styleMarkdownInlineSegments renders paragraph/list_item runs with TS-style inline `code` color
 // and strong/emphasis (terminal lipgloss).
-func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix string) string {
+func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix string, userRow bool) string {
 	if len(segs) == 0 {
 		return ""
 	}
-	stCode := lipgloss.NewStyle().Foreground(theme.MarkdownInlineCode())
-	stPlain := lipgloss.NewStyle()
-	stBold := lipgloss.NewStyle().Bold(true)
-	stItalic := lipgloss.NewStyle().Italic(true)
-	stBoldItalic := lipgloss.NewStyle().Bold(true).Italic(true)
+	stCode := baseMsgStyle(userRow).Foreground(theme.MarkdownInlineCode())
+	stPlain := baseMsgStyle(userRow)
+	stBold := baseMsgStyle(userRow).Bold(true)
+	stItalic := baseMsgStyle(userRow).Italic(true)
+	stBoldItalic := baseMsgStyle(userRow).Bold(true).Italic(true)
 	var b strings.Builder
 	for i, seg := range segs {
 		txt := seg.Text
@@ -2310,7 +2325,7 @@ func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix strin
 }
 
 // styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).
-func styleMarkdownTokens(toks []markdown.Token, cols int) string {
+func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 	if len(toks) == 0 {
 		return ""
 	}
@@ -2321,9 +2336,9 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 			lv := min(max(t.Level, 1), 6)
 			prefix := strings.Repeat("#", lv) + " "
 			if len(t.Segments) > 0 {
-				parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(theme.MarkdownHeading()).Render(styleMarkdownInlineSegments(t.Segments, prefix)))
+				parts = append(parts, baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading()).Render(styleMarkdownInlineSegments(t.Segments, prefix, userRow)))
 			} else {
-				parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(theme.MarkdownHeading()).Render(prefix+t.Text))
+				parts = append(parts, baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading()).Render(prefix+t.Text))
 			}
 		case "code":
 			cb := "```" + t.Lang + "\n" + t.Text
@@ -2331,7 +2346,7 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 				cb += "\n"
 			}
 			cb += "```"
-			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(cb))
+			parts = append(parts, baseMsgStyle(userRow).Faint(true).Render(cb))
 		case "list_item":
 			indent := strings.Repeat(" ", t.ListIndent)
 			var prefix string
@@ -2343,28 +2358,36 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 				prefix = indent + "- "
 			}
 			if len(t.Segments) > 0 {
-				parts = append(parts, styleMarkdownInlineSegments(t.Segments, prefix))
+				parts = append(parts, styleMarkdownInlineSegments(t.Segments, prefix, userRow))
 			} else {
-				parts = append(parts, lipgloss.NewStyle().Render(prefix+t.Text))
+				parts = append(parts, baseMsgStyle(userRow).Render(prefix+t.Text))
 			}
 		case "blockquote":
 			if len(t.Segments) > 0 {
-				inner := styleMarkdownInlineSegments(t.Segments, "")
+				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
 				pref := "> " + strings.ReplaceAll(inner, "\n", "\n> ")
 				parts = append(parts, pref)
 			} else {
-				parts = append(parts, lipgloss.NewStyle().Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
+				parts = append(parts, baseMsgStyle(userRow).Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
 			}
 		case "hr":
-			parts = append(parts, lipgloss.NewStyle().Faint(true).Render("---"))
+			parts = append(parts, baseMsgStyle(userRow).Faint(true).Render("---"))
 		case "paragraph":
 			if len(t.Segments) > 0 {
-				parts = append(parts, styleMarkdownInlineSegments(t.Segments, ""))
+				parts = append(parts, styleMarkdownInlineSegments(t.Segments, "", userRow))
+			} else {
+				if userRow {
+					parts = append(parts, baseMsgStyle(userRow).Render(t.Text))
+				} else {
+					parts = append(parts, t.Text)
+				}
+			}
+		default:
+			if userRow {
+				parts = append(parts, baseMsgStyle(userRow).Render(t.Text))
 			} else {
 				parts = append(parts, t.Text)
 			}
-		default:
-			parts = append(parts, t.Text)
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))

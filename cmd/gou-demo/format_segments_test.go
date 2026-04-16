@@ -23,7 +23,7 @@ func TestFormatMessageSegments_mergedSearchReadSummaryOneCommaLine(t *testing.T)
 		{Kind: messagerow.SegTextMarkdown, Text: "现在让我查看 UseOpenAIChatProvider 函数："},
 		{Kind: messagerow.SegToolUseSummaryLine, Text: "Searched for 1 pattern, Read 1 file", ToolUseIDs: []string{"g1", "r1"}},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false, false)
 	if strings.Count(out, "Searched for 1 pattern") != 1 || strings.Count(out, "Read 1 file") != 1 {
 		t.Fatalf("want single line containing both clauses, got:\n%s", out)
 	}
@@ -47,7 +47,7 @@ func TestFormatMessageSegments_singleLeadGlyphAfterAssistantText(t *testing.T) {
 		{Kind: messagerow.SegTextMarkdown, Text: "我来查看一下项目结构和主要业务。"},
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "README.md", ToolHint: "README.md", Text: "Reading README", ToolUseID: "call_x"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false, false)
 	if n := countToolLeadGlyphs(out); n != 1 {
 		t.Fatalf("want exactly one ⏺/● lead (on assistant text only), got %d in:\n%s", n, out)
 	}
@@ -60,7 +60,7 @@ func TestFormatMessageSegments_leadGlyphOnToolWhenNoPriorText(t *testing.T) {
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "README.md", ToolHint: "README.md", Text: "Reading README", ToolUseID: "call_y"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false, false)
 	if n := countToolLeadGlyphs(out); n < 1 {
 		t.Fatalf("tool-only message should keep lead on tool row, got %d in:\n%s", n, out)
 	}
@@ -73,7 +73,7 @@ func TestFormatMessageSegments_searchHighlightInsertsANSI(t *testing.T) {
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, Text: "alpha BETA gamma", ToolUseID: "id1"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "beta", nil, false)
+	out := formatMessageSegments(segs, 80, true, nil, true, "beta", nil, false, false)
 	if !strings.Contains(out, "BETA") && !strings.Contains(out, "beta") {
 		t.Fatalf("expected original casing preserved in visible text: %q", out)
 	}
@@ -86,8 +86,8 @@ func TestFormatMessageSegments_searchHighlightEmptyNeedleNoExtraFromHL(t *testin
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, Text: "plain tool title", ToolUseID: "id2"},
 	}
-	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false)
-	outHL := formatMessageSegments(segs, 80, true, nil, true, "   ", nil, false)
+	out := formatMessageSegments(segs, 80, true, nil, true, "", nil, false, false)
+	outHL := formatMessageSegments(segs, 80, true, nil, true, "   ", nil, false, false)
 	if out != outHL {
 		t.Fatalf("whitespace-only searchHL should behave like no highlight: %q vs %q", out, outHL)
 	}
@@ -99,7 +99,7 @@ func TestFormatMessageSegments_resolvedToolOmitsActivityAndHint(t *testing.T) {
 		{Kind: messagerow.SegTextMarkdown, Text: "hello"},
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "a.md", ToolHint: "a.md", Text: "Reading a", ToolUseID: "call_z"},
 	}
-	out := formatMessageSegments(segs, 80, true, resolved, true, "", nil, false)
+	out := formatMessageSegments(segs, 80, true, resolved, true, "", nil, false, false)
 	if strings.Contains(out, "⎿") {
 		t.Fatalf("resolved tool should not render ⎿ row, got:\n%s", out)
 	}
@@ -114,7 +114,7 @@ func TestFormatMessageSegments_transcriptStatsWhenResolvedIDMapEmptyButToolResul
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "x.go", ToolHint: "x.go", Text: "Reading x.go", ToolUseID: "tid"},
 	}
-	out := formatMessageSegments(segs, 80, false, nil, true, "", byID, true)
+	out := formatMessageSegments(segs, 80, false, nil, true, "", byID, true, false)
 	if strings.Contains(out, "Reading") {
 		t.Fatalf("should not show in-flight activity when tool_result payload is present: %s", out)
 	}
@@ -130,7 +130,7 @@ func TestFormatMessageSegments_transcriptResolvedReadShowsResultSummary(t *testi
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, ToolFacing: "Read", ToolParen: "x.go · lines 1-30", ToolHint: "x.go", Text: "Reading x.go", ToolUseID: "t1"},
 	}
-	out := formatMessageSegments(segs, 80, false, resolved, true, "", byID, true)
+	out := formatMessageSegments(segs, 80, false, resolved, true, "", byID, true, false)
 	if !strings.Contains(out, "⎿") || !strings.Contains(out, "Read 30 lines") {
 		t.Fatalf("want ⎿ Read 30 lines, got:\n%s", out)
 	}
@@ -143,7 +143,7 @@ func TestFormatMessageSegments_transcriptResolvedGrepShowsMatchLine(t *testing.T
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, ToolFacing: "Search", ToolParen: `pattern: "func UseOpenAIChatProvider"`, ToolHint: `"func`, ToolUseID: "g1", Text: "Searching"},
 	}
-	out := formatMessageSegments(segs, 80, false, resolved, true, "", byID, true)
+	out := formatMessageSegments(segs, 80, false, resolved, true, "", byID, true, false)
 	if !strings.Contains(out, "Found 1 line") {
 		t.Fatalf("want Found 1 line, got:\n%s", out)
 	}

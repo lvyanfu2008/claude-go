@@ -256,7 +256,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		var sb strings.Builder
 		sb.WriteString(lipglossStyleAssistantHead())
 		sb.WriteByte('\n')
-		sb.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols))
+		sb.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false))
 		if !addBlock(sb.String()) {
 			return "", false
 		}
