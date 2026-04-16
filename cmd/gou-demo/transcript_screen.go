@@ -128,6 +128,8 @@ func (m *model) enterTranscriptScreen() tea.Cmd {
 	m.uiScreen = gouDemoScreenTranscript
 	m.sticky = true
 	m.scrollTop = 1 << 30
+	m.pendingDelta = 0
+	m.heightCache = nil
 	m.rebuildHeightCache()
 	return m.maybeTeaResetHistoryBrowseMouse()
 }
@@ -144,6 +146,8 @@ func (m *model) exitTranscriptScreen() {
 	m.transcriptEditorGen++
 	m.transcriptEditorBusy = false
 	m.transcriptEditorStatus = ""
+	m.heightCache = nil
+	m.pendingDelta = 0
 	m.rebuildHeightCache()
 	if m.useMsgViewport {
 		m.lastVpContentSig = ""
@@ -153,7 +157,11 @@ func (m *model) exitTranscriptScreen() {
 
 // exitTranscriptScreenWithPostCmd exits transcript mode; kept for call sites that expect a tea.Cmd return.
 func (m *model) exitTranscriptScreenWithPostCmd() tea.Cmd {
+	wasDump := m.transcriptDumpMode
 	m.exitTranscriptScreen()
+	if wasDump && gouDemoAltScreenEnabled() {
+		return tea.EnterAltScreen
+	}
 	return nil
 }
 
