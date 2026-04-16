@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"goc/gou/layout"
 	"goc/gou/messagerow"
+	"goc/gou/messagesview"
 	"goc/types"
 )
 
@@ -73,8 +75,21 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 	if wrapCols < 1 {
 		wrapCols = 80
 	}
-	msgView := m.messagesForScroll()
-	opts := &messagerow.RenderOpts{ShowAllInTranscript: true}
+	// Always export full history regardless of current screen mode.
+	raw := slices.Clone(m.store.Messages)
+	msgView := messagesview.MessagesForScrollList(raw, messagesview.ScrollListOpts{
+		TranscriptMode:       true, // Force transcript mode to use its filters
+		ShowAllInTranscript:  true, // Force show all
+		VirtualScrollEnabled: false,
+		ResolvedToolUseIDs:   m.resolvedToolIDs,
+	})
+	opts := &messagerow.RenderOpts{
+		ShowAllInTranscript:        true,
+		VerboseCollapsedReadSearch: true,
+		GroupedAgentLookups:        m.groupedAgentLookups,
+		ResolvedToolUseIDs:         m.resolvedToolIDs,
+		TranscriptMode:             true,
+	}
 	var b strings.Builder
 	for i := range msgView {
 		if i > 0 {
@@ -85,6 +100,7 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 		b.WriteByte('\n')
 		b.WriteString(transcriptPlainBodyFromMessage(msg, opts, wrapCols))
 	}
+	// ... streaming tools ...
 	for _, tu := range m.transcriptStreamingToolsForView() {
 		b.WriteByte('\n')
 		b.WriteString(string(types.MessageTypeAssistant))

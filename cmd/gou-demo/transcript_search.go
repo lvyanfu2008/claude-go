@@ -272,7 +272,7 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.transcriptShowAll = true
 		m.rebuildHeightCache()
 		plain := transcriptExportPlain(m, exportTranscriptWidth(m))
-		return true, transcriptBracketDumpScrollbackCmd(plain)
+		return true, tea.Sequence(tea.ExitAltScreen, transcriptBracketDumpScrollbackCmd(plain))
 	case "v":
 		if m.transcriptSearchOpen {
 			return true, nil

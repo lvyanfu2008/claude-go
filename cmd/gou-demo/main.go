@@ -671,8 +671,15 @@ func main() {
 	if *streamStdin {
 		ccbstream.Feed(os.Stdin, p)
 	}
-	if _, err := p.Run(); err != nil {
+	res, err := p.Run()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+	}
+	if m, ok := res.(*model); ok && gouDemoAltScreenEnabled() && (gouDemoEnvTruthy("GOU_DEMO_DUMP_ON_EXIT") || m.transcriptDumpMode) {
+		// Dump transcript to main screen on exit if requested (or was already dumping) and was in alt screen.
+		fmt.Print(transcriptExportPlain(m, exportTranscriptWidth(m)) + "\n")
+	}
+	if err != nil {
 		os.Exit(1)
 	}
 }
