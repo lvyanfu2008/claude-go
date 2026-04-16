@@ -665,6 +665,9 @@ func main() {
 	m.BindCCB(p.Send, inlineCCB)
 	gouDemoWarnApilogExpectations(inlineCCB)
 	gouDemoTracef("startup messages=%d ccbInline=%v", len(st.Messages), inlineCCB)
+	if gouDemoKittyKeyboardEnabled() {
+		defer func() { _ = prompt.WriteKittyKeyboardProtocolDisable() }()
+	}
 	if *streamStdin {
 		ccbstream.Feed(os.Stdin, p)
 	}
@@ -818,10 +821,20 @@ func seedDemo(s *conversation.Store) {
 }
 
 func (m *model) Init() tea.Cmd {
-	if gouDemoToolUseSummaryDelay() <= 0 {
+	var cmds []tea.Cmd
+	if gouDemoKittyKeyboardEnabled() {
+		cmds = append(cmds, func() tea.Msg {
+			_ = prompt.WriteKittyKeyboardProtocolEnable()
+			return nil
+		})
+	}
+	if gouDemoToolUseSummaryDelay() > 0 {
+		cmds = append(cmds, tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} }))
+	}
+	if len(cmds) == 0 {
 		return nil
 	}
-	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} })
+	return tea.Batch(cmds...)
 }
 
 // teaGlobalRedrawCmd mirrors TS useGlobalKeybindings app:redraw (ctrl+l): clear the terminal

@@ -92,6 +92,17 @@ func TestGouDemoPromptEnterSubmits_defaultRepl(t *testing.T) {
 	}
 }
 
+func TestGouDemoKittyKeyboardEnabled_defaultOn(t *testing.T) {
+	t.Setenv("GOU_DEMO_KITTY_KEYBOARD", "")
+	if !gouDemoKittyKeyboardEnabled() {
+		t.Fatal("empty env: default Kitty keyboard protocol on")
+	}
+	t.Setenv("GOU_DEMO_KITTY_KEYBOARD", "0")
+	if gouDemoKittyKeyboardEnabled() {
+		t.Fatal("0 should disable")
+	}
+}
+
 func TestReplChromeFooterHint_empty(t *testing.T) {
 	t.Setenv("GOU_DEMO_DISABLE_MOUSE", "")
 	t.Setenv("CLAUDE_CODE_DISABLE_MOUSE", "")

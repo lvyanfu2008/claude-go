@@ -59,6 +59,17 @@ func gouDemoAltScreenEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_ALT_SCREEN")
 }
 
+// gouDemoKittyKeyboardEnabled opts into the Kitty keyboard protocol (CSI > 1 u at startup, CSI < u on exit).
+// Improves modifier key reporting when the terminal supports it (Kitty, WezTerm, Ghostty, etc.).
+// Default on. Set GOU_DEMO_KITTY_KEYBOARD=0|false|off|no to skip (ignored terminals are harmless).
+func gouDemoKittyKeyboardEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_KITTY_KEYBOARD")))
+	if v == "0" || v == "false" || v == "off" || v == "no" {
+		return false
+	}
+	return true
+}
+
 // gouDemoPromptEnterSubmits selects REPL-style prompt: Enter sends; newline via Alt+Enter (Option+Enter on macOS when the terminal maps Option to Meta), Ctrl+J, or Shift+Enter when the terminal sends LF.
 // Default true. Set GOU_DEMO_REPL_ENTER_SUBMITS=0|false|off|no for chat-style (Enter newline, Alt+Enter send) when Enter and Shift+Enter are indistinguishable.
 func gouDemoPromptEnterSubmits() bool {
