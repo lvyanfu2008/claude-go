@@ -53,3 +53,18 @@ func TestParseKittyCSIKeyU(t *testing.T) {
 		t.Fatal("99 without modifier should not parse as key;mod")
 	}
 }
+
+func TestKittyCtrlLetterKeyType(t *testing.T) {
+	t.Parallel()
+	kt, ok := kittyCtrlLetterKeyType(99, 5)
+	if !ok || kt != tea.KeyCtrlC {
+		t.Fatalf("ctrl+c: ok=%v kt=%v", ok, kt)
+	}
+	ko, ok2 := kittyCtrlLetterKeyType(111, 5)
+	if !ok2 || ko != tea.KeyCtrlO {
+		t.Fatalf("ctrl+o: ok=%v kt=%v", ok2, ko)
+	}
+	if _, ok := kittyCtrlLetterKeyType(99, 6); ok {
+		t.Fatal("wrong modifier should not match")
+	}
+}

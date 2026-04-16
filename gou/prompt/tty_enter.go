@@ -34,20 +34,33 @@ func SyntheticNewlineFromUnknownMsg(msg tea.Msg) (tea.KeyMsg, bool) {
 }
 
 // SyntheticTTYKeyFromUnknownMsg maps bubbletea's unknown CSI (Kitty keyboard protocol) to KeyMsg:
-//   - Ctrl+C → KeyCtrlC (e.g. \x1b[99;5u, key 99 = 'c', modifier 5 = 1+ctrl)
+//   - Ctrl+letter (a–z) → KeyCtrlA…KeyCtrlZ (e.g. \x1b[111;5u = ctrl+o, modifier 5 = 1+ctrl)
 //   - modified Enter → KeyCtrlJ (newline in REPL prompt)
 func SyntheticTTYKeyFromUnknownMsg(msg tea.Msg) (tea.KeyMsg, bool) {
 	b, ok := bubbleteaUnknownCSIBytes(msg)
 	if !ok {
 		return tea.KeyMsg{}, false
 	}
-	if k, mod, ok := parseKittyCSIKeyU(b); ok && k == 99 && mod == 5 {
-		return tea.KeyMsg{Type: tea.KeyCtrlC}, true
+	if k, mod, ok := parseKittyCSIKeyU(b); ok {
+		if kt, ok := kittyCtrlLetterKeyType(k, mod); ok {
+			return tea.KeyMsg{Type: kt}, true
+		}
 	}
 	if isKittyModifiedEnterCSI(b) {
 		return tea.KeyMsg{Type: tea.KeyCtrlJ}, true
 	}
 	return tea.KeyMsg{}, false
+}
+
+// kittyCtrlLetterKeyType maps Kitty CSI key code + modifier to ctrl+a…ctrl+z (modifier 5 = 1+ctrl).
+func kittyCtrlLetterKeyType(keyCode, modEnc int) (tea.KeyType, bool) {
+	if modEnc != 5 {
+		return 0, false
+	}
+	if keyCode < 97 || keyCode > 122 {
+		return 0, false
+	}
+	return tea.KeyType(keyCode - 96), true
 }
 
 // parseKittyCSIKeyU parses CSI … u sequences (e.g. \x1b[99;5u or \x1b[99;5:1u).
