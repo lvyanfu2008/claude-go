@@ -45,7 +45,7 @@ func defaultPalette() Palette {
 		Grouped:   lipgloss.Color("226"),
 		Collapsed: lipgloss.Color("114"),
 		Server:    lipgloss.Color("99"),
-		Heading:               lipgloss.Color("214"),
+		Heading:               lipgloss.Color("255"), // markdown # / ## / ### — bright white (matches user body emphasis)
 		InlineCode:            lipgloss.Color("117"), // light sky blue on dark bg
 		UserMessageBackground: lipgloss.Color("236"),
 		UserMessageText:       lipgloss.Color("255"),
@@ -65,7 +65,7 @@ func lightPalette() Palette {
 		Grouped:   lipgloss.Color("130"),
 		Collapsed: lipgloss.Color("64"),
 		Server:    lipgloss.Color("54"),
-		Heading:               lipgloss.Color("94"),
+		Heading:               lipgloss.Color("24"), // primary text on light bg (matches UserMessageText)
 		InlineCode:            lipgloss.Color("39"), // dodger blue on light bg (distinct from User 25)
 		UserMessageBackground: lipgloss.Color("252"),
 		UserMessageText:       lipgloss.Color("24"),
@@ -144,7 +144,7 @@ func ServerAccent() lipgloss.Color {
 	return activePalette.Server
 }
 
-// MarkdownHeading is heading token color in markdown styling.
+// MarkdownHeading is ATX heading (# … ###) foreground in markdown (bold applied in gou-demo).
 func MarkdownHeading() lipgloss.Color {
 	return activePalette.Heading
 }
