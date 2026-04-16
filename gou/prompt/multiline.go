@@ -160,9 +160,12 @@ func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
 			m.insertRunes(msg.Runes)
 			return nil
 		}
-		if len(msg.Runes) == 1 && msg.Runes[0] == '\n' {
-			m.insertRune('\n')
-			return nil
+		if len(msg.Runes) == 1 {
+			switch msg.Runes[0] {
+			case '\n', '\u0085', '\u2028', '\u2029':
+				m.insertRune('\n')
+				return nil
+			}
 		}
 		m.insertRunes(msg.Runes)
 		return nil

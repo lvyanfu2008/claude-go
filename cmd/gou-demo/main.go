@@ -961,7 +961,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.uiScreen == gouDemoScreenTranscript {
 			return m, nil
 		}
-		m.pr.Update(msg)
+		m.pr.Update(prompt.NormalizeTTYNewlineKey(msg))
 		if m.pr.Submitted() {
 			fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
 			m.pr.SetValue("")
@@ -1325,6 +1325,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.uiScreen != gouDemoScreenTranscript {
+		if m.uiScreen == gouDemoScreenPrompt && gouDemoPromptEnterSubmits() {
+			if syn, ok := prompt.SyntheticNewlineFromUnknownMsg(msg); ok {
+				m.pr.Update(syn)
+				return m, nil
+			}
+		}
 		m.pr.Update(msg)
 	}
 	return m, nil
