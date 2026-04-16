@@ -2229,6 +2229,43 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 	return strings.TrimSpace(b.String())
 }
 
+// styleMarkdownInlineSegments renders paragraph/list_item runs with TS-style inline `code` color
+// and strong/emphasis (terminal lipgloss).
+func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix string) string {
+	if len(segs) == 0 {
+		return ""
+	}
+	stCode := lipgloss.NewStyle().Foreground(theme.MarkdownInlineCode())
+	stPlain := lipgloss.NewStyle()
+	stBold := lipgloss.NewStyle().Bold(true)
+	stItalic := lipgloss.NewStyle().Italic(true)
+	stBoldItalic := lipgloss.NewStyle().Bold(true).Italic(true)
+	var b strings.Builder
+	for i, seg := range segs {
+		txt := seg.Text
+		if i == 0 && linePrefix != "" {
+			txt = linePrefix + txt
+		}
+		if seg.Code {
+			b.WriteString(stCode.Render(txt))
+			continue
+		}
+		var st lipgloss.Style
+		switch {
+		case seg.Bold && seg.Italic:
+			st = stBoldItalic
+		case seg.Bold:
+			st = stBold
+		case seg.Italic:
+			st = stItalic
+		default:
+			st = stPlain
+		}
+		b.WriteString(st.Render(txt))
+	}
+	return b.String()
+}
+
 // styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).
 func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 	if len(toks) == 0 {
@@ -2239,8 +2276,12 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 		switch t.Type {
 		case "heading":
 			lv := min(max(t.Level, 1), 6)
-			line := strings.Repeat("#", lv) + " " + t.Text
-			parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(theme.MarkdownHeading()).Render(line))
+			prefix := strings.Repeat("#", lv) + " "
+			if len(t.Segments) > 0 {
+				parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(theme.MarkdownHeading()).Render(styleMarkdownInlineSegments(t.Segments, prefix)))
+			} else {
+				parts = append(parts, lipgloss.NewStyle().Bold(true).Foreground(theme.MarkdownHeading()).Render(prefix+t.Text))
+			}
 		case "code":
 			cb := "```" + t.Lang + "\n" + t.Text
 			if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
@@ -2249,11 +2290,36 @@ func styleMarkdownTokens(toks []markdown.Token, cols int) string {
 			cb += "```"
 			parts = append(parts, lipgloss.NewStyle().Faint(true).Render(cb))
 		case "list_item":
-			parts = append(parts, lipgloss.NewStyle().Render("- "+t.Text))
+			indent := strings.Repeat(" ", t.ListIndent)
+			var prefix string
+			if t.ListContinuation {
+				prefix = indent + "   "
+			} else if t.ListOrdered && t.ListIndex > 0 {
+				prefix = indent + fmt.Sprintf("%d. ", t.ListIndex)
+			} else {
+				prefix = indent + "- "
+			}
+			if len(t.Segments) > 0 {
+				parts = append(parts, styleMarkdownInlineSegments(t.Segments, prefix))
+			} else {
+				parts = append(parts, lipgloss.NewStyle().Render(prefix+t.Text))
+			}
 		case "blockquote":
-			parts = append(parts, lipgloss.NewStyle().Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
+			if len(t.Segments) > 0 {
+				inner := styleMarkdownInlineSegments(t.Segments, "")
+				pref := "> " + strings.ReplaceAll(inner, "\n", "\n> ")
+				parts = append(parts, pref)
+			} else {
+				parts = append(parts, lipgloss.NewStyle().Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
+			}
 		case "hr":
 			parts = append(parts, lipgloss.NewStyle().Faint(true).Render("---"))
+		case "paragraph":
+			if len(t.Segments) > 0 {
+				parts = append(parts, styleMarkdownInlineSegments(t.Segments, ""))
+			} else {
+				parts = append(parts, t.Text)
+			}
 		default:
 			parts = append(parts, t.Text)
 		}

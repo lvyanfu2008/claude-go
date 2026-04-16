@@ -135,7 +135,10 @@ func prepareLogDestination() {
 	_ = f.Close()
 	debugpath.MaybeUpdateLatestSymlink(path)
 	announcePath.Do(func() {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] LLM API bodies: %s points to %s\n", debugpath.LatestLinkPathFor(path), path)
+		if err := appendApilogPathAnnounce(path); err != nil {
+			fmt.Fprintf(os.Stderr, "[ccb-engine apilog] LLM API bodies: %s points to %s\n", debugpath.LatestLinkPathFor(path), path)
+			fmt.Fprintf(os.Stderr, "[ccb-engine apilog] (could not write announce line to log: %v)\n", err)
+		}
 	})
 }
 
@@ -161,6 +164,26 @@ func LogResponseBody(label string, rawJSON []byte) {
 
 var announcePath, warnNoPath sync.Once
 
+// appendApilogPathAnnounce writes the one-time "latest points to …" line to the log file (not stderr).
+func appendApilogPathAnnounce(path string) error {
+	if path == "" {
+		return fmt.Errorf("empty log path")
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	ts := time.Now().UTC().Format(time.RFC3339Nano)
+	lp := debugpath.LatestLinkPathFor(path)
+	_, err = fmt.Fprintf(f, "%s [ccb-engine apilog] LLM API bodies: %s points to %s\n", ts, lp, path)
+	return err
+}
+
 func writeLog(kind, label, bodyPrefix string, raw []byte) {
 	serialized := formatJSONForLog(raw)
 	bodyOut := joinBodyPrefix(bodyPrefix, serialized)
@@ -184,7 +207,10 @@ func writeLog(kind, label, bodyPrefix string, raw []byte) {
 		return
 	}
 	announcePath.Do(func() {
-		fmt.Fprintf(os.Stderr, "[ccb-engine apilog] LLM API bodies: %s points to %s\n", debugpath.LatestLinkPathFor(path), path)
+		if err := appendApilogPathAnnounce(path); err != nil {
+			fmt.Fprintf(os.Stderr, "[ccb-engine apilog] LLM API bodies: %s points to %s\n", debugpath.LatestLinkPathFor(path), path)
+			fmt.Fprintf(os.Stderr, "[ccb-engine apilog] (could not write announce line to log: %v)\n", err)
+		}
 	})
 	_, _ = f.WriteString(out)
 	_ = f.Close()

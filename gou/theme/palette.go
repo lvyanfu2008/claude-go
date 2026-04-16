@@ -20,7 +20,8 @@ type Palette struct {
 	Grouped   lipgloss.Color
 	Collapsed lipgloss.Color
 	Server    lipgloss.Color
-	Heading   lipgloss.Color
+	Heading    lipgloss.Color
+	InlineCode lipgloss.Color // markdown `inline` spans in assistant/user body (TS code color)
 }
 
 var (
@@ -40,7 +41,8 @@ func defaultPalette() Palette {
 		Grouped:   lipgloss.Color("226"),
 		Collapsed: lipgloss.Color("114"),
 		Server:    lipgloss.Color("99"),
-		Heading:   lipgloss.Color("214"),
+		Heading:    lipgloss.Color("214"),
+		InlineCode: lipgloss.Color("63"),
 	}
 }
 
@@ -57,7 +59,8 @@ func lightPalette() Palette {
 		Grouped:   lipgloss.Color("130"),
 		Collapsed: lipgloss.Color("64"),
 		Server:    lipgloss.Color("54"),
-		Heading:   lipgloss.Color("94"),
+		Heading:    lipgloss.Color("94"),
+		InlineCode: lipgloss.Color("24"),
 	}
 }
 
@@ -136,4 +139,9 @@ func ServerAccent() lipgloss.Color {
 // MarkdownHeading is heading token color in markdown styling.
 func MarkdownHeading() lipgloss.Color {
 	return activePalette.Heading
+}
+
+// MarkdownInlineCode is inline `code` span color in markdown body styling (TS parity).
+func MarkdownInlineCode() lipgloss.Color {
+	return activePalette.InlineCode
 }

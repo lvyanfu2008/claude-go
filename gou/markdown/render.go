@@ -1,6 +1,9 @@
 package markdown
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // RenderTokensPlain turns block tokens into plain text for layout height / terminal preview
 // (no ANSI — lipgloss applied in the TUI layer).
@@ -13,10 +16,22 @@ func RenderTokensPlain(tokens []Token) string {
 				b.WriteString("#")
 			}
 			b.WriteString(" ")
-			b.WriteString(t.Text)
+			if len(t.Segments) > 0 {
+				for _, s := range t.Segments {
+					b.WriteString(s.Text)
+				}
+			} else {
+				b.WriteString(t.Text)
+			}
 			b.WriteString("\n\n")
 		case "paragraph":
-			b.WriteString(t.Text)
+			if len(t.Segments) > 0 {
+				for _, s := range t.Segments {
+					b.WriteString(s.Text)
+				}
+			} else {
+				b.WriteString(t.Text)
+			}
 			b.WriteString("\n\n")
 		case "code":
 			b.WriteString("```")
@@ -28,8 +43,21 @@ func RenderTokensPlain(tokens []Token) string {
 			}
 			b.WriteString("```\n\n")
 		case "list_item":
-			b.WriteString("- ")
-			b.WriteString(t.Text)
+			b.WriteString(strings.Repeat(" ", t.ListIndent))
+			if t.ListContinuation {
+				b.WriteString("   ")
+			} else if t.ListOrdered && t.ListIndex > 0 {
+				fmt.Fprintf(&b, "%d. ", t.ListIndex)
+			} else {
+				b.WriteString("- ")
+			}
+			if len(t.Segments) > 0 {
+				for _, s := range t.Segments {
+					b.WriteString(s.Text)
+				}
+			} else {
+				b.WriteString(t.Text)
+			}
 			b.WriteByte('\n')
 		case "blockquote":
 			b.WriteString("> ")
