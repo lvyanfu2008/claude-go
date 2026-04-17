@@ -75,12 +75,16 @@ func (a *assistantStreamAccumulator) OnEvent(ev anthropicmessages.MessageStreamE
 		var d struct {
 			Type        string `json:"type"`
 			Text        string `json:"text"`
+			Thinking    string `json:"thinking"`
 			PartialJSON string `json:"partial_json"`
 		}
 		_ = json.Unmarshal(wrap.Delta, &d)
 		switch d.Type {
 		case "text_delta":
 			b.text.WriteString(d.Text)
+		case "thinking_delta":
+			// OpenAI stream adapter maps delta.reasoning_content → thinking_delta (e.g. DeepSeek reasoner).
+			b.text.WriteString(d.Thinking)
 		case "input_json_delta":
 			b.toolInput.WriteString(d.PartialJSON)
 		}
@@ -142,6 +146,10 @@ func (a *assistantStreamAccumulator) AssistantWire(uuid string) (inner json.RawM
 	for _, idx := range keys {
 		b := a.blocks[idx]
 		switch b.typ {
+		case "thinking":
+			if b.text.Len() > 0 {
+				content = append(content, map[string]any{"type": "thinking", "thinking": b.text.String()})
+			}
 		case "text":
 			if b.text.Len() > 0 {
 				content = append(content, map[string]any{"type": "text", "text": b.text.String()})

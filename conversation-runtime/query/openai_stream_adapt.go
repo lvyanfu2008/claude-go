@@ -427,8 +427,9 @@ func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(
 	}
 	var ch struct {
 		Message struct {
-			Content   json.RawMessage   `json:"content"`
-			ToolCalls []map[string]any `json:"tool_calls"`
+			Content          json.RawMessage   `json:"content"`
+			ReasoningContent *string           `json:"reasoning_content"`
+			ToolCalls        []map[string]any `json:"tool_calls"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	}
@@ -446,6 +447,23 @@ func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(
 	}
 	if err := ad.HandleChunk(kick, emit); err != nil {
 		return err
+	}
+
+	// DeepSeek reasoner (and similar): non-stream body includes message.reasoning_content (chain-of-thought).
+	// Mirror streaming deltas: emit reasoning before visible content (see HandleChunk reasoning_content branch).
+	if ch.Message.ReasoningContent != nil && strings.TrimSpace(*ch.Message.ReasoningContent) != "" {
+		rc, err := json.Marshal(map[string]any{
+			"choices": []map[string]any{{
+				"index": 0,
+				"delta": map[string]any{"reasoning_content": *ch.Message.ReasoningContent},
+			}},
+		})
+		if err != nil {
+			return err
+		}
+		if err := ad.HandleChunk(rc, emit); err != nil {
+			return err
+		}
 	}
 
 	var textPieces []string

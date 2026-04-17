@@ -111,3 +111,24 @@ func TestReplayOpenAINonStreamChatResponse_textOnly(t *testing.T) {
 		t.Fatal("unexpected tool use")
 	}
 }
+
+func TestReplayOpenAINonStreamChatResponse_reasoningAndText_deepseekReasoner(t *testing.T) {
+	body := []byte(`{"choices":[{"index":0,"message":{"role":"assistant","reasoning_content":"think step\n","content":"answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`)
+	acc := newAssistantStreamAccumulator()
+	if err := ReplayOpenAINonStreamChatResponse(body, "deepseek-reasoner", acc.OnEvent); err != nil {
+		t.Fatal(err)
+	}
+	wire, err := acc.AssistantWire("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(wire, []byte("think step")) {
+		t.Fatalf("expected thinking in wire, got %s", string(wire))
+	}
+	if !bytes.Contains(wire, []byte("answer")) {
+		t.Fatalf("expected answer text in wire, got %s", string(wire))
+	}
+	if acc.HasToolUse() {
+		t.Fatal("unexpected tool use")
+	}
+}
