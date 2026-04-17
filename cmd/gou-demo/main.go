@@ -43,7 +43,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"goc/ccb-engine/diaglog"
 	"log"
 	"os"
 	"path/filepath"
@@ -977,8 +976,8 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slashPick = nil
 		return m, m.enterTranscriptScreen()
 	}
-	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "f4" {
-		gouDemoTracef("f4 pressed, starting line reveal")
+	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && (msg.String() == "ctrl+r" || msg.String() == "ctrl+x") {
+		gouDemoTracef("%s pressed, starting line reveal", msg.String())
 		if len(m.store.Messages) > 0 {
 			m.revealingMsgID = m.store.Messages[len(m.store.Messages)-1].UUID
 			m.revealedLines = 0
@@ -2299,7 +2298,8 @@ func baseMsgStyle(userRow bool) lipgloss.Style {
 }
 
 func logg(kind string, r string) {
-	diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
+	return
+	//diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
 }
 
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
