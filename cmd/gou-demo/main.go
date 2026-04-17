@@ -2425,8 +2425,7 @@ func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix strin
 	return b.String()
 }
 
-// headingMarkdownStyle is bold + heading color; level spacing is done with leading spaces (see
-// styleMarkdownTokens heading branch) so deeper ATX headings indent without underline/faint.
+// headingMarkdownStyle is bold + heading color; level spacing is leading spaces only (no # in output).
 func headingMarkdownStyle(userRow bool) lipgloss.Style {
 	return baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading())
 }
@@ -2442,7 +2441,7 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 		case "heading":
 			lv := min(max(t.Level, 1), 6)
 			indent := strings.Repeat(" ", (lv-1)*2)
-			prefix := indent + strings.Repeat("#", lv) + " "
+			prefix := indent
 			hst := headingMarkdownStyle(userRow)
 			if len(t.Segments) > 0 {
 				parts = append(parts, hst.Render(styleMarkdownInlineSegments(t.Segments, prefix, userRow)))
