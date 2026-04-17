@@ -226,7 +226,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		}
 	}
 	//fmt.Println("sleep 2s")
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
 		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
 		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
@@ -370,7 +370,8 @@ func (m *model) filterStreamingToolsFromMessage(msg types.Message) types.Message
 }
 
 func lipglossStyleAssistantHead() string {
-	return lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+	return ""
+	//return lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 }
 
 func lipglossStyleStreamingToolTitle(name string) string {
