@@ -611,6 +611,10 @@ type model struct {
 	msgFirstShownAt map[string]time.Time
 	// msgLastAssistantContentLen tracks len(Content) per assistant UUID so streaming bumps reset the summary delay window.
 	msgLastAssistantContentLen map[string]int
+
+	// manual rendering mode (buffer events until flushed)
+	manualRenderMode bool
+	pendingEvents    []tea.Msg
 }
 
 func main() {
@@ -971,6 +975,30 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slashPick = nil
 		return m, m.enterTranscriptScreen()
 	}
+	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
+		if msg.String() == "f5" {
+			gouDemoTracef("f5 pressed: entering manual render mode (buffering events)")
+			m.manualRenderMode = true
+			return m, nil
+		}
+		if msg.String() == "f6" {
+			gouDemoTracef("f6 pressed: flushing %d buffered events", len(m.pendingEvents))
+			m.manualRenderMode = false
+			var cmds []tea.Cmd
+			for _, e := range m.pendingEvents {
+				_, cmd := m.Update(e)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+			m.pendingEvents = nil
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...)
+			}
+			return m, nil
+		}
+	}
+
 	if handled, cmd := m.handleTranscriptKey(msg); handled {
 		return m, cmd
 	}
@@ -1363,6 +1391,14 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.manualRenderMode {
+		switch msg.(type) {
+		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, streamTick, gouToolSummaryDelayTickMsg:
+			m.pendingEvents = append(m.pendingEvents, msg)
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		return m.handleUpdateWindowSize(msg)
