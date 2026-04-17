@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"goc/gou/conversation"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -16,6 +18,8 @@ import (
 	"goc/gou/messagerow"
 	"goc/gou/theme"
 	"goc/types"
+
+	"github.com/samber/lo"
 )
 
 // gouDemoBubblesViewport defaults on (bubbles/viewport for the prompt message pane, same scrolling style as go-tui).
@@ -151,6 +155,9 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	for i := 0; i < n; i++ {
 		if i < len(msgView) {
 			msg := msgView[i]
+			if m.IsStreamToolUsing(msg.Message) {
+				continue
+			}
 			if m.msgFoldAll {
 				u := msg.UUID
 				if len(u) > 12 {
@@ -215,7 +222,8 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			return "", false
 		}
 	}
-
+	//fmt.Println("sleep 2s")
+	time.Sleep(2 * time.Second)
 	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
 		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
 		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
@@ -239,7 +247,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				if facing == "" {
 					facing = tu.Name
 				}
-				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
+				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + facing)
 				if p := strings.TrimSpace(paren); p != "" {
 					toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
 				}
@@ -291,8 +299,38 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	return b.String(), true
 }
 
+// msg.Message
+func (m *model) IsStreamToolUsing(c json.RawMessage) bool {
+	var contentBlocks []types.MessageContentBlock
+	var inner struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+	isToolUsing := false
+	if err := json.Unmarshal(c, &inner); err != nil {
+		return false
+	}
+
+	if err := json.Unmarshal(inner.Content, &contentBlocks); err != nil {
+		return false
+	}
+
+	toolUseIds := lo.Map(m.store.StreamingToolUses, func(m conversation.StreamingToolUse, _ int) string {
+		return m.ToolUseID
+	})
+
+	for _, c := range contentBlocks {
+		if lo.Contains(toolUseIds, c.ID) {
+			isToolUsing = true
+			break
+		}
+	}
+	return isToolUsing
+}
+
 func lipglossStyleAssistantHead() string {
-	return lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+	return ""
+	//return lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 }
 
 func lipglossStyleStreamingToolTitle(name string) string {

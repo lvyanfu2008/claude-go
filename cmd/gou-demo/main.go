@@ -43,6 +43,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"goc/ccb-engine/diaglog"
 	"log"
 	"os"
 	"path/filepath"
@@ -1544,7 +1545,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		if strings.TrimSpace(searchHL) != "" {
 			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
 		}
-		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
+		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + namePart)
 		if p := strings.TrimSpace(paren); p != "" {
 			toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
 		}
@@ -1552,7 +1553,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		block := head + "\n" + toolLine
 		return max(1, layout.WrappedRowCount(block, cols))
 	}
-	
+
 	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 	summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
 	toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
@@ -1587,7 +1588,7 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 		if strings.TrimSpace(searchHL) != "" {
 			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
 		}
-		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+namePart)
+		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + namePart)
 		if p := strings.TrimSpace(paren); p != "" {
 			toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
 		}
@@ -1613,7 +1614,7 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 			block += "\n" + treeLine
 		}
 	}
-	
+
 	lines := strings.Split(block, "\n")
 	for len(lines) < h {
 		lines = append(lines, "")
@@ -1797,7 +1798,7 @@ func (m *model) View() string {
 					if facing == "" {
 						facing = tu.Name
 					}
-					toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+facing)
+					toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + facing)
 					if p := strings.TrimSpace(paren); p != "" {
 						toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
 					}
@@ -2009,7 +2010,7 @@ func userPromptPrefixStyled(userMsgRowBg bool) string {
 }
 
 // userInputViewWithPromptPrefix prepends the same dim "> " as user rows on the first line of the bottom input.
-func 	userInputViewWithPromptPrefix(m *model) string {
+func userInputViewWithPromptPrefix(m *model) string {
 	v := m.pr.View()
 	prefix := userPromptPrefixStyled(false)
 	lines := strings.Split(v, "\n")
@@ -2197,6 +2198,10 @@ func baseMsgStyle(userRow bool) lipgloss.Style {
 	return s
 }
 
+func logg(kind string, r string) {
+	diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
+}
+
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
 // assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
 // searchHL applies transcript search highlight to visible plain substrings (TS useSearchHighlight).
@@ -2227,6 +2232,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				md = prefixToolGlyphFirstLine(md)
 			}
 			piece = md
+			logg("SegTextMarkdown", piece)
 		case messagerow.SegToolUse:
 			if seg.ToolFacing != "" {
 				row1 := ""
@@ -2272,6 +2278,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				piece = line
 			}
+			logg("SegToolUse", piece)
 		case messagerow.SegToolResult:
 			st := baseMsgStyle(userRow).Foreground(theme.DimMuted())
 			if seg.IsToolError {
@@ -2283,11 +2290,14 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 			}
 			piece = line
+			logg("SegToolResult", piece)
 		case messagerow.SegThinking:
 			body := textutil.LinkifyOSC8(seg.Text)
 			piece = baseMsgStyle(userRow).Bold(true).Render("● " + withHL(body))
+			logg("SegThinking", piece)
 		case messagerow.SegDisplayHint:
 			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			logg("SegDisplayHint", piece)
 		case messagerow.SegServerToolUse:
 			if seg.ToolFacing != "" {
 				row1 := ""
@@ -2333,6 +2343,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				piece = line
 			}
+			logg("SegServerToolUse", piece)
 		case messagerow.SegAdvisorToolResult:
 			st := baseMsgStyle(userRow).Foreground(theme.AdvisorAccent())
 			if seg.IsToolError {
@@ -2344,16 +2355,20 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 			}
 			piece = line
+			logg("SegAdvisorToolResult", piece)
 		case messagerow.SegGroupedToolUse:
 			piece = baseMsgStyle(userRow).Foreground(theme.GroupedAccent()).Bold(true).Render("▦ " + withHL(seg.Text))
+			logg("SegGroupedToolUse", piece)
 		case messagerow.SegCollapsedReadSearch:
 			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			logg("SegCollapsedReadSearch", piece)
 		case messagerow.SegToolUseSummaryLine:
 			line := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
 			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, showResolvedToolStats) && toolUseCtrlOHint {
 				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 			}
 			piece = "  " + line
+			logg("SegToolUseSummaryLine", piece)
 		case messagerow.SegSkillListingAvailable:
 			n := seg.Num
 			if n < 1 {
@@ -2364,8 +2379,10 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				word = "skill"
 			}
 			piece = baseMsgStyle(userRow).Bold(true).Render(strconv.Itoa(n)) + baseMsgStyle(userRow).Render(" "+word+" available")
+			logg("SegSkillListingAvailable", piece)
 		default:
 			piece = baseMsgStyle(userRow).Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			logg("default", piece)
 		}
 		if piece == "" {
 			continue
