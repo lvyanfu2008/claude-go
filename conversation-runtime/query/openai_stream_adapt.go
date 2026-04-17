@@ -1,6 +1,7 @@
 package query
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -405,6 +406,23 @@ func (a *openAIStreamAdapter) FlushOpenBlocks(emit func(anthropicmessages.Messag
 	}
 	a.openBlockIndices = make(map[int]struct{})
 	return nil
+}
+
+// ReplayOpenAIStreamChatResponse feeds a recorded OpenAI chat/completions SSE body (stream:true)
+// through [openAIStreamAdapter] the same way [PostOpenAIChatStream] does, then [FlushOpenBlocks].
+// Each concatenated `data:` payload is passed to [openAIStreamAdapter.HandleChunk], including
+// delta.reasoning_content (e.g. DeepSeek reasoner) and delta.content.
+func ReplayOpenAIStreamChatResponse(sseBody []byte, model string, emit func(anthropicmessages.MessageStreamEvent) error) error {
+	ad := newOpenAIStreamAdapter(model)
+	if err := anthropicmessages.ReadSSE(bytes.NewReader(sseBody), func(data []byte) error {
+		if len(data) == 0 || string(data) == "[DONE]" {
+			return nil
+		}
+		return ad.HandleChunk(data, emit)
+	}); err != nil {
+		return err
+	}
+	return ad.FlushOpenBlocks(emit)
 }
 
 // ReplayOpenAINonStreamChatResponse converts a full POST /v1/chat/completions JSON body (stream:false)

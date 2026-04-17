@@ -23,7 +23,8 @@
 //     When [OpenAIChatNoStreamEnabled] (GOU_QUERY_OPENAI_CHAT_NO_STREAM), OpenAI parity uses
 //     [runOpenAINonStreamingParityModelLoop]: one non-streaming JSON response per round, replayed
 //     through [ReplayOpenAINonStreamChatResponse] (including choices[0].message.reasoning_content for
-//     DeepSeek reasoner) into the same accumulator path (no SSE).
+//     DeepSeek reasoner) into the same accumulator path (no SSE). Recorded SSE can be replayed with
+//     [ReplayOpenAIStreamChatResponse] (same adapter as live stream; supports delta.reasoning_content).
 //   - Each streaming parity turn appends one line via [ccb-engine/diaglog.Line]: "[query] streaming parity: … (model=…)"
 //     before the HTTP loop (OpenAI SSE vs JSON vs Anthropic SSE). Uses CLAUDE_CODE_DIAG_LOG_FILE or the session debug log path;
 //     when CCB_ENGINE_DIAG_TO_STDERR=1, writes to stderr instead (same as other diag lines).
