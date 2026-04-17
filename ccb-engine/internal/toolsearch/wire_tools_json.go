@@ -8,7 +8,7 @@ import (
 )
 
 // WireToolsJSON returns tools[] after the same BuildWireConfig + ApplyWire pass as
-// ccb-engine Session.RunTurn (mirrors claude.ts filteredTools for the HTTP payload).
+// streaming parity / HTTP tool wire (mirrors claude.ts filteredTools for the payload).
 // discoveryMsgsJSON is the messages array wire shape (e.g. from [ccbhydrate.MessagesJSONNormalized]);
 // it is unmarshalled into []anthropic.Message so [ExtractDiscoveredToolNames] can re-include deferred tools.
 func WireToolsJSON(toolsJSON json.RawMessage, modelID string, hasPendingMcp, openAICompat bool, discoveryMsgsJSON json.RawMessage) (json.RawMessage, error) {

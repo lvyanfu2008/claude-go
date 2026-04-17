@@ -7,22 +7,22 @@ import (
 	"os"
 	"strings"
 
-	"goc/ccb-engine/internal/engine"
+	"goc/ccb-engine/toolstub"
 	"goc/commands"
 	"goc/slashresolve"
 	"goc/types"
 )
 
-// DemoToolRunner handles Skill tool calls like TS SkillTool (validate + disk/bundled expand); other tools delegate to [engine.StubRunner].
+// DemoToolRunner handles Skill tool calls like TS SkillTool (validate + disk/bundled expand); other tools delegate to [toolstub.StubRunner].
 type DemoToolRunner struct {
 	Commands  []types.Command
 	SessionID string
 }
 
-// Run implements [engine.ToolRunner].
+// Run implements [toolstub.ToolRunner].
 func (r DemoToolRunner) Run(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
 	if name != SkillToolName() {
-		return engine.StubRunner{}.Run(ctx, name, toolUseID, input)
+		return toolstub.StubRunner{}.Run(ctx, name, toolUseID, input)
 	}
 	var in struct {
 		Skill string `json:"skill"`

@@ -17,7 +17,10 @@
       "Bash(grep -r ANTHROPIC_AUTH_TOKEN . --include=*.js --include=*.jsx --include=*.ts --include=*.tsx --include=*.json --include=*.env* --include=*.md --include=*.py --include=*.go)",
       "Bash(grep -r ANTHROPIC_AUTH_TOKEN ./src ./scripts ./packages ./tests --include=*.js --include=*.ts --include=*.jsx --include=*.tsx --include=*.json)",
       "Bash(grep -r OPENAI_BASE_URL . --include=*.js --include=*.ts --include=*.json --include=*.env --include=*.env*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(go mod:*)",
+      "Bash(go run:*)",
+      "Bash(chmod:*)"
     ]
   }
 }

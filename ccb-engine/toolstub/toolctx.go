@@ -1,4 +1,4 @@
-package engine
+package toolstub
 
 import (
 	"context"
@@ -15,7 +15,7 @@ type toolTurnContext struct {
 	PendingMcpServerNames []string
 }
 
-// ContextWithToolTurn attaches tools[] and optional MCP connecting metadata for this RunTurn.
+// ContextWithToolTurn attaches tools[] and optional MCP connecting metadata for this tool turn.
 func ContextWithToolTurn(ctx context.Context, tools []anthropic.ToolDefinition, hasPendingMcp bool, pendingMcpNames []string) context.Context {
 	if ctx == nil {
 		ctx = context.Background()

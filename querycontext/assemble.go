@@ -54,7 +54,7 @@ func FormatSystemContextLines(context map[string]string) string {
 }
 
 // FormatUserContextReminder returns one standalone <system-reminder>…</system-reminder> blob (for ccbhydrate
-// lead-in, snapshots, submitfill). Do not use this as a value inside [query.PrependUserContext] — that helper
+// lead-in, snapshots). Do not use this as a value inside [query.PrependUserContext] — that helper
 // already wraps raw #key/value lines once, like TS prependUserContext.
 func FormatUserContextReminder(context map[string]string) string {
 	if len(context) == 0 {

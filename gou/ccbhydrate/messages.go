@@ -1,5 +1,5 @@
-// Package ccbhydrate builds JSON message arrays for ccb-engine SubmitUserTurn / HydrateFromMessages
-// (goc/ccb-engine/internal/anthropic.Message: role + content string or block array).
+// Package ccbhydrate builds JSON message arrays for model / query hosts
+// (`goc/ccb-engine/internal/anthropic.Message`-shaped: role + content string or block array).
 package ccbhydrate
 
 import (
@@ -33,7 +33,7 @@ func MessagesJSONNormalized(msgs []types.Message, tools []messagesapi.ToolSpec, 
 	return messagesJSONFromNormalized(norm)
 }
 
-// MessagesJSON returns a JSON array suitable for SubmitUserTurn payload.messages.
+// MessagesJSON returns a JSON array of API-shaped messages for hosts that accept `messages[]`.
 // Only user and assistant rows with non-empty content (after messagerow.NormalizeMessageJSON) are included, in order.
 func MessagesJSON(msgs []types.Message) (json.RawMessage, error) {
 	norm := make([]types.Message, len(msgs))

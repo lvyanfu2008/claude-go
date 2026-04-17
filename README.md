@@ -17,13 +17,6 @@ bun run export:tools-registry
 cp data/exports/commands/data/tools_api.json ../claude-go/commands/data/tools_api.json
 ```
 
-Then refresh Zod parity goldens (expects the same sibling layout):
-
-```bash
-cd ../claude-code
-bun run zod-parity-goldens
-```
-
 **Verify:**
 
 ```bash

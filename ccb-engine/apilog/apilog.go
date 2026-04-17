@@ -44,11 +44,11 @@ func ResolvedLogPath() string {
 	return logPath()
 }
 
-// MaybePrintDiag records resolved path and flag state when CLAUDE_CODE_APILOG_DIAG is truthy.
+// MaybePrintDiag records resolved path and flag state when GOU_DEMO_LOG is truthy (same switch as gou-demo trace).
 // It appends to the same file as [ResolvedLogPath] / LLM API body logs (~/.claude/debug/<session>.txt
 // by default) so TTY sessions are not spammed; if the path is empty or the write fails, it falls back to stderr.
 func MaybePrintDiag() {
-	if !envTruthy("CLAUDE_CODE_APILOG_DIAG") {
+	if !envTruthy("GOU_DEMO_LOG") {
 		return
 	}
 	path := ResolvedLogPath()
@@ -92,7 +92,7 @@ func appendDiagToLog(path, body string) error {
 	}
 	defer f.Close()
 	ts := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = fmt.Fprintf(f, "%s [APILOG_DIAG]\n%s", ts, body)
+	_, err = fmt.Fprintf(f, "%s [GOU_DEMO_LOG_APILOG_DIAG]\n%s", ts, body)
 	return err
 }
 

@@ -5,8 +5,7 @@
 //
 // Run from repo: cd goc && go run ./cmd/gou-demo
 //
-// Flags: -transcript=file.json (UI or API messages), -no-seed (or GOU_DEMO_NO_SEED=1) to skip the 45 demo seed rows,
-// -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
+// Flags: -transcript=file.json (UI or API messages), -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
 // Real model: [goc/conversation-runtime/query.Query] HTTP streaming parity when ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) is set
 // and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]).
 // Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1) for a UI-only simulated stream with no HTTP (no apilog bodies on send).
@@ -33,7 +32,7 @@
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
-// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] to RecordTranscript with a growing turn prefix (same as TS recordTranscript(messages)) so parentUuid chains; each yield is deduped by message UUID; turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid. Use -no-seed for cleaner UUIDs in demo history.
+// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] to RecordTranscript with a growing turn prefix (same as TS recordTranscript(messages)) so parentUuid chains; each yield is deduped by message UUID; turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid.
 // Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
@@ -640,8 +639,7 @@ func main() {
 	traceCleanup := setupGouDemoTrace()
 	defer traceCleanup()
 
-	transcriptPath := flag.String("transcript", "", "load messages from JSON file (UI []Message or API [{role,content}]); skips built-in seed")
-	noSeed := flag.Bool("no-seed", false, "start with an empty transcript (no 45 demo seed messages). Same as GOU_DEMO_NO_SEED=1")
+	transcriptPath := flag.String("transcript", "", "load initial messages from JSON file (UI []Message or API [{role,content}]); default session starts empty")
 	replayCC := flag.String("replay-cc", "", "apply ccb-engine NDJSON stream events from file (protocol-v1 StreamEvent lines), then open TUI")
 	streamStdin := flag.Bool("stream-stdin", false, "read NDJSON stream events from stdin (pipe from ccb-engine); open /dev/tty for keys when available")
 	fakeStreamFlag := flag.Bool("fake-stream", false, "do not call the model: simulated stream only (no HTTP; no apilog bodies)")
@@ -660,15 +658,12 @@ func main() {
 			st.ConversationID = sessiontranscript.NewUUID()
 		}
 	}
-	skipSeed := *noSeed || gouDemoEnvTruthy("GOU_DEMO_NO_SEED")
 	if *transcriptPath != "" {
 		msgs, err := transcript.LoadFile(*transcriptPath)
 		if err != nil {
 			log.Fatalf("transcript: %v", err)
 		}
 		st.Messages = msgs
-	} else if !skipSeed {
-		seedDemo(st)
 	}
 	if *replayCC != "" {
 		if err := ccbstream.ReplayFile(*replayCC, st); err != nil {
@@ -787,90 +782,6 @@ func (m *model) maybeRecordTranscript() {
 func (m *model) BindCCB(send func(tea.Msg), inline bool) {
 	m.ccbSend = send
 	m.ccbInline = inline
-}
-
-func seedDemo(s *conversation.Store) {
-	for i := range 45 {
-		text := fmt.Sprintf("## Seed %d\n\nScroll the message list. Inline `code` here.", i+1)
-		if i%7 == 0 {
-			text += "\n\n```text\nmulti\nline\nfence\n```\n\nMore body."
-		}
-		mt := types.MessageTypeUser
-		if i%2 == 1 {
-			mt = types.MessageTypeAssistant
-		}
-		raw, _ := json.Marshal([]map[string]string{{"type": "text", "text": text}})
-		s.AppendMessage(types.Message{
-			UUID:    fmt.Sprintf("seed-%04d", i),
-			Type:    mt,
-			Content: raw,
-		})
-	}
-	// Tool-use / tool_result pair (Message.tsx assistant + user branches).
-	toolRaw, _ := json.Marshal([]map[string]any{
-		{"type": "text", "text": "Calling a tool."},
-		{"type": "tool_use", "id": "demo-tool-1", "name": "Bash", "input": map[string]any{"command": "ls -la"}},
-	})
-	s.AppendMessage(types.Message{
-		UUID:    "seed-tool-assistant",
-		Type:    types.MessageTypeAssistant,
-		Content: toolRaw,
-	})
-	resRaw, _ := json.Marshal([]map[string]any{
-		{"type": "tool_result", "tool_use_id": "demo-tool-1", "content": "total 0\ndrwxr-xr-x  .\n", "is_error": false},
-	})
-	s.AppendMessage(types.Message{
-		UUID:    "seed-tool-user",
-		Type:    types.MessageTypeUser,
-		Content: resRaw,
-	})
-
-	assistDisplay, _ := json.Marshal([]map[string]any{{"type": "text", "text": "Read **src/foo.go** (display line)."}})
-	displayMsg := types.Message{
-		Type:    types.MessageTypeAssistant,
-		UUID:    "seed-grouped-display",
-		Content: assistDisplay,
-	}
-	s.AppendMessage(types.Message{
-		Type:           types.MessageTypeGroupedToolUse,
-		UUID:           "seed-grouped-1",
-		ToolName:       "Read",
-		Messages:       []types.Message{{Type: types.MessageTypeAssistant, UUID: "g-a1", Content: assistDisplay}},
-		Results:        []types.Message{{Type: types.MessageTypeUser, UUID: "g-u1", Content: resRaw}},
-		DisplayMessage: &displayMsg,
-	})
-
-	s.AppendMessage(types.Message{
-		Type:          types.MessageTypeCollapsedReadSearch,
-		UUID:          "seed-collapsed-1",
-		SearchCount:   2,
-		ReadCount:     5,
-		ListCount:     1,
-		ReadFilePaths: []string{"src/a.ts", "src/b.ts"},
-		SearchArgs:    []string{"TODO"},
-		DisplayMessage: &types.Message{
-			Type:    types.MessageTypeAssistant,
-			UUID:    "seed-collapsed-display",
-			Content: assistDisplay,
-		},
-	})
-
-	serverBlock, _ := json.Marshal([]map[string]any{{
-		"type": "server_tool_use", "id": "srv1", "name": "example_server_tool", "input": map[string]any{"q": "x"},
-	}})
-	s.AppendMessage(types.Message{
-		Type:    types.MessageTypeAssistant,
-		UUID:    "seed-server-tool",
-		Content: serverBlock,
-	})
-	advisorBlock, _ := json.Marshal([]map[string]any{{
-		"type": "advisor_tool_result", "id": "adv1", "content": "suggestion: try Y",
-	}})
-	s.AppendMessage(types.Message{
-		Type:    types.MessageTypeAssistant,
-		UUID:    "seed-advisor",
-		Content: advisorBlock,
-	})
 }
 
 func (m *model) Init() tea.Cmd {

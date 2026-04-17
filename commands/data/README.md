@@ -12,8 +12,7 @@ Additional prompt/skill rows can live under **`../builtin_*/`** (see [`../builti
      `cp /path/to/claude-code/data/exports/commands/data/tools_api.json /path/to/claude-go/commands/data/tools_api.json`  
      (Monorepo sibling example: from `claude-code` repo root,  
      `cp data/exports/commands/data/tools_api.json ../claude-go/commands/data/tools_api.json`.)
-  3. Optional: in **`claude-code`**, `bun run zod-parity-goldens` → refreshes `ccb-engine/internal/toolinput/testdata/zodparity/expected.jsonl` for Go↔Zod accept/reject tests.
-  4. In **`claude-go`**: `go test ./...`  
+  3. In **`claude-go`**: `go test ./...`  
   See also the top-level [`../../README.md`](../../README.md) in this module.
 
 - **Channel / AskUserQuestion parity**: For TS parity when channel relay is active, set **`CLAUDE_CODE_GO_ALLOWED_CHANNELS`** (non-empty, comma-separated) together with **`FEATURE_KAIROS`** or **`FEATURE_KAIROS_CHANNELS`** so `toolpool.GetTools` omits **AskUserQuestion**, matching `AskUserQuestionTool.isEnabled()` in TS.

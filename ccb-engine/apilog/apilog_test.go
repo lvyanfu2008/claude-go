@@ -98,7 +98,7 @@ func TestResolvedLogPath_default(t *testing.T) {
 func TestMaybePrintDiag_appendsToResolvedLogPathNotStderr(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("CLAUDE_CODE_APILOG_DIAG", "1")
+	t.Setenv("GOU_DEMO_LOG", "1")
 	t.Setenv("CLAUDE_CODE_DEBUG_LOG_FILE", "")
 	t.Setenv("CLAUDE_CODE_DEBUG_LOGS_DIR", "")
 	t.Setenv("CLAUDE_CODE_LOG_API_REQUEST_BODY", "")
@@ -110,7 +110,7 @@ func TestMaybePrintDiag_appendsToResolvedLogPathNotStderr(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(b)
-	if !strings.Contains(s, "[APILOG_DIAG]") || !strings.Contains(s, "[ccb-engine apilog] diag:") {
+	if !strings.Contains(s, "[GOU_DEMO_LOG_APILOG_DIAG]") || !strings.Contains(s, "[ccb-engine apilog] diag:") {
 		t.Fatalf("expected diag block in log file, got: %s", s)
 	}
 	if !strings.Contains(s, "resolved log path") {

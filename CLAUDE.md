@@ -15,8 +15,6 @@ This file orients contributors and automation when working in **`claude-go/`** (
 - **`conversation-runtime/process-user-input/`** — `processUserInput` port; **`ApplyQueryHostEnvGates`** / **`WireToolexecutionFromProcessUserInput`** hook hosts that call `query.Query` after `ShouldQuery`.
 - **`toolexecution/`** — Tool execution aligned toward `toolExecution.ts`: **`PermissionDecision`** + **`QueryCanUseTool`**, **`ResolveHookPermissionDecision`**, **`CheckRuleBasedPermissions`** (alwaysDeny / alwaysAsk via **`goc/permissionrules`** when **`ToolPermission`** / **`ExecutionDeps.ToolPermission`** is set), **`RunToolUseChan`** (rules after query gate), **`CheckPermissionsAndCallTool`** (pre-hook + optional **`PreToolHookPermission`** + early **JSON schema** validation for registry tools), **`AskResolver`** for headless `ask`.
 - **`query.QueryParams.ToolPermissionContext`** — copied into **`ToolexecutionDeps.ToolPermission`** on streaming parity ([`streaming_loop.go`](claude-go/conversation-runtime/query/streaming_loop.go)); gou-demo forwards **`ProcessUserInputContextData.ToolPermissionContext`** when set.
-- **`ccb-engine/internal/engine`** — Optional **`ToolexecutionRunner`** implements **`ToolRunner`** via **`RunToolUseChan`** so socket / CLI paths can share the same permission/execution path as query streaming (A5).
-
 ## Permissions / `canUseTool` (vs TS)
 
 - **`query.CanUseToolFn`** is **`toolexecution.QueryCanUseToolFn`**: returns **`PermissionDecision`** (`allow` / `deny` / `ask`) + `error`. Legacy `(bool, error)` hosts use **`toolexecution.LegacyBoolQueryGate`** (see **`process-user-input/query_wire.go`**).

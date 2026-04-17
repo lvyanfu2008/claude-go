@@ -8,7 +8,7 @@ import (
 	"goc/ccb-engine/internal/toolsearch"
 )
 
-// WireToolsJSON delegates to internal/toolsearch (same BuildWireConfig + ApplyWire as CCB Session.RunTurn).
+// WireToolsJSON delegates to internal/toolsearch (same BuildWireConfig + ApplyWire as streaming parity HTTP payloads).
 func WireToolsJSON(toolsJSON json.RawMessage, modelID string, hasPendingMcp, openAICompat bool, discoveryMsgsJSON json.RawMessage) (json.RawMessage, error) {
 	return toolsearch.WireToolsJSON(toolsJSON, modelID, hasPendingMcp, openAICompat, discoveryMsgsJSON)
 }

@@ -1,5 +1,4 @@
-// Package ccbstream applies ccb-engine NDJSON stream events to a conversation.Store.
-// JSON shapes mirror goc/ccb-engine/internal/protocol (that package is internal to ccb-engine).
+// Package ccbstream applies NDJSON stream events to a conversation.Store (protocol-style shapes).
 package ccbstream
 
 // StreamEvent is server→client NDJSON line (protocol-v1.md StreamEvent union).

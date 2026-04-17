@@ -61,7 +61,7 @@ func (r *ParityToolRunner) roots() []string {
 	return out
 }
 
-// Run implements [engine.ToolRunner].
+// Run implements [toolstub.ToolRunner].
 func (r *ParityToolRunner) Run(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
 	if name == "REPL" {
 		return r.runREPLTool(ctx, toolUseID, input)
@@ -116,12 +116,12 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 	return r.DemoToolRunner.Run(ctx, name, toolUseID, input)
 }
 
-// ToolReadMappingRoots supplies absolute roots for Read tool_result mapping (engine.Session).
+// ToolReadMappingRoots supplies absolute roots for Read tool_result mapping.
 func (r *ParityToolRunner) ToolReadMappingRoots() []string {
 	return r.roots()
 }
 
-// ToolReadMappingMemCWD supplies cwd for auto-memory freshness in Read formatter (engine.Session).
+// ToolReadMappingMemCWD supplies cwd for auto-memory freshness in Read formatter.
 func (r *ParityToolRunner) ToolReadMappingMemCWD() string {
 	wd := strings.TrimSpace(r.WorkDir)
 	if wd != "" {
