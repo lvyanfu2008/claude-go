@@ -125,6 +125,27 @@ func messagePaneGutterRowCount(block string, cols int) int {
 	return max(1, strings.Count(g, "\n")+1)
 }
 
+// wrapHeadingForMessagePane wraps heading content to (messageWrapCols − levelPad) so after [applyMessagePaneGutter]
+// each physical line still includes the ATX level indent on continuations (not only the global two spaces).
+func wrapHeadingForMessagePane(content string, levelPad string, cols int) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+	innerW := messageWrapCols(cols) - len(levelPad)
+	if innerW < 8 {
+		innerW = max(8, messageWrapCols(cols)-2)
+	}
+	wrapped := layout.WrapForViewport(content, innerW)
+	if levelPad == "" {
+		return wrapped
+	}
+	lines := strings.Split(wrapped, "\n")
+	for i := range lines {
+		lines[i] = levelPad + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // gouDemoMergedSystemLocale mirrors apiparity.GouDemo: user + project settings.go.json / settings.local.json language/outputStyle with env override.
 // resolveToolProjectRoot returns CCB_ENGINE_PROJECT_ROOT if set, else the nearest Go project marker from cwd, else abs(cwd).
 func resolveToolProjectRoot(cwd string) string {
@@ -2128,7 +2149,11 @@ func styleUserMessageLines(rows []string, cols int) string {
 
 func withCollapsedSpaceIfNeeded(msg types.Message, body string) string {
 	// Message pane uses [applyMessagePaneGutter] for uniform 2-space indent; no extra prefix here.
-	return body
+	if msg.Type != types.MessageTypeCollapsedReadSearch || body == "" {
+		return body
+	}
+
+	return "  " + body
 }
 
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL string) string {
@@ -2527,13 +2552,24 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 		switch t.Type {
 		case "heading":
 			lv := min(max(t.Level, 1), 6)
-			indent := strings.Repeat(" ", (lv-1)*2)
-			prefix := indent
+			levelPad := strings.Repeat(" ", (lv-1)*2)
 			hst := headingMarkdownStyle(userRow)
 			if len(t.Segments) > 0 {
-				parts = append(parts, hst.Render(styleMarkdownInlineSegments(t.Segments, prefix, userRow)))
+				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
+				rendered := hst.Render(inner)
+				parts = append(parts, wrapHeadingForMessagePane(rendered, levelPad, cols))
 			} else {
-				parts = append(parts, hst.Render(prefix+t.Text))
+				plain := strings.TrimSpace(t.Text)
+				wrapped := wrapHeadingForMessagePane(plain, levelPad, cols)
+				lines := strings.Split(wrapped, "\n")
+				var hb strings.Builder
+				for i, ln := range lines {
+					if i > 0 {
+						hb.WriteByte('\n')
+					}
+					hb.WriteString(hst.Render(ln))
+				}
+				parts = append(parts, hb.String())
 			}
 		case "code":
 			cb := "```" + t.Lang + "\n" + t.Text
