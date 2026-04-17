@@ -91,6 +91,40 @@ import (
 // gouDemoTrace is set by setupGouDemoTrace from GOU_DEMO_LOG_FILE or GOU_DEMO_LOG.
 var gouDemoTrace *log.Logger
 
+// messagePaneGutterCols is the uniform left indent for message pane body lines (alignment with wrap width).
+const messagePaneGutterCols = 2
+
+func messageWrapCols(cols int) int {
+	if cols <= messagePaneGutterCols+8 {
+		return max(8, cols)
+	}
+	return cols - messagePaneGutterCols
+}
+
+// applyMessagePaneGutter wraps block to (cols − gutter) and prefixes each line with two spaces.
+func applyMessagePaneGutter(block string, cols int) string {
+	if block == "" {
+		return ""
+	}
+	wrapCols := messageWrapCols(cols)
+	wrapped := layout.WrapForViewport(block, wrapCols)
+	prefix := strings.Repeat(" ", messagePaneGutterCols)
+	lines := strings.Split(wrapped, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// messagePaneGutterRowCount matches [applyMessagePaneGutter] line count for height cache parity.
+func messagePaneGutterRowCount(block string, cols int) int {
+	g := applyMessagePaneGutter(block, cols)
+	if g == "" {
+		return 1
+	}
+	return max(1, strings.Count(g, "\n")+1)
+}
+
 // gouDemoMergedSystemLocale mirrors apiparity.GouDemo: user + project settings.go.json / settings.local.json language/outputStyle with env override.
 // resolveToolProjectRoot returns CCB_ENGINE_PROJECT_ROOT if set, else the nearest Go project marker from cwd, else abs(cwd).
 func resolveToolProjectRoot(cwd string) string {
@@ -436,7 +470,7 @@ func (m *model) promptBottomStreamRows() []string {
 		if streamTail == "" {
 			return padStreamRows(nil, h)
 		}
-		wrapped := layout.WrapForViewport(streamTail, w)
+		wrapped := applyMessagePaneGutter(streamTail, w)
 		tailLines := strings.Split(wrapped, "\n")
 		return padStreamRows(tailLines, h)
 	}
@@ -446,7 +480,7 @@ func (m *model) promptBottomStreamRows() []string {
 	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
 	toks := markdown.CachedLexerStreaming(m.store.StreamingText)
 	streamBody := styleMarkdownTokens(toks, m.cols, false)
-	streamWrapped := layout.WrapForViewport(streamLabel+streamBody, w)
+	streamWrapped := applyMessagePaneGutter(streamLabel+streamBody, w)
 	streamRows := strings.Split(streamWrapped, "\n")
 	return padStreamRows(streamRows, h)
 }
@@ -1497,6 +1531,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	// Resolved Read/Search ⎿ stats (Found N lines, read preview) match transcript; not transcript-screen-only.
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true, msg.Type == types.MessageTypeUser)
 	body = withUserPromptPointerIfNeeded(msg, body)
+	body = withCollapsedSpaceIfNeeded(msg, body)
 	block := body
 	if header != "" {
 		block = header + "\n" + body
@@ -1504,7 +1539,7 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	if msg.Type == types.MessageTypeUser {
 		block = block + "\n"
 	}
-	r := layout.WrappedRowCount(block, cols)
+	r := layout.WrappedRowCount(block, messageWrapCols(cols))
 	if msg.Type == types.MessageTypeAttachment {
 		return r
 	}
@@ -1551,7 +1586,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		}
 		toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
 		block := head + "\n" + toolLine
-		return max(1, layout.WrappedRowCount(block, cols))
+		return messagePaneGutterRowCount(block, cols)
 	}
 
 	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
@@ -1572,7 +1607,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		treeLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path)
 		block += "\n" + treeLine
 	}
-	return max(1, layout.WrappedRowCount(block, cols))
+	return messagePaneGutterRowCount(block, cols)
 }
 
 func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, cols, h int, searchHL string) string {
@@ -1615,6 +1650,7 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 		}
 	}
 
+	block = applyMessagePaneGutter(block, cols)
 	lines := strings.Split(block, "\n")
 	for len(lines) < h {
 		lines = append(lines, "")
@@ -1788,10 +1824,11 @@ func (m *model) View() string {
 				if msgPane.Len() > 0 {
 					msgPane.WriteByte('\n')
 				}
+				var sb strings.Builder
 				if len(msgView) == 0 || msgView[len(msgView)-1].Type != types.MessageTypeAssistant {
 					head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-					msgPane.WriteString(head)
-					msgPane.WriteByte('\n')
+					sb.WriteString(head)
+					sb.WriteByte('\n')
 				}
 
 				if !group.IsGroup {
@@ -1805,11 +1842,11 @@ func (m *model) View() string {
 						toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
 					}
 					toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
-					msgPane.WriteString(toolTitle)
+					sb.WriteString(toolTitle)
 				} else {
 					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
 					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-					msgPane.WriteString(toolTitle)
+					sb.WriteString(toolTitle)
 					for _, item := range group.Items {
 						path := extractPartialJSONField(item.UnparsedInput, "file_path")
 						if path == "" {
@@ -1821,10 +1858,11 @@ func (m *model) View() string {
 						if path == "" {
 							path = "..."
 						}
-						msgPane.WriteByte('\n')
-						msgPane.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
+						sb.WriteByte('\n')
+						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
 					}
 				}
+				msgPane.WriteString(applyMessagePaneGutter(sb.String(), bodyCols))
 			}
 		}
 		if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
@@ -1837,9 +1875,8 @@ func (m *model) View() string {
 				msgPane.WriteByte('\n')
 			}
 			head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-			msgPane.WriteString(head)
-			msgPane.WriteByte('\n')
-			msgPane.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false))
+			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false)
+			msgPane.WriteString(applyMessagePaneGutter(head+"\n"+md, bodyCols))
 		}
 
 		lines := strings.Split(msgPane.String(), "\n")
@@ -2051,16 +2088,8 @@ func styleUserMessageLines(rows []string, cols int) string {
 }
 
 func withCollapsedSpaceIfNeeded(msg types.Message, body string) string {
-	if msg.Type != types.MessageTypeCollapsedReadSearch || body == "" {
-		return body
-	}
-	prefix := "  "
-	lines := strings.Split(body, "\n")
-	if len(lines) == 0 {
-		return prefix
-	}
-	lines[0] = prefix + lines[0]
-	return strings.Join(lines, "\n")
+	// Message pane uses [applyMessagePaneGutter] for uniform 2-space indent; no extra prefix here.
+	return body
 }
 
 func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL string) string {
@@ -2088,7 +2117,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 	if header != "" {
 		block = header + "\n" + body
 	}
-	wrapped := layout.WrapForViewport(block, cols)
+	wrapped := applyMessagePaneGutter(block, cols)
 	rows := strings.Split(wrapped, "\n")
 	if len(rows) > maxRows {
 		rows = rows[:maxRows]

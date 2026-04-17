@@ -13,10 +13,12 @@ import (
 
 func TestTryBuildFullMessagePaneContent_userThenStreamingToolBlankLine(t *testing.T) {
 	st := &conversation.Store{ConversationID: "c"}
+	// API-shaped Message so [IsStreamToolUsing] matches StreamingToolUses (append tool chrome block in tryBuildFullMessagePaneContent).
+	userMsg := `{"role":"user","content":[{"type":"text","text":"hi"},{"type":"tool_use","id":"t1","name":"Grep","input":{}}]}`
 	st.Messages = []types.Message{
-		{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(`[{"type":"text","text":"hi"}]`)},
+		{Type: types.MessageTypeUser, UUID: "u1", Content: []byte(`[{"type":"text","text":"hi"}]`), Message: []byte(userMsg)},
 	}
-	st.StreamingToolUses = []conversation.StreamingToolUse{{Name: "Grep", UnparsedInput: "{}"}}
+	st.StreamingToolUses = []conversation.StreamingToolUse{{ToolUseID: "t1", Name: "Grep", UnparsedInput: "{}"}}
 	m := newModel(st, "", "", nil)
 	m.width = 80
 	m.height = 40

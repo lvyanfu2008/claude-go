@@ -88,7 +88,7 @@ func TestTranscriptStreamingToolsForView_capsByFrozenLen(t *testing.T) {
 		},
 	}
 	v := m.transcriptStreamingToolsForView()
-	if len(v) != 2 || v[0].ToolUseID != "a" || v[1].ToolUseID != "b" {
+	if len(v) != 2 || v[0].Single.ToolUseID != "a" || v[1].Single.ToolUseID != "b" {
 		t.Fatalf("got %+v", v)
 	}
 }

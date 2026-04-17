@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -225,11 +224,12 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			return "", false
 		}
 	}
-	//fmt.Println("sleep 2s")
-	time.Sleep(1 * time.Second)
-	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
+
+	//需要兼容一下，这里有个问题，已经有工具了但是msgView却没有同步过来
+	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 && m.IsStreamToolUsing(msgView[len(msgView)-1].Message) {
 		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
 		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
+		b.WriteByte('\n')
 		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
 			if lineCnt+1 > maxL {
 				return "", false
@@ -278,7 +278,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				}
 			}
 
-			if !addBlock(sb.String()) {
+			if !addBlock(applyMessagePaneGutter(sb.String(), bodyCols)) {
 				return "", false
 			}
 		}
@@ -293,9 +293,8 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			lineCnt++
 		}
 		var sb strings.Builder
-		sb.WriteString(lipglossStyleAssistantHead())
-		sb.WriteByte('\n')
-		sb.WriteString(styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false))
+		md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false)
+		sb.WriteString(applyMessagePaneGutter(lipglossStyleAssistantHead()+"\n"+md, bodyCols))
 		if !addBlock(sb.String()) {
 			return "", false
 		}
