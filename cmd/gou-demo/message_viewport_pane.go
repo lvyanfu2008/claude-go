@@ -319,7 +319,13 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 type lineRevealTick time.Time
 
 func lineRevealTickCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg {
+	ms := 200
+	if v := strings.TrimSpace(os.Getenv("GOU_DEMO_REVEAL_TICK_MS")); v != "" {
+		if val, err := strconv.Atoi(v); err == nil && val > 0 {
+			ms = val
+		}
+	}
+	return tea.Tick(time.Millisecond*time.Duration(ms), func(t time.Time) tea.Msg {
 		return lineRevealTick(t)
 	})
 }
