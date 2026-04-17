@@ -611,11 +611,6 @@ type model struct {
 	msgFirstShownAt map[string]time.Time
 	// msgLastAssistantContentLen tracks len(Content) per assistant UUID so streaming bumps reset the summary delay window.
 	msgLastAssistantContentLen map[string]int
-
-	// progressive reveal (typewriter effect) for latest message
-	revealingMsgID string
-	revealedLines  int
-	isRevealing    bool
 }
 
 func main() {
@@ -975,27 +970,6 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
 		m.slashPick = nil
 		return m, m.enterTranscriptScreen()
-	}
-	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
-		if msg.String() == "ctrl+r" {
-			gouDemoTracef("ctrl+r pressed, starting line reveal")
-			if len(m.store.Messages) > 0 {
-				m.revealingMsgID = m.store.Messages[len(m.store.Messages)-1].UUID
-				m.revealedLines = 0
-				m.isRevealing = true
-				m.vpNeedResizeContent = true
-				return m, lineRevealTickCmd()
-			}
-			return m, nil
-		}
-		if msg.String() == "ctrl+x" {
-			if m.isRevealing {
-				gouDemoTracef("ctrl+x pressed, stopping line reveal")
-				m.isRevealing = false
-				m.vpNeedResizeContent = true
-			}
-			return m, nil
-		}
 	}
 	if handled, cmd := m.handleTranscriptKey(msg); handled {
 		return m, cmd
@@ -1439,25 +1413,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouToolSummaryDelayTickMsg:
 		return m.handleUpdateToolSummaryDelayTick(msg)
 
-	case lineRevealTick:
-		if !m.isRevealing {
-			return m, nil
-		}
-		if gouDemoTrace != nil {
-			gouDemoTracef("lineRevealTick: revealedLines=%d", m.revealedLines)
-		}
-		m.revealedLines++
-		// Since we slice by lines later, if it exceeds the total lines, we will stop revealing.
-		// For simplicity, we just stop checking after a large number of lines or when View tells us.
-		// Wait, how do we know the total lines here? We don't. We just increment it.
-		// To be safe, let's limit it to e.g. 1000 lines.
-		if m.revealedLines > 2000 {
-			m.isRevealing = false
-			return m, nil
-		}
-		m.vpNeedResizeContent = true
-		return m, lineRevealTickCmd()
-
 	case ccbstream.Msg:
 		return m.handleUpdateCCBStream(msg)
 	}
@@ -1853,15 +1808,6 @@ func (m *model) View() string {
 			if i < msgN {
 				msg := msgView[i]
 				block = m.renderMessageRow(msg, bodyCols, h, hl)
-				if m.isRevealing && msg.UUID == m.revealingMsgID {
-					lines := strings.Split(block, "\n")
-					if m.revealedLines < len(lines) {
-						lines = lines[:m.revealedLines]
-					} else {
-						m.isRevealing = false
-					}
-					block = strings.Join(lines, "\n")
-				}
 			} else {
 				ti := i - msgN
 				if ti < 0 || ti >= len(stRows) {

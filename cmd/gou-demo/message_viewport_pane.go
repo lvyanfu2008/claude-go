@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -200,18 +199,6 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			}
 			h := m.measureMessageRows(msg, bodyCols, hl)
 			block := m.renderMessageRow(msg, bodyCols, h, hl)
-			
-			if m.isRevealing && msg.UUID == m.revealingMsgID {
-				lines := strings.Split(block, "\n")
-				if m.revealedLines < len(lines) {
-					lines = lines[:m.revealedLines]
-				} else {
-					// Finish revealing when we hit the total lines
-					m.isRevealing = false
-				}
-				block = strings.Join(lines, "\n")
-			}
-
 			if !addBlock(block) {
 				return "", false
 			}
@@ -297,6 +284,8 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		}
 	}
 
+	//time.Sleep(500 * time.Millisecond)
+
 	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
 		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
 			if lineCnt+1 > maxL {
@@ -314,26 +303,6 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	}
 
 	return b.String(), true
-}
-
-type lineRevealTick time.Time
-
-func lineRevealTickCmd() tea.Cmd {
-	ms := 200
-	if v := strings.TrimSpace(os.Getenv("GOU_DEMO_REVEAL_TICK_MS")); v != "" {
-		if val, err := strconv.Atoi(v); err == nil && val > 0 {
-			ms = val
-		}
-	}
-	if gouDemoTrace != nil {
-		gouDemoTracef("scheduling lineRevealTickCmd in %d ms", ms)
-	}
-	return tea.Tick(time.Millisecond*time.Duration(ms), func(t time.Time) tea.Msg {
-		if gouDemoTrace != nil {
-			gouDemoTracef("lineRevealTick triggered at %v", t)
-		}
-		return lineRevealTick(t)
-	})
 }
 
 // msg.Message
