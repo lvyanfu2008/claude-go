@@ -976,16 +976,26 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slashPick = nil
 		return m, m.enterTranscriptScreen()
 	}
-	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && (msg.String() == "ctrl+r" || msg.String() == "ctrl+x") {
-		gouDemoTracef("%s pressed, starting line reveal", msg.String())
-		if len(m.store.Messages) > 0 {
-			m.revealingMsgID = m.store.Messages[len(m.store.Messages)-1].UUID
-			m.revealedLines = 0
-			m.isRevealing = true
-			m.vpNeedResizeContent = true
-			return m, lineRevealTickCmd()
+	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
+		if msg.String() == "ctrl+r" {
+			gouDemoTracef("ctrl+r pressed, starting line reveal")
+			if len(m.store.Messages) > 0 {
+				m.revealingMsgID = m.store.Messages[len(m.store.Messages)-1].UUID
+				m.revealedLines = 0
+				m.isRevealing = true
+				m.vpNeedResizeContent = true
+				return m, lineRevealTickCmd()
+			}
+			return m, nil
 		}
-		return m, nil
+		if msg.String() == "ctrl+x" {
+			if m.isRevealing {
+				gouDemoTracef("ctrl+x pressed, stopping line reveal")
+				m.isRevealing = false
+				m.vpNeedResizeContent = true
+			}
+			return m, nil
+		}
 	}
 	if handled, cmd := m.handleTranscriptKey(msg); handled {
 		return m, cmd
