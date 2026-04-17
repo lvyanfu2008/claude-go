@@ -325,7 +325,13 @@ func lineRevealTickCmd() tea.Cmd {
 			ms = val
 		}
 	}
+	if gouDemoTrace != nil {
+		gouDemoTracef("scheduling lineRevealTickCmd in %d ms", ms)
+	}
 	return tea.Tick(time.Millisecond*time.Duration(ms), func(t time.Time) tea.Msg {
+		if gouDemoTrace != nil {
+			gouDemoTracef("lineRevealTick triggered at %v", t)
+		}
 		return lineRevealTick(t)
 	})
 }

@@ -977,11 +977,13 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.slashPick = nil
 		return m, m.enterTranscriptScreen()
 	}
-	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+t" {
+	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "f4" {
+		gouDemoTracef("f4 pressed, starting line reveal")
 		if len(m.store.Messages) > 0 {
 			m.revealingMsgID = m.store.Messages[len(m.store.Messages)-1].UUID
 			m.revealedLines = 0
 			m.isRevealing = true
+			m.vpNeedResizeContent = true
 			return m, lineRevealTickCmd()
 		}
 		return m, nil
@@ -1431,6 +1433,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case lineRevealTick:
 		if !m.isRevealing {
 			return m, nil
+		}
+		if gouDemoTrace != nil {
+			gouDemoTracef("lineRevealTick: revealedLines=%d", m.revealedLines)
 		}
 		m.revealedLines++
 		// Since we slice by lines later, if it exceeds the total lines, we will stop revealing.
