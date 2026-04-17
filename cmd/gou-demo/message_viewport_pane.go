@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -226,19 +227,57 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	}
 
 	//需要兼容一下，这里有个问题，已经有工具了但是msgView却没有同步过来
-	if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 && m.IsStreamToolUsing(msgView[len(msgView)-1].Message) {
+	if m.uiScreen != gouDemoScreenTranscript &&
+		len(m.store.StreamingToolUses) > 0 &&
+		(m.IsStreamToolUsing(msgView[len(msgView)-1].Message) || m.IsStreamToolUsing(msgView[len(msgView)-2].Message)) {
 		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
 		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
-		b.WriteByte('\n')
-		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
+		if lineCnt > 0 && (m.IsStreamToolUsing(msgView[len(msgView)-1].Message)) {
 			if lineCnt+1 > maxL {
 				return "", false
 			}
 			b.WriteByte('\n')
 			lineCnt++
 		}
+
+		now := time.Now()
+		if m.streamToolFirstSeen == nil {
+			m.streamToolFirstSeen = make(map[string]time.Time)
+		}
+		for _, tu := range m.store.StreamingToolUses {
+			if _, ok := m.streamToolFirstSeen[tu.ToolUseID]; !ok {
+				m.streamToolFirstSeen[tu.ToolUseID] = now
+			}
+		}
+
 		grouped := groupStreamingTools(m.store.StreamingToolUses)
 		for _, group := range grouped {
+			var firstSeen time.Time
+			if len(group.Items) > 0 {
+				firstSeen = m.streamToolFirstSeen[group.Items[0].ToolUseID]
+			} else if group.Single.ToolUseID != "" {
+				firstSeen = m.streamToolFirstSeen[group.Single.ToolUseID]
+			}
+
+			elapsed := time.Since(firstSeen)
+			
+			titleDelayMs := 50
+			detailDelayMs := 100
+			if v := os.Getenv("GOU_DEMO_STREAM_TOOL_TITLE_DELAY_MS"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+					titleDelayMs = n
+				}
+			}
+			if v := os.Getenv("GOU_DEMO_STREAM_TOOL_DETAIL_DELAY_MS"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+					detailDelayMs = n
+				}
+			}
+
+			if elapsed < time.Duration(titleDelayMs)*time.Millisecond {
+				continue
+			}
+
 			var sb strings.Builder
 			if len(msgView) == 0 || msgView[len(msgView)-1].Type != types.MessageTypeAssistant {
 				head := lipglossStyleAssistantHead()
@@ -284,7 +323,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		}
 	}
 
-	//time.Sleep(500 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 
 	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
 		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
