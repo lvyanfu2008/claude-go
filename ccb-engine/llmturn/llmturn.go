@@ -1,5 +1,7 @@
-// Package llm abstracts Anthropic Messages vs OpenAI-compatible (e.g. DeepSeek) chat completions.
-package llm
+// Package llmturn provides TurnCompleter implementations (Anthropic Messages vs OpenAI chat/completions)
+// for ccb-engine Session.RunTurn and socketserve — not the primary gou-demo path, which uses
+// goc/conversation-runtime/query.
+package llmturn
 
 import (
 	"context"

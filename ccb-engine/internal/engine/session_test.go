@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"goc/ccb-engine/internal/anthropic"
-	"goc/ccb-engine/internal/llm"
+	"goc/ccb-engine/llmturn"
 )
 
 func TestSessionRunTurn_MockAPI_EndTurn(t *testing.T) {
@@ -43,7 +43,7 @@ func TestSessionRunTurn_MockAPI_EndTurn(t *testing.T) {
 	sess := NewSession(nil)
 	sess.AppendUserText("hi")
 	ctx := context.Background()
-	err := sess.RunTurn(ctx, &llm.AnthropicAdapter{Client: client}, nil, "", StubRunner{}, false)
+	err := sess.RunTurn(ctx, &llmturn.AnthropicAdapter{Client: client}, nil, "", StubRunner{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestSessionRunTurn_MockAPI_ToolUseThenEnd(t *testing.T) {
 	sess := NewSession(nil)
 	sess.AppendUserText("use tool")
 	ctx := context.Background()
-	err := sess.RunTurn(ctx, &llm.AnthropicAdapter{Client: client}, anthropic.DefaultStubTools(), "", StubRunner{}, false)
+	err := sess.RunTurn(ctx, &llmturn.AnthropicAdapter{Client: client}, anthropic.DefaultStubTools(), "", StubRunner{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

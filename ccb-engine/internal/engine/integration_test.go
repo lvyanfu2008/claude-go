@@ -7,14 +7,14 @@ import (
 	"os"
 	"testing"
 
-	"goc/ccb-engine/internal/llm"
+	"goc/ccb-engine/llmturn"
 )
 
 func TestSessionRunTurn_LiveAPI(t *testing.T) {
 	if os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
 		t.Skip("set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in the environment")
 	}
-	completer := llm.NewFromEnv()
+	completer := llmturn.NewFromEnv()
 	sess := NewSession(nil)
 	sess.AppendUserText("Reply with exactly the word: pong")
 	ctx := context.Background()

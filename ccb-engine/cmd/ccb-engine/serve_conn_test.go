@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"goc/ccb-engine/internal/anthropic"
-	"goc/ccb-engine/internal/llm"
 	"goc/ccb-engine/socketserve"
+	"goc/ccb-engine/llmturn"
 )
 
 type textOnlyCompleter struct{}
@@ -22,8 +22,8 @@ func (textOnlyCompleter) Complete(
 	_ []anthropic.Message,
 	_ []anthropic.ToolDefinition,
 	_ string,
-) (*llm.TurnResult, error) {
-	return &llm.TurnResult{
+) (*llmturn.TurnResult, error) {
+	return &llmturn.TurnResult{
 		Blocks: []anthropic.ContentBlock{
 			{Type: "text", Text: "hello"},
 		},
@@ -102,14 +102,14 @@ func (m *seqMockCompleter) Complete(
 	_ []anthropic.Message,
 	_ []anthropic.ToolDefinition,
 	_ string,
-) (*llm.TurnResult, error) {
+) (*llmturn.TurnResult, error) {
 	m.mu.Lock()
 	m.calls++
 	c := m.calls
 	m.mu.Unlock()
 
 	if c == 1 {
-		return &llm.TurnResult{
+		return &llmturn.TurnResult{
 			Blocks: []anthropic.ContentBlock{
 				{
 					Type:  "tool_use",
@@ -121,7 +121,7 @@ func (m *seqMockCompleter) Complete(
 			StopReason: "tool_use",
 		}, nil
 	}
-	return &llm.TurnResult{
+	return &llmturn.TurnResult{
 		Blocks: []anthropic.ContentBlock{
 			{Type: "text", Text: "after_tool"},
 		},

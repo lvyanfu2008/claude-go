@@ -12,9 +12,9 @@ import (
 	"goc/ccb-engine/apilog"
 	"goc/ccb-engine/internal/anthropic"
 	"goc/ccb-engine/internal/engine"
-	"goc/ccb-engine/internal/llm"
 	"goc/ccb-engine/internal/protocol"
 	"goc/ccb-engine/settingsfile"
+	"goc/ccb-engine/llmturn"
 )
 
 func initClaudeProjectEnv() {
@@ -39,7 +39,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	completer := llm.NewFromEnv()
+	completer := llmturn.NewFromEnv()
 
 	var sink engine.EventSink
 	if *jsonEvents {

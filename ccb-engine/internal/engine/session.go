@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 
 	"goc/ccb-engine/internal/anthropic"
-	"goc/ccb-engine/internal/llm"
 	"goc/ccb-engine/internal/protocol"
 	"goc/ccb-engine/internal/toolinput"
 	"goc/ccb-engine/internal/toolpolicy"
 	"goc/ccb-engine/internal/toolsearch"
 	"goc/ccb-engine/localtools"
+	"goc/ccb-engine/llmturn"
 	"goc/modelenv"
 )
 
@@ -118,7 +118,7 @@ func WithPendingMcpServerNames(names []string) RunTurnOption {
 // RunTurn calls the model until end_turn or max rounds; uses runner for tool_result content.
 // Lock is not held during HTTP calls to the API. system is forwarded to the Messages API (Anthropic) or prepended as a system message (OpenAI compat).
 // When skillUserFollowUp is true, successful Skill tool results also append a plain-text user message (TS often inserts expanded skill content as follow-up transcript).
-func (s *Session) RunTurn(ctx context.Context, completer llm.TurnCompleter, tools []anthropic.ToolDefinition, system string, runner ToolRunner, skillUserFollowUp bool, opts ...RunTurnOption) error {
+func (s *Session) RunTurn(ctx context.Context, completer llmturn.TurnCompleter, tools []anthropic.ToolDefinition, system string, runner ToolRunner, skillUserFollowUp bool, opts ...RunTurnOption) error {
 	if runner == nil {
 		runner = StubRunner{}
 	}
@@ -143,7 +143,7 @@ func (s *Session) RunTurn(ctx context.Context, completer llm.TurnCompleter, tool
 		if modelID == "" {
 			modelID = modelenv.ResolveWithFallback("")
 		}
-		openAI := llm.UseOpenAICompat()
+		openAI := llmturn.UseOpenAICompat()
 		wireCfg := toolsearch.BuildWireConfig(modelID, tools, rtOpts.hasPendingMcpServers, openAI)
 		wiredTools := toolsearch.ApplyWire(tools, msgs, wireCfg)
 		apiMsgs := toolsearch.PrepareAnthropicMessages(msgs, tools, wireCfg)

@@ -76,7 +76,9 @@ When **`CCB_ENGINE_ENFORCE_ALLOWED_TOOLS=1`**, the engine requires **`SubmitUser
 
 `ccb-engine` speaks the **Anthropic Messages API** (`/v1/messages`, `x-api-key`, `anthropic-version`). An **OpenAI-compatible** base URL (e.g. some third-party gateways) may return errors until a separate adapter exists; use an Anthropic-compatible endpoint or the official Anthropic host for live tests.
 
-`NewClient()` resolves model id via [`goc/modelenv.ResolveWithFallback`]: `CCB_ENGINE_MODEL` → `ANTHROPIC_MODEL` → `ANTHROPIC_DEFAULT_SONNET_MODEL` → `ANTHROPIC_DEFAULT_HAIKU_MODEL` → `ANTHROPIC_DEFAULT_OPUS_MODEL` → default `claude-sonnet-4-20250514`. OpenAI-compat (`newOpenAICompatFromEnv`) uses the same chain with fallback `deepseek-chat`.
+`NewClient()` resolves model id via [`goc/modelenv.ResolveWithFallback`]: `CCB_ENGINE_MODEL` → `ANTHROPIC_MODEL` → `ANTHROPIC_DEFAULT_SONNET_MODEL` → `ANTHROPIC_DEFAULT_HAIKU_MODEL` → `ANTHROPIC_DEFAULT_OPUS_MODEL` → default `claude-sonnet-4-20250514`. The OpenAI-compat path in [`llmturn`](./llmturn/) uses the same chain with fallback `deepseek-chat`.
+
+**Note:** Primary **gou-demo** model traffic uses [`goc/conversation-runtime/query`](../conversation-runtime/query/) (TS parity), not `ccb-engine`’s `Session.RunTurn`. Package **`llmturn`** supplies `TurnCompleter` for **`ccb-engine` CLI**, **socketserve**, and integration tests only.
 
 ### DeepSeek / OpenAI-compatible APIs
 
@@ -92,7 +94,7 @@ You can put the same variables in the project **`.claude/settings.go.json`** `en
 - `ANTHROPIC_AUTH_TOKEN` or `OPENAI_API_KEY` = your key
 - `CCB_ENGINE_MODEL=deepseek-chat` (or `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_*_MODEL` via `goc/modelenv`)
 
-`cmd/ccb-engine` uses `llm.NewFromEnv()` so it follows the rules above automatically.
+`cmd/ccb-engine` uses `llmturn.NewFromEnv()` ([`llmturn`](./llmturn/)) so it follows the rules above automatically.
 
 ### LLM request/response body log (TS parity)
 

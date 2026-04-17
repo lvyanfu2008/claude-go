@@ -232,7 +232,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		(m.IsStreamToolUsing(msgView[len(msgView)-1].Message) || m.IsStreamToolUsing(msgView[len(msgView)-2].Message)) {
 		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
 		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
-		if lineCnt > 0 && (m.IsStreamToolUsing(msgView[len(msgView)-1].Message)) {
+		if lineCnt > 0 && (m.IsStreamToolUsing(msgView[len(msgView)-1].Message) || streamGapAfterUserMessage(msgView)) {
 			if lineCnt+1 > maxL {
 				return "", false
 			}
@@ -260,7 +260,7 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			}
 
 			elapsed := time.Since(firstSeen)
-			
+
 			titleDelayMs := 50
 			detailDelayMs := 100
 			if v := os.Getenv("GOU_DEMO_STREAM_TOOL_TITLE_DELAY_MS"); v != "" {

@@ -15,10 +15,10 @@ import (
 
 	"goc/ccb-engine/internal/anthropic"
 	"goc/ccb-engine/internal/engine"
-	"goc/ccb-engine/internal/llm"
 	"goc/ccb-engine/internal/protocol"
 	"goc/ccb-engine/internal/toolpolicy"
 	"goc/ccb-engine/submitfill"
+	"goc/ccb-engine/llmturn"
 )
 
 // Logf prints optional diagnostics (e.g. to stderr or a trace logger); nil is a no-op.
@@ -71,7 +71,7 @@ func Run(ctx context.Context, socketPath string, logf Logf) error {
 		logf("socketserve: chmod socket: %v", err)
 	}
 
-	completer := llm.NewFromEnv()
+	completer := llmturn.NewFromEnv()
 	defaultTools := anthropic.DefaultStubTools()
 	anthropic.LogToolsLoaded("socketserve_listen", "", "default_stub", defaultTools)
 
@@ -110,7 +110,7 @@ func readOneLine(r *bufio.Reader) (string, error) {
 }
 
 // HandleConn serves one Unix (or TCP for tests) connection: line-delimited JSON protocol.
-func HandleConn(conn net.Conn, completer llm.TurnCompleter, defaultTools []anthropic.ToolDefinition) {
+func HandleConn(conn net.Conn, completer llmturn.TurnCompleter, defaultTools []anthropic.ToolDefinition) {
 	defer conn.Close()
 
 	lines := make(chan string, 128)

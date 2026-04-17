@@ -1,4 +1,4 @@
-package llm
+package llmturn
 
 import (
 	"bytes"
@@ -72,7 +72,7 @@ type oaTool struct {
 	Function struct {
 		Name        string `json:"name"`
 		Description string `json:"description,omitempty"`
-		Parameters  any    `json:"parameters,omitempty"`
+		Parameters  any     `json:"parameters,omitempty"`
 	} `json:"function"`
 }
 
@@ -110,7 +110,7 @@ func toolsToOpenAI(tools []anthropic.ToolDefinition) []oaTool {
 			Function: struct {
 				Name        string `json:"name"`
 				Description string `json:"description,omitempty"`
-				Parameters  any    `json:"parameters,omitempty"`
+				Parameters  any     `json:"parameters,omitempty"`
 			}{
 				Name:        t.Name,
 				Description: t.Description,
