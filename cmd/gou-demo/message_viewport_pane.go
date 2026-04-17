@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -199,6 +200,18 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			}
 			h := m.measureMessageRows(msg, bodyCols, hl)
 			block := m.renderMessageRow(msg, bodyCols, h, hl)
+			
+			if m.isRevealing && msg.UUID == m.revealingMsgID {
+				lines := strings.Split(block, "\n")
+				if m.revealedLines < len(lines) {
+					lines = lines[:m.revealedLines]
+				} else {
+					// Finish revealing when we hit the total lines
+					m.isRevealing = false
+				}
+				block = strings.Join(lines, "\n")
+			}
+
 			if !addBlock(block) {
 				return "", false
 			}
@@ -301,6 +314,14 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	}
 
 	return b.String(), true
+}
+
+type lineRevealTick time.Time
+
+func lineRevealTickCmd() tea.Cmd {
+	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg {
+		return lineRevealTick(t)
+	})
 }
 
 // msg.Message
