@@ -301,19 +301,21 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 				summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
 				toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 				sb.WriteString(toolTitle)
-				for _, item := range group.Items {
-					path := extractPartialJSONField(item.UnparsedInput, "file_path")
-					if path == "" {
-						path = extractPartialJSONField(item.UnparsedInput, "path")
+				if elapsed >= time.Duration(detailDelayMs)*time.Millisecond {
+					for _, item := range group.Items {
+						path := extractPartialJSONField(item.UnparsedInput, "file_path")
+						if path == "" {
+							path = extractPartialJSONField(item.UnparsedInput, "path")
+						}
+						if path == "" {
+							path = extractPartialJSONField(item.UnparsedInput, "pattern")
+						}
+						if path == "" {
+							path = "..."
+						}
+						sb.WriteByte('\n')
+						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
 					}
-					if path == "" {
-						path = extractPartialJSONField(item.UnparsedInput, "pattern")
-					}
-					if path == "" {
-						path = "..."
-					}
-					sb.WriteByte('\n')
-					sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
 				}
 			}
 
@@ -322,8 +324,6 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			}
 		}
 	}
-
-	time.Sleep(2000 * time.Millisecond)
 
 	if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
 		if lineCnt > 0 && streamGapAfterUserMessage(msgView) {
