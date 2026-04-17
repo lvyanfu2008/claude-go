@@ -1788,9 +1788,11 @@ func (m *model) View() string {
 				if msgPane.Len() > 0 {
 					msgPane.WriteByte('\n')
 				}
-				head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-				msgPane.WriteString(head)
-				msgPane.WriteByte('\n')
+				if len(msgView) == 0 || msgView[len(msgView)-1].Type != types.MessageTypeAssistant {
+					head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+					msgPane.WriteString(head)
+					msgPane.WriteByte('\n')
+				}
 
 				if !group.IsGroup {
 					tu := group.Single

@@ -156,7 +156,10 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		if i < len(msgView) {
 			msg := msgView[i]
 			if m.IsStreamToolUsing(msg.Message) {
-				continue
+				msg = m.filterStreamingToolsFromMessage(msg)
+				if len(msg.Content) == 0 || string(msg.Content) == "[]" {
+					continue
+				}
 			}
 			if m.msgFoldAll {
 				u := msg.UUID
@@ -237,9 +240,11 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		grouped := groupStreamingTools(m.store.StreamingToolUses)
 		for _, group := range grouped {
 			var sb strings.Builder
-			head := lipglossStyleAssistantHead()
-			sb.WriteString(head)
-			sb.WriteByte('\n')
+			if len(msgView) == 0 || msgView[len(msgView)-1].Type != types.MessageTypeAssistant {
+				head := lipglossStyleAssistantHead()
+				sb.WriteString(head)
+				sb.WriteByte('\n')
+			}
 
 			if !group.IsGroup {
 				tu := group.Single
@@ -328,9 +333,44 @@ func (m *model) IsStreamToolUsing(c json.RawMessage) bool {
 	return isToolUsing
 }
 
+func (m *model) filterStreamingToolsFromMessage(msg types.Message) types.Message {
+	if !m.IsStreamToolUsing(msg.Message) {
+		return msg
+	}
+	var contentBlocks []types.MessageContentBlock
+	var inner struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(msg.Message, &inner); err != nil {
+		return msg
+	}
+	if err := json.Unmarshal(inner.Content, &contentBlocks); err != nil {
+		return msg
+	}
+
+	toolUseIds := lo.Map(m.store.StreamingToolUses, func(tu conversation.StreamingToolUse, _ int) string {
+		return tu.ToolUseID
+	})
+
+	var filtered []types.MessageContentBlock
+	for _, c := range contentBlocks {
+		if c.Type == "tool_use" && lo.Contains(toolUseIds, c.ID) {
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+
+	newContent, _ := json.Marshal(filtered)
+	inner.Content = newContent
+	newMessage, _ := json.Marshal(inner)
+	msg.Message = newMessage
+	msg.Content = newContent
+	return msg
+}
+
 func lipglossStyleAssistantHead() string {
-	return ""
-	//return lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+	return lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
 }
 
 func lipglossStyleStreamingToolTitle(name string) string {
