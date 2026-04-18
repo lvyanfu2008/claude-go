@@ -48,7 +48,7 @@ func runOpenAINonStreamingParityModelLoop(
 		httpClient = deps.HTTPClient
 	}
 
-	const maxRounds = 24
+	const maxRounds = 200
 	cur := append([]types.Message(nil), work...)
 
 	for round := 0; round < maxRounds; round++ {

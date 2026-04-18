@@ -68,7 +68,7 @@ func runStreamingParityModelLoop(
 		return fmt.Errorf("query streaming parity: set ANTHROPIC_API_KEY or inject QueryDeps.StreamPost")
 	}
 
-	const maxRounds = 24
+	const maxRounds = 200
 	cur := append([]types.Message(nil), work...)
 
 	for round := 0; round < maxRounds; round++ {
