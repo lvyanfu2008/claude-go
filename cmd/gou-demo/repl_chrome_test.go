@@ -58,6 +58,23 @@ func TestGouDemoMsgHistoryBrowseReleaseEnabled(t *testing.T) {
 	}
 }
 
+func TestGouDemoMessageScrollbarStrip_defaultOnOptOut(t *testing.T) {
+	t.Setenv("GOU_DEMO_NO_SCROLLBAR", "")
+	t.Setenv("GOU_DEMO_MESSAGE_SCROLLBAR", "")
+	if !gouDemoMessageScrollbarStrip() {
+		t.Fatal("default should show message scrollbar strip when not opted out")
+	}
+	t.Setenv("GOU_DEMO_MESSAGE_SCROLLBAR", "0")
+	if gouDemoMessageScrollbarStrip() {
+		t.Fatal("GOU_DEMO_MESSAGE_SCROLLBAR=0 should disable strip")
+	}
+	t.Setenv("GOU_DEMO_MESSAGE_SCROLLBAR", "")
+	t.Setenv("GOU_DEMO_NO_SCROLLBAR", "1")
+	if gouDemoMessageScrollbarStrip() {
+		t.Fatal("GOU_DEMO_NO_SCROLLBAR=1 should force strip off")
+	}
+}
+
 func TestGouDemoDisallowDisableMouse_overridesDisableEnvs(t *testing.T) {
 	t.Setenv("GOU_DEMO_DISALLOW_DISABLE_MOUSE", "1")
 	t.Setenv("CLAUDE_CODE_DISABLE_MOUSE", "1")

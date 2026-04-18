@@ -96,13 +96,17 @@ func gouDemoMsgHistoryBrowseReleaseEnabled() bool {
 }
 
 // gouDemoMessageScrollbarStrip draws a one-column TUI scrollbar beside the message list when content overflows.
-// Default off (plain bubbles/viewport like go-tui). Opt in with GOU_DEMO_MESSAGE_SCROLLBAR=1.
-// GOU_DEMO_NO_SCROLLBAR=1 still forces the strip off (e.g. legacy scripts).
+// Default on (when the pane is wide enough; see rebuildHeightCache). Opt out with GOU_DEMO_MESSAGE_SCROLLBAR=0|false|off|no
+// or GOU_DEMO_NO_SCROLLBAR=1 (legacy scripts).
 func gouDemoMessageScrollbarStrip() bool {
 	if gouDemoEnvTruthy("GOU_DEMO_NO_SCROLLBAR") {
 		return false
 	}
-	return gouDemoEnvTruthy("GOU_DEMO_MESSAGE_SCROLLBAR")
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_MESSAGE_SCROLLBAR")))
+	if v == "0" || v == "false" || v == "off" || v == "no" {
+		return false
+	}
+	return true
 }
 
 func sanitizeWindowTitle(s string) string {
