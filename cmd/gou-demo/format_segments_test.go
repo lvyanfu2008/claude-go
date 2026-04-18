@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"goc/gou/conversation"
 	"goc/gou/messagerow"
@@ -33,9 +36,10 @@ func TestFormatMessageSegments_mergedSearchReadSummaryOneCommaLine(t *testing.T)
 	if !strings.Contains(out, "  ") || !strings.Contains(out, "Searched for 1 pattern") {
 		t.Fatalf("want two-space indent before summary line, got:\n%s", out)
 	}
-	idx := strings.Index(out, "Searched for 1 pattern")
-	if idx < 2 || out[idx-1] != ' ' || out[idx-2] != ' ' {
-		t.Fatalf("summary should start after exactly two spaces, got:\n%s", out)
+	plain := ansi.Strip(out)
+	idx := strings.Index(plain, "Searched for 1 pattern")
+	if idx < 2 || plain[idx-1] != ' ' || plain[idx-2] != ' ' {
+		t.Fatalf("summary should start after exactly two spaces, got:\n%s", plain)
 	}
 	if !strings.Contains(out, "ctrl+o to expand") {
 		t.Fatalf("want ctrl+o when unresolved, got:\n%s", out)
@@ -67,8 +71,9 @@ func TestFormatMessageSegments_leadGlyphOnToolWhenNoPriorText(t *testing.T) {
 }
 
 func TestFormatMessageSegments_searchHighlightInsertsANSI(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+	oldW := lipgloss.Writer
+	lipgloss.Writer = &colorprofile.Writer{Forward: io.Discard, Profile: colorprofile.TrueColor}
+	t.Cleanup(func() { lipgloss.Writer = oldW })
 
 	segs := []messagerow.Segment{
 		{Kind: messagerow.SegToolUse, Text: "alpha BETA gamma", ToolUseID: "id1"},

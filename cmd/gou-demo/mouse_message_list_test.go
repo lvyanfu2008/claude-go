@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"goc/gou/conversation"
 	"goc/types"
@@ -50,7 +50,7 @@ func TestTryHandleMessageListMouse_wheelInPane(t *testing.T) {
 		scrollTop: 100,
 	}
 	y := m.titleH + 2
-	handled, _ := m.tryHandleMessageListMouse(tea.MouseMsg{Y: y, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	handled, _ := m.tryHandleMessageListMouse(tea.MouseWheelMsg{Y: y, Button: tea.MouseWheelDown})
 	if !handled {
 		t.Fatal("expected wheel down handled")
 	}
@@ -93,7 +93,7 @@ func TestTryHandleMessageListMouse_respectsDisableEnv(t *testing.T) {
 		scrollTop: 10,
 	}
 	y := m.titleH + 1
-	handled, _ := m.tryHandleMessageListMouse(tea.MouseMsg{Y: y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	handled, _ := m.tryHandleMessageListMouse(tea.MouseWheelMsg{Y: y, Button: tea.MouseWheelUp})
 	if handled {
 		t.Fatal("should not handle when disabled")
 	}
@@ -118,13 +118,13 @@ func TestTryHandleMessageListMouse_viewportTopWheelUpReleasesMouse(t *testing.T)
 		useMsgViewport:      true,
 		msgViewportFallback: false,
 	}
-	m.msgViewport = viewport.New(80, listViewportH(m))
+	m.msgViewport = viewport.New(viewport.WithWidth(80), viewport.WithHeight(listViewportH(m)))
 	m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
 	m.msgViewport.MouseWheelEnabled = false
 	m.msgViewport.SetContent(strings.Repeat("x\n", 200))
 	m.msgViewport.GotoTop()
 	y := m.titleH + 2
-	handled, cmd := m.tryHandleMessageListMouse(tea.MouseMsg{Y: y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	handled, cmd := m.tryHandleMessageListMouse(tea.MouseWheelMsg{Y: y, Button: tea.MouseWheelUp})
 	if !handled || cmd == nil {
 		t.Fatalf("expected history-browse cmd, handled=%v cmd=%v", handled, cmd)
 	}
@@ -148,13 +148,13 @@ func TestTryHandleMessageListMouse_disallowDisableMouseSkipsHistoryRelease(t *te
 		useMsgViewport:      true,
 		msgViewportFallback: false,
 	}
-	m.msgViewport = viewport.New(80, listViewportH(m))
+	m.msgViewport = viewport.New(viewport.WithWidth(80), viewport.WithHeight(listViewportH(m)))
 	m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
 	m.msgViewport.MouseWheelEnabled = false
 	m.msgViewport.SetContent(strings.Repeat("x\n", 200))
 	m.msgViewport.GotoTop()
 	y := m.titleH + 2
-	handled, cmd := m.tryHandleMessageListMouse(tea.MouseMsg{Y: y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	handled, cmd := m.tryHandleMessageListMouse(tea.MouseWheelMsg{Y: y, Button: tea.MouseWheelUp})
 	if !handled || cmd != nil {
 		t.Fatalf("expected viewport scroll only, handled=%v cmd=%v", handled, cmd)
 	}
@@ -177,13 +177,13 @@ func TestTryHandleMessageListMouse_viewportTopWheelUpDisabledByEnv(t *testing.T)
 		useMsgViewport:      true,
 		msgViewportFallback: false,
 	}
-	m.msgViewport = viewport.New(80, listViewportH(m))
+	m.msgViewport = viewport.New(viewport.WithWidth(80), viewport.WithHeight(listViewportH(m)))
 	m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
 	m.msgViewport.MouseWheelEnabled = false
 	m.msgViewport.SetContent(strings.Repeat("x\n", 200))
 	m.msgViewport.GotoTop()
 	y := m.titleH + 2
-	handled, cmd := m.tryHandleMessageListMouse(tea.MouseMsg{Y: y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	handled, cmd := m.tryHandleMessageListMouse(tea.MouseWheelMsg{Y: y, Button: tea.MouseWheelUp})
 	if !handled || cmd != nil {
 		t.Fatalf("expected normal scroll without release cmd, handled=%v cmd=%v", handled, cmd)
 	}

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"goc/gou/conversation"
 	"goc/gou/messagesview"
@@ -180,6 +180,7 @@ func (m *model) enterTranscriptScreen() tea.Cmd {
 
 func (m *model) exitTranscriptScreen() {
 	m.clearTranscriptSearchState()
+	m.suspendAltScreenForScrollbackDump = false
 	m.uiScreen = gouDemoScreenPrompt
 	m.scrollTop = m.promptSavedScrollTop
 	m.sticky = m.promptSavedSticky
@@ -201,11 +202,7 @@ func (m *model) exitTranscriptScreen() {
 
 // exitTranscriptScreenWithPostCmd exits transcript mode; kept for call sites that expect a tea.Cmd return.
 func (m *model) exitTranscriptScreenWithPostCmd() tea.Cmd {
-	wasDump := m.transcriptDumpMode
 	m.exitTranscriptScreen()
-	if wasDump && gouDemoAltScreenEnabled() {
-		return tea.EnterAltScreen
-	}
 	return nil
 }
 

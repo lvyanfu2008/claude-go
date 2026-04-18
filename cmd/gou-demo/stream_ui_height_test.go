@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbstream"

@@ -3,68 +3,17 @@ package prompt
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
-func TestNormalizeTTYNewlineKey(t *testing.T) {
-	t.Parallel()
-	nel := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'\u0085'}}
+func TestNormalizeTTYNewlineKey_mapsNELToCtrlJ(t *testing.T) {
+	nel := tea.KeyPressMsg(tea.Key{Text: "\u0085", Code: '\u0085'})
 	got := NormalizeTTYNewlineKey(nel)
-	if got.Type != tea.KeyCtrlJ || len(got.Runes) != 0 {
-		t.Fatalf("NEL: got %#v want KeyCtrlJ", got)
+	if got.String() != "ctrl+j" {
+		t.Fatalf("expected ctrl+j, got %q", got.String())
 	}
-	unchanged := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
-	got2 := NormalizeTTYNewlineKey(unchanged)
-	if got2.Type != unchanged.Type || len(got2.Runes) != 1 || got2.Runes[0] != 'x' {
-		t.Fatalf("non-line-separator rune should be unchanged, got %#v", got2)
-	}
-}
-
-func TestIsKittyModifiedEnterCSI(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		b    []byte
-		want bool
-	}{
-		{[]byte("\x1b[13;2u"), true},
-		{[]byte("\x1b[13:2u"), true},
-		{[]byte("\x1b[13u"), false},
-		{[]byte("\x1b[12;2u"), false},
-		{[]byte("x"), false},
-	}
-	for _, tc := range cases {
-		if got := isKittyModifiedEnterCSI(tc.b); got != tc.want {
-			t.Errorf("%q: got %v want %v", tc.b, got, tc.want)
-		}
-	}
-}
-
-func TestParseKittyCSIKeyU(t *testing.T) {
-	t.Parallel()
-	k, mod, ok := parseKittyCSIKeyU([]byte("\x1b[99;5u"))
-	if !ok || k != 99 || mod != 5 {
-		t.Fatalf("99;5: ok=%v k=%d mod=%d", ok, k, mod)
-	}
-	k2, mod2, ok2 := parseKittyCSIKeyU([]byte("\x1b[99;5:1u"))
-	if !ok2 || k2 != 99 || mod2 != 5 {
-		t.Fatalf("99;5:1: ok=%v k=%d mod=%d", ok2, k2, mod2)
-	}
-	if _, _, ok3 := parseKittyCSIKeyU([]byte("\x1b[99u")); ok3 {
-		t.Fatal("99 without modifier should not parse as key;mod")
-	}
-}
-
-func TestKittyCtrlLetterKeyType(t *testing.T) {
-	t.Parallel()
-	kt, ok := kittyCtrlLetterKeyType(99, 5)
-	if !ok || kt != tea.KeyCtrlC {
-		t.Fatalf("ctrl+c: ok=%v kt=%v", ok, kt)
-	}
-	ko, ok2 := kittyCtrlLetterKeyType(111, 5)
-	if !ok2 || ko != tea.KeyCtrlO {
-		t.Fatalf("ctrl+o: ok=%v kt=%v", ok2, ko)
-	}
-	if _, ok := kittyCtrlLetterKeyType(99, 6); ok {
-		t.Fatal("wrong modifier should not match")
+	unchanged := tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'})
+	if NormalizeTTYNewlineKey(unchanged).String() != "x" {
+		t.Fatal("expected plain x unchanged")
 	}
 }

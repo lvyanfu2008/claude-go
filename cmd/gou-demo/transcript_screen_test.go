@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"goc/gou/conversation"
 	"goc/types"
@@ -95,7 +95,7 @@ func TestTranscriptStreamingToolsForView_capsByFrozenLen(t *testing.T) {
 
 func TestHandleTranscriptKeySwallowsUnknown(t *testing.T) {
 	m := &model{store: &conversation.Store{ConversationID: "x"}, uiScreen: gouDemoScreenTranscript}
-	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	handled, cmd := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}))
 	if !handled || cmd != nil {
 		t.Fatalf("expected swallow without cmd: handled=%v cmd=%v", handled, cmd)
 	}

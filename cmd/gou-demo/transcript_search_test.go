@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"goc/gou/conversation"
 	"goc/types"
@@ -17,7 +17,7 @@ func TestTranscriptCtrlLGlobalRedraw(t *testing.T) {
 		uiScreen:         gouDemoScreenTranscript,
 		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
 	}
-	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlL})
+	handled, cmd := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: 'l', Mod: tea.ModCtrl}))
 	if !handled || cmd == nil {
 		t.Fatalf("handled=%v cmd=%v", handled, cmd)
 	}
@@ -45,7 +45,7 @@ func TestTranscriptSpaceFullPageDown(t *testing.T) {
 	}
 	before := m.scrollTop
 	vp := listViewportH(m)
-	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeySpace})
+	handled, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
 	if !handled {
 		t.Fatal("expected space handled")
 	}
@@ -61,7 +61,7 @@ func TestTranscriptCtrlNLineDown(t *testing.T) {
 		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
 		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 5,
 	}
-	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlN})
+	handled, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: 'n', Mod: tea.ModCtrl}))
 	if !handled {
 		t.Fatal("expected ctrl+n handled")
 	}
@@ -78,7 +78,7 @@ func TestTranscriptHomeEndTopBottom(t *testing.T) {
 		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
 		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 42,
 	}
-	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyHome})
+	handled, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyHome}))
 	if !handled {
 		t.Fatal("expected home handled")
 	}
@@ -86,7 +86,7 @@ func TestTranscriptHomeEndTopBottom(t *testing.T) {
 		t.Fatalf("home: scrollTop=%d sticky=%v", m.scrollTop, m.sticky)
 	}
 	m.scrollTop = 0
-	handled2, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyEnd})
+	handled2, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnd}))
 	if !handled2 {
 		t.Fatal("expected end handled")
 	}
@@ -103,14 +103,14 @@ func TestTranscriptCtrlHomeCtrlEndTopBottom(t *testing.T) {
 		transcriptFrozen: &frozenTranscriptSnapshot{MessagesLen: 1, StreamingToolUsesLen: 0},
 		height:           40, width: 100, cols: 80, titleH: 1, scrollTop: 99,
 	}
-	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlHome})
+	handled, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyHome, Mod: tea.ModCtrl}))
 	if !handled {
 		t.Fatal("expected ctrl+home handled")
 	}
 	if m.scrollTop != 0 || m.sticky {
 		t.Fatalf("ctrl+home: scrollTop=%d sticky=%v", m.scrollTop, m.sticky)
 	}
-	handled2, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlEnd})
+	handled2, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnd, Mod: tea.ModCtrl}))
 	if !handled2 {
 		t.Fatal("expected ctrl+end handled")
 	}
@@ -128,7 +128,7 @@ func TestTranscriptSearchOpenDisablesPagerArrows(t *testing.T) {
 		transcriptSearchOpen: true,
 	}
 	before := m.scrollTop
-	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyUp})
+	handled, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyUp}))
 	if !handled {
 		t.Fatal("expected key swallowed in transcript")
 	}
@@ -147,7 +147,7 @@ func TestTranscriptSearchOpenDisablesCtrlHome(t *testing.T) {
 		transcriptSearchOpen: true,
 	}
 	before := m.scrollTop
-	handled, _ := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlHome})
+	handled, _ := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyHome, Mod: tea.ModCtrl}))
 	if !handled {
 		t.Fatal("expected ctrl+home swallowed")
 	}
@@ -192,7 +192,7 @@ func TestHandleTranscriptKey_bracketEntersDumpModeAndShowAll(t *testing.T) {
 	m := testTranscriptModelWithMessages(t, []types.Message{
 		{UUID: "u1", Type: types.MessageTypeUser, Content: []byte(userJSON)},
 	})
-	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
+	handled, cmd := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Text: "[", Code: '['}))
 	if !handled {
 		t.Fatal("expected [ handled")
 	}
@@ -211,7 +211,7 @@ func TestHandleTranscriptKey_bracketNoopWhenSearchOpen(t *testing.T) {
 	t.Parallel()
 	m := testTranscriptModelWithMessages(t, []types.Message{{UUID: "a", Type: types.MessageTypeUser}})
 	m.transcriptSearchOpen = true
-	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
+	handled, cmd := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Text: "[", Code: '['}))
 	if !handled || cmd != nil {
 		t.Fatalf("expected swallow without cmd: handled=%v cmd=%v", handled, cmd)
 	}
@@ -227,7 +227,7 @@ func TestHandleTranscriptKey_vEditorPrepWritesFileWithoutEditor(t *testing.T) {
 	m := testTranscriptModelWithMessages(t, []types.Message{
 		{UUID: "u1", Type: types.MessageTypeUser, Content: []byte(userJSON)},
 	})
-	handled, cmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	handled, cmd := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Text: "v", Code: 'v'}))
 	if !handled || cmd == nil {
 		t.Fatalf("expected v handled with cmd: handled=%v cmd=%v", handled, cmd)
 	}
@@ -269,7 +269,7 @@ func TestHandleTranscriptKey_vIgnoredWhenEditorBusy(t *testing.T) {
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 	m := testTranscriptModelWithMessages(t, []types.Message{{UUID: "a", Type: types.MessageTypeUser, Content: []byte(`[{"type":"text","text":"x"}]`)}})
-	handled, prepCmd := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	handled, prepCmd := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Text: "v", Code: 'v'}))
 	if !handled || prepCmd == nil {
 		t.Fatal("first v should start prep")
 	}
@@ -280,7 +280,7 @@ func TestHandleTranscriptKey_vIgnoredWhenEditorBusy(t *testing.T) {
 	if !m.transcriptEditorBusy {
 		t.Fatal("expected still busy until chain runs")
 	}
-	handled2, cmd2 := m.handleTranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	handled2, cmd2 := m.handleTranscriptKey(tea.KeyPressMsg(tea.Key{Text: "v", Code: 'v'}))
 	if !handled2 || cmd2 != nil {
 		t.Fatalf("second v while busy: handled=%v cmd=%v", handled2, cmd2)
 	}

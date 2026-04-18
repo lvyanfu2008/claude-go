@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"goc/gou/messagerow"
 	"goc/types"
@@ -197,7 +197,7 @@ func (m *model) transcriptSearchStep(delta int) {
 	m.scrollTranscriptToMessageIndex(h[m.transcriptSearchCursor])
 }
 
-func (m *model) handleTranscriptSearchBarKey(msg tea.KeyMsg) bool {
+func (m *model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
 	if !m.transcriptSearchOpen {
 		return false
 	}
@@ -220,8 +220,8 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyMsg) bool {
 		}
 		return true
 	}
-	if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
-		m.transcriptSearchQuery += string(msg.Runes)
+	if msg.Key().Text != "" {
+		m.transcriptSearchQuery += msg.Key().Text
 		m.rebuildTranscriptSearchMatches()
 		return true
 	}
@@ -229,7 +229,7 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyMsg) bool {
 }
 
 // handleTranscriptKey returns (handled, cmd). cmd may be non-nil when bracket dump prints to scrollback (TS).
-func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	if m.uiScreen != gouDemoScreenTranscript {
 		return false, nil
 	}
@@ -260,8 +260,7 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 	}
 	s := msg.String()
-	// Match KeyCtrlE by type so Kitty/synthetic KeyMsg still toggles when String() is empty or differs.
-	if s == "ctrl+e" || msg.Type == tea.KeyCtrlE {
+	if msg.String() == "ctrl+e" {
 		if m.transcriptDumpMode {
 			return true, nil
 		}
@@ -284,7 +283,8 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.transcriptShowAll = true
 		m.rebuildHeightCache()
 		plain := transcriptExportPlain(m, exportTranscriptWidth(m))
-		return true, tea.Sequence(tea.ExitAltScreen, transcriptBracketDumpScrollbackCmd(plain))
+		m.suspendAltScreenForScrollbackDump = gouDemoAltScreenEnabled()
+		return true, transcriptBracketDumpScrollbackCmd(plain)
 	case "v":
 		if m.transcriptSearchOpen {
 			return true, nil
@@ -378,7 +378,7 @@ func (m *model) handleTranscriptKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
 			m.transcriptAfterManualScroll()
 			return true, nil
-		case " ":
+		case "space":
 			m.sticky = false
 			m.scrollTop += listViewportH(m)
 			m.transcriptAfterManualScroll()
@@ -414,8 +414,8 @@ func (m *model) transcriptAfterManualScroll() {
 }
 
 // transcriptScrollByKeyType handles Kitty / disambiguated keys where msg.String() is not "up"/"down" (see handleTranscriptKey string switch).
-func (m *model) transcriptScrollByKeyType(msg tea.KeyMsg) bool {
-	switch msg.Type {
+func (m *model) transcriptScrollByKeyType(msg tea.KeyPressMsg) bool {
+	switch msg.Key().Code {
 	case tea.KeyUp:
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-1)

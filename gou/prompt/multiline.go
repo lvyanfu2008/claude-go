@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Model is a lightweight multiline text buffer with cursor.
@@ -83,23 +83,28 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.WindowSizeMsg:
 		m.SetWidth(msg.Width - 4)
 		return nil
-	case tea.KeyMsg:
+	case tea.PasteMsg:
+		m.insertRunes([]rune(msg.Content))
+		return nil
+	case tea.KeyPressMsg:
 		return m.updateKey(msg)
 	}
 	return nil
 }
 
-func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
+func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	repl := m.enterSubmits
-	// KeyCtrlJ is LF (\n). Many terminals send Shift+Enter as LF; macOS Option+Enter
-	// often arrives as ESC+LF, which bubbletea reports as KeyCtrlJ with Alt (alt+ctrl+j),
-	// not alt+enter — handle by type before msg.String().
-	switch msg.Type {
-	case tea.KeyCtrlJ:
+	key := msg.Key()
+
+	// Ctrl+J is LF (\n). Many terminals send Shift+Enter as LF; macOS Option+Enter
+	// often arrives as ESC+LF (alt+ctrl+j), not alt+enter — handle before msg.String().
+	if key.Code == 'j' && key.Mod.Contains(tea.ModCtrl) {
 		m.insertRune('\n')
 		return nil
-	case tea.KeyEnter:
-		if msg.Alt {
+	}
+
+	if key.Code == tea.KeyEnter {
+		if key.Mod.Contains(tea.ModAlt) {
 			if repl {
 				m.insertRune('\n')
 			} else if strings.TrimSpace(m.Value()) != "" {
@@ -130,47 +135,52 @@ func (m *Model) updateKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	switch msg.Type {
-	case tea.KeyBackspace:
+
+	if key.Code == tea.KeyBackspace || msg.String() == "backspace" {
 		m.deleteBefore()
 		return nil
-	case tea.KeySpace:
+	}
+	if key.Code == tea.KeySpace || msg.String() == "space" {
 		m.insertRune(' ')
 		return nil
-	case tea.KeyDelete, tea.KeyCtrlD:
+	}
+	if key.Code == tea.KeyDelete || msg.String() == "ctrl+d" {
 		m.deleteAfter()
 		return nil
-	case tea.KeyLeft, tea.KeyCtrlB:
+	}
+	if key.Code == tea.KeyLeft || msg.String() == "ctrl+b" {
 		m.moveRune(-1)
 		return nil
-	case tea.KeyRight, tea.KeyCtrlF:
+	}
+	if key.Code == tea.KeyRight || msg.String() == "ctrl+f" {
 		m.moveRune(1)
 		return nil
-	case tea.KeyShiftUp:
+	}
+	if key.Code == tea.KeyUp && key.Mod.Contains(tea.ModShift) {
 		m.moveLine(-1)
 		return nil
-	case tea.KeyShiftDown:
+	}
+	if key.Code == tea.KeyDown && key.Mod.Contains(tea.ModShift) {
 		m.moveLine(1)
 		return nil
-	case tea.KeyHome, tea.KeyCtrlA:
+	}
+	if key.Code == tea.KeyHome || msg.String() == "ctrl+a" {
 		m.cursorLineStart()
 		return nil
-	case tea.KeyEnd, tea.KeyCtrlE:
+	}
+	if key.Code == tea.KeyEnd || msg.String() == "ctrl+e" {
 		m.cursorLineEnd()
 		return nil
-	case tea.KeyRunes:
-		if msg.Paste {
-			m.insertRunes(msg.Runes)
-			return nil
-		}
-		if len(msg.Runes) == 1 {
-			switch msg.Runes[0] {
+	}
+	if key.Text != "" {
+		for _, r := range key.Text {
+			switch r {
 			case '\n', '\u0085', '\u2028', '\u2029':
 				m.insertRune('\n')
 				return nil
 			}
 		}
-		m.insertRunes(msg.Runes)
+		m.insertRunes([]rune(key.Text))
 		return nil
 	}
 	return nil

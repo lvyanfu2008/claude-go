@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Msg wraps StreamEvent for Bubble Tea (Update switch).

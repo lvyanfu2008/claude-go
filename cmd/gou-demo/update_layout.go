@@ -1,7 +1,7 @@
 package main
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Layout / resize reactions (extracted from [model.Update]).

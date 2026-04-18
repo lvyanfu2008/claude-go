@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"goc/gou/conversation"
 	"goc/gou/layout"

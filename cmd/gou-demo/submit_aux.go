@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"goc/commands"
 	"goc/toolexecution"
@@ -128,12 +128,12 @@ func (m *model) finishPermissionAsk(r permissionAskReply) {
 }
 
 // handlePermissionKey returns true when the permission modal is showing (all keys are swallowed).
-func (m *model) handlePermissionKey(msg tea.KeyMsg) bool {
+func (m *model) handlePermissionKey(msg tea.KeyPressMsg) bool {
 	if m.permAsk == nil {
 		return false
 	}
 	switch msg.String() {
-	case "y", "Y", "enter", " ":
+	case "y", "Y", "enter", "space":
 		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.AllowDecision(), err: nil})
 	case "n", "N", "esc", "q":
 		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("denied by user"), err: nil})
@@ -191,7 +191,7 @@ func (m *model) toggleSlashPicker() {
 }
 
 // handleSlashPickerKey returns true when consumed by the slash picker.
-func (m *model) handleSlashPickerKey(msg tea.KeyMsg) bool {
+func (m *model) handleSlashPickerKey(msg tea.KeyPressMsg) bool {
 	if m.slashPick == nil {
 		return false
 	}
@@ -231,8 +231,8 @@ func (m *model) handleSlashPickerKey(msg tea.KeyMsg) bool {
 		m.slashPick.clampIdx()
 		return true
 	}
-	if msg.Type == tea.KeyRunes && !msg.Paste && len(msg.Runes) > 0 {
-		m.slashPick.filter += string(msg.Runes)
+	if kt := msg.Key(); kt.Text != "" {
+		m.slashPick.filter += kt.Text
 		m.slashPick.clampIdx()
 		return true
 	}

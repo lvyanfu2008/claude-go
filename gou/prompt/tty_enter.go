@@ -4,63 +4,72 @@ import (
 	"bytes"
 	"reflect"
 	"strconv"
+	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
-// NormalizeTTYNewlineKey maps TTY quirks to KeyCtrlJ so multiline REPL sees a newline:
+// NormalizeTTYNewlineKey maps TTY quirks to ctrl+j so multiline REPL sees a newline:
 // macOS Option+layer may insert NEL / line/paragraph separators instead of Alt+Enter.
-func NormalizeTTYNewlineKey(k tea.KeyMsg) tea.KeyMsg {
-	if k.Type != tea.KeyRunes || k.Paste || len(k.Runes) != 1 {
-		return k
+func NormalizeTTYNewlineKey(k tea.KeyPressMsg) tea.KeyPressMsg {
+	key := k.Key()
+	var r rune
+	if key.Text != "" {
+		r, _ = utf8.DecodeRuneInString(key.Text)
+	} else {
+		r = key.Code
 	}
-	switch k.Runes[0] {
+	switch r {
 	case '\u0085', '\u2028', '\u2029':
-		return tea.KeyMsg{Type: tea.KeyCtrlJ}
+		return tea.KeyPressMsg(tea.Key{Code: 'j', Mod: tea.ModCtrl})
 	default:
 		return k
 	}
 }
 
-// SyntheticNewlineFromUnknownMsg returns KeyCtrlJ when msg is bubbletea's unknown CSI sequence
+// SyntheticNewlineFromUnknownMsg returns a ctrl+j key when msg is bubbletea's unknown CSI sequence
 // for kitty keyboard protocol style modified Enter (e.g. \x1b[13;2u for Alt+Enter) that the
-// library does not map to KeyMsg.
-func SyntheticNewlineFromUnknownMsg(msg tea.Msg) (tea.KeyMsg, bool) {
+// library does not map to KeyPressMsg.
+func SyntheticNewlineFromUnknownMsg(msg tea.Msg) (tea.KeyPressMsg, bool) {
 	k, ok := SyntheticTTYKeyFromUnknownMsg(msg)
-	if !ok || k.Type != tea.KeyCtrlJ {
-		return tea.KeyMsg{}, false
+	if !ok {
+		return tea.KeyPressMsg{}, false
+	}
+	kk := k.Key()
+	if kk.Code != 'j' || !kk.Mod.Contains(tea.ModCtrl) {
+		return tea.KeyPressMsg{}, false
 	}
 	return k, true
 }
 
-// SyntheticTTYKeyFromUnknownMsg maps bubbletea's unknown CSI (Kitty keyboard protocol) to KeyMsg:
-//   - Ctrl+letter (a–z) → KeyCtrlA…KeyCtrlZ (e.g. \x1b[111;5u = ctrl+o, modifier 5 = 1+ctrl)
-//   - modified Enter → KeyCtrlJ (newline in REPL prompt)
-func SyntheticTTYKeyFromUnknownMsg(msg tea.Msg) (tea.KeyMsg, bool) {
+// SyntheticTTYKeyFromUnknownMsg maps bubbletea's unknown CSI (Kitty keyboard protocol) to KeyPressMsg:
+//   - Ctrl+letter (a–z) → ctrl+a…ctrl+z (e.g. \x1b[111;5u = ctrl+o, modifier 5 = 1+ctrl)
+//   - modified Enter → ctrl+j (newline in REPL prompt)
+func SyntheticTTYKeyFromUnknownMsg(msg tea.Msg) (tea.KeyPressMsg, bool) {
 	b, ok := bubbleteaUnknownCSIBytes(msg)
 	if !ok {
-		return tea.KeyMsg{}, false
+		return tea.KeyPressMsg{}, false
 	}
 	if k, mod, ok := parseKittyCSIKeyU(b); ok {
-		if kt, ok := kittyCtrlLetterKeyType(k, mod); ok {
-			return tea.KeyMsg{Type: kt}, true
+		if kp, ok := kittyCtrlLetterKeyPress(k, mod); ok {
+			return kp, true
 		}
 	}
 	if isKittyModifiedEnterCSI(b) {
-		return tea.KeyMsg{Type: tea.KeyCtrlJ}, true
+		return tea.KeyPressMsg(tea.Key{Code: 'j', Mod: tea.ModCtrl}), true
 	}
-	return tea.KeyMsg{}, false
+	return tea.KeyPressMsg{}, false
 }
 
-// kittyCtrlLetterKeyType maps Kitty CSI key code + modifier to ctrl+a…ctrl+z (modifier 5 = 1+ctrl).
-func kittyCtrlLetterKeyType(keyCode, modEnc int) (tea.KeyType, bool) {
+// kittyCtrlLetterKeyPress maps Kitty CSI key code + modifier to ctrl+a…ctrl+z (modifier 5 = 1+ctrl).
+func kittyCtrlLetterKeyPress(keyCode, modEnc int) (tea.KeyPressMsg, bool) {
 	if modEnc != 5 {
-		return 0, false
+		return tea.KeyPressMsg{}, false
 	}
 	if keyCode < 97 || keyCode > 122 {
-		return 0, false
+		return tea.KeyPressMsg{}, false
 	}
-	return tea.KeyType(keyCode - 96), true
+	return tea.KeyPressMsg(tea.Key{Code: rune(keyCode), Mod: tea.ModCtrl}), true
 }
 
 // parseKittyCSIKeyU parses CSI … u sequences (e.g. \x1b[99;5u or \x1b[99;5:1u).
@@ -92,7 +101,7 @@ func bubbleteaUnknownCSIBytes(msg tea.Msg) ([]byte, bool) {
 	if t == nil || t.Kind() != reflect.Slice || t.Elem().Kind() != reflect.Uint8 {
 		return nil, false
 	}
-	if t.Name() != "unknownCSISequenceMsg" || t.PkgPath() != "github.com/charmbracelet/bubbletea" {
+	if t.Name() != "unknownCSISequenceMsg" || t.PkgPath() != "charm.land/bubbletea/v2" {
 		return nil, false
 	}
 	return reflect.ValueOf(msg).Bytes(), true

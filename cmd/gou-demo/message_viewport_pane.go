@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"goc/gou/markdown"
 	"goc/gou/messagerow"
@@ -73,7 +73,7 @@ func gouDemoMsgViewportKeyMap() viewport.KeyMap {
 			key.WithHelp("ctrl+b", "page up"),
 		),
 		HalfPageDown: key.NewBinding(
-			key.WithKeys("pgdown", " ", "ctrl+d"),
+			key.WithKeys("pgdown", "space", "ctrl+d"),
 			key.WithHelp("pgdn", "½ page down"),
 		),
 		HalfPageUp: key.NewBinding(
@@ -107,11 +107,11 @@ func (m *model) msgViewportSyncGeometry() {
 	}
 	sig := fmt.Sprintf("%d,%d", w, h)
 	if sig != m.lastVpGeom {
-		if m.msgViewport.Width == 0 || m.msgViewport.Height == 0 {
-			m.msgViewport = viewport.New(w, h)
+		if m.msgViewport.Width() == 0 || m.msgViewport.Height() == 0 {
+			m.msgViewport = viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
 		} else {
-			m.msgViewport.Width = w
-			m.msgViewport.Height = h
+			m.msgViewport.SetWidth(w)
+			m.msgViewport.SetHeight(h)
 		}
 		m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
 		m.msgViewport.MouseWheelEnabled = false
@@ -454,12 +454,12 @@ func (m *model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
 		return nil
 	}
 	m.msgHistoryBrowseMouseOff = false
-	return tea.EnableMouseCellMotion
+	return nil
 }
 
 // handleMsgViewportScrollKey forwards list keys through bubbles/viewport.Update (go-tui/main pattern) plus
 // GotoTop/GotoBottom bindings not in the default viewport keymap.
-func (m *model) handleMsgViewportScrollKey(msg tea.KeyMsg) tea.Cmd {
+func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	var cmd tea.Cmd
 	m.msgViewport, cmd = m.msgViewport.Update(msg)
 	switch msg.String() {
@@ -493,7 +493,7 @@ func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	if totalH < vpH {
 		totalH = vpH
 	}
-	return joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.msgViewport.YOffset, m.msgScrollbarW)
+	return joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.msgViewport.YOffset(), m.msgScrollbarW)
 }
 
 func (m *model) handleMsgViewportMouseWheel(delta int) {

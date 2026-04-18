@@ -51,9 +51,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-isatty"
 
 	"goc/ccb-engine/apilog"
@@ -569,6 +569,8 @@ type model struct {
 	transcriptFrozen     *frozenTranscriptSnapshot // nil in prompt; set on enterTranscriptScreen
 	transcriptShowAll    bool
 	transcriptDumpMode   bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
+	// suspendAltScreenForScrollbackDump exits the alternate buffer so bracket-dump (tea.Printf) hits host scrollback (Bubble Tea v2: no tea.ExitAltScreen).
+	suspendAltScreenForScrollbackDump bool
 	promptSavedScrollTop int
 	promptSavedSticky    bool
 
@@ -670,12 +672,6 @@ func main() {
 	m := newModel(st, strings.TrimSpace(*mcpCommandsJSON), strings.TrimSpace(*mcpToolsJSON), nil)
 
 	opts := []tea.ProgramOption{}
-	if gouDemoAltScreenEnabled() {
-		opts = append(opts, tea.WithAltScreen())
-	}
-	if gouDemoMouseCellMotionEnabled() {
-		opts = append(opts, tea.WithMouseCellMotion())
-	}
 	if *streamStdin {
 		tty, err := os.Open("/dev/tty")
 		if err == nil {
@@ -840,20 +836,20 @@ func (m *model) bottomChromeHeight() int {
 	return max(4, n+1)
 }
 
-// handleKeyMsg is the tea.KeyMsg branch; also used when SyntheticTTYKeyFromUnknownMsg maps Kitty CSI to KeyMsg.
-func (m *model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleKeyMsg is the tea.KeyPressMsg branch; also used when SyntheticTTYKeyFromUnknownMsg maps Kitty CSI to KeyPressMsg.
+func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.msgHistoryBrowseMouseOff {
 		m.msgHistoryBrowseMouseOff = false
 		m2, cmd := m.handleKeyMsgPreserving(msg)
 		if cmd == nil {
-			return m2, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen)
+			return m2, teaGlobalRedrawCmd()
 		}
-		return m2, tea.Sequence(tea.EnableMouseCellMotion, tea.ClearScreen, cmd)
+		return m2, tea.Sequence(teaGlobalRedrawCmd(), cmd)
 	}
 	return m.handleKeyMsgPreserving(msg)
 }
 
-func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.permAsk != nil && msg.String() == "ctrl+c" {
 		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
 		return m, tea.Quit
@@ -1323,7 +1319,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouTranscriptEditorClearStatusMsg:
 		return m, m.handleTranscriptEditorChainMsg(msg)
 
-	case tea.MouseMsg:
+	case tea.MouseClickMsg, tea.MouseMotionMsg, tea.MouseWheelMsg, tea.MouseReleaseMsg:
 		if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
 			return m, nil
 		}
@@ -1331,7 +1327,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKeyMsg(msg)
 
 	case gouQueryYieldMsg:
@@ -1657,9 +1653,9 @@ func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
 	}
 }
 
-func (m *model) View() string {
+func (m *model) View() tea.View {
 	if m.width == 0 {
-		return "Loading…"
+		return m.wrapRootView("Loading…")
 	}
 
 	vpH := listViewportH(m)
@@ -1902,7 +1898,20 @@ func (m *model) View() string {
 		overlay := m.renderSlashPicker(m.width, min(14, m.height/3))
 		out = lipgloss.JoinVertical(lipgloss.Left, out, overlay)
 	}
-	return out
+	return m.wrapRootView(out)
+}
+
+func (m *model) wrapRootView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = gouDemoAltScreenEnabled() && !m.suspendAltScreenForScrollbackDump
+	if gouDemoMouseCellMotionEnabled() {
+		if m.msgHistoryBrowseMouseOff {
+			v.MouseMode = tea.MouseModeNone
+		} else {
+			v.MouseMode = tea.MouseModeCellMotion
+		}
+	}
+	return v
 }
 
 func (m *model) showToolUseCtrlOExpandHint() bool {

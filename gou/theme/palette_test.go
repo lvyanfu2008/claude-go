@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"image/color"
 	"testing"
 
 	"goc/types"
@@ -12,7 +13,7 @@ func TestInitFromThemeName_lightChangesUserColor(t *testing.T) {
 	c0 := MessageTypeColor(types.MessageTypeUser)
 	InitFromThemeName("light")
 	c1 := MessageTypeColor(types.MessageTypeUser)
-	if c0 == c1 {
+	if colorsEqual(c0, c1) {
 		t.Fatal("expected different user colors for light theme")
 	}
 	if ActiveTheme() != "light" {
@@ -22,4 +23,10 @@ func TestInitFromThemeName_lightChangesUserColor(t *testing.T) {
 	if ActiveTheme() != "default" {
 		t.Fatalf("reset active %q", ActiveTheme())
 	}
+}
+
+func colorsEqual(a, b color.Color) bool {
+	ar, ag, ab, aa := a.RGBA()
+	br, bg, bb, ba := b.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
 }

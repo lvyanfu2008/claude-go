@@ -1,31 +1,32 @@
 package theme
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"goc/types"
 )
 
 // Palette holds terminal colors for gou TUI (subset of TS design-system roles).
 type Palette struct {
-	User      lipgloss.Color
-	Assistant lipgloss.Color
-	Default   lipgloss.Color
-	ToolUse   lipgloss.Color
-	ToolMuted lipgloss.Color
-	ToolError lipgloss.Color
-	Advisor   lipgloss.Color
-	Grouped   lipgloss.Color
-	Collapsed lipgloss.Color
-	Server    lipgloss.Color
-	Heading    lipgloss.Color
-	InlineCode lipgloss.Color // markdown `inline` spans — light blue (ANSI 256)
+	User      color.Color
+	Assistant color.Color
+	Default   color.Color
+	ToolUse   color.Color
+	ToolMuted color.Color
+	ToolError color.Color
+	Advisor   color.Color
+	Grouped   color.Color
+	Collapsed color.Color
+	Server    color.Color
+	Heading   color.Color
+	InlineCode color.Color // markdown `inline` spans — light blue (ANSI 256)
 	// UserMessageBackground fills rows behind user-authored text in the gou-demo message list.
-	UserMessageBackground lipgloss.Color
+	UserMessageBackground color.Color
 	// UserMessageText is the primary foreground for user-authored prose (bright; Bold applied in gou-demo).
-	UserMessageText lipgloss.Color
+	UserMessageText color.Color
 }
 
 var (
@@ -35,16 +36,16 @@ var (
 
 func defaultPalette() Palette {
 	return Palette{
-		User:      lipgloss.Color("39"),
-		Assistant: lipgloss.Color("141"),
-		Default:   lipgloss.Color("245"),
-		ToolUse:   lipgloss.Color("213"),
-		ToolMuted: lipgloss.Color("245"),
-		ToolError: lipgloss.Color("196"),
-		Advisor:   lipgloss.Color("183"),
-		Grouped:   lipgloss.Color("226"),
-		Collapsed: lipgloss.Color("114"),
-		Server:    lipgloss.Color("99"),
+		User:                  lipgloss.Color("39"),
+		Assistant:             lipgloss.Color("141"),
+		Default:               lipgloss.Color("245"),
+		ToolUse:               lipgloss.Color("213"),
+		ToolMuted:             lipgloss.Color("245"),
+		ToolError:             lipgloss.Color("196"),
+		Advisor:               lipgloss.Color("183"),
+		Grouped:               lipgloss.Color("226"),
+		Collapsed:             lipgloss.Color("114"),
+		Server:                lipgloss.Color("99"),
 		Heading:               lipgloss.Color("255"), // markdown # / ## / ### — bright white (matches user body emphasis)
 		InlineCode:            lipgloss.Color("117"), // light sky blue on dark bg
 		UserMessageBackground: lipgloss.Color("236"),
@@ -55,16 +56,16 @@ func defaultPalette() Palette {
 // lightPalette uses higher-contrast ANSI256 picks (rough TS "light" terminal feel).
 func lightPalette() Palette {
 	return Palette{
-		User:      lipgloss.Color("25"),
-		Assistant: lipgloss.Color("55"),
-		Default:   lipgloss.Color("240"),
-		ToolUse:   lipgloss.Color("92"),
-		ToolMuted: lipgloss.Color("241"),
-		ToolError: lipgloss.Color("124"),
-		Advisor:   lipgloss.Color("96"),
-		Grouped:   lipgloss.Color("130"),
-		Collapsed: lipgloss.Color("64"),
-		Server:    lipgloss.Color("54"),
+		User:                  lipgloss.Color("25"),
+		Assistant:             lipgloss.Color("55"),
+		Default:               lipgloss.Color("240"),
+		ToolUse:               lipgloss.Color("92"),
+		ToolMuted:             lipgloss.Color("241"),
+		ToolError:             lipgloss.Color("124"),
+		Advisor:               lipgloss.Color("96"),
+		Grouped:               lipgloss.Color("130"),
+		Collapsed:             lipgloss.Color("64"),
+		Server:                lipgloss.Color("54"),
 		Heading:               lipgloss.Color("24"), // primary text on light bg (matches UserMessageText)
 		InlineCode:            lipgloss.Color("39"), // dodger blue on light bg (distinct from User 25)
 		UserMessageBackground: lipgloss.Color("252"),
@@ -93,7 +94,7 @@ func ActiveTheme() string {
 }
 
 // MessageTypeColor returns the role header color from the active palette.
-func MessageTypeColor(mt types.MessageType) lipgloss.Color {
+func MessageTypeColor(mt types.MessageType) color.Color {
 	switch mt {
 	case types.MessageTypeUser:
 		return activePalette.User
@@ -105,61 +106,61 @@ func MessageTypeColor(mt types.MessageType) lipgloss.Color {
 }
 
 // ToolError returns the active tool error color.
-func ToolError() lipgloss.Color {
+func ToolError() color.Color {
 	return activePalette.ToolError
 }
 
 // ToolWarning is unchanged across palettes (attention).
-func ToolWarning() lipgloss.Color {
+func ToolWarning() color.Color {
 	return lipgloss.Color("214")
 }
 
 // DimMuted returns secondary / tool_result default tone.
-func DimMuted() lipgloss.Color {
+func DimMuted() color.Color {
 	return activePalette.ToolMuted
 }
 
 // ToolUseAccent is the tool_use block accent.
-func ToolUseAccent() lipgloss.Color {
+func ToolUseAccent() color.Color {
 	return activePalette.ToolUse
 }
 
 // AdvisorAccent is advisor_tool_result default (non-error).
-func AdvisorAccent() lipgloss.Color {
+func AdvisorAccent() color.Color {
 	return activePalette.Advisor
 }
 
 // GroupedAccent is grouped_tool_use accent.
-func GroupedAccent() lipgloss.Color {
+func GroupedAccent() color.Color {
 	return activePalette.Grouped
 }
 
 // CollapsedAccent is collapsed_read_search accent.
-func CollapsedAccent() lipgloss.Color {
+func CollapsedAccent() color.Color {
 	return activePalette.Collapsed
 }
 
 // ServerAccent is server_tool_use accent.
-func ServerAccent() lipgloss.Color {
+func ServerAccent() color.Color {
 	return activePalette.Server
 }
 
 // MarkdownHeading is ATX heading (# … ###) foreground in markdown (bold applied in gou-demo).
-func MarkdownHeading() lipgloss.Color {
+func MarkdownHeading() color.Color {
 	return activePalette.Heading
 }
 
 // MarkdownInlineCode is inline `code` span color in markdown body styling.
-func MarkdownInlineCode() lipgloss.Color {
+func MarkdownInlineCode() color.Color {
 	return activePalette.InlineCode
 }
 
 // UserMessageBackground is the full-width row fill behind user message text in the gou-demo message list.
-func UserMessageBackground() lipgloss.Color {
+func UserMessageBackground() color.Color {
 	return activePalette.UserMessageBackground
 }
 
 // UserMessageText returns the bright foreground for user-authored message body text in gou-demo.
-func UserMessageText() lipgloss.Color {
+func UserMessageText() color.Color {
 	return activePalette.UserMessageText
 }

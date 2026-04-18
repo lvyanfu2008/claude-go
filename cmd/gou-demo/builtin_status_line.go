@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"goc/gou/pui"
 	"goc/modelenv"
 	"goc/types"
