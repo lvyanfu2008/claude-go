@@ -36,7 +36,7 @@ Same env as TS `logLlmApiRequestBody` / `logLlmApiResponseBody`:
 
 Output path resolution: [`debugpath.ResolveLogPath`](debugpath/path.go). **`apilog.PrepareIfEnabled()`** runs after merged settings (e.g. from **`gou-demo`**). Diagnostics block: **`GOU_DEMO_LOG=1`** (same as gou-demo trace) → [`apilog.MaybePrintDiag`](apilog/apilog.go); log lines are tagged **`[GOU_DEMO_LOG_APILOG_DIAG]`**.
 
-**`gou-demo`:** use **`-fake-stream`** / **`GOU_DEMO_USE_FAKE_STREAM=1`** only for simulation without HTTP. For real requests + body logs, set API keys and **`GOU_QUERY_STREAMING_PARITY=1`** or **`GOU_DEMO_STREAMING_TOOL_EXECUTION=1`**.
+**`gou-demo`:** use **`-fake-stream`** / **`GOU_DEMO_USE_FAKE_STREAM=1`** only for simulation without HTTP. For real requests + body logs, set API keys; streaming parity is enabled by the query host when **`QueryParams.StreamingParity`** is set (optional **`GOU_QUERY_STREAMING_PARITY=1`** sets config flags for tooling).
 
 ## Packages (non-exhaustive)
 

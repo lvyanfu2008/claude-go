@@ -29,7 +29,6 @@ func textOnlySSE() string {
 }
 
 func TestStreamingParity_textOnly(t *testing.T) {
-	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
 	t.Setenv("GOU_QUERY_STREAMING_PARITY", "")
 	tools, _ := json.Marshal([]map[string]any{{"name": "echo_stub", "input_schema": map[string]any{"type": "object"}}})
 
@@ -89,7 +88,6 @@ func TestStreamingParity_textOnly(t *testing.T) {
 }
 
 func TestStreamingParity_OnQueryYield(t *testing.T) {
-	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
 	tools, _ := json.Marshal([]map[string]any{{"name": "echo_stub", "input_schema": map[string]any{"type": "object"}}})
 
 	var hookCalls int
@@ -138,7 +136,6 @@ func TestStreamingParity_OnQueryYield(t *testing.T) {
 }
 
 func TestStreamingParity_textOnly_gateViaGOUQueryEnv(t *testing.T) {
-	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "")
 	t.Setenv("GOU_QUERY_STREAMING_PARITY", "1")
 	tools, _ := json.Marshal([]map[string]any{{"name": "echo_stub", "input_schema": map[string]any{"type": "object"}}})
 
@@ -208,7 +205,6 @@ func sseToolUseWithJSONDeltas() string {
 }
 
 func TestStreamingParity_OnStreamingToolUsesSnapshots(t *testing.T) {
-	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
 	tools, _ := json.Marshal([]map[string]any{{
 		"name":         "echo_stub",
 		"description":  "echo",
@@ -280,7 +276,6 @@ func TestStreamingParity_OnStreamingToolUsesSnapshots(t *testing.T) {
 }
 
 func TestStreamingParity_toolThenFollowUpText(t *testing.T) {
-	t.Setenv("GOU_DEMO_STREAMING_TOOL_EXECUTION", "1")
 	tools, _ := json.Marshal([]map[string]any{{
 		"name":         "echo_stub",
 		"description":  "echo",

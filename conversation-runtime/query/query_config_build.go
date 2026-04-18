@@ -15,11 +15,10 @@ func BuildQueryConfig() QueryConfig {
 	return QueryConfig{
 		SessionID: sessionID,
 		Gates: QueryConfigGates{
-			StreamingParityPath:    envTruthy("GOU_QUERY_STREAMING_PARITY"),
-			StreamingToolExecution: envTruthy("GOU_DEMO_STREAMING_TOOL_EXECUTION"),
-			EmitToolUseSummaries:   envTruthy("GOU_DEMO_EMIT_TOOL_USE_SUMMARIES"),
-			IsAnt:                  envTruthy("ANT_ONLY") || strings.EqualFold(os.Getenv("CLAUDE_CODE_VENDOR"), "ant"),
-			FastModeEnabled:        envTruthy("GOU_DEMO_FAST_MODE_ENABLED"),
+			StreamingParityPath:  envTruthy("GOU_QUERY_STREAMING_PARITY"),
+			EmitToolUseSummaries: envTruthy("GOU_DEMO_EMIT_TOOL_USE_SUMMARIES"),
+			IsAnt:                envTruthy("ANT_ONLY") || strings.EqualFold(os.Getenv("CLAUDE_CODE_VENDOR"), "ant"),
+			FastModeEnabled:      envTruthy("GOU_DEMO_FAST_MODE_ENABLED"),
 		},
 	}
 }
@@ -29,7 +28,9 @@ func envTruthy(name string) bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
-// StreamingParityPathEnabled is true when env gates allow the Anthropic SSE parity path together with [QueryParams.StreamingParity].
+// StreamingParityPathEnabled is true when the host may use the HTTP streaming parity path with [QueryParams.StreamingParity]
+// (gou-demo and merged settings always allow this; see also GOU_QUERY_STREAMING_PARITY on [QueryConfigGates.StreamingParityPath] for diagnostics).
 func StreamingParityPathEnabled(cfg QueryConfig) bool {
-	return cfg.Gates.StreamingParityPath || cfg.Gates.StreamingToolExecution
+	_ = cfg
+	return true
 }

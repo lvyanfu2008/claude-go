@@ -123,7 +123,6 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		}
 		applyAutocompactSideEffects(&state, autoRes)
 
-		LogQueryUserContextIfEnabled("before_prepend", params.UserContext)
 		msgs := PrependUserContext(work, params.UserContext)
 
 		fullSystem := StripSystemPromptDynamicBoundaryForAPI(

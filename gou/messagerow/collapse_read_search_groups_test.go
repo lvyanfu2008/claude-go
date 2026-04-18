@@ -7,20 +7,21 @@ import (
 	"goc/types"
 )
 
-func TestCollapseReadSearchGroupsInList_envOffNoop(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "")
+func TestCollapseReadSearchGroupsInList_singlePairCollapses(t *testing.T) {
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
 	}
 	got := CollapseReadSearchGroupsInList(msgs, nil)
-	if len(got) != 2 {
-		t.Fatalf("len=%d want 2", len(got))
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1", len(got))
+	}
+	if got[0].Type != types.MessageTypeCollapsedReadSearch || got[0].ReadCount != 1 {
+		t.Fatalf("got type=%s read=%d", got[0].Type, got[0].ReadCount)
 	}
 }
 
 func TestCollapseReadSearchGroupsInList_twoPairs(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
@@ -37,7 +38,6 @@ func TestCollapseReadSearchGroupsInList_twoPairs(t *testing.T) {
 }
 
 func TestCollapseReadSearchGroupsInList_thinkingAndToolUseSameAssistantMessage(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	raw, _ := json.Marshal([]map[string]any{
 		{"type": "thinking", "thinking": "..."},
 		{"type": "tool_use", "id": "t1", "name": "Read", "input": map[string]any{"file_path": "/a"}},
@@ -57,7 +57,6 @@ func TestCollapseReadSearchGroupsInList_thinkingAndToolUseSameAssistantMessage(t
 }
 
 func TestCollapseReadSearchGroupsInList_textFirstThenToolUseSameAssistantMessage(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	raw, _ := json.Marshal([]map[string]any{
 		{"type": "text", "text": "I will search next."},
 		{"type": "tool_use", "id": "t1", "name": "Grep", "input": map[string]any{"pattern": "foo", "path": "/x"}},
@@ -76,7 +75,6 @@ func TestCollapseReadSearchGroupsInList_textFirstThenToolUseSameAssistantMessage
 }
 
 func TestCollapseReadSearchGroupsInList_thinkingDeferredAfterCollapsed(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	thinkingRaw, _ := json.Marshal([]map[string]any{{"type": "thinking", "thinking": "..."}})
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
@@ -96,7 +94,6 @@ func TestCollapseReadSearchGroupsInList_thinkingDeferredAfterCollapsed(t *testin
 }
 
 func TestCollapseReadSearchGroupsInList_skipCollapseWhenUnresolved(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
@@ -111,7 +108,6 @@ func TestCollapseReadSearchGroupsInList_skipCollapseWhenUnresolved(t *testing.T)
 }
 
 func TestCollapseReadSearchGroupsInList_collapseWhenAllResolved(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "a1", Content: toolUseContent("t1", "Read", map[string]any{"file_path": "/a"})},
 		{Type: types.MessageTypeUser, UUID: "u1", Content: toolResultContent("t1", "ok")},
@@ -123,7 +119,6 @@ func TestCollapseReadSearchGroupsInList_collapseWhenAllResolved(t *testing.T) {
 }
 
 func TestCollapseReadSearchGroupsInList_prefixUnchanged(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	textRaw, _ := json.Marshal([]map[string]string{{"type": "text", "text": "hi"}})
 	msgs := []types.Message{
 		{Type: types.MessageTypeAssistant, UUID: "t0", Content: textRaw},

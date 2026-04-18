@@ -10,8 +10,7 @@
 //     [QueryDeps.Microcompact], [QueryDeps.Autocompact] (receives snip token delta when set),
 //     [PrependUserContext], then CallModel.
 //   - TS-parity streaming ([streamingtool.StreamingToolExecutor] + [toolexecution.RunToolUseChan]):
-//     when [QueryParams.StreamingParity] and [StreamingParityPathEnabled]([BuildQueryConfig]) (env
-//     GOU_QUERY_STREAMING_PARITY or GOU_DEMO_STREAMING_TOOL_EXECUTION) are true, [queryLoop] calls either
+//     when [QueryParams.StreamingParity] and [StreamingParityPathEnabled]([BuildQueryConfig]) are true, [queryLoop] calls either
 //     [runStreamingParityModelLoop] (Anthropic Messages API + [goc/anthropicmessages.PostStream] or
 //     [QueryDeps.StreamPost]) or, when [StreamingUsesOpenAIChat] is true (TS modelType openai /
 //     CLAUDE_CODE_USE_OPENAI), [runOpenAIStreamingParityModelLoop] mirroring TS [queryModelOpenAI]:
@@ -27,9 +26,6 @@
 //     [ReplayOpenAIStreamChatResponse] (same adapter as live stream; supports delta.reasoning_content).
 //   - Each streaming parity turn appends one line via [ccb-engine/diaglog.Line]: "[query] streaming parity: … (model=…)"
 //     before the HTTP loop (OpenAI SSE vs JSON vs Anthropic SSE). Uses CLAUDE_CODE_DIAG_LOG_FILE or the session debug log path (same as [ccb-engine/diaglog.Line]).
-//   - Debug: GOU_QUERY_LOG_USER_CONTEXT=1 logs [QueryParams.UserContext] JSON to stderr before [PrependUserContext]
-//     (see [LogQueryUserContextIfEnabled]). GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK=1 logs the initial work slice
-//     JSON via [ccb-engine/diaglog.Line] at the start of [runOpenAINonStreamingParityModelLoop] (truncated at 32KiB).
 //   - [QueryParams.CanUseTool] is [toolexecution.QueryCanUseToolFn] ([toolexecution.PermissionDecision] + error); [NewStreamingToolExecutor]
 //     receives it so [streamingtool.StreamingToolExecutor]'s canUseTool path matches TS wiring.
 //   - After [runAutocompact], [applyAutocompactSideEffects] applies [AutocompactResult.UpdatedTracking] /

@@ -13,7 +13,7 @@
 //
 // Host query streaming: after [ProcessUserInput] returns [ProcessUserInputBaseResult] with ShouldQuery, callers that
 // use [goc/conversation-runtime/query.Query] may call [ApplyQueryHostEnvGates] and [WireToolexecutionFromProcessUserInput]
-// so merged settings env (GOU_QUERY_STREAMING_PARITY / GOU_DEMO_STREAMING_TOOL_EXECUTION) and [ProcessUserInputParams.CanUseTool]
+// so merged settings env (streaming parity path; see [query.StreamingParityPathEnabled]) and [ProcessUserInputParams.CanUseTool]
 // feed [QueryParams.StreamingParity] and [toolexecution.ExecutionDeps] (see gou-demo streaming parity path).
 //
 // Inject bash/slash/attachment/hook handlers via [ProcessUserInputParams]; nil bash/slash handlers use bashprepare/slashprepare execution_request stubs.

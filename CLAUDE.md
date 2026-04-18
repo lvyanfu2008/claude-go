@@ -25,7 +25,7 @@ This file orients contributors and automation when working in **`claude-go/`** (
 
 | Path | When | Notes |
 |------|------|--------|
-| **Streaming parity** (`query.Query` with `StreamingParity` + env gate) | `GOU_QUERY_STREAMING_PARITY=1` **or** `GOU_DEMO_STREAMING_TOOL_EXECUTION=1`, plus `QueryParams.StreamingParity`, plus provider keys (e.g. Anthropic) for real HTTP | Inside **`queryLoop`**, if `useStream` is true it **runs before** `CallModel`. **gou-demo** uses this for real turns when the gate and key are set; otherwise it falls back to a simulated stream (or `-fake-stream`). |
+| **Streaming parity** (`query.Query` with `StreamingParity` + host gate) | [StreamingParityPathEnabled](conversation-runtime/query/query_config_build.go) is always true; set `QueryParams.StreamingParity`, plus provider keys (e.g. Anthropic) for real HTTP. `GOU_QUERY_STREAMING_PARITY=1` still sets [QueryConfigGates.StreamingParityPath](conversation-runtime/query/config.go) for diagnostics. | Inside **`queryLoop`**, if `useStream` is true it **runs before** `CallModel`. **gou-demo** uses this for real turns when the gate and key are set; otherwise it falls back to a simulated stream (or `-fake-stream`). |
 | **CallModel** (`QueryDeps.CallModel` set) | Host supplies a non-streaming or custom model loop | Runs when streaming parity is off or not selected. |
 
 Env gates are assembled in **`query.BuildQueryConfig`** (`query_config_build.go`). Project **`.claude/settings.go.json`** `env` block is merged at runtime (see **`ccb-engine/settingsfile`**, gou-demo init).

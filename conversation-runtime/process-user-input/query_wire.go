@@ -5,8 +5,8 @@ import (
 	"goc/toolexecution"
 )
 
-// ApplyQueryHostEnvGates sets [query.QueryParams.StreamingParity] when [query.BuildQueryConfig] env gates
-// request the HTTP SSE parity path (GOU_QUERY_STREAMING_PARITY or GOU_DEMO_STREAMING_TOOL_EXECUTION).
+// ApplyQueryHostEnvGates sets [query.QueryParams.StreamingParity] when [query.StreamingParityPathEnabled] allows
+// the HTTP SSE parity path (host default: enabled).
 // Call from hosts (for example gou-demo) before [query.Query] when merged settings env should drive parity.
 func ApplyQueryHostEnvGates(qp *query.QueryParams) {
 	if qp == nil {

@@ -36,7 +36,7 @@
 | 载入 transcript JSON（UI / API 形） | — / `goc/gou/transcript` | **已做** |
 | 回放 / 管道 NDJSON → `ccbstream.Apply` | `goEngine` / `goc/gou/ccbstream` | **已做** |
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
-| 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ `GOU_QUERY_STREAMING_PARITY=1` 或 `GOU_DEMO_STREAMING_TOOL_EXECUTION=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。 |
+| 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ 宿主打开流式 parity（`ApplyQueryHostEnvGates` / `QueryParams.StreamingParity`）；可选 `GOU_QUERY_STREAMING_PARITY=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。 |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `execution_request`（bash/slash 的 prepare 桩） | `bashprepare` / `slashprepare` 仍可能返回 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动、**`[`** 滚动条 dump、**`v`** 外编辑器）；其余见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
@@ -92,7 +92,7 @@ cd goc && go run ./cmd/gou-demo -replay-cc=/path/to/stream.ndjson
 # 管道读 stdin 上的 NDJSON（Unix 下会尝试打开 /dev/tty 供键盘）
 cd goc && cat /path/to/stream.ndjson | go run ./cmd/gou-demo -stream-stdin
 
-# 真实 LLM：API key + GOU_QUERY_STREAMING_PARITY=1（或 GOU_DEMO_STREAMING_TOOL_EXECUTION=1）；密钥可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json
+# 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json
 cd goc && go run ./cmd/gou-demo
 # 仅 UI 模拟流、不调模型：
 cd goc && go run ./cmd/gou-demo -fake-stream

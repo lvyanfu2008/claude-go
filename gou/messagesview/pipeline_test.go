@@ -76,7 +76,6 @@ func TestMessagesForScrollList_noTailWhenVirtualOn(t *testing.T) {
 }
 
 func TestMessagesForScrollList_fullCollapseReadSearch(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	raw, _ := json.Marshal([]map[string]any{{
 		"type": "tool_use", "id": "t1", "name": "Read",
 		"input": map[string]any{"file_path": "/x"},
@@ -100,7 +99,6 @@ func TestMessagesForScrollList_fullCollapseReadSearch(t *testing.T) {
 }
 
 func TestMessagesForScrollList_fullCollapseReadSearch_unresolvedKeepsExpanded(t *testing.T) {
-	t.Setenv("GOU_DEMO_COLLAPSE_READ_SEARCH_FULL", "1")
 	raw, _ := json.Marshal([]map[string]any{{
 		"type": "tool_use", "id": "t1", "name": "Read",
 		"input": map[string]any{"file_path": "/x"},
