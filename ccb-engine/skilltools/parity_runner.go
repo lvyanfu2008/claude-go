@@ -25,7 +25,7 @@ type ParityToolRunner struct {
 	UserModified  bool
 	// AskAutoFirst makes AskUserQuestion pick the first option per question (gou-demo default).
 	AskAutoFirst bool
-	// LocalBashDefault enables Bash without CCB_ENGINE_LOCAL_BASH (gou-demo aligns with TS; opt out via GOU_DEMO_NO_LOCAL_BASH).
+	// LocalBashDefault enables Bash by default (gou-demo aligns with TS; opt out via GOU_DEMO_NO_LOCAL_BASH).
 	LocalBashDefault bool
 	// MainLoopModel is optional; when set it drives Read tool_result cyber-risk mitigation (TS shouldIncludeFileReadMitigation).
 	MainLoopModel string

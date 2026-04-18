@@ -26,8 +26,7 @@
 //     DeepSeek reasoner) into the same accumulator path (no SSE). Recorded SSE can be replayed with
 //     [ReplayOpenAIStreamChatResponse] (same adapter as live stream; supports delta.reasoning_content).
 //   - Each streaming parity turn appends one line via [ccb-engine/diaglog.Line]: "[query] streaming parity: … (model=…)"
-//     before the HTTP loop (OpenAI SSE vs JSON vs Anthropic SSE). Uses CLAUDE_CODE_DIAG_LOG_FILE or the session debug log path;
-//     when CCB_ENGINE_DIAG_TO_STDERR=1, writes to stderr instead (same as other diag lines).
+//     before the HTTP loop (OpenAI SSE vs JSON vs Anthropic SSE). Uses CLAUDE_CODE_DIAG_LOG_FILE or the session debug log path (same as [ccb-engine/diaglog.Line]).
 //   - Debug: GOU_QUERY_LOG_USER_CONTEXT=1 logs [QueryParams.UserContext] JSON to stderr before [PrependUserContext]
 //     (see [LogQueryUserContextIfEnabled]). GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK=1 logs the initial work slice
 //     JSON via [ccb-engine/diaglog.Line] at the start of [runOpenAINonStreamingParityModelLoop] (truncated at 32KiB).

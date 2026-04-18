@@ -102,7 +102,7 @@ cd goc && go run ./cmd/gou-demo -fake-stream
 
 ### Go `init.ts` 对齐（进行中）
 
-**`GOU_DEMO_GO_INIT=1`**：gou-demo 入口使用 [`goc/claudeinit`](../claudeinit) 的 **`Init`**（内含 `settingsfile.EnsureProjectClaudeEnvOnce`），替代「仅 Ensure」路径。矩阵与缺口见 **[`docs/plans/go-init-port.md`](../../docs/plans/go-init-port.md)**。
+gou-demo 入口**默认**调用 [`goc/claudeinit`](../claudeinit) 的 **`Init`**（内含 `settingsfile.EnsureProjectClaudeEnvOnce`）。矩阵与缺口见 **[`docs/plans/go-init-port.md`](../../docs/plans/go-init-port.md)**。
 
 对照：`goc/cmd/claude-init-dump`（**Go-only**，适合 CI）。若本地另有 `claude-code` 检出，可 **人工** 运行其 `dump-init-state` + `scripts/compare-init-dumps.sh` 做差异对照（**非** `goc` 必需步骤）。
 

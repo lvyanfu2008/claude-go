@@ -15,7 +15,7 @@
 // (embedded export matches TS default defer; char-only tst-auto can otherwise leave deferred tools inline).
 // CLAUDE_CODE_GO_TOOL_SEARCH_CONTEXT=0 disables only the <available-deferred-tools> prepend, not API tools[] filtering.
 //
-// Wire diagnostics: [LogWireRound] when CLAUDE_CODE_GO_TOOL_SEARCH_DIAG, CLAUDE_CODE_LOG_API_REQUEST_BODY, or GOU_DEMO_LOG is on (see wire_log.go); uses [diaglog.Line] (CCB_ENGINE_DIAG_TO_STDERR=1 for stderr).
+// Wire diagnostics: [LogWireRound] when CLAUDE_CODE_GO_TOOL_SEARCH_DIAG, CLAUDE_CODE_LOG_API_REQUEST_BODY, or GOU_DEMO_LOG is on (see wire_log.go); uses [diaglog.Line].
 //
 // OpenAI /chat/completions (DeepSeek, etc.): TypeScript still applies the same filteredTools pass before
 // queryModelOpenAI (src/services/api/claude.ts: filteredTools from useToolSearch + extractDiscoveredToolNames;

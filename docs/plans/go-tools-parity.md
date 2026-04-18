@@ -6,7 +6,7 @@ The gou-demo TUI streams tool calls through [`goc/ccb-engine/skilltools.ParityTo
 
 | Concern | Default | Override |
 |--------|---------|----------|
-| **Bash** | Allowed (TS-aligned) | `GOU_DEMO_NO_LOCAL_BASH=1` disables unless `CCB_ENGINE_LOCAL_BASH=1` |
+| **Bash** | Allowed (TS-aligned; gou-demo uses `LocalBashDefault`) | `GOU_DEMO_NO_LOCAL_BASH=1` or `CCB_ENGINE_DISABLE_LOCAL_BASH=1` disables; hosts without local default need `CCB_ENGINE_LOCAL_BASH=1` |
 | **PowerShell** | Off | `CCB_ENGINE_LOCAL_POWERSHELL=1` enables (`pwsh` or `powershell.exe`) |
 | **AskUserQuestion** | Auto-picks first option per question | `GOU_DEMO_NO_ASK_AUTO_FIRST=1` disables auto-pick |
 | **WebFetch** | Allowed | `CCB_ENGINE_DISABLE_WEB_FETCH=1` blocks network fetches in the Go runner |

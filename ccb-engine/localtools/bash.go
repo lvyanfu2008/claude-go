@@ -11,8 +11,8 @@ import (
 )
 
 // BashAllowed reports whether Bash may run. When localDefault is true (e.g. gou-demo ParityToolRunner),
-// Bash is on unless GOU_DEMO_NO_LOCAL_BASH or CCB_ENGINE_DISABLE_LOCAL_BASH is set. Otherwise the historical
-// gate CCB_ENGINE_LOCAL_BASH=1 applies.
+// Bash is on unless GOU_DEMO_NO_LOCAL_BASH or CCB_ENGINE_DISABLE_LOCAL_BASH is set. Otherwise
+// CCB_ENGINE_LOCAL_BASH=1 is required to allow Bash.
 func BashAllowed(localDefault bool) bool {
 	if envTruthy("GOU_DEMO_NO_LOCAL_BASH") || envTruthy("CCB_ENGINE_DISABLE_LOCAL_BASH") {
 		return false

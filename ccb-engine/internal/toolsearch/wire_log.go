@@ -23,7 +23,7 @@ func wireDiagEnabled() bool {
 
 // LogWireRound appends one diagnostic line for the tools[] actually sent on this API round
 // (after ApplyWire). Gated by CLAUDE_CODE_GO_TOOL_SEARCH_DIAG, CLAUDE_CODE_LOG_API_REQUEST_BODY,
-// or GOU_DEMO_LOG. Uses [diaglog.Line] (debug log file; set CCB_ENGINE_DIAG_TO_STDERR=1 for stderr).
+// or GOU_DEMO_LOG. Uses [diaglog.Line] (debug log file).
 func LogWireRound(round int, resolvedModel string, msgs []anthropic.Message, cfg WireConfig, openAICompat bool, fullTools, wired []anthropic.ToolDefinition) {
 	if !wireDiagEnabled() {
 		return

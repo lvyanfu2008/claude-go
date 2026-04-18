@@ -10,7 +10,6 @@ import (
 func TestLine_writesToExplicitFile(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "diag.txt")
 	t.Setenv("CLAUDE_CODE_DIAG_LOG_FILE", tmp)
-	t.Setenv("CCB_ENGINE_DIAG_TO_STDERR", "")
 	Line("test %d", 42)
 	b, err := os.ReadFile(tmp)
 	if err != nil {

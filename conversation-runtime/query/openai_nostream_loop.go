@@ -201,7 +201,7 @@ func runOpenAINonStreamingParityModelLoop(
 }
 
 // logOpenAINonStreamWorkIfEnabled writes work (initial [types.Message] slice from queryLoop) as one line to the
-// Claude diagnostic log ([diaglog.Line]: CLAUDE_CODE_DIAG_LOG_FILE or debug log path; or stderr when CCB_ENGINE_DIAG_TO_STDERR=1)
+// Claude diagnostic log ([diaglog.Line]: CLAUDE_CODE_DIAG_LOG_FILE or debug log path)
 // when GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK is truthy (1/true/yes/on). Payload truncated after 32KiB like other diag JSON lines.
 func logOpenAINonStreamWorkIfEnabled(tag string, work []types.Message) {
 	if !envTruthy("GOU_QUERY_LOG_OPENAI_NONSTREAM_WORK") {

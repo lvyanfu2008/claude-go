@@ -13,21 +13,11 @@ import (
 	"goc/ccb-engine/debugpath"
 )
 
-func envTruthy(name string) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
-}
-
-// Line appends a single line to the diagnostic log. When CCB_ENGINE_DIAG_TO_STDERR=1, writes to stderr instead.
-// Otherwise uses CLAUDE_CODE_DIAG_LOG_FILE if set, else [debugpath.ResolveLogPath]. If the resolved path is empty, drops the line.
+// Line appends a single line to the diagnostic log. Uses CLAUDE_CODE_DIAG_LOG_FILE if set, else [debugpath.ResolveLogPath]. If the resolved path is empty, drops the line.
 func Line(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if !strings.HasSuffix(msg, "\n") {
 		msg += "\n"
-	}
-	if envTruthy("CCB_ENGINE_DIAG_TO_STDERR") {
-		_, _ = os.Stderr.WriteString(msg)
-		return
 	}
 	path := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DIAG_LOG_FILE"))
 	if path == "" {

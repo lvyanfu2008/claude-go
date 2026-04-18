@@ -11,7 +11,7 @@
 // Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1) for a UI-only simulated stream with no HTTP (no apilog bodies on send).
 // When a tool gate returns ask, GOU_QUERY_ASK_STRATEGY=allow auto-allows for headless demo (maps to [toolexecution.ExecutionDeps.AskResolver]).
 // GOU_TOOLEXEC_BASH_SANDBOX_1B=1 enables permissions.ts whole-tool ask bypass on Bash when the tool input carries a non-empty command without dangerously_disable_sandbox (see toolexecution.WholeToolAskSkippedForBash1b).
-// Go-side init port (subset of TS init.ts): GOU_DEMO_GO_INIT=1 runs [goc/claudeinit.Init] instead of only [settingsfile.EnsureProjectClaudeEnvOnce] (Init includes Ensure). See docs/plans/go-init-port.md.
+// Go-side init port (subset of TS init.ts): gou-demo runs [goc/claudeinit.Init] (includes [settingsfile.EnsureProjectClaudeEnvOnce]). See docs/plans/go-init-port.md.
 // Go local tool parity (streaming parity + [skilltools.ParityToolRunner]): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. PowerShell is off unless CCB_ENGINE_LOCAL_POWERSHELL=1 (uses pwsh or powershell.exe). AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch is allowed by default; set CCB_ENGINE_DISABLE_WEB_FETCH=1 to block network fetches in the Go runner. See docs/plans/go-tools-parity.md.
 //
 // System # Language / # Output Style: merged from ~/.claude/settings.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
@@ -32,7 +32,7 @@
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
 // MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
 //
-// Session JSONL (optional): GOU_DEMO_RECORD_TRANSCRIPT=1 persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] to RecordTranscript with a growing turn prefix (same as TS recordTranscript(messages)) so parentUuid chains; each yield is deduped by message UUID; turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid.
+// Session JSONL (default on): persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] to RecordTranscript with a growing turn prefix (same as TS recordTranscript(messages)) so parentUuid chains; each yield is deduped by message UUID; turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid.
 // Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
 package main
 
@@ -553,7 +553,7 @@ type model struct {
 	// tsBridge when non-nil supplies in-process snapshot for commands/tools/prompt parts (tests; former TS bridge removed).
 	tsBridge *tscontext.Snapshot
 
-	// transcript when non-nil (GOU_DEMO_RECORD_TRANSCRIPT=1) appends messages after each completed turn.
+	// transcript appends messages after each completed turn (session JSONL).
 	transcript *sessiontranscript.Store
 
 	// REPL chrome (terminal title, permission pill): see repl_chrome.go.
@@ -620,16 +620,10 @@ type model struct {
 }
 
 func main() {
-	if gouDemoEnvTruthy("GOU_DEMO_GO_INIT") {
-		if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
-			log.Fatalf("gou-demo: claudeinit (GOU_DEMO_GO_INIT): %v", err)
-		}
-		defer claudeinit.RunCleanups()
-	} else {
-		if err := settingsfile.EnsureProjectClaudeEnvOnce(); err != nil {
-			log.Fatalf("gou-demo: project settings: %v", err)
-		}
+	if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
+		log.Fatalf("gou-demo: claudeinit: %v", err)
 	}
+	defer claudeinit.RunCleanups()
 	theme.InitFromThemeName(os.Getenv("CLAUDE_CODE_THEME"))
 	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: user ~/.claude/settings.json,
 	// project .claude/settings.go.json, settings.local.json. Project .claude/settings.json is TS-only
@@ -651,12 +645,10 @@ func main() {
 	_ = ccbInlineCompat
 
 	st := &conversation.Store{ConversationID: "demo"}
-	if gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
-		if sid := strings.TrimSpace(os.Getenv("GOU_DEMO_SESSION_ID")); sessiontranscript.IsValidUUID(sid) {
-			st.ConversationID = sid
-		} else if !sessiontranscript.IsValidUUID(st.ConversationID) {
-			st.ConversationID = sessiontranscript.NewUUID()
-		}
+	if sid := strings.TrimSpace(os.Getenv("GOU_DEMO_SESSION_ID")); sessiontranscript.IsValidUUID(sid) {
+		st.ConversationID = sid
+	} else if !sessiontranscript.IsValidUUID(st.ConversationID) {
+		st.ConversationID = sessiontranscript.NewUUID()
 	}
 	if *transcriptPath != "" {
 		msgs, err := transcript.LoadFile(*transcriptPath)
@@ -729,19 +721,16 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	pr := prompt.New()
 	pr.SetEnterSubmits(gouDemoPromptEnterSubmits())
 
-	var tr *sessiontranscript.Store
-	if gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
-		cwd, _ := os.Getwd()
-		fhSnap := !gouDemoEnvTruthy("GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT")
-		fhEachUser := gouDemoEnvTruthy("GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER")
-		tr = &sessiontranscript.Store{
-			SessionID:                 st.ConversationID,
-			OriginalCwd:               cwd,
-			Cwd:                       cwd,
-			FileHistorySnapshotOnUser: fhSnap,
-			// Default: at most one stub snapshot per session (TS often shows one line with checkpointing off or single-turn).
-			FileHistorySnapshotOnce: fhSnap && !fhEachUser,
-		}
+	cwd, _ := os.Getwd()
+	fhSnap := !gouDemoEnvTruthy("GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT")
+	fhEachUser := gouDemoEnvTruthy("GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER")
+	tr := &sessiontranscript.Store{
+		SessionID:                 st.ConversationID,
+		OriginalCwd:               cwd,
+		Cwd:                       cwd,
+		FileHistorySnapshotOnUser: fhSnap,
+		// Default: at most one stub snapshot per session (TS often shows one line with checkpointing off or single-turn).
+		FileHistorySnapshotOnce: fhSnap && !fhEachUser,
 	}
 
 	lm := strings.TrimSpace(modelenv.FirstNonEmpty())
@@ -1219,7 +1208,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 									return nil
 								}
 							}
-							if m.transcript != nil && gouDemoEnvTruthy("GOU_DEMO_RECORD_TRANSCRIPT") {
+							if m.transcript != nil {
 								tr := m.transcript
 								// Mirror TS recordTranscript(messages): each yield appends to the same turn prefix so
 								// sessiontranscript dedup sees already-recorded user (and prior yields) before new rows.
