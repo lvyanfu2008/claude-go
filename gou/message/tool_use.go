@@ -101,14 +101,29 @@ func (r *ToolUseMessageRenderer) MeasureToolUseBlock(block map[string]interface{
 func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	// Similar to TS tool result display
 	_, _ = block["tool_use_id"].(string) // toolUseID is unused
-	content, _ := block["content"].([]interface{})
+	// content can be either a string or []interface{}
+	var contentItems []interface{}
 
-	if len(content) == 0 {
+	if contentStr, ok := block["content"].(string); ok {
+		// content is a string - wrap it as a text block
+		if contentStr != "" {
+			contentItems = []interface{}{
+				map[string]interface{}{
+					"type": "text",
+					"text": contentStr,
+				},
+			}
+		}
+	} else if contentArr, ok := block["content"].([]interface{}); ok {
+		contentItems = contentArr
+	}
+
+	if len(contentItems) == 0 {
 		return []string{"  ↳ [Empty result]"}, nil
 	}
 
 	var lines []string
-	for _, item := range content {
+	for _, item := range contentItems {
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
@@ -137,13 +152,29 @@ func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interfa
 	}
 
 	// Calculate actual height
-	content, _ := block["content"].([]interface{})
-	if len(content) == 0 {
+	// content can be either a string or []interface{}
+	var contentItems []interface{}
+
+	if contentStr, ok := block["content"].(string); ok {
+		// content is a string - wrap it as a text block
+		if contentStr != "" {
+			contentItems = []interface{}{
+				map[string]interface{}{
+					"type": "text",
+					"text": contentStr,
+				},
+			}
+		}
+	} else if contentArr, ok := block["content"].([]interface{}); ok {
+		contentItems = contentArr
+	}
+
+	if len(contentItems) == 0 {
 		return 1
 	}
 
 	totalLines := 0
-	for _, item := range content {
+	for _, item := range contentItems {
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {

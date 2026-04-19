@@ -24,7 +24,8 @@
     "GOU_DEMO_ALT_SCREEN": "1",
     "GOU_DEMO_DUMP_ON_EXIT": "1",
     "OPENAI_MODEL": "deepseek-chat",
-    "CCB_ENGINE_MODEL": "deepseek-chat"
+    "CCB_ENGINE_MODEL": "deepseek-chat",
+    "GOU_DEMO_USE_NEW_RENDERER":"1"
   },
   "hooks": {
     "UserPromptSubmit": [

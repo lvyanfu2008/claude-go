@@ -8,7 +8,9 @@ import (
 )
 
 // AssistantMessageRenderer renders assistant messages.
-type AssistantMessageRenderer struct{}
+type AssistantMessageRenderer struct{
+	toolUseRenderer *ToolUseMessageRenderer
+}
 
 // CanRender returns true for assistant messages.
 func (r *AssistantMessageRenderer) CanRender(msg *types.Message) bool {
@@ -61,7 +63,12 @@ func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface
 		return r.renderThinkingBlock(block, ctx)
 	case "tool_use":
 		// Tool use blocks are handled by ToolUseMessageRenderer
-		return []string{"[Tool use - should be handled by tool use renderer]"}, nil
+		if r.toolUseRenderer == nil {
+			r.toolUseRenderer = &ToolUseMessageRenderer{}
+		}
+		// Check if this tool use is in progress (streaming)
+		isInProgress := false // TODO: Determine if tool use is in progress
+		return r.toolUseRenderer.RenderToolUseBlock(block, ctx, isInProgress)
 	default:
 		return []string{fmt.Sprintf("[Unknown assistant block type: %s]", blockType)}, nil
 	}
@@ -78,7 +85,11 @@ func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interfac
 		return r.measureThinkingBlock(block, ctx)
 	case "tool_use":
 		// Tool use is handled separately
-		return 1
+		if r.toolUseRenderer == nil {
+			r.toolUseRenderer = &ToolUseMessageRenderer{}
+		}
+		isInProgress := false // TODO: Determine if tool use is in progress
+		return r.toolUseRenderer.MeasureToolUseBlock(block, ctx, isInProgress)
 	default:
 		return 1
 	}

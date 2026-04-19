@@ -643,6 +643,14 @@ func main() {
 	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: user ~/.claude/settings.json,
 	// project .claude/settings.go.json, settings.local.json. Project .claude/settings.json is TS-only
 	// (see settingsfile package doc); put GOU_DEMO_* / CCB_ENGINE_* in settings.go.json or export in shell.
+
+	// Ensure Grep and Glob tools are available in gou-demo by disabling EMBEDDED_SEARCH_TOOLS
+	// This overrides any environment setting that might filter out these tools
+	if os.Getenv("EMBEDDED_SEARCH_TOOLS") != "" {
+		gouDemoTracef("gou-demo: overriding EMBEDDED_SEARCH_TOOLS=%q to ensure Grep/Glob tools are available", os.Getenv("EMBEDDED_SEARCH_TOOLS"))
+	}
+	os.Setenv("EMBEDDED_SEARCH_TOOLS", "0")
+
 	apilog.PrepareIfEnabled()
 	apilog.MaybePrintDiag()
 	traceCleanup := setupGouDemoTrace()
@@ -1671,6 +1679,9 @@ func (m *model) View() tea.View {
 		return m.wrapRootView("Loading…")
 	}
 
+	// Check if we should use the new message renderer
+	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
+
 	vpH := listViewportH(m)
 	bodyCols := m.messageBodyColsForLayout()
 	useVp := m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback
@@ -1699,7 +1710,38 @@ func (m *model) View() tea.View {
 	b.WriteString(title)
 	b.WriteByte('\n')
 
-	if useVp {
+	if useNewRenderer {
+		// Use the new message renderer
+		msgPaneContent := m.renderMessagePaneWithNewRenderer()
+		lines := strings.Split(msgPaneContent, "\n")
+
+		// The new renderer already handles virtual scrolling internally
+		// Just ensure output fits in viewport
+		if len(lines) > vpH {
+			lines = lines[:vpH]
+		}
+		for len(lines) < vpH {
+			lines = append(lines, "")
+		}
+		// Get total height for scrollbar
+		m.integrateMessageRenderer()
+		messages := m.store.Messages
+		var messagesPtr []*types.Message
+		for i := range messages {
+			messagesPtr = append(messagesPtr, &messages[i])
+		}
+		isTranscript := m.uiScreen == gouDemoScreenTranscript
+		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(
+			messagesPtr,
+			0, // scrollTop = 0 to get total height
+			1, // viewportHeight = 1 doesn't matter for total height
+			isTranscript,
+			verbose,
+		)
+		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
+		b.WriteByte('\n')
+	} else if useVp {
 		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
 		b.WriteByte('\n')
 	} else {
