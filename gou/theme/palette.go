@@ -93,6 +93,11 @@ func ActiveTheme() string {
 	return activeThemeKey
 }
 
+// ActivePalette returns the current active palette.
+func ActivePalette() *Palette {
+	return &activePalette
+}
+
 // MessageTypeColor returns the role header color from the active palette.
 func MessageTypeColor(mt types.MessageType) color.Color {
 	switch mt {

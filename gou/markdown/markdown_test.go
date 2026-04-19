@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 func TestMain(m *testing.M) {
@@ -197,5 +199,126 @@ func TestNormalizeStreamingForLexer(t *testing.T) {
 	s := "```go\nfmt.Println("
 	if strings.Count(NormalizeStreamingForLexer(s), "```")%2 != 0 {
 		t.Fatal("should balance fences")
+	}
+}
+
+func TestCodeHighlighting(t *testing.T) {
+	// 创建高亮器
+	config := DefaultHighlightConfig()
+	highlighter, err := NewHighlighter(config)
+	if err != nil {
+		t.Fatalf("Failed to create highlighter: %v", err)
+	}
+
+	// 测试支持的语言
+	if !highlighter.SupportsLanguage("go") {
+		t.Error("Should support Go language")
+	}
+
+	// 测试代码高亮
+	code := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, World!")
+}`
+
+	highlighted, err := highlighter.HighlightCode(code, "go")
+	if err != nil {
+		t.Fatalf("Failed to highlight code: %v", err)
+	}
+
+	// 检查是否包含ANSI转义序列（高亮后的代码应该包含颜色）
+	if !strings.Contains(highlighted, "\x1b[") && !strings.Contains(highlighted, "\033[") {
+		t.Log("Highlighted code doesn't contain ANSI escape sequences (might be using different formatting)")
+	}
+
+	// 至少应该返回非空字符串
+	if highlighted == "" {
+		t.Error("Highlighted code should not be empty")
+	}
+}
+
+// removeANSIEscapeSequences 移除ANSI转义序列
+func removeANSIEscapeSequences(s string) string {
+	// 简单的ANSI转义序列移除
+	var result strings.Builder
+	inEscape := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' || s[i] == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if s[i] == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteByte(s[i])
+	}
+	return result.String()
+}
+
+func TestRenderTokensWithHighlight(t *testing.T) {
+	// 创建高亮器
+	config := DefaultHighlightConfig()
+	highlighter, err := NewHighlighter(config)
+	if err != nil {
+		t.Fatalf("Failed to create highlighter: %v", err)
+	}
+
+	// 创建测试tokens
+	tokens := []Token{
+		{
+			Type: "heading",
+			Level: 1,
+			Text: "Test Code",
+		},
+		{
+			Type: "code",
+			Lang: "go",
+			Text: "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}",
+		},
+		{
+			Type: "paragraph",
+			Text: "This is a test with `inline code`.",
+			Segments: []InlineSegment{
+				{Text: "This is a test with "},
+				{Code: true, Text: "inline code"},
+				{Text: "."},
+			},
+		},
+	}
+
+	// 使用默认主题
+	theme := lipgloss.NewStyle()
+
+	// 渲染带高亮的文本
+	result := RenderTokensWithHighlight(tokens, highlighter, theme)
+
+	// 调试输出
+	t.Logf("Result length: %d", len(result))
+	t.Logf("Result first 200 chars: %.200s", result)
+	t.Logf("Result: %q", result)
+
+	// 检查结果
+	if !strings.Contains(result, "```go") {
+		t.Error("Should contain code fence with language")
+	}
+
+	// 移除ANSI转义序列后检查内容
+	cleanResult := removeANSIEscapeSequences(result)
+	if !strings.Contains(cleanResult, "package main") {
+		t.Errorf("Should contain code content. Clean result: %s", cleanResult)
+	}
+
+	if !strings.Contains(cleanResult, "Test Code") {
+		t.Error("Should contain heading text")
+	}
+
+	if !strings.Contains(cleanResult, "This is a test with") {
+		t.Error("Should contain paragraph text")
 	}
 }

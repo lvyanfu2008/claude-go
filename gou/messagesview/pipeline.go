@@ -32,8 +32,9 @@ func MessagesForScrollList(messages []types.Message, o ScrollListOpts) []types.M
 	work = DropNullRenderingAttachments(work)
 	work = FilterShouldShowUserMessage(work, o.TranscriptMode)
 	work = ReorderMessagesInUI(work)
-	work = maybeTranscriptTail(work, o.TranscriptMode, o.ShowAllInTranscript, o.VirtualScrollEnabled)
 	work = ApplyGrouping(work, o.Verbose)
 	work = messagerow.CollapseReadSearchGroupsInList(work, o.ResolvedToolUseIDs)
+	// Apply transcript tail after grouping/collapsing to ensure correct message count
+	work = maybeTranscriptTail(work, o.TranscriptMode, o.ShowAllInTranscript, o.VirtualScrollEnabled)
 	return work
 }

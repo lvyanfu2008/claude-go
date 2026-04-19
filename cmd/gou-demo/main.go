@@ -90,6 +90,9 @@ import (
 // gouDemoTrace is set by setupGouDemoTrace from GOU_DEMO_LOG_FILE or GOU_DEMO_LOG.
 var gouDemoTrace *log.Logger
 
+// markdownHighlighter is the global code highlighter instance
+var markdownHighlighter *markdown.Highlighter
+
 // messagePaneGutterCols is the uniform left indent for message pane body lines (alignment with wrap width).
 const messagePaneGutterCols = 2
 
@@ -623,6 +626,9 @@ type model struct {
 	//用来存储上次视图结果
 	lastB      string
 	lastResult bool
+
+	// New message rendering system integration
+	msgRenderer *MessageRendererIntegration
 }
 
 func main() {
@@ -631,6 +637,9 @@ func main() {
 	}
 	defer claudeinit.RunCleanups()
 	theme.InitFromThemeName(os.Getenv("CLAUDE_CODE_THEME"))
+	// Initialize markdown highlighter for code syntax highlighting
+	config := markdown.DefaultHighlightConfig()
+	markdownHighlighter, _ = markdown.NewHighlighter(config)
 	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: user ~/.claude/settings.json,
 	// project .claude/settings.go.json, settings.local.json. Project .claude/settings.json is TS-only
 	// (see settingsfile package doc); put GOU_DEMO_* / CCB_ENGINE_* in settings.go.json or export in shell.
@@ -2493,12 +2502,27 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 				parts = append(parts, hb.String())
 			}
 		case "code":
-			cb := "```" + t.Lang + "\n" + t.Text
-			if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
-				cb += "\n"
+			// Apply syntax highlighting if highlighter is available
+			var highlightedCode string
+			if markdownHighlighter != nil {
+				highlighted, err := markdownHighlighter.HighlightCode(t.Text, t.Lang)
+				if err == nil && highlighted != "" {
+					highlightedCode = highlighted
+				}
 			}
-			cb += "```"
-			parts = append(parts, baseMsgStyle(userRow).Faint(true).Render(cb))
+
+			// If highlighting failed or highlighter is disabled, use plain code
+			if highlightedCode == "" {
+				cb := "```" + t.Lang + "\n" + t.Text
+				if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
+					cb += "\n"
+				}
+				cb += "```"
+				parts = append(parts, baseMsgStyle(userRow).Faint(true).Render(cb))
+			} else {
+				// For highlighted code, just show the highlighted content without backticks
+				parts = append(parts, baseMsgStyle(userRow).Render(highlightedCode))
+			}
 		case "list_item":
 			indent := strings.Repeat(" ", t.ListIndent)
 			var prefix string

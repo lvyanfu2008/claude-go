@@ -52,6 +52,22 @@ func ExtractIncludePathsFromMarkdown(src []byte, basePath string) []string {
 			for _, p := range pathsFromIncludeText(stripped, baseDir) {
 				add(p)
 			}
+		case *ast.HTMLBlock:
+			h := n.(*ast.HTMLBlock)
+			lines := h.Lines()
+			var raw strings.Builder
+			for i := 0; i < lines.Len(); i++ {
+				line := lines.At(i)
+				raw.Write(line.Value(src))
+			}
+			rawStr := raw.String()
+			stripped := htmlCommentSpan.ReplaceAllString(rawStr, "")
+			if strings.TrimSpace(stripped) == "" {
+				return ast.WalkContinue, nil
+			}
+			for _, p := range pathsFromIncludeText(stripped, baseDir) {
+				add(p)
+			}
 		}
 		return ast.WalkContinue, nil
 	})
@@ -73,11 +89,17 @@ func pathsFromIncludeText(textContent, baseDir string) []string {
 		if path == "" {
 			continue
 		}
-		valid := strings.HasPrefix(path, "./") || strings.HasPrefix(path, "~/") ||
+		// Accept @path, @./path, @~/path, or @/path
+		// Mirroring TypeScript implementation
+		isValidPath := strings.HasPrefix(path, "./") ||
+			strings.HasPrefix(path, "~/") ||
 			(strings.HasPrefix(path, "/") && path != "/") ||
-			(!strings.HasPrefix(path, "@") && !invalidAtStart.MatchString(path) &&
-				len(path) > 0 && validPathStart.MatchString(path[:1]))
-		if !valid {
+			(!strings.HasPrefix(path, "@") &&
+				!invalidAtStart.MatchString(path) &&
+				len(path) > 0 &&
+				validPathStart.MatchString(path[:1]))
+
+		if !isValidPath {
 			continue
 		}
 		abs := ExpandPath(path, baseDir)
