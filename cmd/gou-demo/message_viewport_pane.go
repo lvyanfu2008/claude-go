@@ -294,15 +294,23 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 
 			if !group.IsGroup {
 				tu := group.Single
-				facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-				if facing == "" {
-					facing = tu.Name
+				// 所有工具都显示活动状态
+				activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+				if activityLine == "" {
+					// 如果没有活动描述，使用工具名
+					facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+					if facing == "" {
+						facing = tu.Name
+					}
+					activityLine = facing
+					if p := strings.TrimSpace(paren); p != "" {
+						activityLine += " " + p
+					}
 				}
-				toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + facing)
-				if p := strings.TrimSpace(paren); p != "" {
-					toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
-				}
-				toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+				// 添加省略号表示正在执行
+				activityLine += "…"
+				// 添加交互提示
+				toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 				sb.WriteString(toolTitle)
 			} else {
 				summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
@@ -450,7 +458,13 @@ func lipglossStyleAssistantHead() string {
 }
 
 func lipglossStyleStreamingToolTitle(name string) string {
-	return lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ "+name) + lipgloss.NewStyle().Faint(true).Render(" · streaming")
+	// 改为显示活动状态
+	activityLine := messagerow.ActivityLineForToolUse(name, json.RawMessage("{}"))
+	if activityLine == "" {
+		activityLine = name
+	}
+	activityLine += "…"
+	return lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 }
 
 func lipglossStyleFaintPreview(s string) string {

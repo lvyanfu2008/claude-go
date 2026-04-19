@@ -1559,11 +1559,19 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		if strings.TrimSpace(searchHL) != "" {
 			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
 		}
-		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + namePart)
-		if p := strings.TrimSpace(paren); p != "" {
-			toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
+		// 所有工具都显示活动状态
+		activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if activityLine == "" {
+			// 如果没有活动描述，使用工具名
+			activityLine = namePart
+			if p := strings.TrimSpace(paren); p != "" {
+				activityLine += " " + p
+			}
 		}
-		toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+		// 添加省略号表示正在执行
+		activityLine += "…"
+		// 添加交互提示
+		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 		block := head + "\n" + toolLine
 		return messagePaneGutterRowCount(block, cols)
 	}
@@ -1602,11 +1610,19 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 		if strings.TrimSpace(searchHL) != "" {
 			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
 		}
-		toolLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + namePart)
-		if p := strings.TrimSpace(paren); p != "" {
-			toolLine += lipgloss.NewStyle().Faint(true).Render(" " + p)
+		// 所有工具都显示活动状态
+		activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if activityLine == "" {
+			// 如果没有活动描述，使用工具名
+			activityLine = namePart
+			if p := strings.TrimSpace(paren); p != "" {
+				activityLine += " " + p
+			}
 		}
-		toolLine += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+		// 添加省略号表示正在执行
+		activityLine += "…"
+		// 添加交互提示
+		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 		block = head + "\n" + toolLine
 	} else {
 		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
@@ -1854,7 +1870,19 @@ func (m *model) View() tea.View {
 					if p := strings.TrimSpace(paren); p != "" {
 						toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
 					}
-					toolTitle += lipgloss.NewStyle().Faint(true).Render(" · streaming")
+					// 所有工具都显示活动状态
+					activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+					if activityLine == "" {
+						// 如果没有活动描述，使用工具名
+						activityLine = facing
+						if p := strings.TrimSpace(paren); p != "" {
+							activityLine += " " + p
+						}
+					}
+					// 添加省略号表示正在执行
+					activityLine += "…"
+					// 添加交互提示
+					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 					sb.WriteString(toolTitle)
 				} else {
 					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
