@@ -2,6 +2,8 @@ package message
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"goc/types"
 )
@@ -34,7 +36,7 @@ func (r *GroupedToolUseRenderer) Render(msg *types.Message, ctx *RenderContext) 
 	// Render individual tool uses if verbose
 	if ctx.Verbose || ctx.IsTranscript {
 		for i, toolMsg := range msg.Messages {
-			// TODO: Render individual tool uses
+			// Render individual tool uses
 			line := fmt.Sprintf("  %d. %s", i+1, formatToolMessage(&toolMsg))
 			if len(line) > width && width > 10 {
 				line = line[:width-3] + "..."
@@ -90,8 +92,12 @@ func formatToolName(toolName string) string {
 
 // formatToolMessage formats a tool message for display.
 func formatToolMessage(msg *types.Message) string {
-	// TODO: Extract and format tool use information from message
-	// This requires parsing the message content
+	// Extract and format tool use information from message
+	// Simple implementation for now
+	toolName := extractToolName(msg)
+	if toolName != "" {
+		return fmt.Sprintf("%s tool", toolName)
+	}
 	return fmt.Sprintf("%s tool use", msg.Type)
 }
 
@@ -159,8 +165,32 @@ func extractToolName(msg *types.Message) string {
 		return ""
 	}
 
-	// TODO: Parse message content to extract tool name
-	// This requires parsing the JSON content
+	// Parse message content to extract tool name
+	content := string(msg.Content)
+	if len(content) == 0 && msg.Message != nil {
+		content = string(msg.Message)
+	}
+
+	// Simple string matching for common tools
+	// In production, should parse JSON properly
+	if contains(content, `"name":"Read"`) {
+		return "Read"
+	} else if contains(content, `"name":"Grep"`) {
+		return "Grep"
+	} else if contains(content, `"name":"Glob"`) {
+		return "Glob"
+	} else if contains(content, `"name":"Bash"`) {
+		return "Bash"
+	} else if contains(content, `"name":"Write"`) {
+		return "Write"
+	} else if contains(content, `"name":"Edit"`) {
+		return "Edit"
+	} else if contains(content, `"name":"WebFetch"`) {
+		return "WebFetch"
+	} else if contains(content, `"name":"WebSearch"`) {
+		return "WebSearch"
+	}
+
 	return ""
 }
 
@@ -227,8 +257,13 @@ func GroupConsecutiveToolUses(messages []*types.Message) []*types.Message {
 	return result
 }
 
-// Helper function to generate UUID (placeholder)
+// Helper function to generate UUID
 func generateUUID() string {
-	// TODO: Use proper UUID generation
-	return "group-uuid"
+	// Generate a simple UUID-like string
+	// In production, use github.com/google/uuid or similar
+	return fmt.Sprintf("group-%x-%x-%x-%x",
+		time.Now().UnixNano(),
+		rand.Int63(),
+		rand.Int63(),
+		rand.Int63())
 }

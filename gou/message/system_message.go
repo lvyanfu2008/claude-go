@@ -3,6 +3,7 @@
 package message
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -94,8 +95,12 @@ func (r *SystemMessageRenderer) renderLocalCommand(msg *types.Message, ctx *Rend
 	}
 
 	// Render as user text message
-	// TODO: This should delegate to UserTextMessage renderer
-	return []string{content}, nil
+	// Delegate to UserTextMessage renderer
+	userRenderer := &UserMessageRenderer{}
+	return userRenderer.renderTextBlock(map[string]interface{}{
+		"type": "text",
+		"text": content,
+	}, ctx)
 }
 
 // measureLocalCommand measures a local command message.
@@ -185,14 +190,25 @@ func (r *SystemMessageRenderer) measureApiError(msg *types.Message, ctx *RenderC
 
 // renderStopHookSummary renders a stop hook summary message.
 func (r *SystemMessageRenderer) renderStopHookSummary(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement stop hook summary rendering
 	// Similar to TS StopHookSummaryMessage component
-	return []string{"[Hook summary]"}, nil
+	// Extract hook summary from message
+	summary := "Hook executed"
+	if msg.Content != nil {
+		var text string
+		if err := json.Unmarshal(msg.Content, &text); err == nil && text != "" {
+			if len(text) > 60 {
+				summary = text[:60] + "..."
+			} else {
+				summary = text
+			}
+		}
+	}
+	return []string{"🪝 " + summary}, nil
 }
 
 // measureStopHookSummary measures a stop hook summary message.
 func (r *SystemMessageRenderer) measureStopHookSummary(msg *types.Message, ctx *RenderContext) (int, error) {
-	// TODO: Implement proper measurement
+	// Stop hook summary is always 1 line
 	return 1, nil
 }
 

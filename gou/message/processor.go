@@ -1,6 +1,8 @@
 package message
 
 import (
+	"fmt"
+	"math/rand"
 	"time"
 
 	"goc/types"
@@ -120,7 +122,7 @@ func (p *Processor) collapseReadSearch(messages []*types.Message) []*types.Messa
 			if len(currentBatch) == 0 {
 				// Start new batch
 				currentBatch = []*types.Message{msg}
-				// TODO: Extract timestamp from message
+				// Timestamp extraction would go here
 				// batchStartTime = extractTimestamp(msg)
 			} else {
 				// Check if this message belongs to current batch
@@ -199,8 +201,8 @@ func (p *Processor) createCollapsedGroup(messages []*types.Message) *types.Messa
 
 // countOperation counts an operation in the collapsed group.
 func (p *Processor) countOperation(msg *types.Message, group *types.Message) {
-	// TODO: Parse message content to determine operation type
-	// For now, use simple heuristics
+	// Parse message content to determine operation type
+	// Using simple heuristics for now
 
 	// Check message content for operation hints
 	content := string(msg.Content)
@@ -219,7 +221,7 @@ func (p *Processor) countOperation(msg *types.Message, group *types.Message) {
 		}
 		*group.BashCount++
 	}
-	// TODO: Add more operation types
+	// More operation types can be added here
 }
 
 // extractToolName extracts the tool name from a message.
@@ -228,8 +230,8 @@ func (p *Processor) extractToolName(msg *types.Message) string {
 		return ""
 	}
 
-	// TODO: Parse message content to extract tool name
-	// For now, check content for tool names
+	// Parse message content to extract tool name
+	// Using simple string matching for now
 	content := string(msg.Content)
 	if len(content) == 0 && msg.Message != nil {
 		content = string(msg.Message)
@@ -279,6 +281,10 @@ func contains(s, substr string) bool {
 }
 
 func generateGroupUUID() string {
-	// TODO: Use proper UUID generation
-	return "group-" + time.Now().Format("20060102150405")
+	// Generate a simple UUID-like string
+	return fmt.Sprintf("group-%x-%x-%x-%x",
+		time.Now().UnixNano(),
+		rand.Int63(),
+		rand.Int63(),
+		rand.Int63())
 }

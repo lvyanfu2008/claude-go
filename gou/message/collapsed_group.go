@@ -134,9 +134,9 @@ func (r *CollapsedGroupRenderer) buildGitSummary(msg *types.Message) string {
 
 // ShouldCollapseMessages checks if messages should be collapsed into a group.
 func ShouldCollapseMessages(messages []*types.Message) bool {
-	// TODO: Implement proper collapse logic
 	// Similar to TS shouldCollapseReadSearch function
 	// Based on message types and timing
+	// For now, collapse if all messages are read/search operations
 
 	if len(messages) < 2 {
 		return false
@@ -157,8 +157,8 @@ func ShouldCollapseMessages(messages []*types.Message) bool {
 
 // CreateCollapsedGroup creates a collapsed group from messages.
 func CreateCollapsedGroup(messages []*types.Message, groupUUID string) *types.Message {
-	// TODO: Implement proper group creation
 	// Similar to TS createCollapsedReadSearchGroup function
+	// Create a collapsed read/search group
 
 	// Convert []*types.Message to []types.Message
 	var msgSlice []types.Message
@@ -174,8 +174,11 @@ func CreateCollapsedGroup(messages []*types.Message, groupUUID string) *types.Me
 
 	// Count operations
 	for _, msg := range messages {
-		// TODO: Count different types of operations
-		_ = msg // Use variable to avoid unused error
+		// Count different types of operations
+		if isReadSearchMessage(msg) {
+			group.ReadCount++
+		}
+		// Add more operation types as needed
 	}
 
 	return group
@@ -187,7 +190,14 @@ func isReadSearchMessage(msg *types.Message) bool {
 		return false
 	}
 
-	// TODO: Check if message contains Read, Grep, or Glob tool uses
-	// This requires parsing the message content
-	return false
+	// Check if message contains Read, Grep, or Glob tool uses
+	// Simple string matching for now
+	content := string(msg.Content)
+	if len(content) == 0 && msg.Message != nil {
+		content = string(msg.Message)
+	}
+
+	return strings.Contains(content, `"name":"Read"`) ||
+		strings.Contains(content, `"name":"Grep"`) ||
+		strings.Contains(content, `"name":"Glob"`)
 }

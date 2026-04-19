@@ -99,7 +99,6 @@ func (r *ToolUseMessageRenderer) MeasureToolUseBlock(block map[string]interface{
 
 // RenderToolResultBlock renders a tool_result block.
 func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement tool result rendering
 	// Similar to TS tool result display
 	_, _ = block["tool_use_id"].(string) // toolUseID is unused
 	content, _ := block["content"].([]interface{})

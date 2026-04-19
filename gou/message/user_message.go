@@ -62,9 +62,20 @@ func (r *UserMessageRenderer) Measure(msg *types.Message, ctx *RenderContext) (i
 
 // renderCompactSummary renders a compact summary message.
 func (r *UserMessageRenderer) renderCompactSummary(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement compact summary rendering
 	// Similar to TS CompactSummary component
-	return []string{"[Compact summary]"}, nil
+	// Extract summary text from message
+	summary := "[Previous messages summarized]"
+	if msg.Content != nil {
+		var text string
+		if err := json.Unmarshal(msg.Content, &text); err == nil && text != "" {
+			if len(text) > 50 {
+				summary = text[:50] + "..."
+			} else {
+				summary = text
+			}
+		}
+	}
+	return []string{"📋 " + summary}, nil
 }
 
 // renderContentBlock renders a content block.
@@ -143,7 +154,7 @@ func (r *UserMessageRenderer) measureTextBlock(block map[string]interface{}, ctx
 // renderBashInput renders bash input.
 func (r *UserMessageRenderer) renderBashInput(text string, ctx *RenderContext) ([]string, error) {
 	// Extract command from XML-like tag
-	// TODO: Parse properly
+	// Basic XML-like parsing
 	cmdStart := strings.Index(text, ">")
 	cmdEnd := strings.LastIndex(text, "<")
 	if cmdStart > 0 && cmdEnd > cmdStart {
@@ -155,20 +166,49 @@ func (r *UserMessageRenderer) renderBashInput(text string, ctx *RenderContext) (
 
 // renderBashOutput renders bash output.
 func (r *UserMessageRenderer) renderBashOutput(text string, ctx *RenderContext) ([]string, error) {
-	// TODO: Parse and render bash output properly
+	// Extract output from XML-like tag
+	outputStart := strings.Index(text, ">")
+	outputEnd := strings.LastIndex(text, "<")
+	if outputStart > 0 && outputEnd > outputStart {
+		output := text[outputStart+1 : outputEnd]
+		// Truncate long output
+		if len(output) > 100 {
+			output = output[:100] + "..."
+		}
+		return []string{output}, nil
+	}
 	return []string{"[bash output]"}, nil
 }
 
 // renderLocalCommandOutput renders local command output.
 func (r *UserMessageRenderer) renderLocalCommandOutput(text string, ctx *RenderContext) ([]string, error) {
-	// TODO: Parse and render local command output
+	// Similar to bash output rendering
+	outputStart := strings.Index(text, ">")
+	outputEnd := strings.LastIndex(text, "<")
+	if outputStart > 0 && outputEnd > outputStart {
+		output := text[outputStart+1 : outputEnd]
+		// Truncate long output
+		if len(output) > 100 {
+			output = output[:100] + "..."
+		}
+		return []string{output}, nil
+	}
 	return []string{"[local command output]"}, nil
 }
 
 // renderImageBlock renders an image block.
 func (r *UserMessageRenderer) renderImageBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement image rendering
-	return []string{"[Image]"}, nil
+	// Extract image information
+	source, _ := block["source"].(map[string]interface{})
+	if source != nil {
+		data, _ := source["data"].(string)
+		mediaType, _ := source["media_type"].(string)
+		if data != "" && mediaType != "" {
+			// Show image info
+			return []string{fmt.Sprintf("🖼 Image (%s, %d chars)", mediaType, len(data))}, nil
+		}
+	}
+	return []string{"🖼 [Image]"}, nil
 }
 
 // renderToolUseBlock renders a tool use block.
@@ -179,9 +219,33 @@ func (r *UserMessageRenderer) renderToolUseBlock(block map[string]interface{}, c
 
 // renderToolResultBlock renders a tool result block.
 func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement tool result rendering
 	// Similar to TS UserToolResultMessage
-	return []string{"[Tool result]"}, nil
+	content, _ := block["content"].([]interface{})
+
+	if len(content) == 0 {
+		return []string{"  ↳ [Empty result]"}, nil
+	}
+
+	var lines []string
+	for _, item := range content {
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			if itemType, _ := itemMap["type"].(string); itemType == "text" {
+				if text, _ := itemMap["text"].(string); text != "" {
+					// Render text content with indentation
+					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme)
+					for _, tl := range textLines {
+						lines = append(lines, "  "+tl)
+					}
+				}
+			}
+		}
+	}
+
+	if len(lines) == 0 {
+		return []string{"  ↳ [Result]"}, nil
+	}
+
+	return lines, nil
 }
 
 // measureToolResultBlock measures a tool result block.
@@ -191,8 +255,28 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 		return 1
 	}
 	// In transcript or verbose mode, show full content
-	// TODO: Calculate actual height
-	return 3
+	content, _ := block["content"].([]interface{})
+	if len(content) == 0 {
+		return 1
+	}
+
+	totalLines := 0
+	for _, item := range content {
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			if itemType, _ := itemMap["type"].(string); itemType == "text" {
+				if text, _ := itemMap["text"].(string); text != "" {
+					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme)
+					totalLines += len(textLines)
+				}
+			}
+		}
+	}
+
+	if totalLines == 0 {
+		return 1
+	}
+
+	return totalLines
 }
 
 // Helper function to parse message content

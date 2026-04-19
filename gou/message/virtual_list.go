@@ -37,8 +37,10 @@ func (vl *VirtualList) RenderRange(messages []*types.Message, startIdx, endIdx i
 
 		// Add separator between messages if needed
 		if i < endIdx-1 && i < len(messages)-1 {
-			// TODO: Add appropriate spacing based on message types
-			// result = append(result, "") // Empty line between messages
+			// Add appropriate spacing based on message types
+			if shouldAddSpacing(messages[i], messages[i+1]) {
+				result = append(result, "") // Empty line between messages
+			}
 		}
 	}
 
@@ -108,9 +110,9 @@ func (vl *VirtualList) GetMessageHeight(msg *types.Message, ctx *RenderContext) 
 
 // ProcessMessagesForDisplay processes messages for display (collapsing, grouping, etc.).
 func (vl *VirtualList) ProcessMessagesForDisplay(messages []*types.Message, ctx *RenderContext) []*types.Message {
-	// TODO: Implement message processing pipeline:
-	// 1. Collapse consecutive read/search operations
-	// 2. Group consecutive tool uses by tool name
+	// Message processing pipeline:
+	// 1. Group consecutive tool uses by tool name
+	// 2. Collapse consecutive read/search operations
 	// 3. Apply other transformations
 
 	processed := make([]*types.Message, len(messages))
@@ -119,12 +121,66 @@ func (vl *VirtualList) ProcessMessagesForDisplay(messages []*types.Message, ctx 
 	// Apply grouping
 	processed = GroupConsecutiveToolUses(processed)
 
-	// TODO: Apply collapsing
-	// if ShouldCollapseMessages(processed) {
-	//     processed = collapseMessages(processed)
-	// }
+	// Apply collapsing for read/search operations
+	// Note: This is a simplified version - full implementation would
+	// check timing and other factors
+	processed = collapseReadSearchOperations(processed)
 
 	return processed
+}
+
+// collapseReadSearchOperations collapses consecutive read/search operations.
+func collapseReadSearchOperations(messages []*types.Message) []*types.Message {
+	var result []*types.Message
+	var currentBatch []*types.Message
+
+	for i, msg := range messages {
+		if isReadSearchMessage(msg) {
+			currentBatch = append(currentBatch, msg)
+			// If this is the last message or next message is not read/search, flush batch
+			if i == len(messages)-1 || !isReadSearchMessage(messages[i+1]) {
+				if len(currentBatch) > 1 {
+					// Create collapsed group
+					group := CreateCollapsedGroup(currentBatch, generateUUID())
+					if group != nil {
+						result = append(result, group)
+					}
+				} else if len(currentBatch) == 1 {
+					result = append(result, currentBatch[0])
+				}
+				currentBatch = nil
+			}
+		} else {
+			// Not a read/search operation
+			if len(currentBatch) > 0 {
+				// Flush any pending batch
+				if len(currentBatch) > 1 {
+					group := CreateCollapsedGroup(currentBatch, generateUUID())
+					if group != nil {
+						result = append(result, group)
+					}
+				} else if len(currentBatch) == 1 {
+					result = append(result, currentBatch[0])
+				}
+				currentBatch = nil
+			}
+			result = append(result, msg)
+		}
+	}
+
+	// Handle any remaining batch
+	if len(currentBatch) > 0 {
+		if len(currentBatch) > 1 {
+			group := CreateCollapsedGroup(currentBatch, generateUUID())
+			if group != nil {
+				result = append(result, group)
+			}
+		} else if len(currentBatch) == 1 {
+			result = append(result, currentBatch[0])
+		}
+	}
+
+	return result
 }
 
 // BuildDisplayList builds the display list with proper spacing and separators.
@@ -169,8 +225,24 @@ func (vl *VirtualList) determineSpacingBefore(msg *types.Message, idx int, messa
 		return 1 // One empty line between different message types
 	}
 
-	// TODO: Add more sophisticated spacing rules
+	// Add more sophisticated spacing rules
 	// Based on message content, timing, etc.
+
+	// Add spacing after long messages (more than 5 lines)
+	prevHeight := vl.measureMessageHeight(prevMsg, ctx)
+	if prevHeight > 5 {
+		return 1
+	}
+
+	// Add spacing before system messages
+	if msg.Type == types.MessageTypeSystem {
+		return 1
+	}
+
+	// Add spacing before grouped tool uses
+	if msg.Type == types.MessageTypeGroupedToolUse {
+		return 1
+	}
 
 	return 0
 }
@@ -189,4 +261,51 @@ func (vl *VirtualList) determineSpacingAfter(msg *types.Message, idx int, messag
 	}
 
 	return 0
+}
+
+// shouldAddSpacing checks if spacing should be added between two messages.
+func shouldAddSpacing(msg1, msg2 *types.Message) bool {
+	// Add spacing between different message types
+	if msg1.Type != msg2.Type {
+		return true
+	}
+
+	// Special cases: add spacing after system messages
+	if msg1.Type == types.MessageTypeSystem {
+		return true
+	}
+
+	// Add spacing after grouped tool uses
+	if msg1.Type == types.MessageTypeGroupedToolUse {
+		return true
+	}
+
+	// Add spacing after collapsed groups
+	if msg1.Type == types.MessageTypeCollapsedReadSearch {
+		return true
+	}
+
+	return false
+}
+
+// measureMessageHeight measures the height of a message.
+func (vl *VirtualList) measureMessageHeight(msg *types.Message, ctx *RenderContext) int {
+	// Check cache first
+	if height, ok := vl.heightCache[msg.UUID]; ok {
+		return height
+	}
+
+	// Measure using dispatcher
+	height, err := vl.dispatcher.Measure(msg, ctx)
+	if err != nil {
+		height = 1 // Default height
+	}
+
+	// Cache the result
+	if vl.heightCache == nil {
+		vl.heightCache = make(map[string]int)
+	}
+	vl.heightCache[msg.UUID] = height
+
+	return height
 }

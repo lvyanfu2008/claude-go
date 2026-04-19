@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+	"goc/gou/markdown"
 	"goc/gou/theme"
 	"goc/types"
 )
@@ -109,10 +111,40 @@ func wrapText(text string, width int) []string {
 
 // renderMarkdown renders markdown text with theme.
 func renderMarkdown(text string, width int, palette *theme.Palette) []string {
-	// Use existing markdown renderer
-	// TODO: Update markdown.Render to accept palette
-	rendered := text // Placeholder
-	return strings.Split(rendered, "\n")
+	if text == "" {
+		return []string{""}
+	}
+
+	// Parse markdown
+	tokens := markdown.ParseWithGoldmark(text)
+
+	// Convert palette to lipgloss style for markdown rendering
+	style := paletteToLipglossStyle(palette)
+
+	// Render with highlighting
+	rendered := markdown.RenderTokensWithHighlight(tokens, nil, style)
+
+	// Split into lines and wrap if needed
+	lines := strings.Split(rendered, "\n")
+	var result []string
+	for _, line := range lines {
+		if width > 0 && len(line) > width {
+			// Wrap long lines
+			wrapped := wrapText(line, width)
+			result = append(result, wrapped...)
+		} else {
+			result = append(result, line)
+		}
+	}
+
+	return result
+}
+
+// paletteToLipglossStyle converts a theme palette to a lipgloss style for markdown rendering.
+func paletteToLipglossStyle(palette *theme.Palette) lipgloss.Style {
+	// Create a basic style with heading color
+	style := lipgloss.NewStyle().Foreground(palette.Heading)
+	return style
 }
 
 // getContainerWidth returns the effective container width.

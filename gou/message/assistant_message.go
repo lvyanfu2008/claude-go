@@ -101,7 +101,8 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 
 	// Add dot if needed
 	if ctx.ShouldShowDot && len(lines) > 0 {
-		// TODO: Add black circle prefix like TS
+		// Add black circle prefix like TS
+		lines[0] = "● " + lines[0]
 	}
 
 	return lines, nil
@@ -116,40 +117,68 @@ func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}
 
 // renderThinkingBlock renders a thinking block.
 func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement thinking block rendering
 	// Similar to TS AssistantThinkingMessage
-	return []string{"[Thinking...]"}, nil
+	// Thinking blocks show a simple indicator
+	thinkingText := "[Thinking...]"
+
+	// In verbose mode or transcript, we might show more detail
+	if ctx.Verbose || ctx.IsTranscript {
+		if text, ok := block["text"].(string); ok && text != "" {
+			// Show the actual thinking text
+			lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+			// Add thinking prefix to first line
+			if len(lines) > 0 {
+				lines[0] = "💭 " + lines[0]
+			}
+			return lines, nil
+		}
+	}
+
+	return []string{"💭 " + thinkingText}, nil
 }
 
 // measureThinkingBlock measures a thinking block.
 func (r *AssistantMessageRenderer) measureThinkingBlock(block map[string]interface{}, ctx *RenderContext) int {
-	// Thinking blocks are usually 1 line
+	// Thinking blocks are usually 1 line in normal mode
+	if !ctx.Verbose && !ctx.IsTranscript {
+		return 1
+	}
+
+	// In verbose mode or transcript, measure actual content
+	if text, ok := block["text"].(string); ok && text != "" {
+		lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+		return len(lines)
+	}
+
 	return 1
 }
 
 // renderRateLimitError renders a rate limit error.
 func (r *AssistantMessageRenderer) renderRateLimitError(text string, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement rate limit error rendering
 	// Similar to TS RateLimitMessage
-	return []string{"[Rate limit error]"}, nil
+	return []string{"⏳ Rate limit exceeded. Please wait and try again."}, nil
 }
 
 // renderApiError renders an API error.
 func (r *AssistantMessageRenderer) renderApiError(text string, ctx *RenderContext) ([]string, error) {
-	// TODO: Implement API error rendering
-	return []string{"[API error]"}, nil
+	// Extract error message from text
+	errorMsg := "API error"
+	if len(text) > 100 {
+		errorMsg = text[:100] + "..."
+	} else if text != "" {
+		errorMsg = text
+	}
+	return []string{"⚠ " + errorMsg}, nil
 }
 
 // Helper functions for error detection
 
 func isRateLimitError(text string) bool {
-	// TODO: Implement proper rate limit error detection
 	// Similar to TS isRateLimitErrorMessage
 	return strings.Contains(text, "rate limit") || strings.Contains(text, "Rate limit")
 }
 
 func isApiError(text string) bool {
-	// TODO: Implement proper API error detection
 	// Check for common API error prefixes
 	errorPrefixes := []string{
 		"Invalid API key",
