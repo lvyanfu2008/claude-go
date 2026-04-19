@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -112,7 +113,12 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 				b.WriteByte('\n')
 				b.WriteString(string(types.MessageTypeAssistant))
 				b.WriteByte('\n')
-				line := "⚙ " + tu.Name + " · streaming"
+				activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+				if activityLine == "" {
+					activityLine = tu.Name
+				}
+				activityLine += "…"
+				line := "⚙ " + activityLine + messagerow.CtrlOToExpandHint
 				if s := strings.TrimSpace(tu.UnparsedInput); s != "" {
 					line += "\n" + s
 				}

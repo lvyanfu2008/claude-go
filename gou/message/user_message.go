@@ -3,8 +3,11 @@ package message
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
+	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
@@ -25,18 +28,25 @@ func (r *UserMessageRenderer) Render(msg *types.Message, ctx *RenderContext) ([]
 	// Parse message content
 	content, err := parseMessageContent(msg)
 	if err != nil {
+		diaglog.Line("[user-message] Parse error: %v", err)
 		return []string{fmt.Sprintf("Error parsing user message: %v", err)}, nil
 	}
 
+	diaglog.Line("[user-message] Parsed %d content blocks, type=%s", len(content), msg.Type)
+
 	var lines []string
 	for i, block := range content {
+		blockType, _ := block["type"].(string)
+		diaglog.Line("[user-message] Rendering block %d: type=%s", i, blockType)
 		blockLines, err := r.renderContentBlock(block, ctx, i, len(content))
 		if err != nil {
+			diaglog.Line("[user-message] Error rendering block %d: %v", i, err)
 			return []string{fmt.Sprintf("Error rendering block: %v", err)}, nil
 		}
 		lines = append(lines, blockLines...)
 	}
 
+	diaglog.Line("[user-message] Total rendered lines: %d", len(lines))
 	return lines, nil
 }
 
@@ -223,8 +233,19 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 	// content can be either a string or []interface{}
 	var contentItems []interface{}
 
+	diaglog.Line("[user-message] renderToolResultBlock: isTranscript=%v, verbose=%v", ctx.IsTranscript, ctx.Verbose)
+
+	// In prompt mode, tool results are usually collapsed to 1 line
+	if !ctx.IsTranscript && !ctx.Verbose {
+		diaglog.Line("[user-message] renderToolResultBlock: collapsed to 1 line (prompt mode)")
+		// Generate meaningful summary instead of generic "[Result]"
+		summary := GenerateToolResultSummary(block)
+		return []string{"  ↳ " + summary + " (ctrl+o to expand)"}, nil
+	}
+
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
+		diaglog.Line("[user-message] tool_result content is string, length=%d", len(contentStr))
 		if contentStr != "" {
 			contentItems = []interface{}{
 				map[string]interface{}{
@@ -234,10 +255,14 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 			}
 		}
 	} else if contentArr, ok := block["content"].([]interface{}); ok {
+		diaglog.Line("[user-message] tool_result content is array, length=%d", len(contentArr))
 		contentItems = contentArr
+	} else {
+		diaglog.Line("[user-message] tool_result content is unknown type: %T", block["content"])
 	}
 
 	if len(contentItems) == 0 {
+		diaglog.Line("[user-message] tool_result empty content")
 		return []string{"  ↳ [Empty result]"}, nil
 	}
 
@@ -267,8 +292,10 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{}, ctx *RenderContext) int {
 	// Tool results are usually collapsed to 1 line in prompt mode
 	if !ctx.IsTranscript && !ctx.Verbose {
+		diaglog.Line("[user-message] measureToolResultBlock: collapsed to 1 line (prompt mode)")
 		return 1
 	}
+	diaglog.Line("[user-message] measureToolResultBlock: showing full content (transcript=%v, verbose=%v)", ctx.IsTranscript, ctx.Verbose)
 	// In transcript or verbose mode, show full content
 	// content can be either a string or []interface{}
 	var contentItems []interface{}
@@ -316,30 +343,207 @@ func parseMessageContent(msg *types.Message) ([]map[string]interface{}, error) {
 
 	// Try Content field first
 	if len(msg.Content) > 0 {
+		diaglog.Line("[parseMessageContent] Trying to parse Content field, length=%d", len(msg.Content))
 		if err := json.Unmarshal(msg.Content, &content); err == nil {
+			diaglog.Line("[parseMessageContent] Successfully parsed %d blocks from Content", len(content))
 			return content, nil
+		} else {
+			diaglog.Line("[parseMessageContent] Failed to parse Content: %v", err)
 		}
 	}
 
 	// Try Message field
 	if len(msg.Message) > 0 {
+		diaglog.Line("[parseMessageContent] Trying to parse Message field, length=%d", len(msg.Message))
 		var messageObj struct {
 			Content json.RawMessage `json:"content"`
 		}
 		if err := json.Unmarshal(msg.Message, &messageObj); err == nil && len(messageObj.Content) > 0 {
 			if err := json.Unmarshal(messageObj.Content, &content); err == nil {
+				diaglog.Line("[parseMessageContent] Successfully parsed %d blocks from Message.content", len(content))
 				return content, nil
+			} else {
+				diaglog.Line("[parseMessageContent] Failed to parse Message.content: %v", err)
 			}
 		}
 	}
 
 	// Fallback: treat as single text block
 	if msg.Content != nil {
+		diaglog.Line("[parseMessageContent] Trying fallback: parse Content as string")
 		var text string
 		if err := json.Unmarshal(msg.Content, &text); err == nil {
+			diaglog.Line("[parseMessageContent] Fallback successful: text length=%d", len(text))
 			return []map[string]interface{}{{"type": "text", "text": text}}, nil
+		} else {
+			diaglog.Line("[parseMessageContent] Fallback failed: %v", err)
 		}
 	}
 
+	diaglog.Line("[parseMessageContent] Could not parse message content")
 	return nil, fmt.Errorf("could not parse message content")
+}
+
+// GenerateToolResultSummary generates a meaningful summary for a tool result block in collapsed mode.
+func GenerateToolResultSummary(block map[string]interface{}) string {
+	// First try to generate a tool-specific summary if we can infer the tool type
+	if summary := generateToolSpecificSummary(block); summary != "" {
+		return summary
+	}
+
+	// Fall back to analyzing content
+	content := block["content"]
+
+	// Handle string content
+	if contentStr, ok := content.(string); ok {
+		if contentStr == "" {
+			return "[Empty result]"
+		}
+		// For text content, analyze what it contains
+		return analyzeTextContent(contentStr)
+	}
+
+	// Handle array content
+	if contentArr, ok := content.([]interface{}); ok {
+		if len(contentArr) == 0 {
+			return "[Empty result]"
+		}
+
+		// Analyze all text items in the array
+		textItemCount := 0
+		otherItemCount := 0
+
+		for _, item := range contentArr {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				if itemType, _ := itemMap["type"].(string); itemType == "text" {
+					textItemCount++
+				} else {
+					otherItemCount++
+				}
+			} else {
+				otherItemCount++
+			}
+		}
+
+		// If we have multiple items, return a count-based summary
+		if textItemCount > 1 || (textItemCount + otherItemCount) > 1 {
+			totalItems := textItemCount + otherItemCount
+			if totalItems == 1 {
+				return "[Result]"
+			}
+			return fmt.Sprintf("[%d results]", totalItems)
+		}
+
+		// Single text item - analyze it
+		if textItemCount == 1 {
+			for _, item := range contentArr {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					if itemType, _ := itemMap["type"].(string); itemType == "text" {
+						if text, _ := itemMap["text"].(string); text != "" {
+							return analyzeTextContent(text)
+						}
+					}
+				}
+			}
+		}
+
+		// Generic array result (non-text items)
+		if len(contentArr) == 1 {
+			return "[Result]"
+		}
+		return fmt.Sprintf("[%d results]", len(contentArr))
+	}
+
+	// Unknown content type
+	return "[Result]"
+}
+
+// generateToolSpecificSummary tries to generate a tool-specific summary based on content analysis.
+func generateToolSpecificSummary(block map[string]interface{}) string {
+	// This function is now redundant since analyzeTextContent handles the analysis
+	// We'll keep it for now but it will rarely be called
+	return ""
+}
+
+// analyzeTextContent analyzes text content and returns a meaningful summary
+func analyzeTextContent(text string) string {
+	if text == "" {
+		return "[Empty]"
+	}
+
+	// Check for structured Read output pattern
+	// Pattern: "file":{"numLines":X
+	if strings.Contains(text, `"file"`) && strings.Contains(text, `"numLines"`) {
+		// Try to extract numLines value
+		re := regexp.MustCompile(`"numLines"\s*:\s*(\d+)`)
+		if matches := re.FindStringSubmatch(text); matches != nil {
+			if n, err := strconv.Atoi(matches[1]); err == nil {
+				if n == 1 {
+					return "Read 1 file (1 line)"
+				}
+				return fmt.Sprintf("Read 1 file (%d lines)", n)
+			}
+		}
+	}
+
+	// Check for Grep results with match counts
+	// Try to extract match count - look for "X match(es)" pattern (case insensitive)
+	re := regexp.MustCompile(`(?i)(\d+)\s+match(es)?`)
+	if matches := re.FindStringSubmatch(text); matches != nil {
+		if n, err := strconv.Atoi(matches[1]); err == nil {
+			if n == 1 {
+				return "Found 1 match"
+			}
+			return fmt.Sprintf("Found %d matches", n)
+		}
+	}
+
+	// Split text into lines for analysis
+	lines := strings.Split(text, "\n")
+	nonEmptyLines := 0
+	fileLikeLines := 0
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		nonEmptyLines++
+
+		// Check if line looks like a file path (simple heuristic)
+		// A line is file-like if it contains a dot (extension) or slash (path)
+		// and doesn't look like a sentence
+		hasDot := strings.Contains(trimmed, ".")
+		hasSlash := strings.Contains(trimmed, "/")
+		hasSpace := strings.Contains(trimmed, " ")
+		isShort := len(trimmed) < 60
+
+		if (hasDot || hasSlash) && !hasSpace && isShort {
+			fileLikeLines++
+		}
+	}
+
+	if nonEmptyLines == 0 {
+		return "[Empty]"
+	}
+
+	// If it looks like a file listing
+	if fileLikeLines > 0 {
+		// For single line, check if it looks like a filename
+		if nonEmptyLines == 1 && fileLikeLines == 1 {
+			// Single line that looks like a file
+			return "Listed 1 item"
+		}
+		// For multiple lines, check if they look like file listings
+		if nonEmptyLines >= 2 && fileLikeLines == nonEmptyLines {
+			// All lines look like files
+			return fmt.Sprintf("Listed %d items", fileLikeLines)
+		}
+	}
+
+	// For generic text
+	if nonEmptyLines == 1 {
+		return "[Text result]"
+	}
+	return fmt.Sprintf("[Text: %d lines]", nonEmptyLines)
 }

@@ -1697,6 +1697,7 @@ func (m *model) View() tea.View {
 
 	// Check if we should use the new message renderer
 	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
+	diaglog.Line("[main] View: useNewRenderer=%v, GOU_DEMO_USE_NEW_RENDERER=%s", useNewRenderer, os.Getenv("GOU_DEMO_USE_NEW_RENDERER"))
 
 	vpH := listViewportH(m)
 	bodyCols := m.messageBodyColsForLayout()
@@ -1882,7 +1883,7 @@ func (m *model) View() tea.View {
 					// 添加省略号表示正在执行
 					activityLine += "…"
 					// 添加交互提示
-					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+					toolTitle = toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 					sb.WriteString(toolTitle)
 				} else {
 					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)

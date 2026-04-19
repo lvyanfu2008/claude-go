@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
@@ -56,6 +57,9 @@ func (r *AssistantMessageRenderer) Measure(msg *types.Message, ctx *RenderContex
 func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface{}, ctx *RenderContext, index, total int) ([]string, error) {
 	blockType, _ := block["type"].(string)
 
+	diaglog.Line("[assistant-message] renderContentBlock: type=%s, index=%d/%d, isTranscript=%v, verbose=%v",
+		blockType, index, total, ctx.IsTranscript, ctx.Verbose)
+
 	switch blockType {
 	case "text":
 		return r.renderTextBlock(block, ctx)
@@ -68,8 +72,10 @@ func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface
 		}
 		// Check if this tool use is in progress (streaming)
 		isInProgress := false // TODO: Determine if tool use is in progress
+		diaglog.Line("[assistant-message] rendering tool_use block, isInProgress=%v", isInProgress)
 		return r.toolUseRenderer.RenderToolUseBlock(block, ctx, isInProgress)
 	default:
+		diaglog.Line("[assistant-message] unknown block type: %s", blockType)
 		return []string{fmt.Sprintf("[Unknown assistant block type: %s]", blockType)}, nil
 	}
 }

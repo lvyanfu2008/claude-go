@@ -1,6 +1,7 @@
 package message
 
 import (
+	"goc/ccb-engine/diaglog"
 	"goc/gou/virtualscroll"
 	"goc/types"
 )
@@ -24,15 +25,22 @@ func NewVirtualList() *VirtualList {
 func (vl *VirtualList) RenderRange(messages []*types.Message, startIdx, endIdx int, ctx *RenderContext) ([]string, error) {
 	var result []string
 
+	diaglog.Line("[virtual-list] RenderRange: messages=%d, range=[%d,%d), isTranscript=%v, verbose=%v",
+		len(messages), startIdx, endIdx, ctx.IsTranscript, ctx.Verbose)
+
 	for i := startIdx; i < endIdx && i < len(messages); i++ {
 		msg := messages[i]
+		diaglog.Line("[virtual-list] Rendering message %d: type=%s, uuid=%s", i, msg.Type, msg.UUID)
+
 		lines, err := vl.dispatcher.Render(msg, ctx)
 		if err != nil {
+			diaglog.Line("[virtual-list] Error rendering message %d: %v", i, err)
 			// Add error line
 			result = append(result, "[Error rendering message]")
 			continue
 		}
 
+		diaglog.Line("[virtual-list] Message %d rendered %d lines", i, len(lines))
 		result = append(result, lines...)
 
 		// Add separator between messages if needed
@@ -44,6 +52,7 @@ func (vl *VirtualList) RenderRange(messages []*types.Message, startIdx, endIdx i
 		}
 	}
 
+	diaglog.Line("[virtual-list] RenderRange complete: total %d lines", len(result))
 	return result, nil
 }
 

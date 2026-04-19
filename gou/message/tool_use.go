@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"goc/ccb-engine/diaglog"
 	"goc/gou/messagerow"
 	"goc/types"
 )
@@ -32,18 +33,23 @@ func (r *ToolUseMessageRenderer) Measure(msg *types.Message, ctx *RenderContext)
 
 // RenderToolUseBlock renders a single tool_use block.
 func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}, ctx *RenderContext, isInProgress bool) ([]string, error) {
-	_, _ = block["id"].(string) // id is unused
+	id, _ := block["id"].(string)
 	name, _ := block["name"].(string)
 	inputRaw, _ := block["input"].(map[string]interface{})
+
+	diaglog.Line("[tool-use] RenderToolUseBlock: id=%s, name=%s, isInProgress=%v, isTranscript=%v, verbose=%v",
+		id, name, isInProgress, ctx.IsTranscript, ctx.Verbose)
 
 	// Convert input to JSON
 	inputJSON, err := json.Marshal(inputRaw)
 	if err != nil {
+		diaglog.Line("[tool-use] Error marshaling input: %v", err)
 		return []string{fmt.Sprintf("[Tool use error: %v]", err)}, nil
 	}
 
 	// Get tool chrome parts
 	facing, paren, hint := messagerow.ToolChromeParts(name, inputJSON)
+	diaglog.Line("[tool-use] Tool chrome: facing=%s, paren=%s, hint=%s", facing, paren, hint)
 
 	var lines []string
 	width := getContainerWidth(ctx)
@@ -54,8 +60,10 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 	// Add loader or status indicator
 	if isInProgress {
 		lineBuilder.WriteString("⟳ ") // Loading symbol
+		diaglog.Line("[tool-use] Showing loading symbol (in progress)")
 	} else {
 		lineBuilder.WriteString("✓ ") // Completed symbol
+		diaglog.Line("[tool-use] Showing completed symbol")
 	}
 
 	// Add tool name
@@ -100,12 +108,25 @@ func (r *ToolUseMessageRenderer) MeasureToolUseBlock(block map[string]interface{
 // RenderToolResultBlock renders a tool_result block.
 func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	// Similar to TS tool result display
-	_, _ = block["tool_use_id"].(string) // toolUseID is unused
+	toolUseID, _ := block["tool_use_id"].(string)
 	// content can be either a string or []interface{}
 	var contentItems []interface{}
 
+	diaglog.Line("[tool-use] RenderToolResultBlock: tool_use_id=%s, isTranscript=%v, verbose=%v",
+		toolUseID, ctx.IsTranscript, ctx.Verbose)
+
+	// In prompt mode, tool results are usually collapsed to 1 line
+	if !ctx.IsTranscript && !ctx.Verbose {
+		diaglog.Line("[tool-use] RenderToolResultBlock: collapsed to 1 line (prompt mode)")
+		// Generate meaningful summary instead of generic "[Result]"
+		summary := GenerateToolResultSummary(block)
+		// Add (ctrl+o to expand) hint for consistency with other TUI messages
+		return []string{"  ↳ " + summary + " (ctrl+o to expand)"}, nil
+	}
+
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
+		diaglog.Line("[tool-use] tool_result content is string, length=%d", len(contentStr))
 		if contentStr != "" {
 			contentItems = []interface{}{
 				map[string]interface{}{
@@ -115,10 +136,14 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 			}
 		}
 	} else if contentArr, ok := block["content"].([]interface{}); ok {
+		diaglog.Line("[tool-use] tool_result content is array, length=%d", len(contentArr))
 		contentItems = contentArr
+	} else {
+		diaglog.Line("[tool-use] tool_result content is unknown type: %T", block["content"])
 	}
 
 	if len(contentItems) == 0 {
+		diaglog.Line("[tool-use] tool_result empty content")
 		return []string{"  ↳ [Empty result]"}, nil
 	}
 
@@ -148,8 +173,10 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interface{}, ctx *RenderContext) int {
 	// In prompt mode, tool results are usually collapsed
 	if !ctx.IsTranscript && !ctx.Verbose {
+		diaglog.Line("[tool-use] MeasureToolResultBlock: collapsed to 1 line (prompt mode)")
 		return 1
 	}
+	diaglog.Line("[tool-use] MeasureToolResultBlock: showing full content (transcript=%v, verbose=%v)", ctx.IsTranscript, ctx.Verbose)
 
 	// Calculate actual height
 	// content can be either a string or []interface{}
