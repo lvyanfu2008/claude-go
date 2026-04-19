@@ -2,6 +2,18 @@ package main
 
 import "testing"
 
+func TestMessageListMouseWheelStep(t *testing.T) {
+	if messageListMouseWheelStep(0) != 1 {
+		t.Fatal("vp 0 -> 1")
+	}
+	if got := messageListMouseWheelStep(24); got != 2 {
+		t.Fatalf("24/12=2 got %d", got)
+	}
+	if got := messageListMouseWheelStep(11); got != 1 {
+		t.Fatalf("11/12 floor got %d", got)
+	}
+}
+
 func TestMessageScrollbarThumbBounds(t *testing.T) {
 	start, length := messageScrollbarThumb(10, 100, 0)
 	if start != 0 || length < 1 || length > 10 {

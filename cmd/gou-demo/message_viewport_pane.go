@@ -500,7 +500,7 @@ func (m *model) handleMsgViewportMouseWheel(delta int) {
 	if delta == 0 {
 		return
 	}
-	n := max(1, listViewportH(m)/6)
+	n := messageListMouseWheelStep(listViewportH(m))
 	if delta < 0 {
 		m.msgViewport.ScrollDown(n)
 	} else {

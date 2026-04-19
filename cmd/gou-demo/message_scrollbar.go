@@ -24,6 +24,15 @@ func (m *model) messageBodyColsForLayout() int {
 	return c
 }
 
+// messageListMouseWheelStep returns how many terminal rows one wheel notch moves (message pane).
+// Smaller than viewport height / 6 so scrolling feels less jumpy.
+func messageListMouseWheelStep(vpH int) int {
+	if vpH < 1 {
+		return 1
+	}
+	return max(1, vpH/12)
+}
+
 // messageScrollContentHeight returns total wrapped height (terminal rows) of the virtual message list.
 func (m *model) messageScrollContentHeight() int {
 	keys := m.scrollItemKeys()

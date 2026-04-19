@@ -88,11 +88,11 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			case tea.MouseWheelDown:
 				m.handleMsgViewportMouseWheel(-1)
 			case tea.MouseWheelLeft:
-				for range max(1, listViewportH(m)/12) {
+				for range max(1, listViewportH(m)/24) {
 					m.msgViewport.HalfPageUp()
 				}
 			case tea.MouseWheelRight:
-				for range max(1, listViewportH(m)/12) {
+				for range max(1, listViewportH(m)/24) {
 					m.msgViewport.HalfPageDown()
 				}
 			default:
@@ -100,7 +100,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			}
 			return true, nil
 		}
-		step := max(1, listViewportH(m)/6)
+		step := messageListMouseWheelStep(listViewportH(m))
 		switch msg.Button {
 		case tea.MouseWheelUp:
 			m.sticky = false
@@ -109,9 +109,9 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			m.scrollTop += step
 		case tea.MouseWheelLeft:
 			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/4)
 		case tea.MouseWheelRight:
-			m.scrollTop += listViewportH(m) / 2
+			m.scrollTop += listViewportH(m) / 4
 		default:
 			return false, nil
 		}
@@ -136,7 +136,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			dy := msg.Y - m.msgListMouseLastY
 			if dy != 0 {
 				if m.msgViewportWanted() {
-					n := min(8, max(1, absInt(dy)))
+					n := min(4, max(1, absInt(dy)))
 					if dy > 0 {
 						m.msgViewport.ScrollUp(n)
 					} else {
