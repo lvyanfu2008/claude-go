@@ -2299,11 +2299,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				piece = line
 			}
-			if userRow {
-				logg("SegToolUse %s", "userRow")
-			} else {
-				logg("SegToolUse %s", "no userRow")
-			}
+			logg("SegToolUse", piece)
 		case messagerow.SegToolResult:
 			st := baseMsgStyle(userRow).Foreground(theme.DimMuted())
 			if seg.IsToolError {

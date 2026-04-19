@@ -1,11 +1,14 @@
 package querycontext
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"goc/utils"
 )
 
 // MaxStatusChars matches src/context.ts MAX_STATUS_CHARS.
@@ -13,6 +16,8 @@ const MaxStatusChars = 2000
 
 // BuildGitStatusSnapshot mirrors getGitStatus in src/context.ts (git snapshot string or empty).
 func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
+	startTime := time.Now()
+
 	if ctx.Err() != nil {
 		return ""
 	}
@@ -20,20 +25,41 @@ func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
 	if err != nil {
 		return ""
 	}
-	git := gitExe()
-	if git == "" {
-		return ""
-	}
-	// TS: getIsGit first
-	if !gitInsideWorkTree(ctx, git, abs) {
+
+	// Check if we're in a git repo
+	if !utils.GitInsideWorkTree(abs) {
 		return ""
 	}
 
-	branch := strings.TrimSpace(runGitOut(ctx, abs, git, "rev-parse", "--abbrev-ref", "HEAD"))
-	mainBranch := defaultBranchName(ctx, git, abs)
-	status := strings.TrimSpace(runGitOut(ctx, abs, git, "--no-optional-locks", "status", "--short"))
-	logOut := strings.TrimSpace(runGitOut(ctx, abs, git, "--no-optional-locks", "log", "--oneline", "-n", "5"))
-	userName := strings.TrimSpace(runGitOut(ctx, abs, git, "config", "user.name"))
+	// Run Git commands in parallel like TS Promise.all
+	commands := [][]string{
+		{"rev-parse", "--abbrev-ref", "HEAD"},                     // branch
+		{"symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"}, // for default branch
+		{"--no-optional-locks", "status", "--short"},              // status
+		{"--no-optional-locks", "log", "--oneline", "-n", "5"},    // log
+		{"config", "user.name"},                                   // userName
+	}
+
+	results, errs := utils.RunGitCommandsParallel(abs, commands)
+
+	// Check for critical errors
+	for i, err := range errs {
+		if err != nil && i != 1 { // symbolic-ref can fail, that's OK
+			// Log error but continue with partial results
+			fmt.Printf("Git command failed: %v\n", err)
+		}
+	}
+
+	branch := results[0]
+	mainBranch := utils.ExtractDefaultBranch(results[1])
+	status := results[2]
+	logOut := results[3]
+	userName := results[4]
+
+	// Fallback for default branch if symbolic-ref failed
+	if mainBranch == "" {
+		mainBranch = defaultBranchName(ctx, abs)
+	}
 
 	truncated := status
 	if len(truncated) > MaxStatusChars {
@@ -54,46 +80,37 @@ func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
 	parts = append(parts, `Status:
 `+truncated, `Recent commits:
 `+logOut)
+
+	// Log completion time for diagnostics (simplified version of TS logging)
+	fmt.Printf("Git status completed in %v\n", time.Since(startTime))
+
 	return strings.Join(parts, "\n\n")
 }
 
-func gitExe() string {
-	if p, err := exec.LookPath("git"); err == nil {
-		return p
+func defaultBranchName(ctx context.Context, cwd string) string {
+	// Try symbolic-ref first
+	ref, err := utils.RunGitCommand(cwd, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
+	if err == nil && ref != "" {
+		return utils.ExtractDefaultBranch(ref)
 	}
-	return ""
-}
 
-func gitInsideWorkTree(ctx context.Context, git, cwd string) bool {
-	out := runGitOut(ctx, cwd, git, "rev-parse", "--is-inside-work-tree")
-	return strings.TrimSpace(strings.ToLower(out)) == "true"
-}
-
-func defaultBranchName(ctx context.Context, git, cwd string) string {
-	// Prefer symbolic-ref for origin/HEAD (TS computeDefaultBranch).
-	ref := strings.TrimSpace(runGitOut(ctx, cwd, git, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"))
-	if ref != "" {
-		// ref like "origin/main" → "main"
-		if i := strings.LastIndex(ref, "/"); i >= 0 && i+1 < len(ref) {
-			return ref[i+1:]
-		}
-		return ref
-	}
+	// Fallback to checking common branch names
 	for _, c := range []string{"main", "master"} {
-		sha := strings.TrimSpace(runGitOut(ctx, cwd, git, "rev-parse", "--verify", "refs/remotes/origin/"+c))
-		if sha != "" {
+		sha, err := utils.RunGitCommand(cwd, "rev-parse", "--verify", "refs/remotes/origin/"+c)
+		if err == nil && sha != "" {
 			return c
 		}
 	}
 	return "main"
 }
 
+// runGitOut is kept for backward compatibility
 func runGitOut(ctx context.Context, cwd, git string, args ...string) string {
-	var buf bytes.Buffer
-	c := exec.CommandContext(ctx, git, args...)
-	c.Dir = cwd
-	c.Stdout = &buf
-	c.Stderr = nil
-	_ = c.Run()
-	return buf.String()
+	cmd := exec.CommandContext(ctx, git, args...)
+	cmd.Dir = cwd
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(output)
 }
