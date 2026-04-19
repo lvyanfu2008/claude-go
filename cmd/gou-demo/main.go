@@ -42,6 +42,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"goc/ccb-engine/diaglog"
 	"log"
 	"os"
 	"path/filepath"
@@ -565,14 +566,14 @@ type model struct {
 	lastEmittedTitlePlain string
 
 	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozenTranscriptState).
-	uiScreen             gouDemoScreen
-	transcriptFrozen     *frozenTranscriptSnapshot // nil in prompt; set on enterTranscriptScreen
-	transcriptShowAll    bool
-	transcriptDumpMode   bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
+	uiScreen           gouDemoScreen
+	transcriptFrozen   *frozenTranscriptSnapshot // nil in prompt; set on enterTranscriptScreen
+	transcriptShowAll  bool
+	transcriptDumpMode bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
 	// suspendAltScreenForScrollbackDump exits the alternate buffer so bracket-dump (tea.Printf) hits host scrollback (Bubble Tea v2: no tea.ExitAltScreen).
 	suspendAltScreenForScrollbackDump bool
-	promptSavedScrollTop int
-	promptSavedSticky    bool
+	promptSavedScrollTop              int
+	promptSavedSticky                 bool
 
 	transcriptEditorBusy   bool
 	transcriptEditorStatus string
@@ -619,6 +620,9 @@ type model struct {
 	// manual rendering mode (buffer events until flushed)
 	manualRenderMode bool
 	pendingEvents    []tea.Msg
+	//用来存储上次视图结果
+	lastB      string
+	lastResult bool
 }
 
 func main() {
@@ -2085,6 +2089,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
 		}
 	}
+	diaglog.Line("formatMessageSegments type %s, message %s", msg.Type, msg.Message)
 	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true, msg.Type == types.MessageTypeUser)
 	body = withUserPromptPointerIfNeeded(msg, body)
 	body = withCollapsedSpaceIfNeeded(msg, body)
@@ -2205,8 +2210,8 @@ func baseMsgStyle(userRow bool) lipgloss.Style {
 }
 
 func logg(kind string, r string) {
-	return
-	//diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
+	//return
+	diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
 }
 
 // formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
@@ -2285,7 +2290,11 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 				}
 				piece = line
 			}
-			logg("SegToolUse", piece)
+			if userRow {
+				logg("SegToolUse %s", "userRow")
+			} else {
+				logg("SegToolUse %s", "no userRow")
+			}
 		case messagerow.SegToolResult:
 			st := baseMsgStyle(userRow).Foreground(theme.DimMuted())
 			if seg.IsToolError {

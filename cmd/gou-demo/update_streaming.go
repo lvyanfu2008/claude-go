@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
 	"goc/gou/pui"
 	"goc/types"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // Streaming / query-parity / NDJSON stream UI updates (extracted from [model.Update] for navigation).
@@ -46,11 +47,11 @@ func (m *model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (t
 		m.sticky = true
 		m.scrollTop = 1 << 30
 	}
-	
+
 	if len(m.store.StreamingToolUses) > 0 {
-		return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
+		//return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
 	}
-	
+
 	return m, nil
 }
 

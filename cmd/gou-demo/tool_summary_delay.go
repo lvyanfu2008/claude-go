@@ -126,7 +126,7 @@ func (m *model) handleUpdateStreamToolTick(_ streamToolRevealTickMsg) (tea.Model
 	if len(m.store.StreamingToolUses) > 0 {
 		m.vpNeedResizeContent = true
 		m.rebuildHeightCache()
-		return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
+		//return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
 	}
 	return m, nil
 }

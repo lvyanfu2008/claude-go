@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"goc/ccb-engine/diaglog"
 	"goc/gou/conversation"
 	"os"
 	"strconv"
@@ -152,10 +153,15 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		return true
 	}
 
+	//检测是否最新工具已经在视图中了,不在则使用上次的结果
+	//if !m.isViewMsgComplete() {
+	//	return m.lastB, true
+	//}
+
 	for i := 0; i < n; i++ {
 		if i < len(msgView) {
 			msg := msgView[i]
-			if m.IsStreamToolUsing(msg.Message) {
+			if m.isStreamToolUsing(msg.Message) {
 				msg = m.filterStreamingToolsFromMessage(msg)
 				if len(msg.Content) == 0 || string(msg.Content) == "[]" {
 					continue
@@ -229,10 +235,11 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 	//需要兼容一下，这里有个问题，已经有工具了但是msgView却没有同步过来
 	if m.uiScreen != gouDemoScreenTranscript &&
 		len(m.store.StreamingToolUses) > 0 &&
-		(m.IsStreamToolUsing(msgView[len(msgView)-1].Message) || m.IsStreamToolUsing(msgView[len(msgView)-2].Message)) {
+		(m.isStreamToolUsing(msgView[len(msgView)-1].Message) || m.isStreamToolUsing(msgView[len(msgView)-2].Message)) {
 		// Same breathing room as user↔assistant rows and StreamingText: last scroll message is user
 		// but no assistant row yet — only a single \n from addBlock would sit the tool chrome too close.
-		if lineCnt > 0 && (m.IsStreamToolUsing(msgView[len(msgView)-1].Message) || streamGapAfterUserMessage(msgView)) {
+		// || streamGapAfterUserMessage(msgView)
+		if lineCnt > 0 && (m.isStreamToolUsing(msgView[len(msgView)-1].Message)) {
 			if lineCnt+1 > maxL {
 				return "", false
 			}
@@ -300,8 +307,9 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 			} else {
 				summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
 				toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+				diaglog.Line("tryBuildFullMessagePaneContent|toolSummary %s, toolTitle %s", summary, toolTitle)
 				sb.WriteString(toolTitle)
-				if elapsed >= time.Duration(detailDelayMs)*time.Millisecond {
+				if elapsed >= time.Duration(detailDelayMs)*time.Millisecond || true {
 					for _, item := range group.Items {
 						path := extractPartialJSONField(item.UnparsedInput, "file_path")
 						if path == "" {
@@ -341,11 +349,38 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 		}
 	}
 
+	//m.lastB = b.String()
+
 	return b.String(), true
 }
 
+func (m *model) isViewMsgComplete() bool {
+	if len(m.store.StreamingToolUses) == 0 {
+		return true
+	}
+
+	for _, msg := range m.store.Messages {
+		if m.isStreamToolUsing(msg.Message) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (m *model) isAnyToolUsing() bool {
+
+	for _, msg := range m.store.Messages {
+		if m.isStreamToolUsing(msg.Message) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // msg.Message
-func (m *model) IsStreamToolUsing(c json.RawMessage) bool {
+func (m *model) isStreamToolUsing(c json.RawMessage) bool {
 	var contentBlocks []types.MessageContentBlock
 	var inner struct {
 		Role    string          `json:"role"`
@@ -374,7 +409,7 @@ func (m *model) IsStreamToolUsing(c json.RawMessage) bool {
 }
 
 func (m *model) filterStreamingToolsFromMessage(msg types.Message) types.Message {
-	if !m.IsStreamToolUsing(msg.Message) {
+	if !m.isStreamToolUsing(msg.Message) {
 		return msg
 	}
 	var contentBlocks []types.MessageContentBlock
