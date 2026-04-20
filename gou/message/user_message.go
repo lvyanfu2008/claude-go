@@ -141,25 +141,29 @@ func (r *UserMessageRenderer) renderTextBlock(block map[string]interface{}, ctx 
 	}
 
 	// Regular user prompt
-		lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+	containerWidth := getContainerWidth(ctx)
+	lines := renderMarkdown(text, containerWidth, ctx.Theme, ctx.Highlighter)
 
-		// Create lipgloss style for user messages: gray background, bold font
-		userStyle := lipgloss.NewStyle().
-			Background(ctx.Theme.UserMessageBackground).
-			Foreground(ctx.Theme.UserMessageText).
-			Bold(true)
+	// Create lipgloss style for user messages: gray background, bold font
+	// Use Width() to fill the entire row with background color
+	userStyle := lipgloss.NewStyle().
+		Background(ctx.Theme.UserMessageBackground).
+		Foreground(ctx.Theme.UserMessageText).
+		Bold(true).
+		Width(containerWidth)
 
-		// Apply styling to each line
-		for i, line := range lines {
-			styledLine := userStyle.Render(line)
-			if i == 0 {
-				lines[i] = "  > " + styledLine
-			} else {
-				lines[i] = "    " + styledLine
-			}
+	// Apply styling to each line including prefix
+	for i, line := range lines {
+		// Add prefix first, then apply styling to the entire line
+		if i == 0 {
+			line = "  > " + line
+		} else {
+			line = "    " + line
 		}
+		lines[i] = userStyle.Render(line)
+	}
 
-		return lines, nil
+	return lines, nil
 }
 
 // measureTextBlock measures a text block.
@@ -191,14 +195,18 @@ func (r *UserMessageRenderer) renderBashInput(text string, ctx *RenderContext) (
 		cmd = text[cmdStart+1 : cmdEnd]
 	}
 
-	// Create lipgloss style for user messages: gray background, bold font
+	// Create lipgloss style for user messages: gray background fills entire row
+	containerWidth := getContainerWidth(ctx)
 	userStyle := lipgloss.NewStyle().
 		Background(ctx.Theme.UserMessageBackground).
 		Foreground(ctx.Theme.UserMessageText).
-		Bold(true)
+		Bold(true).
+		Width(containerWidth)
 
-	styledCmd := userStyle.Render("$ " + cmd)
-	return []string{"  > " + styledCmd}, nil
+	// Apply styling to entire line including prefix
+	fullLine := "  > $ " + cmd
+	styledLine := userStyle.Render(fullLine)
+	return []string{styledLine}, nil
 }
 
 // renderBashOutput renders bash output.
