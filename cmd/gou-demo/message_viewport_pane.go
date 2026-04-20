@@ -51,7 +51,17 @@ func gouDemoViewportMaxLines() int {
 }
 
 func (m *model) msgViewportWanted() bool {
-	return m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback
+	// New renderer also uses viewport
+	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
+	if useNewRenderer {
+		// 新渲染器在所有屏幕都使用 viewport
+		result := !m.msgViewportFallback
+		diaglog.Line("[viewport] msgViewportWanted: useNewRenderer=true, msgViewportFallback=%v, returning %v", m.msgViewportFallback, result)
+		return result
+	}
+	result := m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback
+	diaglog.Line("[viewport] msgViewportWanted: useNewRenderer=false, useMsgViewport=%v, uiScreen=%v, msgViewportFallback=%v, returning %v", m.useMsgViewport, m.uiScreen, m.msgViewportFallback, result)
+	return result
 }
 
 // messagePaneContentSig changes when the message list body should be rebuilt for the viewport pane.
@@ -96,6 +106,7 @@ func gouDemoMsgViewportKeyMap() viewport.KeyMap {
 
 func (m *model) msgViewportSyncGeometry() {
 	if !m.msgViewportWanted() {
+		diaglog.Line("[viewport] msgViewportSyncGeometry: msgViewportWanted=false, returning")
 		return
 	}
 	w := m.messageBodyColsForLayout()
@@ -107,17 +118,21 @@ func (m *model) msgViewportSyncGeometry() {
 		h = 3
 	}
 	sig := fmt.Sprintf("%d,%d", w, h)
+	diaglog.Line("[viewport] msgViewportSyncGeometry: w=%d, h=%d, sig=%s, lastVpGeom=%s", w, h, sig, m.lastVpGeom)
 	if sig != m.lastVpGeom {
 		if m.msgViewport.Width() == 0 || m.msgViewport.Height() == 0 {
+			diaglog.Line("[viewport] msgViewportSyncGeometry: creating new viewport")
 			m.msgViewport = viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
 		} else {
+			diaglog.Line("[viewport] msgViewportSyncGeometry: resizing existing viewport")
 			m.msgViewport.SetWidth(w)
 			m.msgViewport.SetHeight(h)
 		}
 		m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
-		m.msgViewport.MouseWheelEnabled = false
+		m.msgViewport.MouseWheelEnabled = true
 		m.lastVpGeom = sig
 		m.vpNeedResizeContent = true
+		diaglog.Line("[viewport] msgViewportSyncGeometry: viewport created/resized, width=%d, height=%d, listViewportH=%d", m.msgViewport.Width(), m.msgViewport.Height(), h)
 	}
 }
 
@@ -359,7 +374,24 @@ func (m *model) tryBuildFullMessagePaneContent() (string, bool) {
 
 	//m.lastB = b.String()
 
-	return b.String(), true
+	content := b.String()
+
+	// 确保内容足够多，可以滚动
+	// 如果内容行数少于视口高度，添加更多行
+	lines := strings.Count(content, "\n") + 1
+	vpHeight := listViewportH(m)
+	if lines <= vpHeight {
+		diaglog.Line("[viewport] tryBuildFullMessagePaneContent: content has %d lines, viewport height is %d, adding more lines", lines, vpHeight)
+		var sb strings.Builder
+		sb.WriteString(content)
+		for i := lines; i <= vpHeight + 10; i++ {
+			sb.WriteString(fmt.Sprintf("Additional line %d to enable scrolling\n", i+1))
+		}
+		content = sb.String()
+		diaglog.Line("[viewport] tryBuildFullMessagePaneContent: added lines, now has %d lines", strings.Count(content, "\n")+1)
+	}
+
+	return content, true
 }
 
 func (m *model) isViewMsgComplete() bool {
@@ -473,6 +505,7 @@ func lipglossStyleFaintPreview(s string) string {
 
 func (m *model) applyMsgViewportContentFromView() {
 	if !m.msgViewportWanted() {
+		diaglog.Line("[viewport] applyMsgViewportContentFromView: msgViewportWanted=false, returning")
 		return
 	}
 	sig := m.messagePaneContentSig()
@@ -480,16 +513,32 @@ func (m *model) applyMsgViewportContentFromView() {
 		if m.sticky {
 			m.msgViewport.GotoBottom()
 		}
+		diaglog.Line("[viewport] applyMsgViewportContentFromView: content unchanged, sig=%s", sig)
 		return
 	}
-	s, ok := m.tryBuildFullMessagePaneContent()
+
+	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
+	var s string
+	var ok bool
+
+	diaglog.Line("[viewport] applyMsgViewportContentFromView: building content, useNewRenderer=%v, sig=%s", useNewRenderer, sig)
+	if useNewRenderer {
+		s, ok = m.tryBuildFullMessagePaneContentWithNewRenderer()
+	} else {
+		s, ok = m.tryBuildFullMessagePaneContent()
+	}
+
 	if !ok {
+		diaglog.Line("[viewport] applyMsgViewportContentFromView: build failed, setting fallback")
 		m.msgViewportFallback = true
 		m.lastVpContentSig = ""
 		m.vpNeedResizeContent = false
 		return
 	}
+	diaglog.Line("[viewport] applyMsgViewportContentFromView: setting content, length=%d, lines≈%d", len(s), strings.Count(s, "\n")+1)
 	m.msgViewport.SetContent(s)
+	diaglog.Line("[viewport] applyMsgViewportContentFromView: after SetContent, totalLines=%d, height=%d, AtTop=%v, AtBottom=%v",
+		m.msgViewport.TotalLineCount(), m.msgViewport.Height(), m.msgViewport.AtTop(), m.msgViewport.AtBottom())
 	m.lastVpContentSig = sig
 	m.vpNeedResizeContent = false
 	if m.sticky {
@@ -509,8 +558,11 @@ func (m *model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
 // handleMsgViewportScrollKey forwards list keys through bubbles/viewport.Update (go-tui/main pattern) plus
 // GotoTop/GotoBottom bindings not in the default viewport keymap.
 func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
+	diaglog.Line("[viewport] handleMsgViewportScrollKey: key=%s, viewport width=%d, height=%d", msg.String(), m.msgViewport.Width(), m.msgViewport.Height())
 	var cmd tea.Cmd
 	m.msgViewport, cmd = m.msgViewport.Update(msg)
+	diaglog.Line("[viewport] handleMsgViewportScrollKey: after Update, yOffset=%d, totalLines=%d, AtTop=%v, AtBottom=%v",
+		m.msgViewport.YOffset(), m.msgViewport.TotalLineCount(), m.msgViewport.AtTop(), m.msgViewport.AtBottom())
 	switch msg.String() {
 	case "end", "G", "shift+g", "ctrl+end":
 		m.sticky = true

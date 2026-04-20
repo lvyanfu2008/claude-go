@@ -923,7 +923,10 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m, cmd
 	}
 	if m.msgViewportWanted() && isListViewportScrollKey(msg.String()) {
+		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=true, key=%s, calling handleMsgViewportScrollKey", msg.String())
 		return m, m.handleMsgViewportScrollKey(msg)
+	} else if isListViewportScrollKey(msg.String()) {
+		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=false, key=%s, not handling", msg.String())
 	}
 	switch msg.String() {
 	case "ctrl+c":
@@ -1357,7 +1360,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gouStreamingToolUsesMsg:
 		return m.handleUpdateGouStreamingToolUses(msg)
 
-	case gouSpinnerTickMsg:
+	case gouSpinnerTickMsg: //120ms
 		return m.handleUpdateGouSpinnerTick(msg)
 
 	case gouQueryDoneMsg:
@@ -1701,7 +1704,8 @@ func (m *model) View() tea.View {
 
 	vpH := listViewportH(m)
 	bodyCols := m.messageBodyColsForLayout()
-	useVp := m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback
+	// 对于新渲染器，使用 msgViewportWanted() 来决定是否使用 viewport
+	useVp := m.msgViewportWanted()
 	if useVp {
 		m.msgViewportSyncGeometry()
 		m.applyMsgViewportContentFromView()
@@ -1727,20 +1731,20 @@ func (m *model) View() tea.View {
 	b.WriteString(title)
 	b.WriteByte('\n')
 
-	if useNewRenderer {
-		// Use the new message renderer
+	if useNewRenderer && useVp {
+		// Keys/wheel update bubbles/viewport (applyMsgViewportContentFromView uses new-renderer full document).
+		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
+		b.WriteByte('\n')
+	} else if useNewRenderer {
+		// No bubbles viewport (fallback): virtual slice uses m.scrollTop; keep scrollbar in sync with renderer totals.
 		msgPaneContent := m.renderMessagePaneWithNewRenderer()
 		lines := strings.Split(msgPaneContent, "\n")
-
-		// The new renderer already handles virtual scrolling internally
-		// Just ensure output fits in viewport
 		if len(lines) > vpH {
 			lines = lines[:vpH]
 		}
 		for len(lines) < vpH {
 			lines = append(lines, "")
 		}
-		// Get total height for scrollbar
 		m.integrateMessageRenderer()
 		messages := m.store.Messages
 		var messagesPtr []*types.Message
@@ -1751,10 +1755,11 @@ func (m *model) View() tea.View {
 		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
 		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(
 			messagesPtr,
-			0, // scrollTop = 0 to get total height
-			1, // viewportHeight = 1 doesn't matter for total height
+			0,
+			1,
 			isTranscript,
 			verbose,
+			bodyCols,
 		)
 		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
 		b.WriteByte('\n')

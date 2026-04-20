@@ -1,9 +1,13 @@
 package main
 
 import (
+	"os"
+
 	tea "charm.land/bubbletea/v2"
 
+	"goc/ccb-engine/diaglog"
 	"goc/gou/virtualscroll"
+	"goc/types"
 )
 
 func absInt(n int) int {
@@ -32,27 +36,56 @@ func (m *model) clampScrollTopForVirtualList() {
 	if m.sticky {
 		return
 	}
-	keys := m.scrollItemKeys()
-	n := len(keys)
-	if n == 0 {
-		m.scrollTop = 0
-		return
-	}
 	vpH := listViewportH(m)
 	if vpH < 1 {
 		return
 	}
-	off := virtualscroll.BuildOffsets(keys, m.heightCache, virtualscroll.DefaultEstimate)
-	total := off[n]
-	maxTop := total - vpH
-	if maxTop < 0 {
-		maxTop = 0
-	}
-	if m.scrollTop < 0 {
-		m.scrollTop = 0
-	}
-	if m.scrollTop > maxTop {
-		m.scrollTop = maxTop
+
+	// Check if we're using the new renderer
+	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
+
+	if useNewRenderer && m.msgRenderer != nil {
+		// Use new renderer's height calculation
+		messages := m.store.Messages
+		var messagesPtr []*types.Message
+		for i := range messages {
+			messagesPtr = append(messagesPtr, &messages[i])
+		}
+		isTranscript := m.uiScreen == gouDemoScreenTranscript
+		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+		width := m.messageBodyColsForLayout()
+
+		totalHeight := m.msgRenderer.ComputeTotalHeight(messagesPtr, isTranscript, verbose, width)
+		maxTop := totalHeight - vpH
+		if maxTop < 0 {
+			maxTop = 0
+		}
+		if m.scrollTop < 0 {
+			m.scrollTop = 0
+		}
+		if m.scrollTop > maxTop {
+			m.scrollTop = maxTop
+		}
+	} else {
+		// Use legacy height calculation
+		keys := m.scrollItemKeys()
+		n := len(keys)
+		if n == 0 {
+			m.scrollTop = 0
+			return
+		}
+		off := virtualscroll.BuildOffsets(keys, m.heightCache, virtualscroll.DefaultEstimate)
+		total := off[n]
+		maxTop := total - vpH
+		if maxTop < 0 {
+			maxTop = 0
+		}
+		if m.scrollTop < 0 {
+			m.scrollTop = 0
+		}
+		if m.scrollTop > maxTop {
+			m.scrollTop = maxTop
+		}
 	}
 }
 
@@ -82,6 +115,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			return true, tea.Println("\n📜 History browse: mouse wheel uses host buffer; press any key to return…")
 		}
 		if m.msgViewportWanted() {
+			diaglog.Line("[mouse] tryHandleMessageListMouse: using viewport, button=%v, viewport height=%d", msg.Button, m.msgViewport.Height())
 			switch msg.Button {
 			case tea.MouseWheelUp:
 				m.handleMsgViewportMouseWheel(1)
@@ -98,6 +132,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			default:
 				return false, nil
 			}
+			diaglog.Line("[mouse] tryHandleMessageListMouse: viewport scrolled, yOffset=%d, totalLines=%d", m.msgViewport.YOffset(), m.msgViewport.TotalLineCount())
 			return true, nil
 		}
 		step := messageListMouseWheelStep(listViewportH(m))
@@ -115,7 +150,8 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 		default:
 			return false, nil
 		}
-		if m.uiScreen == gouDemoScreenTranscript && !m.sticky && m.scrollTop >= 1<<20 {
+		// Clamp scrollTop if it's too large (e.g., from sticky-bottom sentinel 1<<30)
+		if !m.sticky && m.scrollTop >= 1<<20 {
 			m.clampScrollTopForVirtualList()
 		}
 		return true, nil
