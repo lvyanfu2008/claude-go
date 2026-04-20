@@ -114,7 +114,7 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 	}
 
 	// Regular assistant text
-	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 
 	// Add dot if needed
 	if ctx.ShouldShowDot && len(lines) > 0 {
@@ -128,7 +128,7 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 // measureTextBlock measures a text block.
 func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}, ctx *RenderContext) int {
 	text, _ := block["text"].(string)
-	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 	return len(lines)
 }
 
@@ -142,7 +142,7 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 	if ctx.Verbose || ctx.IsTranscript {
 		if text, ok := block["text"].(string); ok && text != "" {
 			// Show the actual thinking text
-			lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+			lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 			// Add thinking prefix to first line
 			if len(lines) > 0 {
 				lines[0] = "💭 " + lines[0]
@@ -163,7 +163,7 @@ func (r *AssistantMessageRenderer) measureThinkingBlock(block map[string]interfa
 
 	// In verbose mode or transcript, measure actual content
 	if text, ok := block["text"].(string); ok && text != "" {
-		lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+		lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 		return len(lines)
 	}
 

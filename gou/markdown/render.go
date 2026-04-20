@@ -83,18 +83,32 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 	for _, t := range tokens {
 		switch t.Type {
 		case "heading":
-			for range t.Level {
-				b.WriteString("#")
+			// 应用标题样式，不输出#
+			lv := t.Level
+			if lv < 1 {
+				lv = 1
 			}
-			b.WriteString(" ")
+			if lv > 6 {
+				lv = 6
+			}
+			levelPad := strings.Repeat(" ", (lv-1)*2)
+			headingStyle := theme.Copy().Bold(true)
+
+			var headingText string
 			if len(t.Segments) > 0 {
+				var segText strings.Builder
 				for _, s := range t.Segments {
-					b.WriteString(applyInlineStyle(s, theme))
+					segText.WriteString(applyInlineStyle(s, theme))
 				}
+				headingText = segText.String()
 			} else {
-				b.WriteString(t.Text)
+				headingText = t.Text
 			}
-			b.WriteString("\n\n")
+
+			// 应用标题样式
+			rendered := headingStyle.Render(strings.TrimSpace(headingText))
+			b.WriteString(levelPad + rendered + "\n\n")
+
 		case "paragraph":
 			if len(t.Segments) > 0 {
 				for _, s := range t.Segments {
@@ -109,17 +123,22 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			var highlighted string
 			if highlighter != nil {
 				highlighted, _ = highlighter.HighlightCode(t.Text, t.Lang)
+			}
+
+			if highlighted != "" {
+				// 如果有高亮器且高亮成功，显示高亮后的代码（没有围栏）
+				b.WriteString(highlighted)
 			} else {
-				highlighted = t.Text
+				// 如果没有高亮器或高亮失败，显示带围栏的代码并应用淡色样式
+				codeStyle := theme.Copy().Faint(true)
+				cb := "```" + t.Lang + "\n" + t.Text
+				if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
+					cb += "\n"
+				}
+				cb += "```"
+				b.WriteString(codeStyle.Render(cb))
 			}
-			b.WriteString("```")
-			b.WriteString(t.Lang)
-			b.WriteByte('\n')
-			b.WriteString(highlighted)
-			if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
-				b.WriteByte('\n')
-			}
-			b.WriteString("```\n\n")
+			b.WriteString("\n\n")
 		case "list_item":
 			b.WriteString(strings.Repeat(" ", t.ListIndent))
 			if t.ListContinuation {
@@ -138,19 +157,26 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			}
 			b.WriteByte('\n')
 		case "blockquote":
-			b.WriteString("> ")
-			blockquoteText := t.Text
+			// 应用引用块样式
+			quoteStyle := theme.Copy().Italic(true)
+			var quoteText string
 			if len(t.Segments) > 0 {
 				var segText strings.Builder
 				for _, s := range t.Segments {
 					segText.WriteString(applyInlineStyle(s, theme))
 				}
-				blockquoteText = segText.String()
+				quoteText = segText.String()
+			} else {
+				quoteText = t.Text
 			}
-			b.WriteString(strings.ReplaceAll(blockquoteText, "\n", "\n> "))
-			b.WriteString("\n\n")
+
+			// 添加>前缀并应用样式
+			quoted := "> " + strings.ReplaceAll(quoteText, "\n", "\n> ")
+			b.WriteString(quoteStyle.Render(quoted) + "\n\n")
 		case "hr":
-			b.WriteString("---\n\n")
+			// 应用淡色样式
+			hrStyle := theme.Copy().Faint(true)
+			b.WriteString(hrStyle.Render("---") + "\n\n")
 		default:
 			if t.Text != "" {
 				b.WriteString(t.Text)

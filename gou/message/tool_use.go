@@ -153,7 +153,7 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
 					// Render text content
-					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme)
+					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme, ctx.Highlighter)
 					for _, tl := range textLines {
 						lines = append(lines, "  "+tl)
 					}
@@ -205,7 +205,7 @@ func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interfa
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
-					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme)
+					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme, ctx.Highlighter)
 					totalLines += len(textLines)
 				}
 			}

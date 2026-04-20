@@ -303,10 +303,7 @@ func TestRenderTokensWithHighlight(t *testing.T) {
 	t.Logf("Result first 200 chars: %.200s", result)
 	t.Logf("Result: %q", result)
 
-	// 检查结果
-	if !strings.Contains(result, "```go") {
-		t.Error("Should contain code fence with language")
-	}
+	// 检查结果 - 由于有高亮器，应该输出高亮后的代码，没有围栏
 
 	// 移除ANSI转义序列后检查内容
 	cleanResult := removeANSIEscapeSequences(result)

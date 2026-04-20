@@ -25,6 +25,7 @@ type RenderContext struct {
 	ContainerWidth  *int
 	Style           string // "condensed" or empty
 	IsUserContinuation bool
+	Highlighter     *markdown.Highlighter
 }
 
 // Renderer is the interface for message renderers.
@@ -86,31 +87,69 @@ func wrapText(text string, width int) []string {
 		return []string{text}
 	}
 
-	// Simple wrapping for now - in production should use proper ANSI-aware wrapping
+	// ANSI-aware wrapping
 	var lines []string
+	var currentLine strings.Builder
+	currentLineVisibleLen := 0
+
+	// Split by words, but preserve ANSI sequences
+	// Simple approach: split by space, but this doesn't handle ANSI codes well
+	// For now, use the old logic but with visible length calculation
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return []string{""}
 	}
 
-	currentLine := words[0]
+	// Helper to calculate visible length (ignoring ANSI escape sequences)
+	visibleLen := func(s string) int {
+		// Remove ANSI escape sequences for length calculation
+		// Simple regex: \x1b\[[0-9;]*[A-Za-z]
+		inEscape := false
+		visible := 0
+		for i := 0; i < len(s); i++ {
+			if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+				inEscape = true
+				i++ // Skip '['
+				continue
+			}
+			if inEscape {
+				// Check for end of escape sequence
+				if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+					inEscape = false
+				}
+				continue
+			}
+			visible++
+		}
+		return visible
+	}
+
+	currentLine.WriteString(words[0])
+	currentLineVisibleLen = visibleLen(words[0])
+
 	for _, word := range words[1:] {
-		if len(currentLine)+1+len(word) <= width {
-			currentLine += " " + word
+		wordVisibleLen := visibleLen(word)
+		if currentLineVisibleLen+1+wordVisibleLen <= width {
+			currentLine.WriteString(" ")
+			currentLine.WriteString(word)
+			currentLineVisibleLen += 1 + wordVisibleLen
 		} else {
-			lines = append(lines, currentLine)
-			currentLine = word
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
+			currentLineVisibleLen = wordVisibleLen
 		}
 	}
-	if currentLine != "" {
-		lines = append(lines, currentLine)
+
+	if currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
 	}
 
 	return lines
 }
 
 // renderMarkdown renders markdown text with theme.
-func renderMarkdown(text string, width int, palette *theme.Palette) []string {
+func renderMarkdown(text string, width int, palette *theme.Palette, highlighter *markdown.Highlighter) []string {
 	if text == "" {
 		return []string{""}
 	}
@@ -122,18 +161,29 @@ func renderMarkdown(text string, width int, palette *theme.Palette) []string {
 	style := paletteToLipglossStyle(palette)
 
 	// Render with highlighting
-	rendered := markdown.RenderTokensWithHighlight(tokens, nil, style)
+	rendered := markdown.RenderTokensWithHighlight(tokens, highlighter, style)
 
 	// Split into lines and wrap if needed
 	lines := strings.Split(rendered, "\n")
 	var result []string
+
 	for _, line := range lines {
-		if width > 0 && len(line) > width {
-			// Wrap long lines
-			wrapped := wrapText(line, width)
-			result = append(result, wrapped...)
-		} else {
+		// Check if line contains ANSI escape sequences (likely code)
+		hasAnsi := strings.Contains(line, "\x1b[")
+
+		if hasAnsi {
+			// For code with ANSI, never wrap - keep as is
 			result = append(result, line)
+		} else {
+			// For plain text, calculate visible length
+			visibleLen := len(line)
+			if width > 0 && visibleLen > width {
+				// Wrap long lines
+				wrapped := wrapText(line, width)
+				result = append(result, wrapped...)
+			} else {
+				result = append(result, line)
+			}
 		}
 	}
 

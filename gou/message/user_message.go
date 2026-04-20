@@ -140,7 +140,7 @@ func (r *UserMessageRenderer) renderTextBlock(block map[string]interface{}, ctx 
 	}
 
 	// Regular user prompt
-	return renderMarkdown(text, getContainerWidth(ctx), ctx.Theme), nil
+	return renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter), nil
 }
 
 // measureTextBlock measures a text block.
@@ -157,7 +157,7 @@ func (r *UserMessageRenderer) measureTextBlock(block map[string]interface{}, ctx
 	}
 
 	// Regular text
-	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme)
+	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 	return len(lines)
 }
 
@@ -272,7 +272,7 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
 					// Render text content with indentation
-					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme)
+					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme, ctx.Highlighter)
 					for _, tl := range textLines {
 						lines = append(lines, "  "+tl)
 					}
@@ -323,7 +323,7 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
-					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme)
+					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme, ctx.Highlighter)
 					totalLines += len(textLines)
 				}
 			}

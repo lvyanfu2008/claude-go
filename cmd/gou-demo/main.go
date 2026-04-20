@@ -926,7 +926,8 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=true, key=%s, calling handleMsgViewportScrollKey", msg.String())
 		return m, m.handleMsgViewportScrollKey(msg)
 	} else if isListViewportScrollKey(msg.String()) {
-		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=false, key=%s, not handling", msg.String())
+		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=false, key=%s, handling with traditional scroll", msg.String())
+		return m, m.handleTraditionalScrollKey(msg)
 	}
 	switch msg.String() {
 	case "ctrl+c":
@@ -1147,8 +1148,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 						if appendSys != "" {
 							base = append(base, appendSys)
 						}
-						fullParts := querycontext.AppendSystemContextParts(base, partsRes.SystemContext)
-						guidance = strings.Join(fullParts, "\n\n")
+						guidance = strings.Join(base, "\n\n")
 					}
 
 					listing := ""
@@ -1199,8 +1199,10 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 						}
 						if gouDemoPreferQueryStreamingParity() {
 							var userCtx map[string]string
+							var systemCtx map[string]string
 							if errParts == nil {
 								userCtx = gouDemoUserContextMapForQuery(partsRes.UserContext)
+								systemCtx = partsRes.SystemContext
 							}
 							tcx := types.ToolUseContext{}
 							if params.RuntimeContext != nil {
@@ -1246,6 +1248,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 								Messages:        msgsForQ,
 								SystemPrompt:    query.AsSystemPrompt([]string{guidance}),
 								UserContext:     userCtx,
+								SystemContext:   systemCtx,
 								ToolUseContext:  tcx,
 								QuerySource:     params.QuerySource,
 								StreamingParity: true,
@@ -2643,4 +2646,59 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+// handleTraditionalScrollKey handles scroll keys when not using viewport (traditional virtual scrolling).
+func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.String() {
+	case "j", "down":
+		m.sticky = false
+		m.scrollTop += 1
+		return nil
+	case "k", "up":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-1)
+		return nil
+	case "pgdown", "space":
+		m.sticky = false
+		m.scrollTop += listViewportH(m) / 2
+		return nil
+	case "pgup", "b":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		return nil
+	case "end", "G", "shift+g", "ctrl+end":
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return nil
+	case "home", "ctrl+home":
+		m.sticky = false
+		m.scrollTop = 0
+		return nil
+	case "ctrl+u":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		return nil
+	case "ctrl+d":
+		m.sticky = false
+		m.scrollTop += listViewportH(m) / 2
+		return nil
+	case "ctrl+b":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+		return nil
+	case "ctrl+f":
+		m.sticky = false
+		m.scrollTop += listViewportH(m)
+		return nil
+	case "ctrl+n":
+		m.sticky = false
+		m.scrollTop += 1
+		return nil
+	case "ctrl+p":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-1)
+		return nil
+	}
+	return nil
 }
