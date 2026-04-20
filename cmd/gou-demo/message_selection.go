@@ -8,7 +8,7 @@ func isListViewportScrollKey(s string) bool {
 	switch s {
 	case "up", "down", "k", "j",
 		"pgup", "pgdown",
-		"home", "end", "g", "G", "shift+g",
+		"home", "end", "G", "shift+g",
 		"ctrl+home", "ctrl+end",
 		"ctrl+u", "ctrl+d", "ctrl+b", "ctrl+f", "ctrl+n", "ctrl+p":
 		return true

@@ -568,7 +568,7 @@ func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.sticky = true
 		m.msgViewport.GotoBottom()
 		return cmd
-	case "home", "g", "ctrl+home":
+	case "home", "ctrl+home":
 		m.msgViewport.GotoTop()
 		m.sticky = false
 		return cmd
