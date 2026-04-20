@@ -115,13 +115,16 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 
 	// Regular assistant text
 	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
-
-	// Add dot if needed
-	if ctx.ShouldShowDot && len(lines) > 0 {
-		// Add black circle prefix like TS
-		lines[0] = "● " + lines[0]
+	
+	// Add "⏺ " prefix to assistant messages and indent all lines by 2 spaces
+	for i, line := range lines {
+		if i == 0 {
+			lines[i] = "  ⏺ " + line
+		} else {
+			lines[i] = "    " + line
+		}
 	}
-
+	
 	return lines, nil
 }
 

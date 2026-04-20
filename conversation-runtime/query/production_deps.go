@@ -7,10 +7,16 @@ import (
 )
 
 // ProductionDeps mirrors src/conversation-runtime/queryPipeline/deps.ts productionDeps().
-// CallModel / Microcompact / Autocompact are nil by default; hosts may set them (see [preflight.go] types).
+// CallModel / Microcompact are nil by default; hosts may set them (see [preflight.go] types).
+//
+// Autocompact is wired to the default compactservice adapter — TS parity: productionDeps()
+// passes autoCompactIfNeeded directly. The adapter uses a direct no-tools streaming call
+// for the summary, and defaults to no-op for pre/post-compact hooks and attachment regeneration
+// until those subsystems land Go parity (see compactservice/doc.go for the full list).
 func ProductionDeps() QueryDeps {
 	return QueryDeps{
-		NewUUID: randomUUID,
+		NewUUID:     randomUUID,
+		Autocompact: newCompactAdapter(),
 	}
 }
 

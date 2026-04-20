@@ -182,8 +182,10 @@ func TestCalculateTokenWarningState(t *testing.T) {
 
 	effectiveWindow := GetEffectiveContextWindowSize(model, betas)
 	autoCompactThreshold := GetAutoCompactThreshold(model, betas)
-	warningThreshold := effectiveWindow - WarningThresholdBufferTokens
-	errorThreshold := effectiveWindow - ErrorThresholdBufferTokens
+	// Mirrors TS: warning/error are derived from `threshold` (= autoCompactThreshold
+	// when auto-compact is enabled), not from the raw effective window.
+	warningThreshold := autoCompactThreshold - WarningThresholdBufferTokens
+	errorThreshold := autoCompactThreshold - ErrorThresholdBufferTokens
 
 	tests := []struct {
 		name          string
@@ -200,25 +202,27 @@ func TestCalculateTokenWarningState(t *testing.T) {
 			expectCompact: false,
 		},
 		{
-			name:          "Above auto-compact threshold",
-			tokenUsage:    autoCompactThreshold + 1_000,
+			name:       "Above auto-compact threshold",
+			tokenUsage: autoCompactThreshold + 1_000,
+			// Warning and error share the same buffer (20k) in TS, so both
+			// flip well before auto-compact fires.
 			expectWarning: true,
-			expectError:   false,
+			expectError:   true,
 			expectCompact: true,
 		},
 		{
-			name:          "Above warning threshold",
+			name:          "Above warning threshold (but below auto-compact)",
 			tokenUsage:    warningThreshold + 1_000,
 			expectWarning: true,
-			expectError:   false,
-			expectCompact: false, // Not above auto-compact threshold
+			expectError:   true, // warning buffer == error buffer in TS
+			expectCompact: false,
 		},
 		{
-			name:          "Above error threshold",
+			name:          "Above error threshold (same point as warning)",
 			tokenUsage:    errorThreshold + 1_000,
 			expectWarning: true,
 			expectError:   true,
-			expectCompact: true, // Above auto-compact threshold (error threshold is more restrictive)
+			expectCompact: false, // still below autoCompactThreshold
 		},
 	}
 

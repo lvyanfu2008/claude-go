@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
@@ -140,7 +141,25 @@ func (r *UserMessageRenderer) renderTextBlock(block map[string]interface{}, ctx 
 	}
 
 	// Regular user prompt
-	return renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter), nil
+		lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+
+		// Create lipgloss style for user messages: gray background, bold font
+		userStyle := lipgloss.NewStyle().
+			Background(ctx.Theme.UserMessageBackground).
+			Foreground(ctx.Theme.UserMessageText).
+			Bold(true)
+
+		// Apply styling to each line
+		for i, line := range lines {
+			styledLine := userStyle.Render(line)
+			if i == 0 {
+				lines[i] = "  > " + styledLine
+			} else {
+				lines[i] = "    " + styledLine
+			}
+		}
+
+		return lines, nil
 }
 
 // measureTextBlock measures a text block.
@@ -167,43 +186,50 @@ func (r *UserMessageRenderer) renderBashInput(text string, ctx *RenderContext) (
 	// Basic XML-like parsing
 	cmdStart := strings.Index(text, ">")
 	cmdEnd := strings.LastIndex(text, "<")
+	cmd := "[bash command]"
 	if cmdStart > 0 && cmdEnd > cmdStart {
-		cmd := text[cmdStart+1 : cmdEnd]
-		return []string{fmt.Sprintf("$ %s", cmd)}, nil
+		cmd = text[cmdStart+1 : cmdEnd]
 	}
-	return []string{"$ [bash command]"}, nil
+
+	// Create lipgloss style for user messages: gray background, bold font
+	userStyle := lipgloss.NewStyle().
+		Background(ctx.Theme.UserMessageBackground).
+		Foreground(ctx.Theme.UserMessageText).
+		Bold(true)
+
+	styledCmd := userStyle.Render("$ " + cmd)
+	return []string{"  > " + styledCmd}, nil
 }
 
 // renderBashOutput renders bash output.
 func (r *UserMessageRenderer) renderBashOutput(text string, ctx *RenderContext) ([]string, error) {
 	// Extract output from XML-like tag
+	output := text
 	outputStart := strings.Index(text, ">")
 	outputEnd := strings.LastIndex(text, "<")
 	if outputStart > 0 && outputEnd > outputStart {
-		output := text[outputStart+1 : outputEnd]
-		// Truncate long output
-		if len(output) > 100 {
-			output = output[:100] + "..."
-		}
-		return []string{output}, nil
+		output = text[outputStart+1 : outputEnd]
 	}
-	return []string{"[bash output]"}, nil
+	// Truncate long output
+	if len(output) > 100 {
+		output = output[:100] + "..."
+	}
+	return []string{"    " + output}, nil
 }
 
 // renderLocalCommandOutput renders local command output.
 func (r *UserMessageRenderer) renderLocalCommandOutput(text string, ctx *RenderContext) ([]string, error) {
 	// Similar to bash output rendering
+	output := text
 	outputStart := strings.Index(text, ">")
 	outputEnd := strings.LastIndex(text, "<")
 	if outputStart > 0 && outputEnd > outputStart {
-		output := text[outputStart+1 : outputEnd]
-		// Truncate long output
-		if len(output) > 100 {
-			output = output[:100] + "..."
-		}
-		return []string{output}, nil
+		output = text[outputStart+1 : outputEnd]
 	}
-	return []string{"[local command output]"}, nil
+	if len(output) > 100 {
+		output = output[:100] + "..."
+	}
+	return []string{"    " + output}, nil
 }
 
 // renderImageBlock renders an image block.
@@ -359,11 +385,20 @@ func parseMessageContent(msg *types.Message) ([]map[string]interface{}, error) {
 			Content json.RawMessage `json:"content"`
 		}
 		if err := json.Unmarshal(msg.Message, &messageObj); err == nil && len(messageObj.Content) > 0 {
+			// First try to parse as array of blocks
 			if err := json.Unmarshal(messageObj.Content, &content); err == nil {
 				diaglog.Line("[parseMessageContent] Successfully parsed %d blocks from Message.content", len(content))
 				return content, nil
 			} else {
-				diaglog.Line("[parseMessageContent] Failed to parse Message.content: %v", err)
+				diaglog.Line("[parseMessageContent] Failed to parse Message.content as array: %v", err)
+				// Try to parse as string
+				var text string
+				if err := json.Unmarshal(messageObj.Content, &text); err == nil {
+					diaglog.Line("[parseMessageContent] Successfully parsed Message.content as string, length=%d", len(text))
+					return []map[string]interface{}{{"type": "text", "text": text}}, nil
+				} else {
+					diaglog.Line("[parseMessageContent] Failed to parse Message.content as string: %v", err)
+				}
 			}
 		}
 	}
@@ -383,7 +418,6 @@ func parseMessageContent(msg *types.Message) ([]map[string]interface{}, error) {
 	diaglog.Line("[parseMessageContent] Could not parse message content")
 	return nil, fmt.Errorf("could not parse message content")
 }
-
 // GenerateToolResultSummary generates a meaningful summary for a tool result block in collapsed mode.
 func GenerateToolResultSummary(block map[string]interface{}) string {
 	// First try to generate a tool-specific summary if we can infer the tool type

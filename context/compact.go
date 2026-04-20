@@ -210,9 +210,19 @@ func IsCompactBoundaryMessage(message Message) bool {
 }
 
 // AnalyzeContext 分析上下文
+// Mirrors the threshold semantics of calculateTokenWarningState in
+// claude-code/src/services/compact/autoCompact.ts: warning/error thresholds
+// are derived from autoCompactThreshold (when auto-compact is enabled),
+// not the raw effective window. ShouldCompact uses ">=" like TS.
 func AnalyzeContext(messages []Message, model string, betas []string) ContextAnalysis {
 	tokenCount := TokenCountWithEstimation(messages, model)
 	effectiveWindow := GetEffectiveContextWindowSize(model, betas)
+	autoCompactThreshold := GetAutoCompactThreshold(model, betas)
+
+	threshold := autoCompactThreshold
+	if !IsAutoCompactEnabled() {
+		threshold = effectiveWindow
+	}
 
 	usagePercentage := 0
 	if effectiveWindow > 0 {
@@ -223,14 +233,14 @@ func AnalyzeContext(messages []Message, model string, betas []string) ContextAna
 	}
 
 	return ContextAnalysis{
-		TokenCount:        tokenCount,
-		EffectiveWindow:   effectiveWindow,
-		UsagePercentage:   usagePercentage,
-		MessagesCount:     len(messages),
-		ShouldCompact:     tokenCount > GetAutoCompactThreshold(model, betas),
-		CompactThreshold:  GetAutoCompactThreshold(model, betas),
-		WarningThreshold:  effectiveWindow - WarningThresholdBufferTokens,
-		ErrorThreshold:    effectiveWindow - ErrorThresholdBufferTokens,
+		TokenCount:       tokenCount,
+		EffectiveWindow:  effectiveWindow,
+		UsagePercentage:  usagePercentage,
+		MessagesCount:    len(messages),
+		ShouldCompact:    IsAutoCompactEnabled() && tokenCount >= autoCompactThreshold,
+		CompactThreshold: autoCompactThreshold,
+		WarningThreshold: threshold - WarningThresholdBufferTokens,
+		ErrorThreshold:   threshold - ErrorThresholdBufferTokens,
 	}
 }
 

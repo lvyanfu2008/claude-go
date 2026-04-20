@@ -32,7 +32,7 @@
 //   - TS Messages.tsx list pipeline (filter / reorder / transcript tail cap) → goc/gou/messagesview (MessagesForScrollList, ReorderMessagesInUI)
 //   - TS scrollRef (ScrollBoxHandle: scrollTo, scrollToBottom, sticky, …) → gou-demo model fields
 //     (scrollTop, sticky, pendingDelta) updated in Update/keys; next View pass renders — no separate ref type.
-//   - Prompt message list defaults to bubbles/viewport (go-tui-style); opt out via env in cmd/gou-demo/message_viewport_pane.go; ctrl+y fold; legacy virtualscroll via GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. go-tui shares goc/gou/viewportfold for section toggles.
+//   - Prompt message list defaults to bubbles/viewport (go-tui-style) on top of the new message renderer (gou/message.VirtualList); opt out with GOU_DEMO_BUBBLES_VIEWPORT=0 to render the visible slice directly from m.scrollTop; ctrl+y fold. go-tui shares goc/gou/viewportfold for section toggles.
 //   - Wheel / plain left-drag scroll on the message list: cmd/gou-demo/mouse_message_list.go (tea.WithMouseCellMotion when enabled).
 //     Bubbles viewport prompt pane: keyboard scroll is delegated through viewport.Update with a gou-demo KeyMap (go-tui/main pattern);
 //     at viewport top, wheel-up in-pane can tea.DisableMouse for host scrollback (test.go); GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0 disables.

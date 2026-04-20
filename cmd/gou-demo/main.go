@@ -1,4 +1,4 @@
-// Command gou-demo is a minimal Bubble Tea full-screen UI: virtualscroll + markdown + tool blocks (Phase 4 messagerow).
+// Command gou-demo is a minimal Bubble Tea full-screen UI: new message renderer + markdown + tool blocks (Phase 4 messagerow).
 // Extracted [model.Update] branches: update_streaming.go (query yield / NDJSON / fake stream), update_layout.go (window resize).
 // Layout uses the full terminal size (main buffer by default). Optional GOU_DEMO_ALT_SCREEN=1 uses the alternate buffer (no shell scrollback mixing).
 // With GOU_DEMO_LOG=1, trace uses the same path rules as TS debug log (see goc/ccb-engine/debugpath); on TTY without GOU_DEMO_LOG_FILE, trace goes to that file, not stderr.
@@ -19,14 +19,12 @@
 // Debug log (optional): GOU_DEMO_LOG_FILE=/path/to.log, or GOU_DEMO_LOG=1 (default file path matches TS getDebugLogPath via goc/ccb-engine/debugpath when stderr is TTY). GOU_DEMO_LOG_STDERR=1 forces stderr (may corrupt TUI). Lines are prefixed [gou-demo].
 // ToolUseContext dump: CLAUDE_CODE_LOG_TOOL_USE_CONTEXT or GOU_DEMO_LOG_TOOL_USE_CONTEXT = 1|summary|full (with logging enabled) prints JSON after each BuildDemoParams; full includes the entire commands[] snapshot.
 // Store transcript dump: GOU_DEMO_LOG_STORE_MESSAGES=1 (with GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE) writes [conversation.Store].Messages as indented JSON at after_apply_user_input, before_ccbhydrate, and after stream turn_complete / response_end. Each dump truncates after ~512KiB.
-// Virtual-scroll stats line (messages N, visible [a,b), spacers…): set GOU_DEMO_SCROLL_STATS=1 (default off).
 // Read/Grep/Glob stream tail: default keeps each tool_use + tool_result as separate rows (avoids looking like history was cleared). Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 for TS-style merge into collapsed_read_search (gou/ccbstream/apply.go).
 // Prompt: merged one-line Grep/Glob/Read summaries (GOU_DEMO_TOOL_USE_SUMMARY_LINE) wait GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS after each assistant message first appears (default 2000 ms) while full Search/Read rows are shown; set to 0 to collapse immediately.
 //
 // Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom. Prompt: default Enter send; Alt+Enter or Option+Enter (macOS) newline when the terminal sends Meta; Ctrl+J / LF newline. GOU_DEMO_REPL_ENTER_SUBMITS=0 for chat mode (Enter newline, Alt+Enter send). Shift+↑↓ move line. F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e show-all expands collapsed/grouped + full tool_result bodies except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript (compact): same omission + tool_result folded on user rows; assistant rows show ⏺+⎿ summaries. Ctrl+e show-all or [ dump shows full blocks. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
-// Virtual scroll: CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL=1 widens the mounted-item cap (min(n,2000)) via [virtualscroll.RangeInput.MaxMountedItemsOverride]; see gouDemoVirtualScrollDisabled in repl_chrome.go (TS Messages.tsx gate; not a full non-virtual Ink path).
-// Prompt message list uses [bubbles/viewport] by default (same scrolling style as go-tui: full-document scroll + ctrl+y fold-all). Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no, or use legacy virtualscroll only with GOU_DEMO_LEGACY_VIRTUAL_MESSAGE_SCROLL=1. Exceeding GOU_DEMO_VIEWPORT_MAX_LINES (default 20000 wrapped rows) falls back to classic virtualscroll. Transcript mode always uses the legacy pane.
+// Message pane: new renderer ([message.VirtualList] in [gou/message]) drives both prompt and transcript screens. Prompt uses [bubbles/viewport] by default (full-document scroll + ctrl+y fold-all); disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no to render the visible slice directly on top of m.scrollTop.
 // Mouse: SGR mouse (cell motion) enables wheel + plain left-drag on the message list when not disabled by env. Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse (keyboard scroll still works), unless GOU_DEMO_DISALLOW_DISABLE_MOUSE=1. One-column TUI scrollbar is on by default when the pane is wide enough; GOU_DEMO_MESSAGE_SCROLLBAR=0|false|off|no or GOU_DEMO_NO_SCROLLBAR=1 turns it off. Alternate screen: opt-in GOU_DEMO_ALT_SCREEN=1 (default main buffer). Bubbles viewport: at-top wheel-up can release mouse for host scrollback; opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
 // Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names default to a normal prompt; GOU_DEMO_SLASH_STRICT_UNKNOWN=1 uses TS-style Unknown skill for names matching looksLikeCommand when /name is not an existing root path (non-Windows).
 // MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
@@ -76,7 +74,6 @@ import (
 	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
-	"goc/gou/virtualscroll"
 	"goc/mcpcommands"
 	"goc/messagesapi"
 	"goc/modelenv"
@@ -310,10 +307,6 @@ func gouDemoEnvTruthy(key string) bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
-func gouDemoScrollStatsEnabled() bool {
-	return gouDemoEnvTruthy("GOU_DEMO_SCROLL_STATS")
-}
-
 func gouDemoStatusLineEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_STATUS_LINE")
 }
@@ -528,8 +521,6 @@ type model struct {
 	pendingDelta int
 	sticky       bool
 	heightCache  map[string]int
-	prevRange    *virtualscroll.Range
-	mountedKeys  map[string]struct{}
 
 	// streamChunks appends whole fragments so ``` fences stay valid while streaming.
 	streamChunks []string
@@ -623,9 +614,6 @@ type model struct {
 	// manual rendering mode (buffer events until flushed)
 	manualRenderMode bool
 	pendingEvents    []tea.Msg
-	//用来存储上次视图结果
-	lastB      string
-	lastResult bool
 
 	// New message rendering system integration
 	msgRenderer *MessageRendererIntegration
@@ -1668,52 +1656,13 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 	return strings.Join(lines, "\n")
 }
 
-func (m *model) refineVisibleHeights(keys []string, start, end, n int) {
-	cols := m.messageBodyColsForLayout()
-	if cols < 1 {
-		return
-	}
-	hl := m.transcriptSearchHighlightNeedle()
-	msgView := m.messagesForScroll()
-	msgN := len(msgView)
-	st := m.transcriptStreamingToolsForView()
-	for i := start; i < end && i < n; i++ {
-		if i < msgN {
-			h := m.measureMessageRows(msgView[i], cols, hl)
-			if i > 0 && userAssistantPairBlankLine(msgView[i-1], msgView[i]) {
-				h++
-			}
-			if i > 0 && transcriptAssistantPairBlankLine(m, msgView[i-1], msgView[i]) {
-				h++
-			}
-			m.heightCache[keys[i]] = h
-			continue
-		}
-		ti := i - msgN
-		if ti >= 0 && ti < len(st) {
-			h := m.measureTranscriptStreamingToolRow(st[ti], cols, hl)
-			if ti == 0 && msgN > 0 && msgView[msgN-1].Type == types.MessageTypeUser {
-				h++
-			}
-			m.heightCache[keys[i]] = h
-		} else {
-			m.heightCache[keys[i]] = 1
-		}
-	}
-}
-
 func (m *model) View() tea.View {
 	if m.width == 0 {
 		return m.wrapRootView("Loading…")
 	}
 
-	// Check if we should use the new message renderer
-	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
-	diaglog.Line("[main] View: useNewRenderer=%v, GOU_DEMO_USE_NEW_RENDERER=%s", useNewRenderer, os.Getenv("GOU_DEMO_USE_NEW_RENDERER"))
-
 	vpH := listViewportH(m)
 	bodyCols := m.messageBodyColsForLayout()
-	// 对于新渲染器，使用 msgViewportWanted() 来决定是否使用 viewport
 	useVp := m.msgViewportWanted()
 	if useVp {
 		m.msgViewportSyncGeometry()
@@ -1740,12 +1689,12 @@ func (m *model) View() tea.View {
 	b.WriteString(title)
 	b.WriteByte('\n')
 
-	if useNewRenderer && useVp {
-		// Keys/wheel update bubbles/viewport (applyMsgViewportContentFromView uses new-renderer full document).
+	if useVp {
+		// Bubbles viewport + new renderer (applyMsgViewportContentFromView populates the full document).
 		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
 		b.WriteByte('\n')
-	} else if useNewRenderer {
-		// No bubbles viewport (fallback): virtual slice uses m.scrollTop; keep scrollbar in sync with renderer totals.
+	} else {
+		// New renderer without bubbles viewport: virtual slice uses m.scrollTop; scrollbar reflects renderer totals.
 		msgPaneContent := m.renderMessagePaneWithNewRenderer()
 		lines := strings.Split(msgPaneContent, "\n")
 		if len(lines) > vpH {
@@ -1771,194 +1720,6 @@ func (m *model) View() tea.View {
 			bodyCols,
 		)
 		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
-		b.WriteByte('\n')
-	} else if useVp {
-		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
-		b.WriteByte('\n')
-	} else {
-		keys := m.scrollItemKeys()
-		n := len(keys)
-		if !m.sticky {
-			m.clampScrollTopForVirtualList()
-		}
-
-		if m.prevRange != nil && n > 0 {
-			m.refineVisibleHeights(keys, m.prevRange.Start, m.prevRange.End, n)
-		}
-
-		ri := virtualscroll.RangeInput{
-			ItemKeys:     keys,
-			HeightCache:  m.heightCache,
-			ScrollTop:    m.scrollTop,
-			PendingDelta: m.pendingDelta,
-			ViewportH:    vpH,
-			IsSticky:     m.sticky,
-			ListOrigin:   0,
-			PrevRange:    m.prevRange,
-			MountedKeys:  m.mountedKeys,
-			FastScroll:   false,
-		}
-		if gouDemoVirtualScrollDisabled() && n > 0 {
-			ri.MaxMountedItemsOverride = min(n, 2000)
-		}
-		vr := virtualscroll.ComputeRange(ri)
-
-		m.mountedKeys = make(map[string]struct{}, max(0, vr.End-vr.Start))
-		for i := vr.Start; i < vr.End && i < n; i++ {
-			m.mountedKeys[keys[i]] = struct{}{}
-		}
-
-		if m.prevRange == nil {
-			m.prevRange = &virtualscroll.Range{}
-		}
-		m.prevRange.Start, m.prevRange.End = vr.Start, vr.End
-
-		var msgPane strings.Builder
-		if gouDemoScrollStatsEnabled() {
-			msgPane.WriteString(lipgloss.NewStyle().Faint(true).Render(
-				fmt.Sprintf("messages %d  cols=%d  visible [%d,%d)  topSpacer=%d bottomSpacer=%d sticky=%v",
-					n, m.cols, vr.Start, vr.End, vr.TopSpacer, vr.BottomSpacer, m.sticky)))
-			msgPane.WriteByte('\n')
-		}
-
-		hl := m.transcriptSearchHighlightNeedle()
-		msgView := m.messagesForScroll()
-		msgN := len(msgView)
-		stRows := m.transcriptStreamingToolsForView()
-		for i := vr.Start; i < vr.End && i < n; i++ {
-			key := keys[i]
-			h := m.heightCache[key]
-			var block string
-			if i < msgN {
-				msg := msgView[i]
-				block = m.renderMessageRow(msg, bodyCols, h, hl)
-			} else {
-				ti := i - msgN
-				if ti < 0 || ti >= len(stRows) {
-					continue
-				}
-				block = m.renderTranscriptStreamingToolRow(stRows[ti], bodyCols, h, hl)
-			}
-			if strings.TrimSpace(block) == "" && h <= 0 {
-				continue
-			}
-			if msgPane.Len() > 0 {
-				msgPane.WriteByte('\n')
-				if i > vr.Start {
-					needExtra := false
-					if i < msgN {
-						needExtra = userAssistantPairBlankLine(msgView[i-1], msgView[i]) ||
-							transcriptAssistantPairBlankLine(m, msgView[i-1], msgView[i])
-					} else if i == msgN && msgN > 0 {
-						needExtra = msgView[msgN-1].Type == types.MessageTypeUser
-					}
-					if needExtra {
-						msgPane.WriteByte('\n')
-					}
-				}
-			}
-			msgPane.WriteString(block)
-		}
-		if m.uiScreen != gouDemoScreenTranscript && len(m.store.StreamingToolUses) > 0 {
-			if msgPane.Len() > 0 && streamGapAfterUserMessage(msgView) {
-				msgPane.WriteByte('\n')
-			}
-			grouped := groupStreamingTools(m.store.StreamingToolUses)
-			for _, group := range grouped {
-				if msgPane.Len() > 0 {
-					msgPane.WriteByte('\n')
-				}
-				var sb strings.Builder
-				if len(msgView) == 0 || msgView[len(msgView)-1].Type != types.MessageTypeAssistant {
-					head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-					sb.WriteString(head)
-					sb.WriteByte('\n')
-				}
-
-				if !group.IsGroup {
-					tu := group.Single
-					facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-					if facing == "" {
-						facing = tu.Name
-					}
-					toolTitle := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + facing)
-					if p := strings.TrimSpace(paren); p != "" {
-						toolTitle += lipgloss.NewStyle().Faint(true).Render(" " + p)
-					}
-					// 所有工具都显示活动状态
-					activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
-					if activityLine == "" {
-						// 如果没有活动描述，使用工具名
-						activityLine = facing
-						if p := strings.TrimSpace(paren); p != "" {
-							activityLine += " " + p
-						}
-					}
-					// 添加省略号表示正在执行
-					activityLine += "…"
-					// 添加交互提示
-					toolTitle = toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-					sb.WriteString(toolTitle)
-				} else {
-					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
-					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-					sb.WriteString(toolTitle)
-					for _, item := range group.Items {
-						path := extractPartialJSONField(item.UnparsedInput, "file_path")
-						if path == "" {
-							path = extractPartialJSONField(item.UnparsedInput, "path")
-						}
-						if path == "" {
-							path = extractPartialJSONField(item.UnparsedInput, "pattern")
-						}
-						if path == "" {
-							path = "..."
-						}
-						sb.WriteByte('\n')
-						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
-					}
-				}
-				msgPane.WriteString(applyMessagePaneGutter(sb.String(), bodyCols))
-			}
-		}
-		if m.uiScreen != gouDemoScreenTranscript && strings.TrimSpace(m.store.StreamingText) != "" {
-			if msgPane.Len() > 0 {
-				msgPane.WriteByte('\n')
-				if streamGapAfterUserMessage(msgView) {
-					msgPane.WriteByte('\n')
-				}
-			} else {
-				msgPane.WriteByte('\n')
-			}
-			head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), bodyCols, false)
-			msgPane.WriteString(applyMessagePaneGutter(head+"\n"+md, bodyCols))
-		}
-
-		lines := strings.Split(msgPane.String(), "\n")
-		if m.sticky {
-			if len(lines) > vpH {
-				lines = lines[len(lines)-vpH:]
-			}
-		} else {
-			skip := m.scrollTop - vr.TopSpacer
-			if skip < 0 {
-				skip = 0
-			}
-			if skip < len(lines) {
-				lines = lines[skip:]
-			} else {
-				lines = nil
-			}
-			if len(lines) > vpH {
-				lines = lines[:vpH]
-			}
-		}
-		for len(lines) < vpH {
-			lines = append(lines, "")
-		}
-		totalScroll := m.messageScrollContentHeight()
-		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalScroll, m.scrollTop, m.msgScrollbarW))
 		b.WriteByte('\n')
 	}
 
@@ -2151,7 +1912,16 @@ func styleUserMessageLines(rows []string, cols int) string {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		b.WriteString(st.Render(ln))
+		// Check if the line already has ANSI escape sequences (already styled)
+		// If it does, we need to be careful about applying additional styles
+		if strings.Contains(ln, "\x1b[") {
+			// Line already has ANSI codes, apply background without resetting
+			// We'll wrap the existing styled text with background
+			b.WriteString(st.Render(ln))
+		} else {
+			// Plain text, apply background
+			b.WriteString(st.Render(ln))
+		}
 	}
 	return b.String()
 }

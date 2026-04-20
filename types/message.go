@@ -36,6 +36,11 @@ type Message struct {
 	// IsApiErrorMessage is set on synthetic assistant API error rows (normalizeMessagesForAPI strips them).
 	IsApiErrorMessage *bool `json:"isApiErrorMessage,omitempty"`
 	IsVisibleInTranscriptOnly *bool           `json:"isVisibleInTranscriptOnly,omitempty"`
+	// LogicalParentUUID mirrors logicalParentUuid on SystemCompactBoundaryMessage and related rows
+	// (parent-child linkage for compact-boundary messages; see createCompactBoundaryMessage in TS).
+	LogicalParentUUID *string         `json:"logicalParentUuid,omitempty"`
+	// CompactMetadata mirrors compactMetadata on SystemCompactBoundaryMessage.
+	CompactMetadata   json.RawMessage `json:"compactMetadata,omitempty"`
 	Attachment                json.RawMessage `json:"attachment,omitempty"`
 	Message                   json.RawMessage `json:"message,omitempty"`
 	Content                   json.RawMessage `json:"content,omitempty"`

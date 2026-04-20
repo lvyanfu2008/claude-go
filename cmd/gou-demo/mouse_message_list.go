@@ -1,12 +1,9 @@
 package main
 
 import (
-	"os"
-
 	tea "charm.land/bubbletea/v2"
 
 	"goc/ccb-engine/diaglog"
-	"goc/gou/virtualscroll"
 	"goc/types"
 )
 
@@ -31,7 +28,7 @@ func (m *model) mouseYInMessageListPane(y int) bool {
 
 // clampScrollTopForVirtualList pins scrollTop to [0, max(0, totalContentHeight−viewportH)] when not sticky.
 // After sticky-bottom (scrollTop sentinel ~1<<30), the first manual scroll leaves a huge scrollTop; without
-// clamping, ComputeRange's binary search breaks and wheel/keys cannot scroll back toward the tail.
+// clamping, the new renderer's ComputeVisibleRange cannot scroll back toward the tail.
 func (m *model) clampScrollTopForVirtualList() {
 	if m.sticky {
 		return
@@ -40,52 +37,26 @@ func (m *model) clampScrollTopForVirtualList() {
 	if vpH < 1 {
 		return
 	}
+	m.integrateMessageRenderer()
+	messages := m.store.Messages
+	var messagesPtr []*types.Message
+	for i := range messages {
+		messagesPtr = append(messagesPtr, &messages[i])
+	}
+	isTranscript := m.uiScreen == gouDemoScreenTranscript
+	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+	width := m.messageBodyColsForLayout()
 
-	// Check if we're using the new renderer
-	useNewRenderer := os.Getenv("GOU_DEMO_USE_NEW_RENDERER") == "1"
-
-	if useNewRenderer && m.msgRenderer != nil {
-		// Use new renderer's height calculation
-		messages := m.store.Messages
-		var messagesPtr []*types.Message
-		for i := range messages {
-			messagesPtr = append(messagesPtr, &messages[i])
-		}
-		isTranscript := m.uiScreen == gouDemoScreenTranscript
-		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-		width := m.messageBodyColsForLayout()
-
-		totalHeight := m.msgRenderer.ComputeTotalHeight(messagesPtr, isTranscript, verbose, width)
-		maxTop := totalHeight - vpH
-		if maxTop < 0 {
-			maxTop = 0
-		}
-		if m.scrollTop < 0 {
-			m.scrollTop = 0
-		}
-		if m.scrollTop > maxTop {
-			m.scrollTop = maxTop
-		}
-	} else {
-		// Use legacy height calculation
-		keys := m.scrollItemKeys()
-		n := len(keys)
-		if n == 0 {
-			m.scrollTop = 0
-			return
-		}
-		off := virtualscroll.BuildOffsets(keys, m.heightCache, virtualscroll.DefaultEstimate)
-		total := off[n]
-		maxTop := total - vpH
-		if maxTop < 0 {
-			maxTop = 0
-		}
-		if m.scrollTop < 0 {
-			m.scrollTop = 0
-		}
-		if m.scrollTop > maxTop {
-			m.scrollTop = maxTop
-		}
+	totalHeight := m.msgRenderer.ComputeTotalHeight(messagesPtr, isTranscript, verbose, width)
+	maxTop := totalHeight - vpH
+	if maxTop < 0 {
+		maxTop = 0
+	}
+	if m.scrollTop < 0 {
+		m.scrollTop = 0
+	}
+	if m.scrollTop > maxTop {
+		m.scrollTop = maxTop
 	}
 }
 

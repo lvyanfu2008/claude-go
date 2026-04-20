@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"goc/diagnostics"
+	"goc/growthbook"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/types"
 )
@@ -333,8 +335,19 @@ func wireProcessUserInputCallbacks(
 	logPath string,
 	toStderr bool,
 ) {
+	// Initialize analytics system
+	diagnostics.InitAnalytics()
+
+	// Initialize GrowthBook feature flags
+	growthbook.Init()
+
 	p.LogEvent = func(name string, payload map[string]any) {
+		// Use new diagnostics package for analytics events
+		diagnostics.EmitAnalyticsEvent(name, payload)
+
+		// Keep backward compatibility with stderr output
 		emitAnalyticsEventToStderr(name, payload)
+
 		if processUserInputDebugEnabled() {
 			wrapped := map[string]any{"name": name, "payload": payload}
 			logProcessUserInputDebug(logPath, toStderr, "event", wrapped)

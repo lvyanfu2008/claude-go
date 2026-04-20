@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	"goc/diagnostics"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/types"
 )
@@ -130,19 +131,27 @@ func main() {
 }
 
 func run() error {
+	// Start context load tracking
+	tracker := diagnostics.NewContextLoadTracker()
+	tracker.StartPhase("total_processing")
+
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
+		tracker.Complete(0, false)
 		return fmt.Errorf("read stdin: %w", err)
 	}
 	if len(data) == 0 {
+		tracker.Complete(0, false)
 		return fmt.Errorf("empty stdin")
 	}
 
 	var env stdinEnvelope
 	if err := json.Unmarshal(data, &env); err != nil {
+		tracker.Complete(0, false)
 		return fmt.Errorf("json: %w", err)
 	}
 	if env.V != "" && env.V != protocolVersion {
+		tracker.Complete(0, false)
 		return fmt.Errorf("unsupported protocol %q (want %q)", env.V, protocolVersion)
 	}
 
@@ -178,12 +187,18 @@ func run() error {
 		// Bash / slash / hooks: nil (MVP); GetAttachmentMessages nil unless stdin omits bridgeAttachmentMessages.
 	}
 
+	tracker.StartPhase("command_loading")
 	if err := applyGoCommandsLoad(context.Background(), p, env.GoCommandsLoad); err != nil {
+		tracker.EndPhase("command_loading")
+		tracker.Complete(0, false)
 		return fmt.Errorf("go commands: %w", err)
 	}
+	tracker.EndPhase("command_loading")
 
 	logPath := strings.TrimSpace(os.Getenv(envPuiDebugLog))
 	toStderr := isEnvTruthy(os.Getenv(envPuiDebugStderr))
+
+	tracker.StartPhase("debug_logging")
 	// Distinct marker so session logs show this turn used the Go CLI.
 	logProcessUserInputDebug(logPath, toStderr, "via", map[string]any{
 		"engine":   "go",
@@ -208,21 +223,39 @@ func run() error {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetEscapeHTML(false)
 			if err := enc.Encode(consumed); err != nil {
+				tracker.EndPhase("debug_logging")
+				tracker.Complete(0, false)
 				return fmt.Errorf("encode consumed execution_result: %w", err)
 			}
+			tracker.EndPhase("debug_logging")
+			tracker.Complete(1, true)
 			return nil
 		}
 	}
-	wireProcessUserInputCallbacks(p, logPath, toStderr)
+	tracker.EndPhase("debug_logging")
 
+	tracker.StartPhase("callback_wiring")
+	wireProcessUserInputCallbacks(p, logPath, toStderr)
+	tracker.EndPhase("callback_wiring")
+
+	tracker.StartPhase("process_user_input")
 	out, err := processuserinput.ProcessUserInput(context.Background(), p)
+	tracker.EndPhase("process_user_input")
+
 	if err != nil {
+		tracker.StartPhase("error_logging")
 		logProcessUserInputDebug(logPath, toStderr, "ERROR", map[string]any{"error": err.Error()})
+		tracker.EndPhase("error_logging")
+		tracker.Complete(0, false)
 		return err
 	}
+
+	tracker.StartPhase("result_logging")
 	logProcessUserInputDebug(logPath, toStderr, "AFTER_BASE", buildResultPayload("", out))
 	logProcessUserInputDebug(logPath, toStderr, "OUT", buildResultPayload("go-cli", out))
+	tracker.EndPhase("result_logging")
 
+	tracker.StartPhase("output_encoding")
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
 	envOut := buildStdoutEnvelope(
@@ -233,7 +266,12 @@ func run() error {
 		envOut.StatePatchBatch = out.StatePatchBatch
 	}
 	if err := enc.Encode(envOut); err != nil {
+		tracker.EndPhase("output_encoding")
+		tracker.Complete(0, false)
 		return fmt.Errorf("encode result: %w", err)
 	}
+	tracker.EndPhase("output_encoding")
+
+	tracker.Complete(1, true)
 	return nil
 }

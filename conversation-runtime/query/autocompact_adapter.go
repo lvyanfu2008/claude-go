@@ -1,0 +1,251 @@
+package query
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+
+	"goc/anthropicmessages"
+	"goc/compactservice"
+	"goc/types"
+)
+
+// newCompactAdapter returns a [QueryDeps.Autocompact] function that wires into
+// compactservice.AutoCompactIfNeeded. Mirrors the TS productionDeps autocompact slot
+// (queryPipeline/deps.ts) where autoCompactIfNeeded is plugged in directly.
+//
+// The returned function:
+//  1. Materializes [compactservice.AutoCompactTrackingState] from the host's
+//     [AutocompactInput.Tracking] raw blob (which [queryLoop] round-trips).
+//  2. Calls AutoCompactIfNeeded with a Summarizer that issues a one-shot streaming
+//     POST to /v1/messages against the main loop model (no tools / thinking disabled).
+//  3. Serializes [CompactionResult] + tracking back into the [AutocompactResult] wire shape.
+//
+// Hooks + attachments fall through to the no-op defaults. Hosts that want real
+// pre/post-compact hooks + post-compact attachment regeneration supply their
+// own adapter that layers a CompactDepsBuilder over this.
+func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
+	return func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
+		if in == nil {
+			return nil, nil
+		}
+
+		tracking := decodeAutoCompactTracking(in.Tracking)
+
+		model := modelFromToolUseContext(in.ToolUseContext)
+
+		deps := compactservice.Deps{
+			Summarize: defaultSummarizer(model),
+			// Hooks + attachments default to no-op (TS parity gap: see doc.go).
+		}
+
+		snip := 0
+		if in.SnipTokensFreed != nil {
+			snip = *in.SnipTokensFreed
+		}
+
+		res, err := compactservice.AutoCompactIfNeeded(ctx, compactservice.AutoCompactIfNeededInput{
+			Messages:        in.Messages,
+			Model:           model,
+			AgentID:         "",
+			QuerySource:     string(in.QuerySource),
+			Tracking:        tracking,
+			SnipTokensFreed: snip,
+			Thresholds:      compactservice.CompactThresholds{},
+			Deps:            deps,
+		})
+		if err != nil {
+			// Mirror TS: on failure increment consecutiveFailures, propagate nothing else.
+			out := &AutocompactResult{WasCompacted: false}
+			if res.ConsecutiveFailures != nil {
+				out.ConsecutiveFailures = *res.ConsecutiveFailures
+				out.UpdatedTracking = encodeUpdatedTracking(tracking, res)
+			}
+			return out, nil
+		}
+		if !res.WasCompacted || res.CompactionResult == nil {
+			return &AutocompactResult{WasCompacted: false}, nil
+		}
+
+		post := compactservice.BuildPostCompactMessages(*res.CompactionResult)
+		blob, _ := json.Marshal(res.CompactionResult)
+
+		return &AutocompactResult{
+			WasCompacted:     true,
+			PostMessages:     post,
+			CompactionResult: blob,
+			UpdatedTracking:  encodeUpdatedTracking(tracking, res),
+		}, nil
+	}
+}
+
+// decodeAutoCompactTracking round-trips the raw tracking blob threaded by queryLoop
+// (State.AutoCompactTracking is json.RawMessage). Missing fields fall back to zero.
+func decodeAutoCompactTracking(raw json.RawMessage) *compactservice.AutoCompactTrackingState {
+	if len(raw) == 0 {
+		return nil
+	}
+	var out compactservice.AutoCompactTrackingState
+	var aliased struct {
+		Compacted           bool   `json:"compacted"`
+		TurnCounter         int    `json:"turnCounter"`
+		TurnID              string `json:"turnId"`
+		ConsecutiveFailures int    `json:"consecutiveFailures"`
+	}
+	if err := json.Unmarshal(raw, &aliased); err != nil {
+		return nil
+	}
+	out.Compacted = aliased.Compacted
+	out.TurnCounter = aliased.TurnCounter
+	out.TurnID = aliased.TurnID
+	out.ConsecutiveFailures = aliased.ConsecutiveFailures
+	return &out
+}
+
+// encodeUpdatedTracking returns the JSON-encoded next tracking state to thread back
+// into [State.AutoCompactTracking]. Mirrors the TS path in query.ts that seeds
+// tracking.compacted=true + tracking.turnId=newUuid on success.
+func encodeUpdatedTracking(prev *compactservice.AutoCompactTrackingState, res compactservice.AutoCompactIfNeededResult) json.RawMessage {
+	next := compactservice.AutoCompactTrackingState{}
+	if prev != nil {
+		next = *prev
+	}
+	if res.WasCompacted {
+		next.Compacted = true
+		next.ConsecutiveFailures = 0
+	} else if res.ConsecutiveFailures != nil {
+		next.ConsecutiveFailures = *res.ConsecutiveFailures
+	}
+	out := map[string]any{
+		"compacted":           next.Compacted,
+		"turnCounter":         next.TurnCounter,
+		"turnId":              next.TurnID,
+		"consecutiveFailures": next.ConsecutiveFailures,
+	}
+	raw, _ := json.Marshal(out)
+	return raw
+}
+
+// modelFromToolUseContext plucks mainLoopModel from the context. Falls back to env default.
+func modelFromToolUseContext(tcx *types.ToolUseContext) string {
+	if tcx != nil {
+		if m := strings.TrimSpace(tcx.Options.MainLoopModel); m != "" {
+			return m
+		}
+	}
+	if m := strings.TrimSpace(os.Getenv("CLAUDE_MODEL")); m != "" {
+		return m
+	}
+	return ""
+}
+
+// defaultSummarizer returns a [compactservice.SummarizerFn] that issues a single
+// streaming POST to /v1/messages with no tools and thinking disabled, then accumulates
+// the assistant message.
+//
+// This intentionally bypasses [runStreamingParityModelLoop] — which does tool-execution —
+// because the compact summarizer call is text-only (see TS noToolsPreamble / trailer).
+func defaultSummarizer(_ string) compactservice.SummarizerFn {
+	return func(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
+		apiKey := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
+		}
+		base := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
+		if base == "" {
+			base = "https://api.anthropic.com"
+		}
+		if apiKey == "" {
+			return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: ANTHROPIC_API_KEY missing — cannot summarize")
+		}
+
+		model := strings.TrimSpace(in.Model)
+		if model == "" {
+			return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: model missing")
+		}
+
+		// Build the wire messages: pre-compact conversation + the summaryRequest user message.
+		wireMsgs := append([]types.Message{}, in.Messages...)
+		wireMsgs = append(wireMsgs, in.SummaryRequest)
+		innerMsgs, err := wireShapeFromMessages(wireMsgs)
+		if err != nil {
+			return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact wire msgs: %w", err)
+		}
+
+		sys := strings.TrimSpace(strings.Join(in.SystemPrompt, "\n\n"))
+		maxOut := in.MaxOutputTokens
+		if maxOut <= 0 {
+			maxOut = compactservice.CompactMaxOutputTokens
+		}
+		req := map[string]any{
+			"model":      model,
+			"max_tokens": maxOut,
+			"messages":   innerMsgs,
+			"stream":     true,
+			// Thinking explicitly disabled (TS: thinkingConfig: { type: 'disabled' }).
+			"thinking": map[string]any{"type": "disabled"},
+		}
+		if sys != "" {
+			req["system"] = sys
+		}
+		body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
+		if err != nil {
+			return compactservice.SummaryStreamResult{}, err
+		}
+
+		acc := newAssistantStreamAccumulator()
+		err = anthropicmessages.PostStream(ctx, anthropicmessages.PostStreamParams{
+			BaseURL: base,
+			APIKey:  apiKey,
+			Body:    body,
+			HTTP:    http.DefaultClient,
+			Emit: func(ev anthropicmessages.MessageStreamEvent) error {
+				return acc.OnEvent(ev)
+			},
+		})
+		if err != nil {
+			return compactservice.SummaryStreamResult{}, err
+		}
+
+		uuid := randomUUID()
+		inner, err := acc.AssistantWire(uuid)
+		if err != nil {
+			return compactservice.SummaryStreamResult{}, err
+		}
+		asst := types.Message{
+			Type:    types.MessageTypeAssistant,
+			UUID:    uuid,
+			Message: inner,
+		}
+		types.SyncAssistantMessageID(&asst)
+
+		usage := compactservice.GetTokenUsage(asst)
+		return compactservice.SummaryStreamResult{AssistantMessage: asst, Usage: usage}, nil
+	}
+}
+
+// wireShapeFromMessages converts []types.Message into the API-wire shape used by
+// the POST body (role/content pairs extracted from the inner message envelope).
+// Mirrors normalizeMessagesForAPI's output — we do a lightweight projection so the
+// default summarizer can run without dragging the full message-normalization pipeline.
+func wireShapeFromMessages(messages []types.Message) ([]any, error) {
+	out := make([]any, 0, len(messages))
+	for _, m := range messages {
+		if m.Type != types.MessageTypeUser && m.Type != types.MessageTypeAssistant {
+			// Skip system/attachment/progress — they don't go on the wire.
+			continue
+		}
+		if len(m.Message) == 0 {
+			continue
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(m.Message, &envelope); err != nil {
+			return nil, err
+		}
+		out = append(out, envelope)
+	}
+	return out, nil
+}
