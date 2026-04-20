@@ -201,6 +201,9 @@ type AutoCompactIfNeededInput struct {
 	SnipTokensFreed int
 	Thresholds      CompactThresholds
 	Deps            Deps
+	// ToolUseContext is optional runtime context passed through to CompactConversation
+	// for post-compact attachment re-injection.
+	ToolUseContext *types.ToolUseContext
 }
 
 // AutoCompactIfNeededResult mirrors the TS return shape.
@@ -251,6 +254,7 @@ func AutoCompactIfNeeded(ctx context.Context, in AutoCompactIfNeededInput) (Auto
 		RecompactionInfo:          recomp,
 		Model:                     in.Model,
 		AgentID:                   in.AgentID,
+		ToolUseContext:            in.ToolUseContext,
 	})
 	if err != nil {
 		prev := 0

@@ -40,6 +40,9 @@ type CompactOptions struct {
 	Model string
 	// AgentID mirrors context.agentId (plan/skill scope).
 	AgentID string
+	// ToolUseContext is optional runtime context passed to PostCompactAttachmentProvider
+	// for richer attachment re-injection (tool definitions, agent definitions, MCP clients).
+	ToolUseContext *types.ToolUseContext
 }
 
 // CompactConversation mirrors compactConversation in services/compact/compact.ts.
@@ -90,6 +93,10 @@ func CompactConversation(
 	if err != nil {
 		return CompactionResult{}, fmt.Errorf("pre-compact hooks: %w", err)
 	}
+	// TS blockingError: hooks can abort compaction without error
+	if preHook.Blocked {
+		return CompactionResult{}, nil
+	}
 	customInstructions := MergeHookInstructions(opts.CustomInstructions, preHook.NewCustomInstructions)
 	preHookUserDisplay := preHook.UserDisplayMessage
 
@@ -106,11 +113,10 @@ func CompactConversation(
 	}
 
 	// Pre-strip: stripImagesFromMessages + stripReinjectedAttachments.
-	// EXPERIMENTAL_SKILL_SEARCH is not yet a Go feature flag, so the second
-	// arg defaults false (pass-through) — mirror TS behavior on external builds.
+	// EXPERIMENTAL_SKILL_SEARCH gate mirrors TS behavior.
 	summarizeInput := StripImagesFromMessages(StripReinjectedAttachments(
 		append([]types.Message{}, GetMessagesAfterCompactBoundary(messages)...),
-		false,
+		IsExperimentalSkillSearchEnabled(),
 	))
 
 	messagesToSummarize := summarizeInput
@@ -188,6 +194,8 @@ func CompactConversation(
 		Model:                    opts.Model,
 		AgentID:                  opts.AgentID,
 		MessagesBeforeCompaction: beforeMessages,
+		MessagesToKeep:           nil, // full compact: no preserved tail
+		ToolUseContext:           opts.ToolUseContext,
 	})
 	if err != nil {
 		return CompactionResult{}, fmt.Errorf("post-compact attachments: %w", err)

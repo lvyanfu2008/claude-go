@@ -347,6 +347,147 @@ func TestCompactConversation_RetriesOnPromptTooLong(t *testing.T) {
 	}
 }
 
+// -------- attachment extraction tests --------
+
+func TestExtractReadFilePaths_Basic(t *testing.T) {
+	// Assistant message with Read tool_use
+	assistantMsg := types.Message{
+		Type: types.MessageTypeAssistant,
+		UUID: "a1",
+		Message: mustJSON(map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{
+					"type": "tool_use",
+					"name": "Read",
+					"input": map[string]any{
+						"file_path": "/foo/bar.txt",
+					},
+				},
+				map[string]any{
+					"type": "tool_use",
+					"name": "Read",
+					"input": map[string]any{
+						"file_path": "/baz/qux.go",
+					},
+				},
+			},
+		}),
+	}
+	// Another assistant with a Read already in preserved
+	assistantMsg2 := types.Message{
+		Type: types.MessageTypeAssistant,
+		UUID: "a2",
+		Message: mustJSON(map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{
+					"type": "tool_use",
+					"name": "Read",
+					"input": map[string]any{
+						"file_path": "/preserved/file.txt",
+					},
+				},
+			},
+		}),
+	}
+	// Preserved message with same Read
+	preservedMsg := types.Message{
+		Type: types.MessageTypeAssistant,
+		UUID: "p1",
+		Message: mustJSON(map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{
+					"type": "tool_use",
+					"name": "Read",
+					"input": map[string]any{
+						"file_path": "/preserved/file.txt",
+					},
+				},
+			},
+		}),
+	}
+
+	messages := []types.Message{assistantMsg, assistantMsg2}
+	preserved := []types.Message{preservedMsg}
+
+	result := ExtractReadFilePaths(messages, preserved, 10)
+
+	// Should have 2 files (not 3, since /preserved/file.txt is excluded)
+	if len(result) != 2 {
+		t.Fatalf("want 2 files, got %d: %+v", len(result), result)
+	}
+	paths := make(map[string]bool)
+	for _, r := range result {
+		paths[r.Path] = true
+	}
+	if !paths["/foo/bar.txt"] || !paths["/baz/qux.go"] {
+		t.Fatalf("missing expected paths: %+v", result)
+	}
+	if paths["/preserved/file.txt"] {
+		t.Fatal("should not include preserved file")
+	}
+}
+
+func TestExtractInvokedSkills_Basic(t *testing.T) {
+	attMsg := types.Message{
+		Type: types.MessageTypeAttachment,
+		UUID: "att1",
+		Attachment: mustJSON(map[string]any{
+			"type": "invoked_skills",
+			"skills": []any{
+				map[string]any{
+					"name":    "skill-a",
+					"path":    "/skills/a.md",
+					"content": "Skill A content",
+				},
+				map[string]any{
+					"name":    "skill-b",
+					"path":    "/skills/b.md",
+					"content": "Skill B content",
+				},
+			},
+		}),
+	}
+	// A later invoked_skills with skill-a updated
+	attMsg2 := types.Message{
+		Type: types.MessageTypeAttachment,
+		UUID: "att2",
+		Attachment: mustJSON(map[string]any{
+			"type": "invoked_skills",
+			"skills": []any{
+				map[string]any{
+					"name":    "skill-a",
+					"path":    "/skills/a.md",
+					"content": "Skill A updated content",
+				},
+			},
+		}),
+	}
+
+	messages := []types.Message{attMsg, attMsg2}
+	result := ExtractInvokedSkills(messages)
+
+	if len(result) != 2 {
+		t.Fatalf("want 2 skills, got %d", len(result))
+	}
+	// skill-a should have updated content (later occurrence wins)
+	var skillA *ExtractedSkill
+	for i := range result {
+		if result[i].Name == "skill-a" {
+			skillA = &result[i]
+			break
+		}
+	}
+	if skillA == nil {
+		t.Fatal("skill-a not found")
+	}
+	if skillA.Content != "Skill A updated content" {
+		t.Fatalf("skill-a content not updated: %q", skillA.Content)
+	}
+}
+
 // -------- helpers --------
 
 func mustContainAll(t *testing.T, hay string, needles ...string) {
@@ -359,3 +500,11 @@ func mustContainAll(t *testing.T, hay string, needles ...string) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func mustJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}

@@ -121,9 +121,15 @@ func stripImagesInUserMessageJSON(innerJSON json.RawMessage) (json.RawMessage, b
 	return raw, true
 }
 
+// IsExperimentalSkillSearchEnabled mirrors TS feature('EXPERIMENTAL_SKILL_SEARCH').
+// Go reads from EXPERIMENTAL_SKILL_SEARCH env var. Default false.
+func IsExperimentalSkillSearchEnabled() bool {
+	return IsEnvTruthy("EXPERIMENTAL_SKILL_SEARCH")
+}
+
 // StripReinjectedAttachments mirrors stripReinjectedAttachments in TS. Outside the
-// EXPERIMENTAL_SKILL_SEARCH feature gate (which Go does not yet ship), this is a pass-through.
-// The optional FeatureExperimentalSkillSearch argument lets hosts enable the TS-parity filter.
+// EXPERIMENTAL_SKILL_SEARCH feature gate, this is a pass-through.
+// Pass experimentalSkillSearch=true (or call IsExperimentalSkillSearchEnabled()) to enable.
 func StripReinjectedAttachments(messages []types.Message, experimentalSkillSearch bool) []types.Message {
 	if !experimentalSkillSearch {
 		return messages

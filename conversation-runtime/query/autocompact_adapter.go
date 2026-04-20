@@ -38,8 +38,9 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 		model := modelFromToolUseContext(in.ToolUseContext)
 
 		deps := compactservice.Deps{
-			Summarize: defaultSummarizer(model),
-			// Hooks + attachments default to no-op (TS parity gap: see doc.go).
+			Summarize:              defaultSummarizer(model),
+			PostCompactAttachments: defaultPostCompactAttachments(),
+			// Hooks default to no-op (TS parity gap: see doc.go).
 		}
 
 		snip := 0
@@ -56,6 +57,7 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 			SnipTokensFreed: snip,
 			Thresholds:      compactservice.CompactThresholds{},
 			Deps:            deps,
+			ToolUseContext:  in.ToolUseContext,
 		})
 		if err != nil {
 			// Mirror TS: on failure increment consecutiveFailures, propagate nothing else.
@@ -248,4 +250,82 @@ func wireShapeFromMessages(messages []types.Message) ([]any, error) {
 		out = append(out, envelope)
 	}
 	return out, nil
+}
+
+// defaultPostCompactAttachments returns a PostCompactAttachmentProvider that
+// extracts information from the pre-compact messages and generates attachment
+// messages for post-compact re-injection. This is a fallback implementation
+// that works without access to runtime state (ReadFileState, skill store, etc.).
+//
+// What it supports:
+//   - invoked_skills: extracts from prior invoked_skills attachments in messages
+//
+// What it does NOT support (requires host-side state):
+//   - file attachments (would need ReadFileState + actual file re-read)
+//   - plan / plan_mode (would need plan store)
+//   - deferred_tools_delta (would need live tool pool)
+//   - agent_listing_delta (would need live agent definitions)
+//   - mcp_instructions_delta (would need live MCP clients)
+//
+// Hosts with richer state should provide their own PostCompactAttachmentProvider.
+func defaultPostCompactAttachments() compactservice.PostCompactAttachmentProvider {
+	return func(_ context.Context, in compactservice.PostCompactAttachmentInput) ([]compactservice.HookResultMessage, error) {
+		// Convert []any to []types.Message for extraction
+		messages := make([]types.Message, 0, len(in.MessagesBeforeCompaction))
+		for _, m := range in.MessagesBeforeCompaction {
+			if tm, ok := m.(types.Message); ok {
+				messages = append(messages, tm)
+			}
+		}
+
+		var out []compactservice.HookResultMessage
+
+		// Extract and re-inject invoked_skills from prior messages
+		skills := compactservice.ExtractInvokedSkills(messages)
+		if len(skills) > 0 {
+			skillAtt := buildInvokedSkillsAttachment(skills)
+			if skillAtt != nil {
+				out = append(out, *skillAtt)
+			}
+		}
+
+		// TODO: When host provides ReadFileState, add file re-injection here.
+		// TODO: When host provides plan store, add plan/plan_mode attachments.
+		// TODO: When host provides tool/agent/MCP definitions, add delta attachments.
+
+		return out, nil
+	}
+}
+
+// buildInvokedSkillsAttachment creates an attachment message for invoked_skills.
+func buildInvokedSkillsAttachment(skills []compactservice.ExtractedSkill) *types.Message {
+	if len(skills) == 0 {
+		return nil
+	}
+
+	type skillEntry struct {
+		Name    string `json:"name"`
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	skillsData := make([]skillEntry, len(skills))
+	for i, s := range skills {
+		skillsData[i] = skillEntry{Name: s.Name, Path: s.Path, Content: s.Content}
+	}
+
+	att := map[string]any{
+		"type":   "invoked_skills",
+		"skills": skillsData,
+	}
+	attJSON, err := json.Marshal(att)
+	if err != nil {
+		return nil
+	}
+
+	msg := types.Message{
+		Type:       types.MessageTypeAttachment,
+		UUID:       randomUUID(),
+		Attachment: attJSON,
+	}
+	return &msg
 }

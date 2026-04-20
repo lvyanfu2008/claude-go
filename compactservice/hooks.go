@@ -9,9 +9,14 @@ type PreCompactHookInput struct {
 }
 
 // PreCompactHookResult mirrors { newCustomInstructions, userDisplayMessage } in TS.
+// When Blocked is true, the compaction is aborted without error (TS blockingError behavior).
 type PreCompactHookResult struct {
 	NewCustomInstructions string
 	UserDisplayMessage    string
+	// Blocked when true signals that pre-compact hooks want to abort compaction
+	// without treating it as an error (TS blockingError pattern). The caller should
+	// return early with WasCompacted=false.
+	Blocked bool
 }
 
 // PreCompactHookRunner is the injection point for PreCompact hooks (TS executePreCompactHooks).
