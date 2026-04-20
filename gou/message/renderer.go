@@ -55,6 +55,7 @@ func NewDispatcher() *Dispatcher {
 			&ToolUseMessageRenderer{},
 			&CollapsedGroupRenderer{},
 			&GroupedToolUseRenderer{},
+			&AttachmentMessageRenderer{},
 		},
 	}
 }
