@@ -52,6 +52,13 @@ func NewHighlighter(config HighlightConfig) (*Highlighter, error) {
 	if style == nil {
 		// 回退到默认样式
 		style = styles.Fallback
+		if style == nil {
+			// 如果回退样式也为nil，尝试获取其他样式
+			style = styles.Get("github")
+			if style == nil {
+				style = styles.Get("vs")
+			}
+		}
 	}
 	h.style = style
 
@@ -66,6 +73,11 @@ func NewHighlighter(config HighlightConfig) (*Highlighter, error) {
 	default:
 		// 默认使用terminal256
 		h.formatter = formatters.Get("terminal256")
+	}
+
+	if h.formatter == nil {
+		// 格式化器加载失败，回退到terminal8
+		h.formatter = formatters.Get("terminal8")
 	}
 
 	return h, nil

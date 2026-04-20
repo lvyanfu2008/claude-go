@@ -294,9 +294,10 @@ func TestRenderTokensWithHighlight(t *testing.T) {
 
 	// 使用默认主题
 	theme := lipgloss.NewStyle()
+	inline := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
 
 	// 渲染带高亮的文本
-	result := RenderTokensWithHighlight(tokens, highlighter, theme)
+	result := RenderTokensWithHighlight(tokens, highlighter, theme, inline)
 
 	// 调试输出
 	t.Logf("Result length: %d", len(result))

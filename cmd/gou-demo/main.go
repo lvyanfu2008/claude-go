@@ -639,7 +639,13 @@ func main() {
 	theme.InitFromThemeName(os.Getenv("CLAUDE_CODE_THEME"))
 	// Initialize markdown highlighter for code syntax highlighting
 	config := markdown.DefaultHighlightConfig()
-	markdownHighlighter, _ = markdown.NewHighlighter(config)
+	var err error
+	markdownHighlighter, err = markdown.NewHighlighter(config)
+	if err != nil {
+		log.Printf("gou-demo: failed to create markdown highlighter: %v", err)
+	} else {
+		log.Printf("gou-demo: markdown highlighter initialized with style=%s, formatter=%s", config.StyleName, config.FormatterName)
+	}
 	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: user ~/.claude/settings.json,
 	// project .claude/settings.go.json, settings.local.json. Project .claude/settings.json is TS-only
 	// (see settingsfile package doc); put GOU_DEMO_* / CCB_ENGINE_* in settings.go.json or export in shell.

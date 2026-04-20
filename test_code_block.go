@@ -62,7 +62,8 @@ hello()
 	}
 	
 	theme := lipgloss.NewStyle()
-	highlighted := markdown.RenderTokensWithHighlight(tokens, highlighter, theme)
+	inline := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+	highlighted := markdown.RenderTokensWithHighlight(tokens, highlighter, theme, inline)
 	
 	// 显示前500个字符
 	if len(highlighted) > 500 {

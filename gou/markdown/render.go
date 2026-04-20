@@ -77,8 +77,9 @@ func RenderTokensPlain(tokens []Token) string {
 	return strings.TrimSpace(b.String())
 }
 
-// RenderTokensWithHighlight 将token渲染为带ANSI高亮的文本
-func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme lipgloss.Style) string {
+// RenderTokensWithHighlight 将token渲染为带ANSI高亮的文本。
+// theme 用于标题与普通内联（粗体/斜体）；inlineCode 专用于 `反引号` 内联代码（与 theme.Palette.InlineCode 对齐）。
+func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme lipgloss.Style, inlineCode lipgloss.Style) string {
 	var b strings.Builder
 	for _, t := range tokens {
 		switch t.Type {
@@ -98,7 +99,7 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			if len(t.Segments) > 0 {
 				var segText strings.Builder
 				for _, s := range t.Segments {
-					segText.WriteString(applyInlineStyle(s, theme))
+					segText.WriteString(applyInlineStyle(s, theme, inlineCode))
 				}
 				headingText = segText.String()
 			} else {
@@ -112,7 +113,7 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 		case "paragraph":
 			if len(t.Segments) > 0 {
 				for _, s := range t.Segments {
-					b.WriteString(applyInlineStyle(s, theme))
+					b.WriteString(applyInlineStyle(s, theme, inlineCode))
 				}
 			} else {
 				b.WriteString(t.Text)
@@ -121,18 +122,24 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 		case "code":
 			// 代码块高亮
 			var highlighted string
+			var highlightErr error
 			if highlighter != nil {
-				highlighted, _ = highlighter.HighlightCode(t.Text, t.Lang)
+				highlighted, highlightErr = highlighter.HighlightCode(t.Text, t.Lang)
 			}
 
-			if highlighted != "" {
+			if highlighted != "" && highlightErr == nil {
 				// 如果有高亮器且高亮成功，显示高亮后的代码（没有围栏）
 				b.WriteString(highlighted)
 			} else {
 				// 如果没有高亮器或高亮失败，显示带围栏的代码并应用淡色样式
 				codeStyle := theme.Copy().Faint(true)
-				cb := "```" + t.Lang + "\n" + t.Text
-				if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
+				// 处理代码块中的...
+				codeText := t.Text
+				if strings.Contains(codeText, "...") {
+					codeText = strings.ReplaceAll(codeText, "...", "█")
+				}
+				cb := "```" + t.Lang + "\n" + codeText
+				if codeText != "" && !strings.HasSuffix(codeText, "\n") {
 					cb += "\n"
 				}
 				cb += "```"
@@ -150,7 +157,7 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			}
 			if len(t.Segments) > 0 {
 				for _, s := range t.Segments {
-					b.WriteString(applyInlineStyle(s, theme))
+					b.WriteString(applyInlineStyle(s, theme, inlineCode))
 				}
 			} else {
 				b.WriteString(t.Text)
@@ -163,7 +170,7 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			if len(t.Segments) > 0 {
 				var segText strings.Builder
 				for _, s := range t.Segments {
-					segText.WriteString(applyInlineStyle(s, theme))
+					segText.WriteString(applyInlineStyle(s, theme, inlineCode))
 				}
 				quoteText = segText.String()
 			} else {
@@ -188,14 +195,50 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 }
 
 // applyInlineStyle 应用内联样式（粗体、斜体、代码）
-func applyInlineStyle(seg InlineSegment, theme lipgloss.Style) string {
+func applyInlineStyle(seg InlineSegment, theme, inlineCode lipgloss.Style) string {
 	text := seg.Text
+
 	if seg.Code {
-		// 内联代码使用特定样式
-		return theme.Copy().Foreground(lipgloss.Color("39")).Render(text)
+		// 内联代码使用主题色（与 gou-demo styleMarkdownInlineSegments / theme.InlineCode 一致）
+		if strings.Contains(text, "...") {
+			text = strings.ReplaceAll(text, "...", "█")
+		}
+		return inlineCode.Render(text)
+	}
+	
+	// 处理...这类数据，渲染为淡蓝色的█
+	if text == "..." {
+		// 使用淡蓝色（颜色代码87）
+		return theme.Copy().Foreground(lipgloss.Color("87")).Render("█")
+	}
+	
+	// 检查文本中是否包含...（即使不是单独的segment）
+	if strings.Contains(text, "...") {
+		// 将...替换为淡蓝色的█
+		// 我们需要更精细的处理来保持其他样式
+		parts := strings.Split(text, "...")
+		var result strings.Builder
+		for i, part := range parts {
+			if part != "" {
+				// 应用当前段的样式，从theme开始
+				style := theme.Copy()
+				if seg.Bold {
+					style = style.Bold(true)
+				}
+				if seg.Italic {
+					style = style.Italic(true)
+				}
+				result.WriteString(style.Render(part))
+			}
+			if i < len(parts)-1 {
+				// 添加淡蓝色的█
+				result.WriteString(theme.Copy().Foreground(lipgloss.Color("87")).Render("█"))
+			}
+		}
+		return result.String()
 	}
 
-	style := lipgloss.NewStyle()
+	style := theme.Copy()
 	if seg.Bold {
 		style = style.Bold(true)
 	}

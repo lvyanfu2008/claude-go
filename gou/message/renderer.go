@@ -159,9 +159,10 @@ func renderMarkdown(text string, width int, palette *theme.Palette, highlighter 
 
 	// Convert palette to lipgloss style for markdown rendering
 	style := paletteToLipglossStyle(palette)
+	inlineCode := lipgloss.NewStyle().Foreground(palette.InlineCode)
 
 	// Render with highlighting
-	rendered := markdown.RenderTokensWithHighlight(tokens, highlighter, style)
+	rendered := markdown.RenderTokensWithHighlight(tokens, highlighter, style, inlineCode)
 
 	// Split into lines and wrap if needed
 	lines := strings.Split(rendered, "\n")
