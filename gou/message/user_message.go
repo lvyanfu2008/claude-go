@@ -9,7 +9,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"goc/ccb-engine/diaglog"
-	"goc/gou/messagerow"
 	"goc/types"
 )
 
@@ -270,6 +269,10 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 
 	diaglog.Line("[user-message] renderToolResultBlock: isTranscript=%v, verbose=%v", ctx.IsTranscript, ctx.Verbose)
 
+	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		return diffLines, nil
+	}
+
 	// In prompt mode, tool results are usually collapsed to 1 line
 	if !ctx.IsTranscript && !ctx.Verbose {
 		diaglog.Line("[user-message] renderToolResultBlock: collapsed to 1 line (prompt mode)")
@@ -282,9 +285,6 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 		// content is a string - wrap it as a text block
 		diaglog.Line("[user-message] tool_result content is string, length=%d", len(contentStr))
 		if contentStr != "" {
-			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
-				return diffLines, nil
-			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
@@ -328,6 +328,9 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 
 // measureToolResultBlock measures a tool result block.
 func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{}, ctx *RenderContext) int {
+	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		return len(diffLines)
+	}
 	// Tool results are usually collapsed to 1 line in prompt mode
 	if !ctx.IsTranscript && !ctx.Verbose {
 		diaglog.Line("[user-message] measureToolResultBlock: collapsed to 1 line (prompt mode)")
@@ -341,9 +344,6 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
 		if contentStr != "" {
-			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
-				return len(diffLines)
-			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",

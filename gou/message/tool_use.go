@@ -115,6 +115,10 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 	diaglog.Line("[tool-use] RenderToolResultBlock: tool_use_id=%s, isTranscript=%v, verbose=%v",
 		toolUseID, ctx.IsTranscript, ctx.Verbose)
 
+	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		return diffLines, nil
+	}
+
 	// In prompt mode, tool results are usually collapsed to 1 line
 	if !ctx.IsTranscript && !ctx.Verbose {
 		diaglog.Line("[tool-use] RenderToolResultBlock: collapsed to 1 line (prompt mode)")
@@ -128,9 +132,6 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 		// content is a string - wrap it as a text block
 		diaglog.Line("[tool-use] tool_result content is string, length=%d", len(contentStr))
 		if contentStr != "" {
-			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
-				return diffLines, nil
-			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
@@ -174,6 +175,9 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 
 // MeasureToolResultBlock measures a tool_result block.
 func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interface{}, ctx *RenderContext) int {
+	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		return len(diffLines)
+	}
 	// In prompt mode, tool results are usually collapsed
 	if !ctx.IsTranscript && !ctx.Verbose {
 		diaglog.Line("[tool-use] MeasureToolResultBlock: collapsed to 1 line (prompt mode)")
@@ -188,9 +192,6 @@ func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interfa
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
 		if contentStr != "" {
-			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
-				return len(diffLines)
-			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
