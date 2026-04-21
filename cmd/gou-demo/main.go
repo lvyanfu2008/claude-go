@@ -68,6 +68,7 @@ import (
 	"goc/gou/conversation"
 	"goc/gou/layout"
 	"goc/gou/markdown"
+	goumsg "goc/gou/message"
 	"goc/gou/messagerow"
 	"goc/gou/prompt"
 	"goc/gou/pui"
@@ -1452,7 +1453,14 @@ func (m *model) rebuildHeightCache() {
 	}
 }
 
-// measureMessageRows matches final View styling (ANSI + wrap) for VirtualMessageList heightCache parity.
+// measureMessageRows returns terminal row count for heightCache / scrollbar offsets.
+// It uses the new message renderer ([goumsg.Dispatcher.Measure]) with the same [goumsg.RenderContext]
+// fields as [MessageRendererIntegration.ComputeVisibleRange], plus legacy parity tweaks:
+//   - [skipFoldedToolResultStubInPrompt] → 0 (omitted user stub rows)
+//   - user messages: +1 line (legacy messagerow appended a trailing newline before [layout.WrappedRowCount])
+//   - non-attachment: at least 1 row when non-empty measure path would otherwise undercount
+//
+// Transcript search highlight (searchHL) only affected the old messagerow path; Measure does not widen/wrap on hl.
 func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 	if m.uiScreen == gouDemoScreenPrompt {
 		active := m.queryBusy &&
@@ -1490,39 +1498,39 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 }
 
 func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string) int {
+	_ = searchHL
 	if m.skipFoldedToolResultStubInPrompt(msg) {
 		return 0
 	}
-	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
-	if msg.Type == types.MessageTypeAttachment && len(segs) == 0 {
-		return 0
+	m.integrateMessageRenderer()
+	if cols < 1 {
+		cols = 40
 	}
-	var header string
-	if msg.Type != types.MessageTypeAttachment {
-		switch msg.Type {
-		case types.MessageTypeUser, types.MessageTypeAssistant,
-			types.MessageTypeCollapsedReadSearch, types.MessageTypeGroupedToolUse:
-			// Body-only like assistant — no "collapsed_read_search" / "grouped_tool_use" title row (TS MessageRow).
-		default:
-			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
-		}
+	isTranscript := m.uiScreen == gouDemoScreenTranscript
+	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+	cw := cols
+	ctx := &goumsg.RenderContext{
+		Width:           cols,
+		Theme:           m.msgRenderer.Palette(),
+		IsTranscript:    isTranscript,
+		IsStatic:        isTranscript,
+		Verbose:         verbose,
+		Highlighter:     markdownHighlighter,
+		AddMargin:       true,
+		ContainerWidth:  &cw,
 	}
-	// Resolved Read/Search ⎿ stats (Found N lines, read preview) match transcript; not transcript-screen-only.
-	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true, msg.Type == types.MessageTypeUser)
-	body = withUserPromptPointerIfNeeded(msg, body)
-	body = withCollapsedSpaceIfNeeded(msg, body)
-	block := body
-	if header != "" {
-		block = header + "\n" + body
+	h, err := m.msgRenderer.MeasureMessage(&msg, ctx)
+	if err != nil {
+		h = 1
 	}
 	if msg.Type == types.MessageTypeUser {
-		block = block + "\n"
+		// Match legacy height: user block had an extra trailing newline before WrappedRowCount.
+		h++
 	}
-	r := layout.WrappedRowCount(block, messageWrapCols(cols))
 	if msg.Type == types.MessageTypeAttachment {
-		return r
+		return h
 	}
-	return max(1, r)
+	return max(1, h)
 }
 
 func extractPartialJSONField(input string, field string) string {

@@ -41,7 +41,7 @@
 //     Default: normal terminal buffer (no tea.WithAltScreen) to keep shell scrollback. Optional GOU_DEMO_ALT_SCREEN=1
 //     enables tea.WithAltScreen for in-pane wheel focus.
 //   - Row body: goc/gou/messagerow (SegmentsFromMessage*, tool chrome, collapsed_read_search)
-//   - Render/stitch: cmd/gou-demo/main.go formatMessageSegments, renderMessageRow, measureMessageRows
+//   - Render/stitch: cmd/gou-demo/main.go formatMessageSegments, renderMessageRow (messagerow); heightCache / measureMessageRows use goc/gou/message Dispatcher.Measure (same stack as VirtualList / ComputeVisibleRange)
 //
 // # Stream apply (assistant_delta, tool_use, tool_result, turn_complete)
 //
