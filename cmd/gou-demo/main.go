@@ -2427,11 +2427,11 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 // handleTraditionalScrollKey handles scroll keys when not using viewport (traditional virtual scrolling).
 func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
-	case "j", "down":
+	case "down":
 		m.sticky = false
 		m.scrollTop += 1
 		return nil
-	case "k", "up":
+	case "up":
 		m.sticky = false
 		m.scrollTop = max(0, m.scrollTop-1)
 		return nil

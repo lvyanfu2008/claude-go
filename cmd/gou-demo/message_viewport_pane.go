@@ -57,12 +57,12 @@ func gouDemoMsgViewportKeyMap() viewport.KeyMap {
 			key.WithHelp("pgup", "½ page up"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "up"),
+			key.WithKeys("up"),
+			key.WithHelp("↑", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "down"),
+			key.WithKeys("down"),
+			key.WithHelp("↓", "down"),
 		),
 		Left:  def.Left,
 		Right: def.Right,
