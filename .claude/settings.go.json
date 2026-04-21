@@ -4,7 +4,7 @@
     "CLAUDE_CODE_USE_OPENAI": "1",
     "CLAUDE_CODE_DEBUG_LOGS_DIR": "debug/goc",
     "CLAUDE_CODE_LOG_API_REQUEST_BODY": "1",
-    "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "0",
+    "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "1",
     "GOU_DEMO_LOG": "1",
     "GOU_DEMO_USE_EMBEDDED_TOOLS_API": "1",
     "FEATURE_MCP_SKILLS": "1",
@@ -24,7 +24,7 @@
     "GOU_DEMO_DUMP_ON_EXIT": "1",
     "OPENAI_MODEL": "deepseek-chat",
     "CCB_ENGINE_MODEL": "deepseek-chat",
-    "CLAUDE_CODE_USE_GEMMA": true
+    "CLAUDE_CODE_USE_GEMMA": "1"
   },
   "hooks": {
     "UserPromptSubmit": [
