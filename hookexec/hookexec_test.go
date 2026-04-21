@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"goc/types"
 )
 
 func TestMatchesPattern_pipeExact(t *testing.T) {
@@ -109,6 +111,63 @@ func TestAggregatePostCompactTS(t *testing.T) {
 	})
 	if !strings.Contains(got.UserDisplayMessage, "PostCompact [c]") {
 		t.Fatalf("got %q", got.UserDisplayMessage)
+	}
+}
+
+func TestUserPromptSubmitAggregates_additionalContext(t *testing.T) {
+	r := OutsideReplCommandResult{
+		Command:    `echo '{}'`,
+		Succeeded:  true,
+		Stdout:     `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"ctx1"}}`,
+		Stderr:     "",
+		Output:     `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"ctx1"}}`,
+		ExitCode:   0,
+		DurationMs: 1,
+	}
+	got := userPromptSubmitAggregates(r, "tid", "UserPromptSubmit", r.Command)
+	var foundCtx bool
+	for _, item := range got {
+		if len(item.AdditionalContexts) == 1 && item.AdditionalContexts[0] == "ctx1" {
+			foundCtx = true
+		}
+	}
+	if !foundCtx {
+		t.Fatalf("missing additionalContext: %#v", got)
+	}
+}
+
+func TestUserPromptSubmitAggregates_blockDecision(t *testing.T) {
+	r := OutsideReplCommandResult{
+		Command:   `true`,
+		Succeeded: true,
+		Stdout:    `{"decision":"block","reason":"nope"}`,
+		Output:    `{"decision":"block","reason":"nope"}`,
+		ExitCode:  0,
+	}
+	got := userPromptSubmitAggregates(r, "tid", "UserPromptSubmit", r.Command)
+	var block *types.HookBlockingError
+	for _, item := range got {
+		if item.BlockingError != nil {
+			block = item.BlockingError
+		}
+	}
+	if block == nil || block.BlockingError != "nope" {
+		t.Fatalf("blocking: %#v", got)
+	}
+}
+
+func TestUserPromptSubmitAggregates_exitCode2(t *testing.T) {
+	r := OutsideReplCommandResult{
+		Command:   `./x`,
+		Succeeded: false,
+		Stdout:    "",
+		Stderr:    "boom",
+		Output:    "boom",
+		ExitCode:  2,
+	}
+	got := userPromptSubmitAggregates(r, "tid", "UserPromptSubmit", r.Command)
+	if len(got) != 1 || got[0].BlockingError == nil {
+		t.Fatalf("want single blocking, got %#v", got)
 	}
 }
 

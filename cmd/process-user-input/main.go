@@ -14,6 +14,7 @@ import (
 
 	"goc/diagnostics"
 	processuserinput "goc/conversation-runtime/process-user-input"
+	"goc/hookexec"
 	"goc/types"
 )
 
@@ -103,7 +104,7 @@ func run() error {
 		RuntimeContext:           &rc,
 		BridgeAttachmentMessages: args.BridgeAttachmentMessages,
 		StatePatchAck:            args.StatePatchAck,
-		// Bash / slash / hooks: nil (MVP); GetAttachmentMessages nil unless stdin omits bridgeAttachmentMessages.
+		// Bash / slash: nil; UserPromptSubmit command hooks from merged settings when configured; GetAttachmentMessages nil unless stdin omits bridgeAttachmentMessages.
 	}
 
 	tracker.StartPhase("command_loading")
@@ -137,6 +138,17 @@ func run() error {
 
 	tracker.StartPhase("callback_wiring")
 	wireProcessUserInputCallbacks(p, logPath, toStderr)
+	cwdHooks, errWd := os.Getwd()
+	if errWd != nil {
+		cwdHooks = "."
+	}
+	mergedHooks, errHooks := hookexec.MergedHooksForCwd(cwdHooks)
+	if errHooks != nil {
+		tracker.EndPhase("callback_wiring")
+		tracker.Complete(0, false)
+		return fmt.Errorf("load hooks: %w", errHooks)
+	}
+	wireUserPromptSubmitHooks(p, mergedHooks, cwdHooks)
 	tracker.EndPhase("callback_wiring")
 
 	tracker.StartPhase("process_user_input")

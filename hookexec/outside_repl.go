@@ -5,13 +5,18 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+	"time"
 )
 
 // OutsideReplCommandResult mirrors a single command outcome from TS executeHooksOutsideREPL (command branch).
 type OutsideReplCommandResult struct {
 	Command   string
 	Succeeded bool
-	Output    string
+	Output    string // stdout and stderr joined (same as historical behavior for compact aggregation).
+	Stdout    string
+	Stderr    string
+	ExitCode  int
+	DurationMs int64
 	Blocked   bool
 }
 
@@ -56,8 +61,16 @@ func ExecuteCommandHooksOutsideREPLParallel(p OutsideReplCommandParams) []Outsid
 		go func() {
 			defer wg.Done()
 			ms := hookTimeoutMS(h, batch)
+			start := time.Now()
 			stdout, stderr, exitCode, err := RunCommandHook(ctx, wd, h.Command, strings.TrimSpace(p.JSONInput), ms)
-			res := OutsideReplCommandResult{Command: h.Command, Output: stdout}
+			res := OutsideReplCommandResult{
+				Command:    h.Command,
+				Output:     stdout,
+				Stdout:     stdout,
+				Stderr:     stderr,
+				ExitCode:   exitCode,
+				DurationMs: time.Since(start).Milliseconds(),
+			}
 			if stderr != "" {
 				if res.Output != "" {
 					res.Output += "\n"
