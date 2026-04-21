@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
@@ -75,6 +76,7 @@ func runAutocompact(
 	in *AutocompactInput,
 ) ([]types.Message, *AutocompactResult, error) {
 	if deps == nil || deps.Autocompact == nil {
+		diaglog.Line("[query/autocompact] skip: QueryDeps.Autocompact is nil (auto-compact not wired for this host)")
 		return in.Messages, nil, nil
 	}
 	res, err := deps.Autocompact(ctx, in)

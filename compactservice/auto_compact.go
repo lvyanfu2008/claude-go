@@ -2,18 +2,20 @@ package compactservice
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 
+	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
 // Threshold buffer constants mirror src/services/compact/autoCompact.ts.
 const (
-	AutoCompactBufferTokens          = 13_000
-	WarningThresholdBufferTokens     = 20_000
-	ErrorThresholdBufferTokens       = 20_000
-	ManualCompactBufferTokens        = 3_000
+	AutoCompactBufferTokens           = 13_000
+	WarningThresholdBufferTokens      = 20_000
+	ErrorThresholdBufferTokens        = 20_000
+	ManualCompactBufferTokens         = 3_000
 	MaxConsecutiveAutoCompactFailures = 3
 
 	// MaxOutputTokensForSummary mirrors MAX_OUTPUT_TOKENS_FOR_SUMMARY in TS.
@@ -34,7 +36,7 @@ const defaultMaxOutputTokens = 64_000
 
 // CompactThresholds captures the subset of TS module-level dependencies that threshold math reads.
 type CompactThresholds struct {
-	ResolveContextWindow  ContextWindowResolver
+	ResolveContextWindow   ContextWindowResolver
 	ResolveMaxOutputTokens MaxOutputTokensResolver
 }
 
@@ -90,11 +92,11 @@ func GetAutoCompactThreshold(model string, betas []string, t CompactThresholds) 
 
 // TokenWarningState mirrors the return shape of calculateTokenWarningState in TS.
 type TokenWarningState struct {
-	PercentLeft                  int
-	IsAboveWarningThreshold      bool
-	IsAboveErrorThreshold        bool
-	IsAboveAutoCompactThreshold  bool
-	IsAtBlockingLimit            bool
+	PercentLeft                 int
+	IsAboveWarningThreshold     bool
+	IsAboveErrorThreshold       bool
+	IsAboveAutoCompactThreshold bool
+	IsAtBlockingLimit           bool
 }
 
 // CalculateTokenWarningState mirrors calculateTokenWarningState in TS.
@@ -160,10 +162,10 @@ func IsAutoCompactEnabled() bool {
 
 // AutoCompactTrackingState mirrors AutoCompactTrackingState in TS.
 type AutoCompactTrackingState struct {
-	Compacted            bool
-	TurnCounter          int
-	TurnID               string
-	ConsecutiveFailures  int
+	Compacted           bool
+	TurnCounter         int
+	TurnID              string
+	ConsecutiveFailures int
 }
 
 // ShouldAutoCompactInput groups the inputs to ShouldAutoCompact to avoid a long argument list.
@@ -179,15 +181,26 @@ type ShouldAutoCompactInput struct {
 // ShouldAutoCompact mirrors shouldAutoCompact(messages, model, querySource, snipTokensFreed).
 // Recursion guards + killswitches + enabled check + calculateTokenWarningState.
 func ShouldAutoCompact(in ShouldAutoCompactInput) bool {
+	return autocompactSkipReason(in) == ""
+}
+
+// autocompactSkipReason returns a non-empty human-readable reason when auto-compact should not run
+// (mirrors the branches inside [ShouldAutoCompact]). Empty string means compaction is allowed.
+func autocompactSkipReason(in ShouldAutoCompactInput) string {
 	switch in.QuerySource {
 	case "session_memory", "compact":
-		return false
+		return fmt.Sprintf("query_source=%q", in.QuerySource)
 	}
 	if !IsAutoCompactEnabled() {
-		return false
+		return "auto_compact_disabled (set DISABLE_AUTO_COMPACT or DISABLE_COMPACT)"
 	}
 	tokenCount := TokenCountWithEstimation(in.Messages) - in.SnipTokensFreed
-	return CalculateTokenWarningState(tokenCount, in.Model, in.Betas, in.Thresholds).IsAboveAutoCompactThreshold
+	if !CalculateTokenWarningState(tokenCount, in.Model, in.Betas, in.Thresholds).IsAboveAutoCompactThreshold {
+		thr := GetAutoCompactThreshold(in.Model, in.Betas, in.Thresholds)
+		return fmt.Sprintf("below_threshold estimated_tokens=%d auto_compact_threshold=%d snip_tokens_freed=%d model=%q query_source=%q",
+			tokenCount, thr, in.SnipTokensFreed, in.Model, in.QuerySource)
+	}
+	return ""
 }
 
 // AutoCompactIfNeededInput groups inputs to AutoCompactIfNeeded to mirror the TS call shape.
@@ -219,23 +232,33 @@ type AutoCompactIfNeededResult struct {
 // with a memory-aware implementation if they need that optimization).
 func AutoCompactIfNeeded(ctx context.Context, in AutoCompactIfNeededInput) (AutoCompactIfNeededResult, error) {
 	if IsEnvTruthy("DISABLE_COMPACT") {
+		diaglog.Line("[compactservice/autocompact] skip: DISABLE_COMPACT is set (all compaction off)")
 		return AutoCompactIfNeededResult{}, nil
 	}
 
 	if in.Tracking != nil && in.Tracking.ConsecutiveFailures >= MaxConsecutiveAutoCompactFailures {
+		diaglog.Line("[compactservice/autocompact] skip: circuit_breaker consecutive_failures=%d (max=%d)",
+			in.Tracking.ConsecutiveFailures, MaxConsecutiveAutoCompactFailures)
 		return AutoCompactIfNeededResult{}, nil
 	}
 
-	if !ShouldAutoCompact(ShouldAutoCompactInput{
+	shIn := ShouldAutoCompactInput{
 		Messages:        in.Messages,
 		Model:           in.Model,
 		Betas:           in.Betas,
 		QuerySource:     in.QuerySource,
 		SnipTokensFreed: in.SnipTokensFreed,
 		Thresholds:      in.Thresholds,
-	}) {
+	}
+	if reason := autocompactSkipReason(shIn); reason != "" {
+		diaglog.Line("[compactservice/autocompact] skip: %s", reason)
 		return AutoCompactIfNeededResult{}, nil
 	}
+
+	tokenBefore := TokenCountWithEstimation(in.Messages) - in.SnipTokensFreed
+	thr := GetAutoCompactThreshold(in.Model, in.Betas, in.Thresholds)
+	diaglog.Line("[compactservice/autocompact] running: estimated_tokens=%d threshold=%d model=%q query_source=%q snip_tokens_freed=%d",
+		tokenBefore, thr, in.Model, in.QuerySource, in.SnipTokensFreed)
 
 	recomp := &RecompactionInfo{
 		IsRecompactionInChain:     in.Tracking != nil && in.Tracking.Compacted,
@@ -262,12 +285,15 @@ func AutoCompactIfNeeded(ctx context.Context, in AutoCompactIfNeededInput) (Auto
 			prev = in.Tracking.ConsecutiveFailures
 		}
 		next := prev + 1
+		diaglog.Line("[compactservice/autocompact] failed: %v (consecutive_failures next=%d)", err, next)
 		return AutoCompactIfNeededResult{
 			WasCompacted:        false,
 			ConsecutiveFailures: &next,
 		}, err
 	}
 	zero := 0
+	diaglog.Line("[compactservice/autocompact] success: pre_compact_tokens=%d post_compact_tokens=%d true_post_compact_estimate=%d",
+		result.PreCompactTokenCount, result.PostCompactTokenCount, result.TruePostCompactTokenCount)
 	return AutoCompactIfNeededResult{
 		WasCompacted:        true,
 		CompactionResult:    &result,
