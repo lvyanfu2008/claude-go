@@ -43,11 +43,11 @@ type openAIToolBlockState struct {
 
 func newOpenAIStreamAdapter(model string) *openAIStreamAdapter {
 	return &openAIStreamAdapter{
-		model:            model,
+		model:               model,
 		currentContentIndex: -1,
-		toolBlocks:       make(map[int]*openAIToolBlockState),
-		openBlockIndices: make(map[int]struct{}),
-		msgID:            openAIMessageStreamID(),
+		toolBlocks:          make(map[int]*openAIToolBlockState),
+		openBlockIndices:    make(map[int]struct{}),
+		msgID:               openAIMessageStreamID(),
 	}
 }
 
@@ -124,9 +124,9 @@ func (a *openAIStreamAdapter) applyUsageFromChunk(raw json.RawMessage) {
 		return
 	}
 	var u struct {
-		PromptTokens            int `json:"prompt_tokens"`
-		CompletionTokens        int `json:"completion_tokens"`
-		PromptTokensDetails     *struct {
+		PromptTokens        int `json:"prompt_tokens"`
+		CompletionTokens    int `json:"completion_tokens"`
+		PromptTokensDetails *struct {
 			CachedTokens int `json:"cached_tokens"`
 		} `json:"prompt_tokens_details"`
 	}
@@ -171,10 +171,10 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 				"stop_reason":   nil,
 				"stop_sequence": nil,
 				"usage": map[string]any{
-					"input_tokens":                 a.inputTokens,
-					"output_tokens":                0,
-					"cache_creation_input_tokens":  0,
-					"cache_read_input_tokens":      a.cachedTokens,
+					"input_tokens":                a.inputTokens,
+					"output_tokens":               0,
+					"cache_creation_input_tokens": 0,
+					"cache_read_input_tokens":     a.cachedTokens,
 				},
 			},
 		}, emit); err != nil {
@@ -425,12 +425,140 @@ func ReplayOpenAIStreamChatResponse(sseBody []byte, model string, emit func(anth
 	return ad.FlushOpenBlocks(emit)
 }
 
+// NormalizeOpenAINonStreamChatBodyToolCallsLoose rewrites choices[0].message.tool_calls so sloppy
+// OpenAI-compatible models (e.g. Gemma) still replay through [ReplayOpenAINonStreamChatResponse]:
+// wraps a lone tool-call object as an array, lifts top-level name/arguments into function.{name,arguments},
+// coerces non-string arguments to a JSON string, fills missing id/type/index.
+func NormalizeOpenAINonStreamChatBodyToolCallsLoose(respBody []byte) []byte {
+	var root map[string]any
+	if err := json.Unmarshal(respBody, &root); err != nil {
+		return respBody
+	}
+	choices, ok := root["choices"].([]any)
+	if !ok || len(choices) == 0 {
+		return respBody
+	}
+	ch0, ok := choices[0].(map[string]any)
+	if !ok {
+		return respBody
+	}
+	msg, ok := ch0["message"].(map[string]any)
+	if !ok {
+		return respBody
+	}
+	tcRaw, ok := msg["tool_calls"]
+	if !ok || tcRaw == nil {
+		return respBody
+	}
+	normalized := normalizeOpenAIToolCallsValue(tcRaw)
+	if normalized == nil {
+		return respBody
+	}
+	msg["tool_calls"] = normalized
+	out, err := json.Marshal(root)
+	if err != nil {
+		return respBody
+	}
+	return out
+}
+
+func normalizeOpenAIToolCallsValue(v any) any {
+	if m, ok := v.(map[string]any); ok {
+		if _, fnOK := m["function"].(map[string]any); fnOK {
+			return []any{m}
+		}
+		if _, nameOK := m["name"].(string); nameOK {
+			return []any{m}
+		}
+		return nil
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]any, 0, len(arr))
+	for i, item := range arr {
+		tc, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		normalizeOpenAIToolCallMapInPlace(tc, i)
+		out = append(out, tc)
+	}
+	return out
+}
+
+func normalizeOpenAIToolCallMapInPlace(tc map[string]any, order int) {
+	if fn, ok := tc["function"].(map[string]any); ok {
+		if arg, has := fn["arguments"]; has {
+			fn["arguments"] = openAINonStreamCoerceArgsString(arg)
+		} else if arg, has := fn["input"]; has {
+			fn["arguments"] = openAINonStreamCoerceArgsString(arg)
+			delete(fn, "input")
+		} else {
+			fn["arguments"] = "{}"
+		}
+		if n, ok := fn["name"].(string); !ok || strings.TrimSpace(n) == "" {
+			if n2, ok := tc["name"].(string); ok && strings.TrimSpace(n2) != "" {
+				fn["name"] = n2
+				delete(tc, "name")
+			}
+		}
+	} else {
+		fn := map[string]any{}
+		if n, ok := tc["name"].(string); ok {
+			fn["name"] = n
+		}
+		arg := tc["arguments"]
+		if arg == nil {
+			arg = tc["args"]
+		}
+		if arg == nil {
+			arg = tc["input"]
+		}
+		fn["arguments"] = openAINonStreamCoerceArgsString(arg)
+		tc["function"] = fn
+		delete(tc, "name")
+		delete(tc, "arguments")
+		delete(tc, "args")
+		delete(tc, "input")
+	}
+	if id, ok := tc["id"].(string); !ok || strings.TrimSpace(id) == "" {
+		tc["id"] = openAIToolPlaceholderID()
+	}
+	if typ, ok := tc["type"].(string); !ok || strings.TrimSpace(typ) == "" {
+		tc["type"] = "function"
+	}
+	if _, ok := tc["index"].(float64); !ok {
+		tc["index"] = float64(order)
+	}
+}
+
+func openAINonStreamCoerceArgsString(v any) string {
+	if v == nil {
+		return "{}"
+	}
+	if s, ok := v.(string); ok {
+		if strings.TrimSpace(s) == "" {
+			return "{}"
+		}
+		return s
+	}
+	b, err := json.Marshal(v)
+	if err != nil || len(b) == 0 || string(b) == "null" {
+		return "{}"
+	}
+	return string(b)
+}
+
 // ReplayOpenAINonStreamChatResponse converts a full POST /v1/chat/completions JSON body (stream:false)
 // into the same Anthropic-shaped stream events [openAIStreamAdapter] would emit, so
 // [assistantStreamAccumulator] and the streaming tool executor stay unchanged.
 func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(anthropicmessages.MessageStreamEvent) error) error {
 	var head struct {
-		Error   *struct{ Message string `json:"message"` } `json:"error"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
 		Choices []json.RawMessage `json:"choices"`
 		Usage   json.RawMessage   `json:"usage"`
 	}
@@ -445,8 +573,8 @@ func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(
 	}
 	var ch struct {
 		Message struct {
-			Content          json.RawMessage   `json:"content"`
-			ReasoningContent *string           `json:"reasoning_content"`
+			Content          json.RawMessage  `json:"content"`
+			ReasoningContent *string          `json:"reasoning_content"`
 			ToolCalls        []map[string]any `json:"tool_calls"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`

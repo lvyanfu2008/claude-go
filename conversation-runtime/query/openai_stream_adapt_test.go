@@ -94,6 +94,22 @@ func eventTypes(events []anthropicmessages.MessageStreamEvent) []string {
 	return out
 }
 
+func TestNormalizeOpenAINonStreamChatBodyToolCallsLoose_flatArgsThenReplay(t *testing.T) {
+	body := []byte(`{"choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"name":"demo","arguments":{"path":"/tmp"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`)
+	fixed := NormalizeOpenAINonStreamChatBodyToolCallsLoose(body)
+	acc := newAssistantStreamAccumulator()
+	if err := ReplayOpenAINonStreamChatResponse(fixed, "test-model", acc.OnEvent); err != nil {
+		t.Fatal(err)
+	}
+	if !acc.HasToolUse() {
+		t.Fatal("expected tool use after normalize+replay")
+	}
+	blocks := acc.ToolUseBlocks()
+	if len(blocks) != 1 || blocks[0].Name != "demo" {
+		t.Fatalf("blocks=%+v", blocks)
+	}
+}
+
 func TestReplayOpenAINonStreamChatResponse_textOnly(t *testing.T) {
 	body := []byte(`{"choices":[{"index":0,"message":{"role":"assistant","content":"你好"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`)
 	acc := newAssistantStreamAccumulator()
