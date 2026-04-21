@@ -74,6 +74,13 @@ func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface
 		isInProgress := false // TODO: Determine if tool use is in progress
 		diaglog.Line("[assistant-message] rendering tool_use block, isInProgress=%v", isInProgress)
 		return r.toolUseRenderer.RenderToolUseBlock(block, ctx, isInProgress)
+	case "tool_result":
+		// Assistant rows often interleave tool_use + tool_result; same chrome as [ToolUseMessageRenderer].
+		if r.toolUseRenderer == nil {
+			r.toolUseRenderer = &ToolUseMessageRenderer{}
+		}
+		diaglog.Line("[assistant-message] rendering tool_result block")
+		return r.toolUseRenderer.RenderToolResultBlock(block, ctx)
 	default:
 		diaglog.Line("[assistant-message] unknown block type: %s", blockType)
 		return []string{fmt.Sprintf("[Unknown assistant block type: %s]", blockType)}, nil
@@ -96,6 +103,11 @@ func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interfac
 		}
 		isInProgress := false // TODO: Determine if tool use is in progress
 		return r.toolUseRenderer.MeasureToolUseBlock(block, ctx, isInProgress)
+	case "tool_result":
+		if r.toolUseRenderer == nil {
+			r.toolUseRenderer = &ToolUseMessageRenderer{}
+		}
+		return r.toolUseRenderer.MeasureToolResultBlock(block, ctx)
 	default:
 		return 1
 	}
