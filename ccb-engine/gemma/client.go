@@ -241,9 +241,6 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 			toolsWireBytes = b
 		}
 	}
-	//if len(toolsWireBytes) > 0 {
-	//	insertVertexToolsRoleMessage(&msgs, string(toolsWireBytes))
-	//}
 
 	inst := vertexInstance{
 		RequestFormat: "chatCompletions",
@@ -260,7 +257,6 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 	}
 	if len(toolsWireBytes) > 0 {
 		inst.Tools = toolsWireBytes
-		//inst.ToolChoice = "auto"
 	}
 	if req.ToolChoice != nil {
 		inst.ToolChoice = req.ToolChoice
