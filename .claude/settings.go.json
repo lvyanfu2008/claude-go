@@ -24,7 +24,7 @@
     "GOU_DEMO_DUMP_ON_EXIT": "1",
     "OPENAI_MODEL": "deepseek-chat",
     "CCB_ENGINE_MODEL": "deepseek-chat",
-    "CLAUDE_CODE_USE_GEMMA": "1"
+    "CLAUDE_CODE_USE_GEMMA": "0"
   },
   "hooks": {
     "UserPromptSubmit": [

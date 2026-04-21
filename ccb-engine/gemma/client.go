@@ -260,11 +260,11 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 	}
 	if len(toolsWireBytes) > 0 {
 		inst.Tools = toolsWireBytes
-		inst.ToolChoice = "auto"
+		//inst.ToolChoice = "auto"
 	}
-	//if req.ToolChoice != nil {
-	//	inst.ToolChoice = req.ToolChoice
-	//}
+	if req.ToolChoice != nil {
+		inst.ToolChoice = req.ToolChoice
+	}
 	return &vertexPredictRequest{Instances: []vertexInstance{inst}}, nil
 }
 

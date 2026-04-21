@@ -176,7 +176,7 @@ func runGemmaStreamingParityModelLoop(
 		req := gemma.ChatRequest{
 			Model:       config.ModelName,
 			Messages:    msgsWire,
-			MaxTokens:   4096,
+			MaxTokens:   100,
 			Temperature: 0.7,
 		}
 
@@ -188,11 +188,17 @@ func runGemmaStreamingParityModelLoop(
 		}
 
 		if len(toolsForWire) > 0 {
-			// Always pass verbatim wired tools JSON so Gemma client can put the same payload in
-			// instances[].tools and in messages[] role "tools" (see gemma.buildVertexPredictRequest).
-			req.ToolsJSON = append(json.RawMessage(nil), toolsForWire...)
+			// Same as OpenAI parity: Anthropic-shaped wire (name + input_schema) → OpenAI tools[]
+			// with function.parameters (see anthropicToolsWireToOpenAI).
+			toolsJSON := toolsForWire
+			if oa, errOA := anthropicToolsWireToOpenAI(toolsForWire); errOA == nil && len(oa) > 0 {
+				if b, err := json.Marshal(oa); err == nil {
+					toolsJSON = b
+				}
+			}
+			req.ToolsJSON = append(json.RawMessage(nil), toolsJSON...)
 			var tools []gemma.Tool
-			if err := json.Unmarshal(toolsForWire, &tools); err == nil && len(tools) > 0 {
+			if err := json.Unmarshal(toolsJSON, &tools); err == nil && len(tools) > 0 {
 				req.Tools = tools
 			}
 		}
