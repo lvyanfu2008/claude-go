@@ -3,12 +3,9 @@ package query
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
-	"goc/anthropicmessages"
 	"goc/ccb-engine/settingsfile"
 	"goc/compactservice"
 	"goc/hookexec"
@@ -22,8 +19,8 @@ import (
 // The returned function:
 //  1. Materializes [compactservice.AutoCompactTrackingState] from the host's
 //     [AutocompactInput.Tracking] raw blob (which [queryLoop] round-trips).
-//  2. Calls AutoCompactIfNeeded with a Summarizer that issues a one-shot streaming
-//     POST to /v1/messages against the main loop model (no tools / thinking disabled).
+//  2. Calls AutoCompactIfNeeded with a Summarizer that mirrors TS [queryModel] provider
+//     routing (Gemma → OpenAI chat/completions → Anthropic /v1/messages) for one text-only summary round.
 //  3. Serializes [CompactionResult] + tracking back into the [AutocompactResult] wire shape.
 //
 // Hooks + attachments fall through to the no-op defaults. Hosts that want real
@@ -161,88 +158,11 @@ func modelFromToolUseContext(tcx *types.ToolUseContext) string {
 	return ""
 }
 
-// defaultSummarizer returns a [compactservice.SummarizerFn] that issues a single
-// streaming POST to /v1/messages with no tools and thinking disabled, then accumulates
-// the assistant message.
-//
-// This intentionally bypasses [runStreamingParityModelLoop] — which does tool-execution —
-// because the compact summarizer call is text-only (see TS noToolsPreamble / trailer).
+// defaultSummarizer returns a [compactservice.SummarizerFn] that mirrors TS compact's
+// [queryModelWithStreaming] provider selection (see [summarizeAutocompact]).
 func defaultSummarizer(_ string) compactservice.SummarizerFn {
 	return func(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
-		apiKey := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
-		if apiKey == "" {
-			apiKey = strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
-		}
-		base := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
-		if base == "" {
-			base = "https://api.anthropic.com"
-		}
-		if apiKey == "" {
-			return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: ANTHROPIC_API_KEY missing — cannot summarize")
-		}
-
-		model := strings.TrimSpace(in.Model)
-		if model == "" {
-			return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: model missing")
-		}
-
-		// Build the wire messages: pre-compact conversation + the summaryRequest user message.
-		wireMsgs := append([]types.Message{}, in.Messages...)
-		wireMsgs = append(wireMsgs, in.SummaryRequest)
-		innerMsgs, err := wireShapeFromMessages(wireMsgs)
-		if err != nil {
-			return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact wire msgs: %w", err)
-		}
-
-		sys := strings.TrimSpace(strings.Join(in.SystemPrompt, "\n\n"))
-		maxOut := in.MaxOutputTokens
-		if maxOut <= 0 {
-			maxOut = compactservice.CompactMaxOutputTokens
-		}
-		req := map[string]any{
-			"model":      model,
-			"max_tokens": maxOut,
-			"messages":   innerMsgs,
-			"stream":     true,
-			// Thinking explicitly disabled (TS: thinkingConfig: { type: 'disabled' }).
-			"thinking": map[string]any{"type": "disabled"},
-		}
-		if sys != "" {
-			req["system"] = sys
-		}
-		body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
-		if err != nil {
-			return compactservice.SummaryStreamResult{}, err
-		}
-
-		acc := newAssistantStreamAccumulator()
-		err = anthropicmessages.PostStream(ctx, anthropicmessages.PostStreamParams{
-			BaseURL: base,
-			APIKey:  apiKey,
-			Body:    body,
-			HTTP:    http.DefaultClient,
-			Emit: func(ev anthropicmessages.MessageStreamEvent) error {
-				return acc.OnEvent(ev)
-			},
-		})
-		if err != nil {
-			return compactservice.SummaryStreamResult{}, err
-		}
-
-		uuid := randomUUID()
-		inner, err := acc.AssistantWire(uuid)
-		if err != nil {
-			return compactservice.SummaryStreamResult{}, err
-		}
-		asst := types.Message{
-			Type:    types.MessageTypeAssistant,
-			UUID:    uuid,
-			Message: inner,
-		}
-		types.SyncAssistantMessageID(&asst)
-
-		usage := compactservice.GetTokenUsage(asst)
-		return compactservice.SummaryStreamResult{AssistantMessage: asst, Usage: usage}, nil
+		return summarizeAutocompact(ctx, in)
 	}
 }
 

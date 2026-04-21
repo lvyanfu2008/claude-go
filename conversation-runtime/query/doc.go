@@ -24,6 +24,9 @@
 //     through [ReplayOpenAINonStreamChatResponse] (including choices[0].message.reasoning_content for
 //     DeepSeek reasoner) into the same accumulator path (no SSE). Recorded SSE can be replayed with
 //     [ReplayOpenAIStreamChatResponse] (same adapter as live stream; supports delta.reasoning_content).
+//   - OpenAI-compatible chat.completions (main parity + autocompact) send `max_tokens` clamped like TS
+//     [clampOpenAICompatibleMaxTokens]: CLAUDE_CODE_OPENAI_MAX_OUTPUT_TOKENS_CAP (default 8192); if unset,
+//     GOC_AUTOCOMPACT_OPENAI_MAX_COMPLETION_TOKENS is still read as a legacy alias.
 //   - Each streaming parity turn appends one line via [ccb-engine/diaglog.Line]: "[query] streaming parity: … (model=…)"
 //     before the HTTP loop (OpenAI SSE vs JSON vs Anthropic SSE). Uses CLAUDE_CODE_DIAG_LOG_FILE or the session debug log path (same as [ccb-engine/diaglog.Line]).
 //   - [QueryParams.CanUseTool] is [toolexecution.QueryCanUseToolFn] ([toolexecution.PermissionDecision] + error); [NewStreamingToolExecutor]

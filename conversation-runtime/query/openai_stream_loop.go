@@ -79,6 +79,7 @@ func runOpenAIStreamingParityModelLoop(
 			return err
 		}
 
+		maxTok := openAIMaxTokensForChatCompletion(params, in.ModelID)
 		req := map[string]any{
 			"model":    model,
 			"messages": openaiMsgs,
@@ -86,6 +87,7 @@ func runOpenAIStreamingParityModelLoop(
 			"stream_options": map[string]any{
 				"include_usage": true,
 			},
+			"max_tokens": maxTok,
 		}
 		if len(toolsOA) > 0 {
 			req["tools"] = toolsOA

@@ -33,7 +33,7 @@ type SummaryStreamResult struct {
 }
 
 // SummarizerFn is the injection point for streamCompactSummary.
-// Hosts in production wire this to a direct POST to Anthropic/v1/messages with
-// tools=[FileReadTool], thinking disabled, max_output_tokens capped per TS. Tests
-// provide a synthetic implementation.
+// The default implementation in [goc/conversation-runtime/query] mirrors TS [queryModel]
+// routing (OpenAI-compatible chat/completions vs Anthropic /v1/messages). Tests may inject
+// a synthetic implementation.
 type SummarizerFn func(ctx context.Context, in SummaryStreamInput) (SummaryStreamResult, error)

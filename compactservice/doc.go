@@ -32,4 +32,10 @@
 //     hook (see Deps.LogEvent); hosts wire their analytics.
 //
 // See .cursor/rules/claude-go-mirror-typescript.mdc. TS is source of truth; any deviation is called out inline.
+//
+// Auto-compact context cap (optional): GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW and CLAUDE_CODE_AUTO_COMPACT_WINDOW
+// (positive token counts) lower the model context window used for threshold math; both may be set — the tighter cap applies.
+// OpenAI-compatible `max_tokens` (query parity + autocompact) is clamped in [goc/conversation-runtime/query]
+// like TS: CLAUDE_CODE_OPENAI_MAX_OUTPUT_TOKENS_CAP (default 8192); legacy alias GOC_AUTOCOMPACT_OPENAI_MAX_COMPLETION_TOKENS
+// when the TS-named env is unset.
 package compactservice

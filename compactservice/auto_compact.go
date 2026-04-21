@@ -5,10 +5,41 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
+
+// Env keys that cap the model context window (tokens) before subtracting summary
+// reserve for auto-compact threshold math. Smallest positive cap wins.
+//   - CLAUDE_CODE_AUTO_COMPACT_WINDOW — TS parity (claude-code autoCompact.ts).
+//   - GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW — Go host override (same semantics).
+var autocompactContextWindowCapEnvs = []string{
+	"CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+	"GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW",
+}
+
+func parsePositiveIntEnv(name string) int {
+	s := strings.TrimSpace(os.Getenv(name))
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v <= 0 {
+		return 0
+	}
+	return v
+}
+
+func applyAutocompactContextWindowCaps(contextWindow int) int {
+	for _, key := range autocompactContextWindowCapEnvs {
+		if c := parsePositiveIntEnv(key); c > 0 && c < contextWindow {
+			contextWindow = c
+		}
+	}
+	return contextWindow
+}
 
 // Threshold buffer constants mirror src/services/compact/autoCompact.ts.
 const (
@@ -55,21 +86,15 @@ func (t CompactThresholds) resolve() (ContextWindowResolver, MaxOutputTokensReso
 }
 
 // GetEffectiveContextWindowSize mirrors getEffectiveContextWindowSize(model) in TS.
-// Respects the CLAUDE_CODE_AUTO_COMPACT_WINDOW env override.
+// Caps context window (downward) when CLAUDE_CODE_AUTO_COMPACT_WINDOW or
+// GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW is set to a positive integer (tokens); both may be set — the tighter cap applies.
 func GetEffectiveContextWindowSize(model string, betas []string, t CompactThresholds) int {
 	cw, mt := t.resolve()
 	reserved := mt(model)
 	if reserved > MaxOutputTokensForSummary {
 		reserved = MaxOutputTokensForSummary
 	}
-	contextWindow := cw(model, betas)
-	if override := os.Getenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW"); override != "" {
-		if parsed, err := strconv.Atoi(override); err == nil && parsed > 0 {
-			if parsed < contextWindow {
-				contextWindow = parsed
-			}
-		}
-	}
+	contextWindow := applyAutocompactContextWindowCaps(cw(model, betas))
 	return contextWindow - reserved
 }
 
