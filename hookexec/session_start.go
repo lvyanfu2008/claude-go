@@ -27,35 +27,40 @@ type sessionStartInput struct {
 
 // RunSessionStartHooks runs SessionStart command hooks synchronously and returns hook_additional_context attachment messages (TS processSessionStartHooks).
 func RunSessionStartHooks(ctx context.Context, table HooksTable, workDir string, base BaseHookInput, extra SessionStartExtra, batchTimeoutMs int) ([]types.Message, error) {
-	if HooksDisabled() {
+	if HooksDisabled() || ShouldDisableAllHooksIncludingManaged() || ShouldSkipHookDueToTrust() {
 		return nil, nil
 	}
-	hooks := matchingCommandHooks(table, hookEventSessionStart, extra.Source)
-	if len(hooks) == 0 {
+	in := sessionStartInput{
+		BaseHookInput: base,
+		SessionStartExtra: SessionStartExtra{
+			Source:    extra.Source,
+			AgentType: extra.AgentType,
+			Model:     extra.Model,
+		},
+	}
+	in.HookEventName = hookEventSessionStart
+	jsonIn, err := marshalHookInput(in)
+	if err != nil {
+		return nil, err
+	}
+	var hookInput map[string]any
+	if err := json.Unmarshal([]byte(jsonIn), &hookInput); err != nil {
+		return nil, err
+	}
+	if len(CommandHooksForHookInput(table, hookInput)) == 0 {
 		return nil, nil
 	}
 	wd := trimOrDot(workDir)
+	results := ExecuteCommandHooksOutsideREPLParallel(OutsideReplCommandParams{
+		Ctx:       ctx,
+		WorkDir:   wd,
+		Hooks:     table,
+		JSONInput: jsonIn,
+		TimeoutMs: batchTimeoutMs,
+	})
 	var contexts []string
-	for _, h := range hooks {
-		in := sessionStartInput{
-			BaseHookInput: base,
-			SessionStartExtra: SessionStartExtra{
-				Source:    extra.Source,
-				AgentType: extra.AgentType,
-				Model:     extra.Model,
-			},
-		}
-		in.HookEventName = hookEventSessionStart
-		jsonIn, err := marshalHookInput(in)
-		if err != nil {
-			continue
-		}
-		ms := hookTimeoutMS(h, batchTimeoutMs)
-		stdout, _, _, err := RunCommandHook(ctx, wd, h.Command, jsonIn, ms)
-		if err != nil {
-			continue
-		}
-		add, _ := ParseHookJSONOutput(stdout, hookEventSessionStart)
+	for _, r := range results {
+		add, _ := ParseHookJSONOutput(r.Output, hookEventSessionStart)
 		if add != "" {
 			contexts = append(contexts, add)
 		}

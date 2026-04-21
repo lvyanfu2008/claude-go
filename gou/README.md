@@ -38,7 +38,7 @@
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
 | 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ 宿主打开流式 parity（`ApplyQueryHostEnvGates` / `QueryParams.StreamingParity`）；可选 `GOU_QUERY_STREAMING_PARITY=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。 |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
-| `result.execution` / `result.executionSequence`（bash/slash prepare 桩） | `bashprepare` / `slashprepare` 仍可能填充 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
+| `result.execution`（bash/slash prepare 桩） | `bashprepare` / `slashprepare` 仍可能填充 `Execution` | **TUI 未执行**（仅 system 提示）；无 TS 侧 `attachments_plan` 等多步执行 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动、**`[`** 滚动条 dump、**`v`** 外编辑器）；其余见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
 
 ## ProcessUserInput（gou-demo + `goc/gou/pui`）：已做 vs 未做
@@ -49,7 +49,7 @@
 |---------------|------|
 | `messages` | **已做**：`ApplyProcessUserInputBaseResult` 追加到 `conversation.Store`（不放在 Handoff 结构里）。 |
 | `shouldQuery` / `allowedTools` / `model` / `effort` / `resultText` / `nextInput` / `submitNextInput` | **已做**：写入 `ProcessUserInputBaseResultHandoff`（`json` 标签与 TS 一致）；`ApplyProcessUserInputBaseResultOutcome` 带 `effectiveShouldQuery`、`hadExecutionRequest`（Go 侧物化语义，无 TS 同名 struct）。 |
-| `execution` / `executionSequence`（如 bash/slash prepare 路径） | **TUI 未执行**：仅 system 说明并清空 Handoff；**不再**从 prompt 路径产生 `attachments_plan` / `hooks_plan` / `query`。 |
+| `execution`（如 bash/slash prepare 路径） | **TUI 未执行**：仅 system 说明并清空 Handoff；附件与 hooks 均在 Go 内合并/执行，不通过 execution 多步协议。 |
 | `statePatchBatch` / `hooksReducerInput`（Go 扩展） | **未接**：TUI 不消费。 |
 
 其它约定：

@@ -290,13 +290,6 @@ func buildResultPayload(path string, r *processuserinput.ProcessUserInputBaseRes
 	if len(r.AllowedTools) > 0 {
 		p["allowedTools"] = r.AllowedTools
 	}
-	if len(r.ExecutionSequence) > 0 {
-		kinds := make([]string, len(r.ExecutionSequence))
-		for i, e := range r.ExecutionSequence {
-			kinds[i] = e.Kind
-		}
-		p["executionKinds"] = kinds
-	}
 	if r.Execution != nil {
 		p["executionKind"] = r.Execution.Kind
 		if r.Execution.Input != "" {

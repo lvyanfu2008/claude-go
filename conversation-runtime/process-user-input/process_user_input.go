@@ -9,7 +9,7 @@
 //   - CLAUDE_DEBUG_PROCESS_USER_INPUT → stderr lines [processUserInput:IN|AFTER_BASE|OUT] JSON (mirrors logProcessUserInputDebug stages).
 //   - [commandsForFind] uses context.options.commands when [ProcessUserInputParams.Commands] is empty (bridge-safe slash lookup).
 //   - Non-nil [ProcessBashCommand] / [ProcessSlashCommand] run before bashprepare/slashprepare deferred-execution paths (mirrors dynamic import of processBashCommand / processSlashCommand in TS).
-//   - Prompt path does not emit attachments_plan / hooks_plan / query execution steps (attachments merge into [ProcessTextPrompt]; hooks run in [ProcessUserInput] via [ExecuteUserPromptSubmitHooks] or [ExecuteUserPromptSubmitHooksIter]).
+//   - Prompt path merges attachments into [ProcessTextPrompt]; hooks run in [ProcessUserInput] via [ExecuteUserPromptSubmitHooks] or [ExecuteUserPromptSubmitHooksIter] (no separate execution step for attachments).
 //
 // Host query streaming: after [ProcessUserInput] returns [ProcessUserInputBaseResult] with ShouldQuery, callers that
 // use [goc/conversation-runtime/query.Query] may call [ApplyQueryHostEnvGates] and [WireToolexecutionFromProcessUserInput]
@@ -95,16 +95,6 @@ type ExecutionRequest struct {
 	CommandName  string `json:"commandName,omitempty"`
 	Args         string `json:"args,omitempty"`
 	IsMcp        bool   `json:"isMcp,omitempty"`
-	HooksExecutionPlan *HooksExecutionPlan `json:"hooksExecutionPlan,omitempty"`
-}
-
-type HooksExecutionPlan struct {
-	Strategy  string   `json:"strategy"`
-	Commands  []string `json:"commands,omitempty"`
-	Matchers  []string `json:"matchers,omitempty"`
-	HookCount int      `json:"hookCount,omitempty"`
-	TimeoutMs int      `json:"timeoutMs,omitempty"`
-	PredictedReducerInput *HooksReducerInput `json:"predictedReducerInput,omitempty"`
 }
 
 // HookExecResult is one UserPromptSubmit hook subprocess outcome for hook execution plans.
@@ -131,11 +121,8 @@ type ProcessUserInputBaseResult struct {
 	Messages []types.Message `json:"messages"`
 	// ShouldQuery when false skips the model query turn (commands, hooks, errors).
 	ShouldQuery bool `json:"shouldQuery"`
-	// Execution when set requests the host to run a side-effecting action (e.g. bash) exactly once.
+	// Execution when set requests the host to run a side-effecting action (e.g. bash or slash) exactly once.
 	Execution *ExecutionRequest `json:"execution,omitempty"`
-	// ExecutionSequence when non-empty is an ordered list of host-executed steps.
-	// When set, takes precedence over Execution for ordering; leave Execution nil for multi-step.
-	ExecutionSequence []ExecutionRequest `json:"executionSequence,omitempty"`
 	AllowedTools []string `json:"allowedTools,omitempty"`
 	Model        string   `json:"model,omitempty"`
 	Effort       *utils.EffortValue `json:"effort,omitempty"`
@@ -460,7 +447,7 @@ func processUserInputBase(
 	}
 
 	// Regular user prompt (TS processUserInputBase: processTextPrompt for string input).
-	// UserPromptSubmit hooks run in [ProcessUserInput] after base, not via Execution / ExecutionSequence.
+	// UserPromptSubmit hooks run in [ProcessUserInput] after base, not via Execution.
 	if isString {
 		tp, err := ProcessTextPrompt(normalizedStr, nil, nil, nil, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
 		if err != nil {

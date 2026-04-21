@@ -55,6 +55,8 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 		deps := compactservice.Deps{
 			Summarize:              defaultSummarizer(model),
 			PostCompactAttachments: defaultPostCompactAttachments(),
+			PreCompactHooks:        hookexec.PreCompactHookRunner(projRoot, wd, sid, ""),
+			PostCompactHooks:       hookexec.PostCompactHookRunner(projRoot, wd, sid, ""),
 			SessionStartHooks:      hookexec.SessionStartHookRunner(projRoot, wd, sid, ""),
 		}
 

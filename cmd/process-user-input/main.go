@@ -1,7 +1,7 @@
 // Command process-user-input reads a JSON envelope on stdin and writes JSON on stdout:
 // { "kind": "result", "result": ProcessUserInputBaseResult, "statePatchBatch"?: ... }.
-// When [processuserinput.ProcessUserInputBaseResult] carries execution or executionSequence,
-// those fields are included inside result (no separate stdout envelope kind).
+// When [processuserinput.ProcessUserInputBaseResult] carries execution,
+// it is included inside result (no separate stdout envelope kind).
 package main
 
 import (

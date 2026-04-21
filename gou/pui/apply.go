@@ -12,7 +12,7 @@ import (
 
 const executionStubText = "gou-demo: bash/slash execution (slashprepare/bashprepare) is not run in TUI; inject ProcessBashCommand / ProcessSlashCommand for in-process handling."
 
-// ApplyProcessUserInputBaseResult appends r.Messages to the store, or a stub system line when Execution / ExecutionSequence is set.
+// ApplyProcessUserInputBaseResult appends r.Messages to the store, or a stub system line when Execution is set.
 // When handoff is non-nil, fills it with [ProcessUserInputBaseResultHandoff] from r, or resets it on execution stub.
 func ApplyProcessUserInputBaseResult(
 	store *conversation.Store,
@@ -23,7 +23,7 @@ func ApplyProcessUserInputBaseResult(
 	if r == nil {
 		return out
 	}
-	if r.Execution != nil || len(r.ExecutionSequence) > 0 {
+	if r.Execution != nil {
 		store.AppendMessage(informationalSystem(executionStubText, "info"))
 		if handoff != nil {
 			handoff.reset()

@@ -64,7 +64,7 @@ func (h *ProcessUserInputBaseResultHandoff) mergeFromResult(r *processuserinput.
 type ApplyProcessUserInputBaseResultOutcome struct {
 	// EffectiveShouldQuery is false when deferred execution was stubbed or r.ShouldQuery was false.
 	EffectiveShouldQuery bool `json:"effectiveShouldQuery"`
-	// HadExecutionRequest is true when r.Execution or r.ExecutionSequence was set (host must run bash/slash outside this apply path).
+	// HadExecutionRequest is true when r.Execution was set (host must run bash/slash outside this apply path).
 	HadExecutionRequest bool `json:"hadExecutionRequest"`
 	NextInput           string `json:"nextInput,omitempty"`
 	SubmitNextInput     bool   `json:"submitNextInput"`

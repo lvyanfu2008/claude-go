@@ -140,25 +140,6 @@ func TestBuildStdoutEnvelope_IncludesExecutionInsideResult(t *testing.T) {
 	}
 }
 
-func TestBuildStdoutEnvelope_IncludesExecutionSequenceInsideResult(t *testing.T) {
-	out := &processuserinput.ProcessUserInputBaseResult{
-		ExecutionSequence: []processuserinput.ExecutionRequest{
-			{Kind: "attachments_plan", Input: "hi @f"},
-			{Kind: "hooks_plan", Input: "hi"},
-		},
-	}
-	env := buildStdoutEnvelope(out)
-	if env.Kind != "result" {
-		t.Fatalf("expected kind result, got %q", env.Kind)
-	}
-	if env.Result == nil || len(env.Result.ExecutionSequence) != 2 {
-		t.Fatalf("expected executionSequence inside result, got %#v", env.Result)
-	}
-	if env.Result.ExecutionSequence[0].Kind != "attachments_plan" || env.Result.ExecutionSequence[1].Kind != "hooks_plan" {
-		t.Fatalf("unexpected sequence: %#v", env.Result.ExecutionSequence)
-	}
-}
-
 func TestBuildStdoutEnvelope_QueryStillUsesResultKind(t *testing.T) {
 	out := &processuserinput.ProcessUserInputBaseResult{
 		Messages:    nil,
@@ -178,28 +159,13 @@ func TestBuildResultPayload_IncludesExecutionKind(t *testing.T) {
 		Messages:    nil,
 		ShouldQuery: false,
 		Execution: &processuserinput.ExecutionRequest{
-			Kind:  "hooks_plan",
-			Input: "hello",
+			Kind:    "bash",
+			Command: "echo hello",
 		},
 	})
 	v, ok := p["executionKind"].(string)
-	if !ok || v != "hooks_plan" {
-		t.Fatalf("expected executionKind hooks_plan, got %#v", p["executionKind"])
-	}
-}
-
-func TestBuildResultPayload_IncludesExecutionKindsSequence(t *testing.T) {
-	p := buildResultPayload("go-cli", &processuserinput.ProcessUserInputBaseResult{
-		Messages:    nil,
-		ShouldQuery: false,
-		ExecutionSequence: []processuserinput.ExecutionRequest{
-			{Kind: "attachments_plan", Input: "x"},
-			{Kind: "hooks_plan", Input: "x"},
-		},
-	})
-	raw, ok := p["executionKinds"].([]string)
-	if !ok || len(raw) != 2 || raw[0] != "attachments_plan" || raw[1] != "hooks_plan" {
-		t.Fatalf("expected executionKinds slice, got %#v", p["executionKinds"])
+	if !ok || v != "bash" {
+		t.Fatalf("expected executionKind bash, got %#v", p["executionKind"])
 	}
 }
 
