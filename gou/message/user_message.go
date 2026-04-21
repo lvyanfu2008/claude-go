@@ -9,6 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"goc/ccb-engine/diaglog"
+	"goc/gou/messagerow"
 	"goc/types"
 )
 
@@ -281,6 +282,9 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 		// content is a string - wrap it as a text block
 		diaglog.Line("[user-message] tool_result content is string, length=%d", len(contentStr))
 		if contentStr != "" {
+			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
+				return diffLines, nil
+			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
@@ -337,6 +341,9 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
 		if contentStr != "" {
+			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
+				return len(diffLines)
+			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
@@ -426,6 +433,7 @@ func parseMessageContent(msg *types.Message) ([]map[string]interface{}, error) {
 	diaglog.Line("[parseMessageContent] Could not parse message content")
 	return nil, fmt.Errorf("could not parse message content")
 }
+
 // GenerateToolResultSummary generates a meaningful summary for a tool result block in collapsed mode.
 func GenerateToolResultSummary(block map[string]interface{}) string {
 	// First try to generate a tool-specific summary if we can infer the tool type
@@ -468,7 +476,7 @@ func GenerateToolResultSummary(block map[string]interface{}) string {
 		}
 
 		// If we have multiple items, return a count-based summary
-		if textItemCount > 1 || (textItemCount + otherItemCount) > 1 {
+		if textItemCount > 1 || (textItemCount+otherItemCount) > 1 {
 			totalItems := textItemCount + otherItemCount
 			if totalItems == 1 {
 				return "[Result]"

@@ -109,13 +109,13 @@ func segmentsGroupedToolUse(msg types.Message, depth int, opts *RenderOpts) []Se
 		}
 		return out
 	}
-	
+
 	// Format as multiple line segments or summary using FormatGroupedAgentToolUse
 	var lookups *GroupedAgentLookups
 	if opts != nil {
 		lookups = opts.GroupedAgentLookups
 	}
-	
+
 	return FormatGroupedAgentToolUse(msg, lookups)
 }
 
@@ -364,7 +364,7 @@ func segmentFromBlock(b types.MessageContentBlock, opts *RenderOpts) []Segment {
 			return []Segment{{Kind: SegAdvisorToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr, ToolBodyOmitted: true}}
 		}
 		sb.WriteByte('\n')
-		sb.WriteString(toolResultContentPreview(b.Content))
+		sb.WriteString(toolResultWriteEditBodyOrJSONPreview(b.Content))
 		return []Segment{{Kind: SegAdvisorToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr}}
 	case "tool_result":
 		var sb strings.Builder
@@ -382,7 +382,7 @@ func segmentFromBlock(b types.MessageContentBlock, opts *RenderOpts) []Segment {
 			return []Segment{{Kind: SegToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr, ToolBodyOmitted: true}}
 		}
 		sb.WriteByte('\n')
-		sb.WriteString(toolResultContentPreview(b.Content))
+		sb.WriteString(toolResultWriteEditBodyOrJSONPreview(b.Content))
 		return []Segment{{Kind: SegToolResult, Text: strings.TrimSpace(sb.String()), IsToolError: isErr}}
 	case "thinking", "redacted_thinking":
 		t := b.Thinking
@@ -448,6 +448,13 @@ func toolResultPreview(raw json.RawMessage) string {
 
 func toolResultContentPreview(raw json.RawMessage) string {
 	return strings.TrimSpace(toolResultPreview(raw))
+}
+
+func toolResultWriteEditBodyOrJSONPreview(raw json.RawMessage) string {
+	if txt, ok := FormatWriteEditToolResultBodyIfApplicable(raw); ok {
+		return txt
+	}
+	return toolResultContentPreview(raw)
 }
 
 func compactJSON(s string, max int) string {

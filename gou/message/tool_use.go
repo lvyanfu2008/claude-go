@@ -128,6 +128,9 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 		// content is a string - wrap it as a text block
 		diaglog.Line("[tool-use] tool_result content is string, length=%d", len(contentStr))
 		if contentStr != "" {
+			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
+				return diffLines, nil
+			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
@@ -185,6 +188,9 @@ func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interfa
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
 		if contentStr != "" {
+			if diffLines, ok := messagerow.IndentedWriteEditDiffLinesFromToolResultJSON(contentStr); ok {
+				return len(diffLines)
+			}
 			contentItems = []interface{}{
 				map[string]interface{}{
 					"type": "text",
