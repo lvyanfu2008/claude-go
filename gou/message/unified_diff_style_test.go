@@ -20,3 +20,14 @@ func TestFormatUnifiedDiffLineForDisplay_addDelMeta(t *testing.T) {
 	_ = FormatUnifiedDiffLineForDisplay("+++ b/x", false, p)
 	_ = FormatUnifiedDiffLineForDisplay("@@ -1,2 +1,2 @@", false, p)
 }
+
+func TestFormatUnifiedDiffLineForDisplay_twoSpaceUIPrefixStillColorsAdd(t *testing.T) {
+	p := theme.ActivePalette()
+	s := FormatUnifiedDiffLineForDisplay("  +patched", false, p)
+	if !strings.Contains(s, "\x1b[") {
+		t.Fatalf("expected ANSI with UI indent before +: %q", s)
+	}
+	if !strings.HasPrefix(s, "  ") {
+		t.Fatalf("expected two-space prefix preserved: %q", s)
+	}
+}

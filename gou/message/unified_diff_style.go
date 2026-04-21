@@ -18,26 +18,41 @@ func FormatUnifiedDiffLineForDisplay(line string, toolResultIsError bool, p *the
 	if toolResultIsError {
 		return lipgloss.NewStyle().Foreground(p.ToolError).Render(line)
 	}
-	t := strings.TrimRight(line, "\r")
-	if t == "" {
+	raw := strings.TrimRight(line, "\r")
+	if raw == "" {
 		return line
 	}
-	if strings.HasPrefix(t, "--- ") || strings.HasPrefix(t, "+++") || strings.HasPrefix(t, "diff --git") {
-		return lipgloss.NewStyle().Foreground(p.ToolMuted).Faint(true).Render(line)
+	// [IndentedWriteEditDiffLinesFromToolResultJSON] prefixes each row with two spaces for TUI
+	// alignment; classify on the logical unified-diff line only, then re-attach the prefix so
+	// true context lines (space-prefixed in unified format) stay correct.
+	uiPrefix := ""
+	logical := raw
+	if strings.HasPrefix(logical, "  ") {
+		uiPrefix = "  "
+		logical = logical[2:]
 	}
-	if strings.HasPrefix(t, "@@") {
-		return lipgloss.NewStyle().Foreground(theme.ToolWarning()).Faint(true).Render(line)
+	if logical == "" {
+		return line
 	}
-	if strings.HasPrefix(t, "+") && !strings.HasPrefix(t, "+++") {
-		return lipgloss.NewStyle().Foreground(p.DiffAdd).Render(line)
+	render := func(st lipgloss.Style) string {
+		return uiPrefix + st.Render(logical)
 	}
-	if strings.HasPrefix(t, "-") && !strings.HasPrefix(t, "---") {
-		return lipgloss.NewStyle().Foreground(p.DiffDel).Render(line)
+	if strings.HasPrefix(logical, "--- ") || strings.HasPrefix(logical, "+++") || strings.HasPrefix(logical, "diff --git") {
+		return render(lipgloss.NewStyle().Foreground(p.ToolMuted).Faint(true))
 	}
-	if strings.Contains(t, "unchanged lines") && strings.Contains(t, "⋯") {
-		return lipgloss.NewStyle().Foreground(p.ToolMuted).Faint(true).Render(line)
+	if strings.HasPrefix(logical, "@@") {
+		return render(lipgloss.NewStyle().Foreground(theme.ToolWarning()).Faint(true))
 	}
-	return lipgloss.NewStyle().Foreground(p.ToolMuted).Render(line)
+	if strings.HasPrefix(logical, "+") && !strings.HasPrefix(logical, "+++") {
+		return render(lipgloss.NewStyle().Foreground(p.DiffAdd))
+	}
+	if strings.HasPrefix(logical, "-") && !strings.HasPrefix(logical, "---") {
+		return render(lipgloss.NewStyle().Foreground(p.DiffDel))
+	}
+	if strings.Contains(logical, "unchanged lines") && strings.Contains(logical, "⋯") {
+		return render(lipgloss.NewStyle().Foreground(p.ToolMuted).Faint(true))
+	}
+	return render(lipgloss.NewStyle().Foreground(p.ToolMuted))
 }
 
 // ApplyUnifiedDiffLineStyles maps each line through [FormatUnifiedDiffLineForDisplay].
