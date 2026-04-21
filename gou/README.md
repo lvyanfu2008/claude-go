@@ -50,7 +50,7 @@
 | `messages` | **已做**：`ApplyProcessUserInputBaseResult` 追加到 `conversation.Store`（不放在 Handoff 结构里）。 |
 | `shouldQuery` / `allowedTools` / `model` / `effort` / `resultText` / `nextInput` / `submitNextInput` | **已做**：写入 `ProcessUserInputBaseResultHandoff`（`json` 标签与 TS 一致）；`ApplyProcessUserInputBaseResultOutcome` 带 `effectiveShouldQuery`、`hadExecutionRequest`（Go 侧物化语义，无 TS 同名 struct）。 |
 | `execution`（如 bash/slash prepare 路径） | **TUI 未执行**：仅 system 说明并清空 Handoff；附件与 hooks 均在 Go 内合并/执行，不通过 execution 多步协议。 |
-| `statePatchBatch` / `hooksReducerInput`（Go 扩展） | **未接**：TUI 不消费。 |
+| `statePatchBatch`（Go 扩展） | **未接**：TUI 不消费。 |
 
 其它约定：
 

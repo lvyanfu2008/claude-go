@@ -97,24 +97,6 @@ type ExecutionRequest struct {
 	IsMcp        bool   `json:"isMcp,omitempty"`
 }
 
-// HookExecResult is one UserPromptSubmit hook subprocess outcome for hook execution plans.
-// Stdout/stderr are truncated so serialized payloads stay bounded.
-type HookExecResult struct {
-	Command  string `json:"command"`
-	ExitCode int    `json:"exitCode,omitempty"`
-	Error    string `json:"error,omitempty"`
-	Stdout   string `json:"stdout,omitempty"`
-	Stderr   string `json:"stderr,omitempty"`
-}
-
-type HooksReducerInput struct {
-	Blocked                 bool             `json:"blocked,omitempty"`
-	PreventContinuation     bool             `json:"preventContinuation,omitempty"`
-	AdditionalContextsCount int              `json:"additionalContextsCount,omitempty"`
-	MessageCount            int              `json:"messageCount,omitempty"`
-	HookExecResults         []HookExecResult `json:"hookExecResults,omitempty"`
-}
-
 // ProcessUserInputBaseResult mirrors processUserInput.ts ProcessUserInputBaseResult.
 type ProcessUserInputBaseResult struct {
 	// Messages matches TS: UserMessage | AssistantMessage | AttachmentMessage | SystemMessage | ProgressMessage.
@@ -133,7 +115,6 @@ type ProcessUserInputBaseResult struct {
 	// SubmitNextInput when true submits NextInput automatically after the command completes.
 	SubmitNextInput bool `json:"submitNextInput,omitempty"`
 	StatePatchBatch *StatePatchBatch `json:"statePatchBatch,omitempty"`
-	HooksReducerInput *HooksReducerInput `json:"hooksReducerInput,omitempty"`
 }
 
 const userImageRejectMessage = "当前版本不支持在消息中加入图片（粘贴或图片块）。请去掉图片后重试。"
