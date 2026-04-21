@@ -18,24 +18,84 @@ type userPromptSubmitHookInput struct {
 
 // RunUserPromptSubmitHooks runs UserPromptSubmit **command** hooks (TS executeUserPromptSubmitHooks → executeHooks command branch)
 // and returns [types.AggregatedHookResult] slices suitable for [processuserinput.ProcessUserInputParams.ExecuteUserPromptSubmitHooks].
+//
+// 这个函数执行用户提示提交钩子，处理以下流程：
+// 1. 检查钩子是否被禁用（通过环境变量或策略）
+// 2. 构建钩子输入 JSON，包含基本信息和用户提示
+// 3. 从钩子表中匹配当前事件（UserPromptSubmit）的钩子
+// 4. 并行执行所有匹配的钩子命令
+// 5. 解析每个钩子的输出，进行验证和聚合
+// 6. 返回聚合结果，供 processUserInput 处理
+//
+// 参数说明：
+//   - ctx: 上下文，用于超时控制和取消
+//   - table: 钩子表，从用户设置文件加载的钩子配置
+//   - workDir: 工作目录，钩子命令执行的工作目录
+//   - base: 基本钩子输入，包含会话ID、权限模式、代理信息等
+//   - prompt: 用户提交的提示文本，用于钩子匹配和输入
+//   - batchTimeoutMs: 批处理超时时间（毫秒），控制整个钩子执行的超时
+//
+// 返回值：
+//   - []types.AggregatedHookResult: 聚合的钩子结果切片，每个结果包含：
+//     - BlockingError: 阻塞错误，阻止继续处理
+//     - PreventContinuation: 是否阻止继续
+//     - PermissionBehavior: 权限行为（allow/deny/ask）
+//     - AdditionalContexts: 附加上下文信息
+//     - Message: 钩子生成的消息
+//   - error: 执行过程中的错误，如JSON解析失败、钩子加载失败等
+//
+// 钩子输出格式支持：
+//   - JSON格式（推荐）：包含结构化决策信息
+//     {
+//       "continue": false,
+//       "decision": "block",
+//       "reason": "违反政策",
+//       "systemMessage": "操作被阻止"
+//     }
+//   - 简单文本格式：非JSON输出，根据退出码处理
+//     - 退出码0：成功，输出作为成功消息
+//     - 退出码2：阻塞错误，阻止继续
+//     - 其他退出码：非阻塞错误，记录但不阻止
+//
+// 钩子匹配规则：
+//   - 根据 hook_event_name = "UserPromptSubmit" 选择钩子组
+//   - 使用 DeriveMatchQuery 从 prompt 生成匹配查询
+//   - 根据 matcher 正则表达式过滤钩子
+//   - 支持多个钩子并行执行
+//
+// 与TypeScript的奇偶性：
+//   - 模仿 src/utils/hooks.ts 中的 executeUserPromptSubmitHooks 函数
+//   - 支持相同的输入输出格式
+//   - 保持相同的匹配和执行语义
 func RunUserPromptSubmitHooks(ctx context.Context, table HooksTable, workDir string, base BaseHookInput, prompt string, batchTimeoutMs int) ([]types.AggregatedHookResult, error) {
+	// 1. 检查钩子是否被全局禁用
 	if HooksDisabled() || ShouldDisableAllHooksIncludingManaged() || ShouldSkipHookDueToTrust() {
 		return nil, nil
 	}
+	
+	// 2. 构建完整的钩子输入
 	base.HookEventName = hookEventUserPromptSubmit
 	in := userPromptSubmitHookInput{BaseHookInput: base, Prompt: prompt}
 	jsonIn, err := marshalHookInput(in)
 	if err != nil {
 		return nil, err
 	}
+	
+	// 3. 将JSON输入转换为map，用于钩子匹配
 	var hookInput map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(jsonIn)), &hookInput); err != nil {
 		return nil, err
 	}
+	
+	// 4. 获取匹配的钩子命令，如果没有匹配的钩子则直接返回
 	if len(CommandHooksForHookInput(table, hookInput)) == 0 {
 		return nil, nil
 	}
+	
+	// 5. 确保工作目录有效
 	wd := trimOrDot(workDir)
+	
+	// 6. 并行执行所有匹配的钩子命令
 	results := ExecuteCommandHooksOutsideREPLParallel(OutsideReplCommandParams{
 		Ctx:       ctx,
 		WorkDir:   wd,
@@ -43,11 +103,18 @@ func RunUserPromptSubmitHooks(ctx context.Context, table HooksTable, workDir str
 		JSONInput: jsonIn,
 		TimeoutMs: batchTimeoutMs,
 	})
+	
+	// 7. 为这批钩子生成唯一的工具使用ID
 	toolUseID := randomUUID()
+	
+	// 8. 聚合所有钩子的执行结果
 	var agg []types.AggregatedHookResult
 	for _, r := range results {
+		// 对每个钩子结果进行解析和聚合
 		agg = append(agg, userPromptSubmitAggregates(r, toolUseID, hookEventUserPromptSubmit, r.Command)...)
 	}
+	
+	// 9. 返回聚合结果
 	return agg, nil
 }
 
