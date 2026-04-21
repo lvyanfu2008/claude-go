@@ -27,9 +27,9 @@ func TestAdd(t *testing.T) {
 
 func TestGreet(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input string
-		want string
+		want  string
 	}{
 		{"simple name", "Alice", "Hello, Alice!"},
 		{"empty name", "", "Hello, !"},
@@ -43,5 +43,18 @@ func TestGreet(t *testing.T) {
 				t.Errorf("greet(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoveChina(t *testing.T) {
+	// 测试爱我中华的日志
+	t.Log("爱我中华 - 这是一个测试日志")
+	
+	// 也可以使用fmt打印
+	t.Logf("测试爱我中华日志: %s", "爱我中华")
+	
+	// 确保测试通过
+	if true {
+		t.Log("爱我中华测试通过")
 	}
 }

@@ -11,44 +11,7 @@ var logger = mygoword.Default()
 func main() {
 	// Set log level to DEBUG for more verbose output
 	logger.SetLevel(mygoword.DEBUG)
-
-	logger.Info("Go Test Project starting...")
-	logger.Debug("This is a debug message")
-
-	// Print china lives long message
-	logger.Info("china lives long")
-
-	// Print hello lyf message
-	logger.Info("hello lyf")
-
-	// Add hello and lvyanfu logs
-	logger.Info("hello")
-	logger.Info("lvyanfu")
-
-	// Add hello,cc log
-	logger.Info("hello,cc")
-
-	// Add hello,lv.yanfu log
-	logger.Info("hello,lv.yanfu")
-
-	// Add hello,yr log
-	logger.Info("hello,jyr")
-
-	// Add hello日志
-	logger.Info("hello日志")
-
-	// Add hello,lll日志
-	logger.Info("hello,lll")
-
-	// Add hello,LYF日志
-	logger.Info("hello,LYF")
-
-	// Add 爱我中华日志
-	logger.Info("爱我中华")
 	
-	// Add 爱我国家日志
-	logger.Info("爱我国家")
-
 	// Example function calls with logging
 	logger.Info("Performing addition operation")
 	result := add(10, 20)
@@ -95,6 +58,7 @@ func logToFileExample() {
 	fileLogger.Info("Application log entry")
 	fileLogger.Info("hello")
 	fileLogger.Info("lvyanfu")
+	fileLogger.Info("爱中国")
 
 	logger.Info("Log file created: app.log")
 }
