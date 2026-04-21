@@ -116,6 +116,9 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 		toolUseID, ctx.IsTranscript, ctx.Verbose)
 
 	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		if ctx.Theme != nil {
+			diffLines = ApplyUnifiedDiffLineStyles(diffLines, BlockIsToolError(block), ctx.Theme)
+		}
 		return diffLines, nil
 	}
 

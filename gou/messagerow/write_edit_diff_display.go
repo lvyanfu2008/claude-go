@@ -87,7 +87,8 @@ hunkLoop:
 		}
 		_, _ = fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n", h.OldStart, h.OldLines, h.NewStart, h.NewLines)
 		emitted++
-		for _, ln := range h.Lines {
+		collapsed := CollapseUnifiedDiffContextLines(h.Lines, DefaultUnifiedDiffContextLines)
+		for _, ln := range collapsed {
 			if emitted >= maxStructuredPatchTotalLines {
 				truncated = true
 				break hunkLoop

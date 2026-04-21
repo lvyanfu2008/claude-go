@@ -43,6 +43,27 @@ func toolResultTextPartsFromContent(content any) []string {
 
 // writeEditDiffLinesFromToolResultBlock returns indented unified-diff lines for FileWrite / FileEdit
 // tool_result JSON (structuredPatch or create body), trying each text part until one matches.
+// BlockIsToolError reads tool_result is_error from a parsed content block (bool, *bool, or JSON float).
+func BlockIsToolError(block map[string]interface{}) bool {
+	if block == nil {
+		return false
+	}
+	v, ok := block["is_error"]
+	if !ok {
+		return false
+	}
+	switch t := v.(type) {
+	case bool:
+		return t
+	case *bool:
+		return t != nil && *t
+	case float64:
+		return t != 0
+	default:
+		return false
+	}
+}
+
 func writeEditDiffLinesFromToolResultBlock(block map[string]interface{}) ([]string, bool) {
 	if block == nil {
 		return nil, false

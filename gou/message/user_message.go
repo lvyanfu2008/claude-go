@@ -270,6 +270,9 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 	diaglog.Line("[user-message] renderToolResultBlock: isTranscript=%v, verbose=%v", ctx.IsTranscript, ctx.Verbose)
 
 	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		if ctx.Theme != nil {
+			diffLines = ApplyUnifiedDiffLineStyles(diffLines, BlockIsToolError(block), ctx.Theme)
+		}
 		return diffLines, nil
 	}
 

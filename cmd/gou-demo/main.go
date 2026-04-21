@@ -72,6 +72,7 @@ import (
 	"goc/gou/messagerow"
 	"goc/gou/prompt"
 	"goc/gou/pui"
+	"goc/gou/segdiff"
 	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
@@ -1510,14 +1511,14 @@ func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
 	cw := cols
 	ctx := &goumsg.RenderContext{
-		Width:           cols,
-		Theme:           m.msgRenderer.Palette(),
-		IsTranscript:    isTranscript,
-		IsStatic:        isTranscript,
-		Verbose:         verbose,
-		Highlighter:     markdownHighlighter,
-		AddMargin:       true,
-		ContainerWidth:  &cw,
+		Width:          cols,
+		Theme:          m.msgRenderer.Palette(),
+		IsTranscript:   isTranscript,
+		IsStatic:       isTranscript,
+		Verbose:        verbose,
+		Highlighter:    markdownHighlighter,
+		AddMargin:      true,
+		ContainerWidth: &cw,
 	}
 	h, err := m.msgRenderer.MeasureMessage(&msg, ctx)
 	if err != nil {
@@ -2164,16 +2165,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			}
 			logg("SegToolUse", piece)
 		case messagerow.SegToolResult:
-			st := baseMsgStyle(userRow).Foreground(theme.DimMuted())
-			if seg.IsToolError {
-				st = baseMsgStyle(userRow).Foreground(theme.ToolError())
-			}
-			body := textutil.LinkifyOSC8(seg.Text)
-			line := st.Render("↩ " + withHL(body))
-			if seg.ToolBodyOmitted && toolUseCtrlOHint {
-				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-			}
-			piece = line
+			piece = segdiff.FormatToolResultSegmentForTranscript(seg, userRow, toolUseCtrlOHint, withHL, baseMsgStyle)
 			logg("SegToolResult", piece)
 		case messagerow.SegThinking:
 			body := textutil.LinkifyOSC8(seg.Text)

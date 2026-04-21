@@ -11,22 +11,25 @@ import (
 
 // Palette holds terminal colors for gou TUI (subset of TS design-system roles).
 type Palette struct {
-	User      color.Color
-	Assistant color.Color
-	Default   color.Color
-	ToolUse   color.Color
-	ToolMuted color.Color
-	ToolError color.Color
-	Advisor   color.Color
-	Grouped   color.Color
-	Collapsed color.Color
-	Server    color.Color
-	Heading   color.Color
+	User       color.Color
+	Assistant  color.Color
+	Default    color.Color
+	ToolUse    color.Color
+	ToolMuted  color.Color
+	ToolError  color.Color
+	Advisor    color.Color
+	Grouped    color.Color
+	Collapsed  color.Color
+	Server     color.Color
+	Heading    color.Color
 	InlineCode color.Color // markdown `inline` spans — light blue (ANSI 256)
 	// UserMessageBackground fills rows behind user-authored text in the gou-demo message list.
 	UserMessageBackground color.Color
 	// UserMessageText is the primary foreground for user-authored prose (bright; Bold applied in gou-demo).
 	UserMessageText color.Color
+	// DiffAdd / DiffDel color unified-diff + / − lines (git-like) in tool_result previews.
+	DiffAdd color.Color
+	DiffDel color.Color
 }
 
 var (
@@ -50,6 +53,8 @@ func defaultPalette() Palette {
 		InlineCode:            lipgloss.Color("117"), // light sky blue on dark bg
 		UserMessageBackground: lipgloss.Color("236"),
 		UserMessageText:       lipgloss.Color("255"),
+		DiffAdd:               lipgloss.Color("42"),
+		DiffDel:               lipgloss.Color("203"),
 	}
 }
 
@@ -70,6 +75,8 @@ func lightPalette() Palette {
 		InlineCode:            lipgloss.Color("39"), // dodger blue on light bg (distinct from User 25)
 		UserMessageBackground: lipgloss.Color("252"),
 		UserMessageText:       lipgloss.Color("24"),
+		DiffAdd:               lipgloss.Color("28"),
+		DiffDel:               lipgloss.Color("124"),
 	}
 }
 
