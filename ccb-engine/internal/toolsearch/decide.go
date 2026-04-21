@@ -59,9 +59,9 @@ func contextWindowTokens(modelID string) int {
 	}
 	// Subset of src/utils/context.ts; unknown models default like TS generic window.
 	if strings.Contains(m, "opus-4") || strings.Contains(m, "sonnet-4") || strings.Contains(m, "haiku-4") {
-		return 200_000
+		return 100_000
 	}
-	return 200_000
+	return 100_000
 }
 
 func autoCharThreshold(modelID string) int {

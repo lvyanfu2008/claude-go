@@ -213,6 +213,32 @@ func TestCalculateTokenWarningState_AboveThresholds(t *testing.T) {
 	}
 }
 
+func TestGetEffectiveContextWindowSize_GOCAutocompactMaxContextWindow(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "")
+	t.Setenv("GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW", "50000")
+	eff := GetEffectiveContextWindowSize("any-model", nil, CompactThresholds{})
+	// default cw 100_000 → cap 50_000; reserved min(defaultMaxOutput 64_000, MaxOutputTokensForSummary 20_000) = 20_000
+	wantEff := 50_000 - 20_000
+	if eff != wantEff {
+		t.Fatalf("GetEffectiveContextWindowSize = %d, want %d", eff, wantEff)
+	}
+	thr := GetAutoCompactThreshold("any-model", nil, CompactThresholds{})
+	wantThr := wantEff - AutoCompactBufferTokens
+	if thr != wantThr {
+		t.Fatalf("GetAutoCompactThreshold = %d, want %d", thr, wantThr)
+	}
+}
+
+func TestGetEffectiveContextWindowSize_AutocompactCapsTightestWins(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "90000")
+	t.Setenv("GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW", "80000")
+	eff := GetEffectiveContextWindowSize("any-model", nil, CompactThresholds{})
+	wantEff := 80_000 - 20_000
+	if eff != wantEff {
+		t.Fatalf("GetEffectiveContextWindowSize = %d, want %d (tighter cap should win)", eff, wantEff)
+	}
+}
+
 func TestShouldAutoCompact_QuerySourceGuard(t *testing.T) {
 	in := ShouldAutoCompactInput{
 		Messages:    []types.Message{{Type: types.MessageTypeUser, Message: json.RawMessage(`{"role":"user","content":"x"}`)}},
@@ -318,7 +344,7 @@ func TestCompactConversation_RetriesOnPromptTooLong(t *testing.T) {
 		Summarize: func(_ context.Context, in SummaryStreamInput) (SummaryStreamResult, error) {
 			calls++
 			if calls == 1 {
-				errDetails := "prompt is too long: 200000 tokens > 180000 maximum"
+				errDetails := "prompt is too long: 100000 tokens > 80000 maximum"
 				trueP := true
 				asst := types.Message{
 					Type: types.MessageTypeAssistant, UUID: "err",

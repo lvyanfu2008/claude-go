@@ -96,49 +96,49 @@ func TestGetMaxOutputTokensForModel(t *testing.T) {
 
 func TestCalculateContextPercentages(t *testing.T) {
 	tests := []struct {
-		name                    string
-		inputTokens            int
+		name                     string
+		inputTokens              int
 		cacheCreationInputTokens int
-		cacheReadInputTokens   int
-		contextWindowSize      int
-		expectedUsed           int
-		expectedRemaining      int
+		cacheReadInputTokens     int
+		contextWindowSize        int
+		expectedUsed             int
+		expectedRemaining        int
 	}{
 		{
-			name:                    "50% usage",
-			inputTokens:            100_000,
+			name:                     "50% usage",
+			inputTokens:              50_000,
 			cacheCreationInputTokens: 0,
-			cacheReadInputTokens:   0,
-			contextWindowSize:      200_000,
-			expectedUsed:           50,
-			expectedRemaining:      50,
+			cacheReadInputTokens:     0,
+			contextWindowSize:        100_000,
+			expectedUsed:             50,
+			expectedRemaining:        50,
 		},
 		{
-			name:                    "With cache tokens",
-			inputTokens:            80_000,
-			cacheCreationInputTokens: 10_000,
-			cacheReadInputTokens:   10_000,
-			contextWindowSize:      200_000,
-			expectedUsed:           50,
-			expectedRemaining:      50,
+			name:                     "With cache tokens",
+			inputTokens:              40_000,
+			cacheCreationInputTokens: 5_000,
+			cacheReadInputTokens:     5_000,
+			contextWindowSize:        100_000,
+			expectedUsed:             50,
+			expectedRemaining:        50,
 		},
 		{
-			name:                    "Over 100% usage",
-			inputTokens:            250_000,
+			name:                     "Over 100% usage",
+			inputTokens:              150_000,
 			cacheCreationInputTokens: 0,
-			cacheReadInputTokens:   0,
-			contextWindowSize:      200_000,
-			expectedUsed:           100,
-			expectedRemaining:      0,
+			cacheReadInputTokens:     0,
+			contextWindowSize:        100_000,
+			expectedUsed:             100,
+			expectedRemaining:        0,
 		},
 		{
-			name:                    "Zero window",
-			inputTokens:            100_000,
+			name:                     "Zero window",
+			inputTokens:              100_000,
 			cacheCreationInputTokens: 0,
-			cacheReadInputTokens:   0,
-			contextWindowSize:      0,
-			expectedUsed:           0,
-			expectedRemaining:      100,
+			cacheReadInputTokens:     0,
+			contextWindowSize:        0,
+			expectedUsed:             0,
+			expectedRemaining:        100,
 		},
 	}
 
@@ -269,9 +269,9 @@ func TestShouldAutoCompact(t *testing.T) {
 	betas := []string{}
 
 	trackingState := &AutoCompactTrackingState{
-		Compacted:          false,
-		TurnCounter:        1,
-		TurnId:             "test-turn-1",
+		Compacted:           false,
+		TurnCounter:         1,
+		TurnId:              "test-turn-1",
 		ConsecutiveFailures: 0,
 	}
 
@@ -300,9 +300,9 @@ func TestShouldAutoCompact(t *testing.T) {
 			name:       "Already compacted, should not compact again",
 			tokenUsage: autoCompactThreshold + 1_000,
 			trackingState: &AutoCompactTrackingState{
-				Compacted:          true,
-				TurnCounter:        2,
-				TurnId:             "test-turn-2",
+				Compacted:           true,
+				TurnCounter:         2,
+				TurnId:              "test-turn-2",
 				ConsecutiveFailures: 0,
 			},
 			expectedResult: false,
@@ -311,9 +311,9 @@ func TestShouldAutoCompact(t *testing.T) {
 			name:       "Too many failures, should not compact",
 			tokenUsage: autoCompactThreshold + 1_000,
 			trackingState: &AutoCompactTrackingState{
-				Compacted:          false,
-				TurnCounter:        3,
-				TurnId:             "test-turn-3",
+				Compacted:           false,
+				TurnCounter:         3,
+				TurnId:              "test-turn-3",
 				ConsecutiveFailures: MaxConsecutiveAutocompactFailures,
 			},
 			expectedResult: false,
@@ -341,11 +341,11 @@ func TestTokenCountWithEstimation(t *testing.T) {
 	// 创建测试消息
 	messages := []Message{
 		{
-			Type: "user",
+			Type:    "user",
 			Message: json.RawMessage(`{"role":"user","content":"Hello, how are you?"}`),
 		},
 		{
-			Type: "assistant",
+			Type:    "assistant",
 			Message: json.RawMessage(`{"role":"assistant","content":"I'm doing well, thank you!"}`),
 		},
 	}
@@ -467,8 +467,8 @@ func TestUpdateAutoCompactTracking(t *testing.T) {
 		{
 			name: "Successful compaction",
 			initialState: &AutoCompactTrackingState{
-				TurnCounter:        1,
-				Compacted:          false,
+				TurnCounter:         1,
+				Compacted:           false,
 				ConsecutiveFailures: 2,
 			},
 			compacted:      true,
@@ -478,8 +478,8 @@ func TestUpdateAutoCompactTracking(t *testing.T) {
 		{
 			name: "Failed compaction",
 			initialState: &AutoCompactTrackingState{
-				TurnCounter:        1,
-				Compacted:          false,
+				TurnCounter:         1,
+				Compacted:           false,
 				ConsecutiveFailures: 1,
 			},
 			compacted:      false,
@@ -492,9 +492,9 @@ func TestUpdateAutoCompactTracking(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// 复制初始状态以避免修改原始数据
 			state := &AutoCompactTrackingState{
-				TurnCounter:        tt.initialState.TurnCounter,
-				TurnId:             tt.initialState.TurnId,
-				Compacted:          tt.initialState.Compacted,
+				TurnCounter:         tt.initialState.TurnCounter,
+				TurnId:              tt.initialState.TurnId,
+				Compacted:           tt.initialState.Compacted,
 				ConsecutiveFailures: tt.initialState.ConsecutiveFailures,
 			}
 

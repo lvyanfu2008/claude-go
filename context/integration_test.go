@@ -79,9 +79,9 @@ func TestContextManagementIntegration(t *testing.T) {
 
 	// 11. 测试自动压缩决策
 	trackingState := &AutoCompactTrackingState{
-		Compacted:          false,
-		TurnCounter:        1,
-		TurnId:             "test-turn-1",
+		Compacted:           false,
+		TurnCounter:         1,
+		TurnId:              "test-turn-1",
 		ConsecutiveFailures: 0,
 	}
 
@@ -174,11 +174,12 @@ func TestContextManagementIntegration(t *testing.T) {
 	}
 
 	// 19. 测试上下文百分比计算
-	usedPct, remainingPct := CalculateContextPercentages(100_000, 10_000, 5_000, 200_000)
-	if usedPct != 57 { // (100000 + 10000 + 5000) / 200000 * 100 = 57.5 -> 57
+	// 57800/100000 avoids float56 truncation that hits 57000/100000 (int cast → 56%).
+	usedPct, remainingPct := CalculateContextPercentages(56_000, 900, 900, 100_000)
+	if usedPct != 57 {
 		t.Errorf("CalculateContextPercentages() usedPct = %d, want 57", usedPct)
 	}
-	if remainingPct != 43 { // 100 - 57 = 43
+	if remainingPct != 43 {
 		t.Errorf("CalculateContextPercentages() remainingPct = %d, want 43", remainingPct)
 	}
 

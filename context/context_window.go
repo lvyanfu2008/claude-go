@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// ModelContextWindowDefault 默认上下文窗口大小（200k令牌）
-const ModelContextWindowDefault = 200_000
+// ModelContextWindowDefault 默认上下文窗口大小（100k令牌）
+const ModelContextWindowDefault = 100_000
 
 // CompactMaxOutputTokens 压缩操作的最大输出令牌
 const CompactMaxOutputTokens = 20_000
@@ -83,7 +83,7 @@ func GetContextWindowForModel(model string, betas []string) int {
 		return 1_000_000
 	}
 
-	// 默认返回200k
+	// 默认返回100k
 	return ModelContextWindowDefault
 }
 
@@ -98,10 +98,13 @@ func GetEffectiveContextWindowSize(model string, betas []string) int {
 		reservedTokens = maxOutputTokens
 	}
 
-	// 允许通过环境变量覆盖自动压缩窗口
-	if autoCompactWindow := os.Getenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW"); autoCompactWindow != "" {
-		if parsed, err := strconv.Atoi(autoCompactWindow); err == nil && parsed > 0 {
-			if parsed < contextWindow {
+	// Cap model context window for auto-compact threshold math (tightest cap wins).
+	for _, key := range []string{
+		"CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+		"GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW",
+	} {
+		if s := strings.TrimSpace(os.Getenv(key)); s != "" {
+			if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 && parsed < contextWindow {
 				contextWindow = parsed
 			}
 		}
