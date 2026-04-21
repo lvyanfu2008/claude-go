@@ -108,7 +108,7 @@ func TestGroupMessagesByApiRound(t *testing.T) {
 	msgs := []types.Message{
 		mk(types.MessageTypeUser, "u1"),
 		mk(types.MessageTypeAssistant, "A"),
-		mk(types.MessageTypeUser, "r1"), // tool_result in round A
+		mk(types.MessageTypeUser, "r1"),     // tool_result in round A
 		mk(types.MessageTypeAssistant, "A"), // same round (split assistant chunk)
 		mk(types.MessageTypeAssistant, "B"), // new round
 		mk(types.MessageTypeUser, "r2"),
@@ -164,7 +164,7 @@ func TestTokenCountWithEstimation_UsesLastAssistantUsage(t *testing.T) {
 	}
 	asst := types.Message{
 		Type: types.MessageTypeAssistant, UUID: "a",
-		Message: json.RawMessage(`{"role":"assistant","id":"R1","content":[],"usage":{"input_tokens":100,"output_tokens":50}}`),
+		Message:   json.RawMessage(`{"role":"assistant","id":"R1","content":[],"usage":{"input_tokens":100,"output_tokens":50}}`),
 		MessageID: strPtr("R1"),
 	}
 	later := types.Message{
@@ -198,9 +198,9 @@ func TestIsAutoCompactEnabled_KillSwitch(t *testing.T) {
 
 func TestCalculateTokenWarningState_AboveThresholds(t *testing.T) {
 	state := CalculateTokenWarningState(170_000, "claude-sonnet-4", nil, CompactThresholds{})
-	// default effective window = 200_000 - 20_000 = 180_000
-	// autoCompactThreshold = 180_000 - 13_000 = 167_000
-	// warning/error = 167_000 - 20_000 = 147_000
+	// default effective window = 100_000 - 20_000 = 80_000
+	// autoCompactThreshold = 80_000 - 13_000 = 67_000
+	// warning/error = 67_000 - 20_000 = 47_000
 	if !state.IsAboveAutoCompactThreshold {
 		t.Fatalf("want above auto-compact at 170k")
 	}
@@ -268,7 +268,7 @@ func TestCompactConversation_EndToEnd(t *testing.T) {
 			}
 			asst := types.Message{
 				Type: types.MessageTypeAssistant, UUID: "summary-u",
-				Message: json.RawMessage(`{"role":"assistant","id":"S1","content":[{"type":"text","text":"<analysis>x</analysis>\n<summary>compacted</summary>"}],"usage":{"input_tokens":100,"output_tokens":20}}`),
+				Message:   json.RawMessage(`{"role":"assistant","id":"S1","content":[{"type":"text","text":"<analysis>x</analysis>\n<summary>compacted</summary>"}],"usage":{"input_tokens":100,"output_tokens":20}}`),
 				MessageID: strPtr("S1"),
 			}
 			return SummaryStreamResult{AssistantMessage: asst, Usage: &TokenUsage{InputTokens: 100, OutputTokens: 20}}, nil

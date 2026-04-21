@@ -31,7 +31,7 @@ type MaxOutputTokensResolver func(model string) int
 
 // Defaults: these keep in-package callers functional without wiring. Hosts provide the real
 // per-model tables via CompactThresholds.
-const defaultContextWindow = 200_000
+const defaultContextWindow = 100_000
 const defaultMaxOutputTokens = 64_000
 
 // CompactThresholds captures the subset of TS module-level dependencies that threshold math reads.
@@ -41,7 +41,7 @@ type CompactThresholds struct {
 }
 
 // resolve returns a ready-to-use ResolveX pair, falling back to documented defaults
-// (200_000 context / 64_000 output) when hosts do not wire model-specific tables.
+// (100_000 context / 64_000 output) when hosts do not wire model-specific tables.
 func (t CompactThresholds) resolve() (ContextWindowResolver, MaxOutputTokensResolver) {
 	cw := t.ResolveContextWindow
 	if cw == nil {
