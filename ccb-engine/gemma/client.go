@@ -113,10 +113,11 @@ type vertexToolWire struct {
 	Function vertexFunctionWire `json:"function"`
 }
 
+// vertexFunctionWire matches OpenAI tool function objects (name, description, parameters object).
 type vertexFunctionWire struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
-	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters"`
 }
 
 type vertexInstance struct {
@@ -222,10 +223,14 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 		})
 	}
 
-	// Prefer host/toolsearchwire verbatim JSON so role "tools" matches the wire the rest of the stack uses.
+	// OpenAI chat.completions tools[]: [{"type":"function","function":{"name","description","parameters":{}}}].
 	var toolsWireBytes json.RawMessage
 	if len(req.ToolsJSON) > 0 {
-		toolsWireBytes = append(json.RawMessage(nil), req.ToolsJSON...)
+		if b, err := canonicalToolsJSONForVertex(req.ToolsJSON); err == nil {
+			toolsWireBytes = b
+		} else {
+			toolsWireBytes = append(json.RawMessage(nil), req.ToolsJSON...)
+		}
 	} else if len(req.Tools) > 0 {
 		wireTools := toolsToVertexWire(req.Tools)
 		if len(wireTools) > 0 {
@@ -236,9 +241,9 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 			toolsWireBytes = b
 		}
 	}
-	if len(toolsWireBytes) > 0 {
-		insertVertexToolsRoleMessage(&msgs, string(toolsWireBytes))
-	}
+	//if len(toolsWireBytes) > 0 {
+	//	insertVertexToolsRoleMessage(&msgs, string(toolsWireBytes))
+	//}
 
 	inst := vertexInstance{
 		RequestFormat: "chatCompletions",
@@ -255,10 +260,11 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 	}
 	if len(toolsWireBytes) > 0 {
 		inst.Tools = toolsWireBytes
+		inst.ToolChoice = "auto"
 	}
-	if req.ToolChoice != nil {
-		inst.ToolChoice = req.ToolChoice
-	}
+	//if req.ToolChoice != nil {
+	//	inst.ToolChoice = req.ToolChoice
+	//}
 	return &vertexPredictRequest{Instances: []vertexInstance{inst}}, nil
 }
 
@@ -286,6 +292,93 @@ func insertVertexToolsRoleMessage(msgs *[]vertexChatMessage, toolsJSON string) {
 	*msgs = out
 }
 
+// canonicalToolsJSONForVertex parses a tools JSON array and re-encodes it in strict OpenAI chat.completions shape.
+func canonicalToolsJSONForVertex(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("empty tools")
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("tools array: %w", err)
+	}
+	out := make([]vertexToolWire, 0, len(items))
+	for _, it := range items {
+		var m map[string]any
+		if err := json.Unmarshal(it, &m); err != nil {
+			continue
+		}
+		w, ok := openAIToolItemToVertexWire(m)
+		if !ok {
+			continue
+		}
+		out = append(out, w)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no valid tools")
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func openAIToolItemToVertexWire(m map[string]any) (vertexToolWire, bool) {
+	fnMap, _ := m["function"].(map[string]any)
+	if fnMap == nil {
+		fnMap = make(map[string]any)
+		for _, k := range []string{"name", "description", "parameters"} {
+			if v, ok := m[k]; ok {
+				fnMap[k] = v
+			}
+		}
+	}
+	name, _ := fnMap["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return vertexToolWire{}, false
+	}
+	desc, _ := fnMap["description"].(string)
+	desc = strings.TrimSpace(desc)
+	params := map[string]interface{}{}
+	if p, ok := fnMap["parameters"]; ok && p != nil {
+		params = wireParametersToMap(p)
+	}
+	typ, _ := m["type"].(string)
+	if strings.TrimSpace(typ) == "" {
+		typ = "function"
+	}
+	return vertexToolWire{
+		Type: typ,
+		Function: vertexFunctionWire{
+			Name:        name,
+			Description: desc,
+			Parameters:  params,
+		},
+	}, true
+}
+
+func wireParametersToMap(v any) map[string]interface{} {
+	if v == nil {
+		return map[string]interface{}{}
+	}
+	if m, ok := v.(map[string]interface{}); ok {
+		if m == nil {
+			return map[string]interface{}{}
+		}
+		return m
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return map[string]interface{}{}
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(b, &out); err != nil || out == nil {
+		return map[string]interface{}{}
+	}
+	return out
+}
+
 func toolsToVertexWire(tools []Tool) []vertexToolWire {
 	out := make([]vertexToolWire, 0, len(tools))
 	for _, t := range tools {
@@ -297,12 +390,14 @@ func toolsToVertexWire(tools []Tool) []vertexToolWire {
 		if typ == "" {
 			typ = "function"
 		}
+		params := map[string]interface{}{}
+		if len(t.Function.Parameters) > 0 {
+			params = t.Function.Parameters
+		}
 		fn := vertexFunctionWire{
 			Name:        name,
 			Description: strings.TrimSpace(t.Function.Description),
-		}
-		if len(t.Function.Parameters) > 0 {
-			fn.Parameters = t.Function.Parameters
+			Parameters:  params,
 		}
 		out = append(out, vertexToolWire{Type: typ, Function: fn})
 	}
