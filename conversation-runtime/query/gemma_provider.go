@@ -188,11 +188,12 @@ func runGemmaStreamingParityModelLoop(
 		}
 
 		if len(toolsForWire) > 0 {
+			// Always pass verbatim wired tools JSON so Gemma client can put the same payload in
+			// instances[].tools and in messages[] role "tools" (see gemma.buildVertexPredictRequest).
+			req.ToolsJSON = append(json.RawMessage(nil), toolsForWire...)
 			var tools []gemma.Tool
 			if err := json.Unmarshal(toolsForWire, &tools); err == nil && len(tools) > 0 {
 				req.Tools = tools
-			} else {
-				req.ToolsJSON = append(json.RawMessage(nil), toolsForWire...)
 			}
 		}
 

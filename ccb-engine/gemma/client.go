@@ -222,21 +222,22 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 		})
 	}
 
-	var toolsRaw json.RawMessage
-	if len(req.Tools) > 0 {
+	// Prefer host/toolsearchwire verbatim JSON so role "tools" matches the wire the rest of the stack uses.
+	var toolsWireBytes json.RawMessage
+	if len(req.ToolsJSON) > 0 {
+		toolsWireBytes = append(json.RawMessage(nil), req.ToolsJSON...)
+	} else if len(req.Tools) > 0 {
 		wireTools := toolsToVertexWire(req.Tools)
 		if len(wireTools) > 0 {
 			b, err := json.Marshal(wireTools)
 			if err != nil {
 				return nil, fmt.Errorf("tools: %w", err)
 			}
-			toolsRaw = b
+			toolsWireBytes = b
 		}
-	} else if len(req.ToolsJSON) > 0 {
-		toolsRaw = append(json.RawMessage(nil), req.ToolsJSON...)
 	}
-	if len(toolsRaw) > 0 {
-		insertVertexToolsRoleMessage(&msgs, string(toolsRaw))
+	if len(toolsWireBytes) > 0 {
+		insertVertexToolsRoleMessage(&msgs, string(toolsWireBytes))
 	}
 
 	inst := vertexInstance{
@@ -252,8 +253,8 @@ func (c *Client) buildVertexPredictRequest(req ChatRequest) (*vertexPredictReque
 	if req.TopP != 0 {
 		inst.TopP = req.TopP
 	}
-	if len(toolsRaw) > 0 {
-		inst.Tools = toolsRaw
+	if len(toolsWireBytes) > 0 {
+		inst.Tools = toolsWireBytes
 	}
 	if req.ToolChoice != nil {
 		inst.ToolChoice = req.ToolChoice
