@@ -10,7 +10,7 @@ import (
 	"goc/types"
 )
 
-const executionStubText = "gou-demo: execution_request (bash or slash from slashprepare/bashprepare) is not executed in TUI; inject ProcessBashCommand / ProcessSlashCommand for in-process handling."
+const executionStubText = "gou-demo: bash/slash execution (slashprepare/bashprepare) is not run in TUI; inject ProcessBashCommand / ProcessSlashCommand for in-process handling."
 
 // ApplyProcessUserInputBaseResult appends r.Messages to the store, or a stub system line when Execution / ExecutionSequence is set.
 // When handoff is non-nil, fills it with [ProcessUserInputBaseResultHandoff] from r, or resets it on execution stub.

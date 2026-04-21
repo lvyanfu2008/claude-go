@@ -23,8 +23,9 @@
 //
 // Intentional simplifications from TS (documented and TODO-flagged in code):
 //   - runForkedAgent (cache-prefix sharing) is not ported; fallback streaming path is the only route.
-//   - Hook execution defaults to no-op (PreCompact/PostCompact/SessionStart); host wires a real runner when
-//     the Go hooks subsystem lands parity for non-tool hooks.
+//   - PreCompact/PostCompact hooks still default to no-op unless the host sets Deps.
+//   - SessionStartHooks defaults to no-op inside compactservice.resolve, but conversation-runtime’s
+//     autocompact adapter wires goc/hookexec.SessionStartHookRunner for real SessionStart command hooks.
 //   - Post-compact attachment regeneration defaults to empty; host wires concrete providers (file re-read,
 //     plan/plan_mode, skills, agent listing, MCP, deferred tools) as those subsystems land parity.
 //   - Telemetry (tengu_compact, tengu_auto_compact_succeeded, tengu_compact_ptl_retry) defaults to a logger

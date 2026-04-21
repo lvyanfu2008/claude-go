@@ -1,9 +1,12 @@
 package claudemd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"goc/hookexec"
 )
 
 // LoadOptions drives getMemoryFiles-equivalent loading.
@@ -81,7 +84,40 @@ func LoadMemoryFilesEnhanced(opts LoadOptions) []MemoryFileInfo {
 		}
 	}
 
+	// InstructionsLoaded hooks (TS getMemoryFiles): observability-only, fire-and-forget; skip forceIncludeExternal path.
+	if !opts.ForceIncludeExternal {
+		tab, err := hookexec.MergedHooksForCwd(absOrig)
+		if err == nil && hookexec.HasInstructionsLoaded(tab) {
+			base := hookexec.BaseHookInput{
+				SessionID:      "local",
+				TranscriptPath: "",
+				Cwd:            absOrig,
+			}
+			for _, file := range result {
+				if !isInstructionsMemoryType(file.Type) {
+					continue
+				}
+				hookexec.FireInstructionsLoaded(context.Background(), tab, absOrig, base, hookexec.InstructionsLoadedFields{
+					FilePath:       file.Path,
+					MemoryType:     string(file.Type),
+					LoadReason:     "session_start",
+					Globs:          file.Globs,
+					ParentFilePath: file.Parent,
+				}, hookexec.DefaultHookTimeoutMs)
+			}
+		}
+	}
+
 	return result
+}
+
+func isInstructionsMemoryType(t MemoryType) bool {
+	switch t {
+	case MemoryUser, MemoryProject, MemoryLocal, MemoryManaged:
+		return true
+	default:
+		return false
+	}
 }
 
 // IsTeamMemoryPromptActive mirrors loadMemoryPrompt's isTeamMemoryEnabled gate inside the TEAMMEM branch

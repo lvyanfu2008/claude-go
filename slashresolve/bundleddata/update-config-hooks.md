@@ -36,7 +36,8 @@ Hooks run commands at specific points in Claude Code's lifecycle.
 | PreCompact | "manual"/"auto" | Before compaction |
 | PostCompact | "manual"/"auto" | After compaction (receives summary) |
 | UserPromptSubmit | - | When user submits |
-| SessionStart | - | When session starts |
+| SessionStart | `startup` \| `resume` \| `clear` \| `compact` | When a session phase starts; JSON stdin includes `source`. Go hosts also merge `hook_additional_context` from hook stdout (see Claude Code hook JSON output). |
+| InstructionsLoaded | `session_start` \| `nested_traversal` \| `path_glob_match` \| `include` \| `compact` | Fires when a CLAUDE.md / rules instruction file is loaded (observability-only in TS; command hooks run fire-and-forget in Go’s eager load path with `session_start`). |
 
 **Common tool matchers:** `Bash`, `Write`, `Edit`, `Read`, `Glob`, `Grep`
 

@@ -8,15 +8,15 @@
 //   - [ProcessTextPrompt] emits tengu_input_prompt via [ProcessUserInputParams.LogEvent] (is_negative / is_keep_going; [MatchesNegativeKeyword] / [MatchesKeepGoingKeyword]).
 //   - CLAUDE_DEBUG_PROCESS_USER_INPUT → stderr lines [processUserInput:IN|AFTER_BASE|OUT] JSON (mirrors logProcessUserInputDebug stages).
 //   - [commandsForFind] uses context.options.commands when [ProcessUserInputParams.Commands] is empty (bridge-safe slash lookup).
-//   - Non-nil [ProcessBashCommand] / [ProcessSlashCommand] run before bashprepare/slashprepare execution_request paths (mirrors dynamic import of processBashCommand / processSlashCommand).
-//   - Prompt path does not emit attachments_plan / hooks_plan / query execution_request (attachments merge into [ProcessTextPrompt]; hooks run in [ProcessUserInput] via [ExecuteUserPromptSubmitHooks] or [ExecuteUserPromptSubmitHooksIter]).
+//   - Non-nil [ProcessBashCommand] / [ProcessSlashCommand] run before bashprepare/slashprepare deferred-execution paths (mirrors dynamic import of processBashCommand / processSlashCommand in TS).
+//   - Prompt path does not emit attachments_plan / hooks_plan / query execution steps (attachments merge into [ProcessTextPrompt]; hooks run in [ProcessUserInput] via [ExecuteUserPromptSubmitHooks] or [ExecuteUserPromptSubmitHooksIter]).
 //
 // Host query streaming: after [ProcessUserInput] returns [ProcessUserInputBaseResult] with ShouldQuery, callers that
 // use [goc/conversation-runtime/query.Query] may call [ApplyQueryHostEnvGates] and [WireToolexecutionFromProcessUserInput]
 // so merged settings env (streaming parity path; see [query.StreamingParityPathEnabled]) and [ProcessUserInputParams.CanUseTool]
 // feed [QueryParams.StreamingParity] and [toolexecution.ExecutionDeps] (see gou-demo streaming parity path).
 //
-// Inject bash/slash/attachment/hook handlers via [ProcessUserInputParams]; nil bash/slash handlers use bashprepare/slashprepare execution_request stubs.
+// Inject bash/slash/attachment/hook handlers via [ProcessUserInputParams]; nil bash/slash handlers use bashprepare/slashprepare and populate [ProcessUserInputBaseResult.Execution] for the host.
 // TS parity: [ProcessBashCommand] / [ProcessSlashCommand] receive *ProcessUserInputParams for context,
 // [SetToolJSX], [CanUseTool]; [ExecuteUserPromptSubmitHooks] receives *ProcessUserInputParams for
 // [RuntimeContext] and [RequestPrompt] (mirrors toolUseContext + requestPrompt in hooks.ts).
@@ -71,7 +71,7 @@ func applyUserPromptSubmitHookItem(p *ProcessUserInputParams, result *ProcessUse
 		for i, s := range hookResult.AdditionalContexts {
 			parts[i] = applyTruncation(s)
 		}
-		am, err := newHookAdditionalContextAttachment(parts, "hook-"+randomUUID(), "UserPromptSubmit")
+		am, err := newHookAdditionalContextAttachment(parts, "hook-"+randomUUID(), "UserPromptSubmit", "UserPromptSubmit")
 		if err != nil {
 			return nil, "", err
 		}
@@ -85,8 +85,8 @@ func applyUserPromptSubmitHookItem(p *ProcessUserInputParams, result *ProcessUse
 	return nil, "", nil
 }
 
-// ExecutionRequest is a TS-executed action produced by Go (Phase 1: parse/decide only; no side effects in Go).
-// Exported so the CLI can wrap it in a stdout union envelope.
+// ExecutionRequest describes a side-effecting bash or slash action when Go does not run a handler
+// ([ProcessBashCommand] / [ProcessSlashCommand]): parse/validate only in Go; the caller runs the shell or slash pipeline.
 type ExecutionRequest struct {
 	Kind         string `json:"kind"` // e.g. "bash"
 	Input        string `json:"input,omitempty"`
@@ -107,8 +107,8 @@ type HooksExecutionPlan struct {
 	PredictedReducerInput *HooksReducerInput `json:"predictedReducerInput,omitempty"`
 }
 
-// HookExecResult is one UserPromptSubmit hook subprocess outcome for the TS bridge.
-// Stdout/stderr are truncated like analytics so execution_request JSON stays bounded.
+// HookExecResult is one UserPromptSubmit hook subprocess outcome for hook execution plans.
+// Stdout/stderr are truncated so serialized payloads stay bounded.
 type HookExecResult struct {
 	Command  string `json:"command"`
 	ExitCode int    `json:"exitCode,omitempty"`
@@ -131,10 +131,10 @@ type ProcessUserInputBaseResult struct {
 	Messages []types.Message `json:"messages"`
 	// ShouldQuery when false skips the model query turn (commands, hooks, errors).
 	ShouldQuery bool `json:"shouldQuery"`
-	// Execution when set requests TS to execute a side-effecting action (e.g. bash) exactly once.
+	// Execution when set requests the host to run a side-effecting action (e.g. bash) exactly once.
 	Execution *ExecutionRequest `json:"execution,omitempty"`
-	// ExecutionSequence when non-empty is an ordered list of TS-executed steps (stdout uses "actions").
-	// When set, takes precedence over Execution for CLI emission; leave Execution nil for multi-step.
+	// ExecutionSequence when non-empty is an ordered list of host-executed steps.
+	// When set, takes precedence over Execution for ordering; leave Execution nil for multi-step.
 	ExecutionSequence []ExecutionRequest `json:"executionSequence,omitempty"`
 	AllowedTools []string `json:"allowedTools,omitempty"`
 	Model        string   `json:"model,omitempty"`
@@ -384,13 +384,13 @@ func processUserInputBase(
 			}
 			return addImageMetadataMessage(r, imageMetadataTexts), nil
 		}
-		// Phase 1: do not execute shell in Go. Instead, parse/validate and request TS to execute.
+		// Without ProcessBashCommand: parse/validate in Go; host executes the shell command.
 		prep := bashprepare.Prepare(bashprepare.StdinRequest{
 			Input: *inputString,
 			Shell: "bash",
 		})
 		if prep.Reject != nil {
-			// Return a TS-UI-friendly reject and let TS show it as a bash stderr message.
+			// Return a reject the host can surface like bash stderr.
 			return &ProcessUserInputBaseResult{
 				Messages:    []types.Message{},
 				ShouldQuery: false,
@@ -420,7 +420,7 @@ func processUserInputBase(
 			}
 			return addImageMetadataMessage(r, imageMetadataTexts), nil
 		}
-		// Phase B: Go parses slash intent only; TS executes processSlashCommand.
+		// Without ProcessSlashCommand: Go parses slash intent only; host runs processSlashCommand.
 		prep := slashprepare.Prepare(slashprepare.StdinRequest{
 			Input: inputStr,
 		})
@@ -460,7 +460,7 @@ func processUserInputBase(
 	}
 
 	// Regular user prompt (TS processUserInputBase: processTextPrompt for string input).
-	// UserPromptSubmit hooks run in [ProcessUserInput] after base, not via execution_request.
+	// UserPromptSubmit hooks run in [ProcessUserInput] after base, not via Execution / ExecutionSequence.
 	if isString {
 		tp, err := ProcessTextPrompt(normalizedStr, nil, nil, nil, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
 		if err != nil {
@@ -470,7 +470,7 @@ func processUserInputBase(
 		return addImageMetadataMessage(base, imageMetadataTexts), nil
 	}
 
-	// Non-string fallback keeps previous behavior (not expected on current TS bridge gate).
+	// Non-string fallback keeps previous behavior (rare for current callers).
 	tp, err := ProcessTextPrompt("", normalizedBlocks, nil, nil, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
 	if err != nil {
 		return nil, err

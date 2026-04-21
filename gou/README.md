@@ -38,7 +38,7 @@
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
 | 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ 宿主打开流式 parity（`ApplyQueryHostEnvGates` / `QueryParams.StreamingParity`）；可选 `GOU_QUERY_STREAMING_PARITY=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。 |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
-| `execution_request`（bash/slash 的 prepare 桩） | `bashprepare` / `slashprepare` 仍可能返回 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
+| `result.execution` / `result.executionSequence`（bash/slash prepare 桩） | `bashprepare` / `slashprepare` 仍可能填充 `Execution` | **TUI 未执行**（仅 system 提示）；**已移除** Go 独用的 `attachments_plan` / `hooks_plan` / `query` 分支 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动、**`[`** 滚动条 dump、**`v`** 外编辑器）；其余见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
 
 ## ProcessUserInput（gou-demo + `goc/gou/pui`）：已做 vs 未做
@@ -54,8 +54,8 @@
 
 其它约定：
 
-- **`Enter`**：`BuildDemoParams` 组装 `ProcessUserInputParams`（**`uuid`**、`PromptInputModePrompt`、`SkipAttachments`、最小 `ProcessUserInputContextData`）。普通 prompt 与 TS 一样走 **`ProcessTextPrompt`**；**`ExecuteUserPromptSubmitHooks`** 未注入时不在 base 内发 `query` execution。可选：`LogEvent` → **`tengu_input_prompt`**；**`CLAUDE_DEBUG_PROCESS_USER_INPUT`** → stderr **`[processUserInput:…]`**；**`FindCommand`** 用 **`commands` / `runtimeContext.options.commands`**；注入 **`ProcessBashCommand` / `ProcessSlashCommand`** 可替代 bash/slash 的 prepare **`execution_request`**；注入 **`ExecuteUserPromptSubmitHooksIter`**（`iter.Seq2`）可按件应用 hook 结果（对齐 TS `for await`）；若与 **`ExecuteUserPromptSubmitHooks`** 同时设置，**优先** Iter。
-- **斜杠**：gou-demo 在 `Enter` 提交时调用 `ProcessUserInput` 并注入 **`ProcessSlashCommand`**（`NewSlashResolveProcessSlashCommand`）。**`F2`** 打开本地 slash 名称列表（来自 `GetCommands`）；仍不执行 bash/slash 的 **`execution_request`** 桩（见上表）。历史 **`SlashSkippedMessage`** 路径已不在 demo 主流程使用。
+- **`Enter`**：`BuildDemoParams` 组装 `ProcessUserInputParams`（**`uuid`**、`PromptInputModePrompt`、`SkipAttachments`、最小 `ProcessUserInputContextData`）。普通 prompt 与 TS 一样走 **`ProcessTextPrompt`**；**`ExecuteUserPromptSubmitHooks`** 未注入时不在 base 内发 `query` execution。可选：`LogEvent` → **`tengu_input_prompt`**；**`CLAUDE_DEBUG_PROCESS_USER_INPUT`** → stderr **`[processUserInput:…]`**；**`FindCommand`** 用 **`commands` / `runtimeContext.options.commands`**；注入 **`ProcessBashCommand` / `ProcessSlashCommand`** 可替代 bash/slash 的 prepare **`Execution`** 路径；注入 **`ExecuteUserPromptSubmitHooksIter`**（`iter.Seq2`）可按件应用 hook 结果（对齐 TS `for await`）；若与 **`ExecuteUserPromptSubmitHooks`** 同时设置，**优先** Iter。
+- **斜杠**：gou-demo 在 `Enter` 提交时调用 `ProcessUserInput` 并注入 **`ProcessSlashCommand`**（`NewSlashResolveProcessSlashCommand`）。**`F2`** 打开本地 slash 名称列表（来自 `GetCommands`）；仍不执行 bash/slash 的 **`Execution`** 桩（见上表）。历史 **`SlashSkippedMessage`** 路径已不在 demo 主流程使用。
 - **命名**：包内对外类型与 TS 对齐优先：`ProcessUserInputBaseResultHandoff`（持久化标量子集）、`ApplyProcessUserInputBaseResult` / `ApplyBaseResult`；详见 [`goc/gou/pui/doc.go`](pui/doc.go)。
 
 ## 测试

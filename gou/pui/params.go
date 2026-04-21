@@ -30,7 +30,7 @@ func DefaultMainLoopModelForDemo() string {
 
 // SlashGated is true when the trimmed line starts with "/".
 // Callers that inject [ProcessUserInputParams.ProcessSlashCommand] (e.g. gou-demo with [NewSlashResolveProcessSlashCommand])
-// should not gate on this — [processuserinput.ProcessUserInput] runs the slash handler instead of slashprepare execution_request.
+// should not gate on this — [processuserinput.ProcessUserInput] runs the slash handler instead of slashprepare populating [processuserinput.ProcessUserInputBaseResult.Execution].
 func SlashGated(line string) bool {
 	return strings.HasPrefix(strings.TrimSpace(line), "/")
 }

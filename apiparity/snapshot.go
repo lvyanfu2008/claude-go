@@ -127,8 +127,11 @@ func GouDemo(in SnapshotInput) (SnapshotOutput, error) {
 	}
 	extraRoots := slices.Clone(in.ExtraClaudeMdRoots)
 	partsRes, errFetch := querycontext.FetchSystemPromptParts(context.Background(), querycontext.FetchOpts{
-		Gou:                gouOpts,
-		ExtraClaudeMdRoots: extraRoots,
+		Gou:                  gouOpts,
+		ExtraClaudeMdRoots:   extraRoots,
+		SessionStartSource:   "startup",
+		HooksSessionID:       "apiparity",
+		HooksTranscriptPath:  "",
 	})
 	var sys string
 	var reminder string

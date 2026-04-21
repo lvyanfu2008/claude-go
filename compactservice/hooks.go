@@ -41,8 +41,10 @@ type PostCompactHookRunner func(ctx context.Context, input PostCompactHookInput)
 type SessionStartHookTrigger string
 
 const (
-	SessionStartTriggerCompact SessionStartHookTrigger = "compact"
 	SessionStartTriggerStartup SessionStartHookTrigger = "startup"
+	SessionStartTriggerResume  SessionStartHookTrigger = "resume"
+	SessionStartTriggerClear   SessionStartHookTrigger = "clear"
+	SessionStartTriggerCompact SessionStartHookTrigger = "compact"
 )
 
 // SessionStartHookInput mirrors the second TS arg { model }.

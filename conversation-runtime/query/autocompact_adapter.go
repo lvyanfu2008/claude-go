@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"goc/anthropicmessages"
+	"goc/ccb-engine/settingsfile"
 	"goc/compactservice"
+	"goc/hookexec"
 	"goc/types"
 )
 
@@ -37,10 +39,23 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 
 		model := modelFromToolUseContext(in.ToolUseContext)
 
+		wd, errWd := os.Getwd()
+		if errWd != nil {
+			wd = "."
+		}
+		projRoot, errRoot := settingsfile.FindClaudeProjectRoot(wd)
+		if errRoot != nil || strings.TrimSpace(projRoot) == "" {
+			projRoot = wd
+		}
+		sid := ""
+		if in.ToolUseContext != nil && in.ToolUseContext.ConversationID != nil {
+			sid = strings.TrimSpace(*in.ToolUseContext.ConversationID)
+		}
+
 		deps := compactservice.Deps{
 			Summarize:              defaultSummarizer(model),
 			PostCompactAttachments: defaultPostCompactAttachments(),
-			// Hooks default to no-op (TS parity gap: see doc.go).
+			SessionStartHooks:      hookexec.SessionStartHookRunner(projRoot, wd, sid, ""),
 		}
 
 		snip := 0

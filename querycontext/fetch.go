@@ -7,8 +7,10 @@ import (
 	"sync"
 
 	"goc/commands"
+	"goc/hookexec"
 	"goc/modelenv"
 	"goc/tscontext"
+	"goc/types"
 )
 
 // FetchOpts mirrors fetchSystemPromptParts inputs from src/utils/queryContext.ts.
@@ -28,6 +30,12 @@ type FetchOpts struct {
 	// TSSnapshot when non-nil uses the snapshot for default/system prompt slices (Go harness only).
 	// UserContext always comes from [BuildUserContext] like TS getUserContext() in fetchSystemPromptParts — never from snap.UserContext.
 	TSSnapshot *tscontext.Snapshot
+
+	// SessionStartSource when non-empty (startup|resume|clear|compact) runs SessionStart command hooks like TS processSessionStartHooks.
+	SessionStartSource string
+	// HooksSessionID / HooksTranscriptPath feed BaseHookInput for hook stdin JSON (optional).
+	HooksSessionID      string
+	HooksTranscriptPath string
 }
 
 // FetchResult mirrors the Promise return type of fetchSystemPromptParts.
@@ -35,6 +43,8 @@ type FetchResult struct {
 	DefaultSystemPrompt []string
 	UserContext         map[string]string
 	SystemContext       map[string]string
+	// SessionStartHookMessages holds hook_additional_context attachment rows from SessionStart hooks (optional).
+	SessionStartHookMessages []types.Message `json:"-"`
 }
 
 func useGoDefaultSystemInsteadOfTSSnapshot(opts FetchOpts) bool {
@@ -71,6 +81,38 @@ func userContextLikeTS(opts FetchOpts) (map[string]string, error) {
 	return BuildUserContext(opts.Gou.Cwd, opts.ExtraClaudeMdRoots)
 }
 
+func sessionStartHookMessages(ctx context.Context, opts FetchOpts) ([]types.Message, error) {
+	src := strings.TrimSpace(opts.SessionStartSource)
+	if src == "" {
+		return nil, nil
+	}
+	cwd := strings.TrimSpace(opts.Gou.Cwd)
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			cwd = "."
+		}
+	}
+	tab, err := hookexec.MergedHooksForCwd(cwd)
+	if err != nil {
+		return nil, err
+	}
+	sid := strings.TrimSpace(opts.HooksSessionID)
+	if sid == "" {
+		sid = "local"
+	}
+	base := hookexec.BaseHookInput{
+		SessionID:      sid,
+		TranscriptPath: strings.TrimSpace(opts.HooksTranscriptPath),
+		Cwd:            cwd,
+	}
+	return hookexec.RunSessionStartHooks(ctx, tab, cwd, base, hookexec.SessionStartExtra{
+		Source: src,
+		Model:  strings.TrimSpace(opts.Gou.ModelID),
+	}, hookexec.DefaultHookTimeoutMs)
+}
+
 // FetchSystemPromptParts mirrors src/utils/queryContext.ts fetchSystemPromptParts (parallel fan-in).
 func FetchSystemPromptParts(ctx context.Context, opts FetchOpts) (FetchResult, error) {
 	custom := strings.TrimSpace(opts.CustomSystemPrompt)
@@ -88,24 +130,42 @@ func FetchSystemPromptParts(ctx context.Context, opts FetchOpts) (FetchResult, e
 			// so the model line matches live env. UserContext is always live (getUserContext parity).
 			if useGoDefaultSystemInsteadOfTSSnapshot(opts) {
 				s := strings.TrimSpace(commands.BuildGouDemoSystemPrompt(opts.Gou))
-				return FetchResult{
+				res := FetchResult{
 					DefaultSystemPrompt: []string{s},
 					UserContext:         uc,
 					SystemContext:       cloneStringMap(snap.SystemContext),
-				}, nil
+				}
+				ss, errSS := sessionStartHookMessages(ctx, opts)
+				if errSS != nil {
+					return FetchResult{}, errSS
+				}
+				res.SessionStartHookMessages = ss
+				return res, nil
 			}
-			return FetchResult{
+			res := FetchResult{
 				DefaultSystemPrompt: cloneStringSlice(snap.DefaultSystemPrompt),
 				UserContext:         uc,
 				SystemContext:       cloneStringMap(snap.SystemContext),
-			}, nil
+			}
+			ss, errSS := sessionStartHookMessages(ctx, opts)
+			if errSS != nil {
+				return FetchResult{}, errSS
+			}
+			res.SessionStartHookMessages = ss
+			return res, nil
 		}
 		// TS: customSystemPrompt skips default system + getSystemContext, but getUserContext() still runs.
-		return FetchResult{
+		res := FetchResult{
 			DefaultSystemPrompt: []string{},
 			UserContext:         uc,
 			SystemContext:       map[string]string{},
-		}, nil
+		}
+		ss, errSS := sessionStartHookMessages(ctx, opts)
+		if errSS != nil {
+			return FetchResult{}, errSS
+		}
+		res.SessionStartHookMessages = ss
+		return res, nil
 	}
 
 	var (
@@ -163,9 +223,15 @@ func FetchSystemPromptParts(ctx context.Context, opts FetchOpts) (FetchResult, e
 	if sysCtx == nil {
 		sysCtx = map[string]string{}
 	}
-	return FetchResult{
+	res := FetchResult{
 		DefaultSystemPrompt: defaultParts,
 		UserContext:         userCtx,
 		SystemContext:       sysCtx,
-	}, nil
+	}
+	ss, errSS := sessionStartHookMessages(ctx, opts)
+	if errSS != nil {
+		return FetchResult{}, errSS
+	}
+	res.SessionStartHookMessages = ss
+	return res, nil
 }

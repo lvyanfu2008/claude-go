@@ -91,11 +91,14 @@ func newCommandInputMessage(content string) types.Message {
 	}
 }
 
-func newHookAdditionalContextAttachment(parts []string, toolUseID, hookEvent string) (types.Message, error) {
+func newHookAdditionalContextAttachment(parts []string, toolUseID, hookEvent, hookName string) (types.Message, error) {
+	if strings.TrimSpace(hookName) == "" {
+		hookName = hookEvent
+	}
 	att := map[string]any{
 		"type":      "hook_additional_context",
 		"content":   parts,
-		"hookName":  "UserPromptSubmit",
+		"hookName":  hookName,
 		"toolUseID": toolUseID,
 		"hookEvent": hookEvent,
 	}
