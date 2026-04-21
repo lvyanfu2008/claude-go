@@ -7,7 +7,8 @@
 //  2) PreCompact / PostCompact / SessionStart / InstructionsLoaded / UserPromptSubmit command hooks — implemented (see compact_hooks.go, user_prompt_submit.go).
 //  3) Policy / trust gates — partial (env CLAUDE_CODE_POLICY_DISABLE_ALL_HOOKS; interactive trust stub).
 //  4) Plugin + session snapshot hooks, prompt/agent/http/callback/function — not ported (TS-only or REPL).
-//  5) Per-event stdin validation (Zod) — callers must build JSON matching coreSchemas HookInput union.
+//  5) Per-event stdin validation (Zod in TS) — callers must build JSON matching coreSchemas HookInput union.
+//     Sync hook **stdout** top-level fields are validated with Zog (github.com/Oudwins/zog) toward syncHookResponseSchema (see hook_output_sync_zog.go).
 //
 // Merged hook tables: user ~/.claude/settings.json, project .claude/settings.go.json, .claude/settings.local.json.
 package hookexec

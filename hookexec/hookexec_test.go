@@ -156,6 +156,20 @@ func TestUserPromptSubmitAggregates_blockDecision(t *testing.T) {
 	}
 }
 
+func TestParseSyncHookStdoutJSON_invalidDecision(t *testing.T) {
+	_, err := parseSyncHookStdoutJSON(`{"decision":"maybe"}`)
+	if err == nil {
+		t.Fatal("expected zog validation error")
+	}
+}
+
+func TestParseSyncHookStdoutJSON_hookSpecificOutputNotObject(t *testing.T) {
+	_, err := parseSyncHookStdoutJSON(`{"hookSpecificOutput":[1,2]}`)
+	if err == nil {
+		t.Fatal("expected error for non-object hookSpecificOutput")
+	}
+}
+
 func TestUserPromptSubmitAggregates_exitCode2(t *testing.T) {
 	r := OutsideReplCommandResult{
 		Command:   `./x`,

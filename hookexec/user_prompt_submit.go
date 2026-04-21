@@ -51,14 +51,6 @@ func RunUserPromptSubmitHooks(ctx context.Context, table HooksTable, workDir str
 	return agg, nil
 }
 
-func validateUserPromptSubmitDecision(dec string) error {
-	dec = strings.TrimSpace(dec)
-	if dec == "" || dec == "approve" || dec == "block" {
-		return nil
-	}
-	return fmt.Errorf("Unknown hook decision type: %s. Valid types are: approve, block", dec)
-}
-
 func userPromptSubmitAggregates(r OutsideReplCommandResult, toolUseID, hookEvent, hookName string) []types.AggregatedHookResult {
 	stdout := strings.TrimSpace(r.Stdout)
 	trimmed := strings.TrimSpace(stdout)
@@ -77,14 +69,11 @@ func userPromptSubmitAggregates(r OutsideReplCommandResult, toolUseID, hookEvent
 		return nil
 	}
 
-	var top syncUserPromptSubmitJSON
-	if err := json.Unmarshal([]byte(trimmed), &top); err != nil {
-		return userPromptSubmitValidationError(r, toolUseID, hookEvent, hookName, fmt.Sprintf("Failed to parse hook output as JSON: %v", err))
-	}
-
-	if err := validateUserPromptSubmitDecision(top.Decision); err != nil {
+	parsed, err := parseSyncHookStdoutJSON(trimmed)
+	if err != nil {
 		return userPromptSubmitValidationError(r, toolUseID, hookEvent, hookName, err.Error())
 	}
+	top := parsedSyncHookToLegacyTop(parsed)
 
 	if len(top.HookSpecificOutput) > 0 {
 		var hso struct {
