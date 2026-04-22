@@ -15,6 +15,8 @@ import (
 // UserMessageRenderer renders user messages.
 type UserMessageRenderer struct{}
 
+const transcriptToolResultMaxLines = 10
+
 // CanRender returns true for user messages.
 func (r *UserMessageRenderer) CanRender(msg *types.Message) bool {
 	return msg.Type == types.MessageTypeUser
@@ -312,8 +314,8 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
-					// Render text content with indentation
-					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme, ctx.Highlighter)
+					// Render text content with wrapping instead of markdown to preserve newlines
+					textLines := wrapText(text, getContainerWidth(ctx)-2)
 					for _, tl := range textLines {
 						lines = append(lines, "  "+tl)
 					}
@@ -324,6 +326,10 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 
 	if len(lines) == 0 {
 		return []string{"  ↳ [Result]"}, nil
+	}
+	if ctx.IsTranscript && len(lines) > transcriptToolResultMaxLines {
+		lines = append([]string(nil), lines[:transcriptToolResultMaxLines]...)
+		lines[transcriptToolResultMaxLines-1] += " ..."
 	}
 
 	return lines, nil
@@ -367,7 +373,7 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if itemType, _ := itemMap["type"].(string); itemType == "text" {
 				if text, _ := itemMap["text"].(string); text != "" {
-					textLines := renderMarkdown(text, getContainerWidth(ctx)-2, ctx.Theme, ctx.Highlighter)
+					textLines := wrapText(text, getContainerWidth(ctx)-2)
 					totalLines += len(textLines)
 				}
 			}
@@ -376,6 +382,9 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 
 	if totalLines == 0 {
 		return 1
+	}
+	if ctx.IsTranscript && totalLines > transcriptToolResultMaxLines {
+		return transcriptToolResultMaxLines
 	}
 
 	return totalLines

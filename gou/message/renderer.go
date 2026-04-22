@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"goc/gou/layout"
 	"goc/gou/markdown"
 	"goc/gou/theme"
 	"goc/types"
@@ -87,66 +88,12 @@ func wrapText(text string, width int) []string {
 	if width <= 0 {
 		return []string{text}
 	}
-
-	// ANSI-aware wrapping
-	var lines []string
-	var currentLine strings.Builder
-	currentLineVisibleLen := 0
-
-	// Split by words, but preserve ANSI sequences
-	// Simple approach: split by space, but this doesn't handle ANSI codes well
-	// For now, use the old logic but with visible length calculation
-	words := strings.Fields(text)
-	if len(words) == 0 {
+	if text == "" {
 		return []string{""}
 	}
-
-	// Helper to calculate visible length (ignoring ANSI escape sequences)
-	visibleLen := func(s string) int {
-		// Remove ANSI escape sequences for length calculation
-		// Simple regex: \x1b\[[0-9;]*[A-Za-z]
-		inEscape := false
-		visible := 0
-		for i := 0; i < len(s); i++ {
-			if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
-				inEscape = true
-				i++ // Skip '['
-				continue
-			}
-			if inEscape {
-				// Check for end of escape sequence
-				if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
-					inEscape = false
-				}
-				continue
-			}
-			visible++
-		}
-		return visible
-	}
-
-	currentLine.WriteString(words[0])
-	currentLineVisibleLen = visibleLen(words[0])
-
-	for _, word := range words[1:] {
-		wordVisibleLen := visibleLen(word)
-		if currentLineVisibleLen+1+wordVisibleLen <= width {
-			currentLine.WriteString(" ")
-			currentLine.WriteString(word)
-			currentLineVisibleLen += 1 + wordVisibleLen
-		} else {
-			lines = append(lines, currentLine.String())
-			currentLine.Reset()
-			currentLine.WriteString(word)
-			currentLineVisibleLen = wordVisibleLen
-		}
-	}
-
-	if currentLine.Len() > 0 {
-		lines = append(lines, currentLine.String())
-	}
-
-	return lines
+	// Preserve explicit newlines from tool output, then wrap each visual line.
+	wrapped := layout.WrapForViewport(text, width)
+	return strings.Split(wrapped, "\n")
 }
 
 // renderMarkdown renders markdown text with theme.

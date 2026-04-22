@@ -3,6 +3,7 @@
 package segdiff
 
 import (
+	"encoding/json"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -45,7 +46,7 @@ func FormatToolResultSegmentForTranscript(
 		if seg.IsToolError {
 			st = baseMsgStyle(userRow).Foreground(theme.ToolError())
 		}
-		line := st.Render("↩ " + withHL(textutil.LinkifyOSC8(seg.Text)))
+		line := st.Render("↩ " + withHL(textutil.LinkifyOSC8(decodeEscapedNewlines(seg.Text))))
 		line = wrapAndClampToolResultLines(line, cols, 10)
 		if seg.ToolBodyOmitted && toolUseCtrlOHint {
 			line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
@@ -68,6 +69,30 @@ func FormatToolResultSegmentForTranscript(
 	out := wrapAndClampToolResultLines(b.String(), cols, 10)
 	if seg.ToolBodyOmitted && toolUseCtrlOHint {
 		out += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+	}
+	return out
+}
+
+func decodeEscapedNewlines(s string) string {
+	if !strings.Contains(s, `\n`) {
+		return s
+	}
+	out := s
+	// Some tool_result payloads are doubly escaped (e.g. "\\n" in JSON source text).
+	// Decode a small fixed number of layers so literal "\n" becomes real newlines.
+	for range 2 {
+		if !strings.Contains(out, `\n`) {
+			break
+		}
+		quoted := `"` + strings.ReplaceAll(out, `"`, `\"`) + `"`
+		var unquoted string
+		if err := json.Unmarshal([]byte(quoted), &unquoted); err != nil {
+			break
+		}
+		if unquoted == out {
+			break
+		}
+		out = unquoted
 	}
 	return out
 }

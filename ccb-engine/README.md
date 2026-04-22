@@ -43,7 +43,7 @@ Output path resolution: [`debugpath.ResolveLogPath`](debugpath/path.go). **`apil
 | Area | Packages |
 |------|-----------|
 | HTTP / tools wire (query path) | [`internal/anthropic`](internal/anthropic/), [`internal/toolsearch`](internal/toolsearch/), [`toolsearchwire`](toolsearchwire/) |
-| Local tool parity | [`skilltools`](skilltools/), [`localtools`](localtools/), [`paritytools`](paritytools/), [`bashzog`](bashzog/), [`toolstub`](toolstub/) |
+| Local tool parity | [`skilltools`](skilltools/), [`localtools`](localtools/), [`bashzog`](bashzog/), [`toolstub`](toolstub/), [`tools`](../tools/) |
 | Settings / paths | [`settingsfile`](settingsfile/), [`debugpath`](debugpath/) |
 | Logging | [`apilog`](apilog/), [`diaglog`](diaglog/) |
 
