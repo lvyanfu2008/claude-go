@@ -103,6 +103,8 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return PushNotificationFromJSON(raw)
 	case "SubscribePR":
 		return SubscribePRFromJSON(raw)
+	case "ReviewArtifact":
+		return ReviewArtifactFromJSON(raw)
 	default:
 		return "", false, ErrNotHandled
 	}

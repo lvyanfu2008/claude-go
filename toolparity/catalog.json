@@ -64,6 +64,7 @@
     {"name": "ListMcpResourcesTool", "ts_presence": "core", "go_status": "full", "go_location": "paritytools.ListMcpResourcesFromJSON"},
     {"name": "ReadMcpResourceTool", "ts_presence": "core", "go_status": "full", "go_location": "paritytools.ReadMcpResourceFromJSON"},
     {"name": "ToolSearch", "ts_presence": "tool_search_optimistic", "go_status": "full", "go_location": "ccb-engine/internal/toolsearch"},
-    {"name": "echo_stub", "ts_presence": "not_ts_builtin", "ts_note": "Go tests / demos only", "go_status": "full", "go_location": "paritytools.Run"}
+    {"name": "echo_stub", "ts_presence": "not_ts_builtin", "ts_note": "Go tests / demos only", "go_status": "full", "go_location": "paritytools.Run"},
+    {"name": "ReviewArtifact", "ts_presence": "REVIEW_ARTIFACT", "go_status": "full", "go_location": "paritytools.ReviewArtifactFromJSON"}
   ]
 }
