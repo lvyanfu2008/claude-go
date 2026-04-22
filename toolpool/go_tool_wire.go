@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 
 	"goc/ccb-engine/bashzog"
 	"goc/commands"
@@ -22,11 +21,6 @@ type goWireToolEntry struct {
 
 type nativeToolSpecProvider func(name string) (types.ToolSpec, bool, error)
 
-var (
-	goOwnedSpecParseOnce sync.Once
-	goOwnedSpecByName    map[string]types.ToolSpec
-	goOwnedSpecParseErr  error
-)
 
 func indexToolSpecsByName(specs []types.ToolSpec) map[string]types.ToolSpec {
 	out := make(map[string]types.ToolSpec, len(specs))
@@ -85,31 +79,6 @@ func buildGoWireToolSpecsFromExportSpecs(specs []types.ToolSpec) []types.ToolSpe
 	return buildGoWireToolSpecsFromExportSpecsWithProvider(specs, nativeSpecFromGoProvider)
 }
 
-func loadGoOwnedSpecs() {
-	parsed, err := ParseToolsAPIDocumentJSON(commands.ToolsAPIJSON)
-	if err != nil {
-		goOwnedSpecParseErr = err
-		return
-	}
-	goOwnedSpecByName = indexToolSpecsByName(parsed)
-}
-
-func goOwnedSpec(toolName string) (types.ToolSpec, bool, error) {
-	goOwnedSpecParseOnce.Do(loadGoOwnedSpecs)
-	if goOwnedSpecParseErr != nil {
-		return types.ToolSpec{}, false, goOwnedSpecParseErr
-	}
-	s, ok := goOwnedSpecByName[toolName]
-	return s, ok, nil
-}
-
-func nativeToolDescriptionOrDefault(toolName, fallback string) string {
-	s, ok, err := goOwnedSpec(toolName)
-	if err == nil && ok && strings.TrimSpace(s.Description) != "" {
-		return s.Description
-	}
-	return fallback
-}
 
 func mustMarshalJSONRaw(v any) json.RawMessage {
 	b, err := json.Marshal(v)
@@ -207,7 +176,7 @@ func nativeEditToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Edit",
-		Description:     nativeToolDescriptionOrDefault("Edit", "Performs exact string replacements in files."),
+		Description:     "Performs exact string replacements in files.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -231,7 +200,7 @@ func nativeGlobToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Glob",
-		Description:     nativeToolDescriptionOrDefault("Glob", "Find files matching glob patterns."),
+		Description:     "Find files matching glob patterns.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -304,7 +273,7 @@ func nativeGrepToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Grep",
-		Description:     nativeToolDescriptionOrDefault("Grep", "Search file contents using ripgrep."),
+		Description:     "Search file contents using ripgrep.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -342,7 +311,7 @@ func nativeNotebookEditToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "NotebookEdit",
-		Description:     nativeToolDescriptionOrDefault("NotebookEdit", "Edit Jupyter notebook cells (.ipynb)"),
+		Description:     "Edit Jupyter notebook cells (.ipynb)",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -365,7 +334,7 @@ func nativeTaskStopToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskStop",
-		Description:     nativeToolDescriptionOrDefault("TaskStop", "Stop a running background task by ID."),
+		Description:     "Stop a running background task by ID.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -404,7 +373,7 @@ func nativeTodoWriteToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TodoWrite",
-		Description:     nativeToolDescriptionOrDefault("TodoWrite", "Manage structured task lists for the current coding session."),
+		Description:     "Manage structured task lists for the current coding session.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -429,7 +398,7 @@ func nativeWebFetchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "WebFetch",
-		Description:     nativeToolDescriptionOrDefault("WebFetch", "Fetch and analyze web content for a given URL."),
+		Description:     "Fetch and analyze web content for a given URL.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -464,7 +433,7 @@ func nativeWebSearchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "WebSearch",
-		Description:     nativeToolDescriptionOrDefault("WebSearch", "Search the web for up-to-date information."),
+		Description:     "Search the web for up-to-date information.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -478,7 +447,7 @@ func nativeEnterPlanModeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "EnterPlanMode",
-		Description:     nativeToolDescriptionOrDefault("EnterPlanMode", "Enter plan mode for complex implementation tasks."),
+		Description:     "Enter plan mode for complex implementation tasks.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -489,7 +458,7 @@ func nativeExitPlanModeToolSpec() types.ToolSpec {
 		"type":    "object",
 		"properties": map[string]any{
 			"allowedPrompts": map[string]any{
-				"type": "array",
+				"type":        "array",
 				"description": "Prompt-based permissions needed to implement the plan. These describe categories of actions rather than specific commands.",
 				"items": map[string]any{
 					"type": "object",
@@ -513,7 +482,7 @@ func nativeExitPlanModeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ExitPlanMode",
-		Description:     nativeToolDescriptionOrDefault("ExitPlanMode", "Exit plan mode and request user approval."),
+		Description:     "Exit plan mode and request user approval.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -545,7 +514,7 @@ func nativeCronCreateToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "CronCreate",
-		Description:     nativeToolDescriptionOrDefault("CronCreate", "Schedule prompts using cron expressions."),
+		Description:     "Schedule prompts using cron expressions.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -565,7 +534,7 @@ func nativeCronDeleteToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "CronDelete",
-		Description:     nativeToolDescriptionOrDefault("CronDelete", "Cancel a scheduled cron job."),
+		Description:     "Cancel a scheduled cron job.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -579,7 +548,7 @@ func nativeCronListToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "CronList",
-		Description:     nativeToolDescriptionOrDefault("CronList", "List all scheduled cron jobs."),
+		Description:     "List all scheduled cron jobs.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -688,7 +657,7 @@ func nativeAskUserQuestionToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "AskUserQuestion",
-		Description:     nativeToolDescriptionOrDefault("AskUserQuestion", "Ask the user clarifying multiple-choice questions during execution."),
+		Description:     "Ask the user clarifying multiple-choice questions during execution.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -707,7 +676,7 @@ func nativeEnterWorktreeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "EnterWorktree",
-		Description:     nativeToolDescriptionOrDefault("EnterWorktree", "Enter an isolated worktree session."),
+		Description:     "Enter an isolated worktree session.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -732,7 +701,7 @@ func nativeExitWorktreeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ExitWorktree",
-		Description:     nativeToolDescriptionOrDefault("ExitWorktree", "Exit current worktree session."),
+		Description:     "Exit current worktree session.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -756,7 +725,7 @@ func nativeSkillToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Skill",
-		Description:     nativeToolDescriptionOrDefault("Skill", "Execute a skill within the main conversation."),
+		Description:     "Execute a skill within the main conversation.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -788,7 +757,7 @@ func nativeTaskOutputToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskOutput",
-		Description:     nativeToolDescriptionOrDefault("TaskOutput", "Read output from a running or completed background task."),
+		Description:     "Read output from a running or completed background task.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -813,7 +782,7 @@ func nativeToolSearchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ToolSearch",
-		Description:     nativeToolDescriptionOrDefault("ToolSearch", "Fetch schemas for deferred tools so they can be called."),
+		Description:     "Fetch schemas for deferred tools so they can be called.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -855,7 +824,7 @@ func nativeAgentToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Agent",
-		Description:     nativeToolDescriptionOrDefault("Agent", "Launch a new agent to handle complex tasks."),
+		Description:     agentToolDescription,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -869,7 +838,7 @@ func nativeEmptyObjectSchemaToolSpec(name, fallbackDescription string) types.Too
 	}
 	return types.ToolSpec{
 		Name:            name,
-		Description:     nativeToolDescriptionOrDefault(name, fallbackDescription),
+		Description:     fallbackDescription,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -887,7 +856,7 @@ func nativeSendMessageToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "SendMessage",
-		Description:     nativeToolDescriptionOrDefault("SendMessage", "Send a message to a teammate or broadcast target."),
+		Description:     "Send a message to a teammate or broadcast target.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -909,7 +878,7 @@ func nativeSendUserMessageToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "SendUserMessage",
-		Description:     nativeToolDescriptionOrDefault("SendUserMessage", "Send a user-visible message with optional attachments."),
+		Description:     "Send a user-visible message with optional attachments.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -925,7 +894,7 @@ func nativeListMcpResourcesToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ListMcpResourcesTool",
-		Description:     nativeToolDescriptionOrDefault("ListMcpResourcesTool", "List resources from connected MCP servers."),
+		Description:     "List resources from connected MCP servers.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -943,7 +912,7 @@ func nativeReadMcpResourceToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ReadMcpResourceTool",
-		Description:     nativeToolDescriptionOrDefault("ReadMcpResourceTool", "Read a specific resource from an MCP server."),
+		Description:     "Read a specific resource from an MCP server.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -963,7 +932,7 @@ func nativeTaskCreateToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskCreate",
-		Description:     nativeToolDescriptionOrDefault("TaskCreate", "Create a task in Todo v2."),
+		Description:     "Create a task in Todo v2.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -978,7 +947,7 @@ func nativeTaskGetToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskGet",
-		Description:     nativeToolDescriptionOrDefault("TaskGet", "Get a task by ID in Todo v2."),
+		Description:     "Get a task by ID in Todo v2.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1007,7 +976,7 @@ func nativeTaskUpdateToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskUpdate",
-		Description:     nativeToolDescriptionOrDefault("TaskUpdate", "Update task fields in Todo v2."),
+		Description:     "Update task fields in Todo v2.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1017,14 +986,157 @@ func nativeSleepToolSpec() types.ToolSpec {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"type":    "object",
 		"properties": map[string]any{
-			"duration_seconds": map[string]any{"type": "number"},
-			"seconds":          map[string]any{"type": "number"},
+			"duration_seconds": map[string]any{
+				"type":        "number",
+				"description": "How long to sleep in seconds. Can be interrupted by the user at any time.",
+			},
 		},
+		"required":             []string{"duration_seconds"},
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
 		Name:            "Sleep",
-		Description:     nativeToolDescriptionOrDefault("Sleep", "Wait for a short duration before continuing."),
+		Description:     "Wait for a short duration before continuing.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeCtxInspectToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Optional query to filter context entries. If omitted, returns a summary of all context.",
+			},
+		},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "CtxInspect",
+		Description:     "Inspect context usage and token allocation.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeListPeersToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"include_self": map[string]any{
+				"type":        "boolean",
+				"description": "Whether to include the current session in the list. Defaults to false.",
+			},
+		},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "ListPeers",
+		Description:     "List connected peer sessions.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeMonitorToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"command": map[string]any{
+				"type":        "string",
+				"description": "The shell command to run as a long-running monitor.",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "Clear description of what this monitor watches.",
+			},
+		},
+		"required":             []string{"command", "description"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "Monitor",
+		Description:     "Monitor long-running task output.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativePushNotificationToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"title": map[string]any{
+				"type":        "string",
+				"description": "Title of the push notification.",
+			},
+			"body": map[string]any{
+				"type":        "string",
+				"description": "Body text of the push notification.",
+			},
+			"priority": map[string]any{
+				"type":        "string",
+				"enum":        []string{"normal", "high"},
+				"description": "Notification priority.",
+			},
+		},
+		"required":             []string{"title", "body"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "PushNotification",
+		Description:     "Send a push notification to the user.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeSendUserFileToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"file_path": map[string]any{
+				"type":        "string",
+				"description": "Absolute path to the file to send to the user.",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "Optional description of the file being sent.",
+			},
+		},
+		"required":             []string{"file_path"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "SendUserFile",
+		Description:     "Send a file artifact to the user.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeSnipToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"message_ids": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "IDs of the messages to snip from history.",
+			},
+			"reason": map[string]any{
+				"type":        "string",
+				"description": "Why these messages are being snipped.",
+			},
+		},
+		"required":             []string{"message_ids"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "Snip",
+		Description:     "Snip conversation history to free context.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1043,7 +1155,7 @@ func nativePowerShellToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "PowerShell",
-		Description:     nativeToolDescriptionOrDefault("PowerShell", "Execute a PowerShell command in the local environment."),
+		Description:     "Execute a PowerShell command in the local environment.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1131,13 +1243,13 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "OverflowTest":
 		return nativeEmptyObjectSchemaToolSpec("OverflowTest", "Internal overflow stress-test tool."), true, nil
 	case "CtxInspect":
-		return nativeEmptyObjectSchemaToolSpec("CtxInspect", "Inspect context usage and token allocation."), true, nil
+		return nativeCtxInspectToolSpec(), true, nil
 	case "TerminalCapture":
 		return nativeEmptyObjectSchemaToolSpec("TerminalCapture", "Capture terminal state for diagnostics."), true, nil
 	case "LSP":
 		return nativeEmptyObjectSchemaToolSpec("LSP", "Language Server Protocol helper tool."), true, nil
 	case "ListPeers":
-		return nativeEmptyObjectSchemaToolSpec("ListPeers", "List connected peer sessions."), true, nil
+		return nativeListPeersToolSpec(), true, nil
 	case "TeamCreate":
 		return nativeEmptyObjectSchemaToolSpec("TeamCreate", "Create an agent team context."), true, nil
 	case "TeamDelete":
@@ -1146,22 +1258,22 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result."), true, nil
 	case "REPL":
 		return nativeEmptyObjectSchemaToolSpec("REPL", "Run command(s) in REPL mode."), true, nil
-	case "Workflow":
-		return nativeEmptyObjectSchemaToolSpec("Workflow", "Execute a workflow script."), true, nil
+	case "workflow":
+		return nativeEmptyObjectSchemaToolSpec("workflow", "Execute a workflow script."), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions."), true, nil
 	case "Monitor":
-		return nativeEmptyObjectSchemaToolSpec("Monitor", "Monitor long-running task output."), true, nil
+		return nativeMonitorToolSpec(), true, nil
 	case "SendUserFile":
-		return nativeEmptyObjectSchemaToolSpec("SendUserFile", "Send a file artifact to the user."), true, nil
+		return nativeSendUserFileToolSpec(), true, nil
 	case "PushNotification":
-		return nativeEmptyObjectSchemaToolSpec("PushNotification", "Send a push notification to the user."), true, nil
+		return nativePushNotificationToolSpec(), true, nil
 	case "SubscribePR":
 		return nativeEmptyObjectSchemaToolSpec("SubscribePR", "Subscribe to PR updates."), true, nil
 	case "ReviewArtifact":
 		return nativeEmptyObjectSchemaToolSpec("ReviewArtifact", "Review generated artifact content."), true, nil
 	case "Snip":
-		return nativeEmptyObjectSchemaToolSpec("Snip", "Snip conversation history to free context."), true, nil
+		return nativeSnipToolSpec(), true, nil
 	default:
 		return types.ToolSpec{}, false, nil
 	}
@@ -1224,26 +1336,26 @@ var goWireBaseTools = []goWireToolEntry{
 	{Name: "TaskUpdate", Required: false, Enabled: commands.TodoV2Enabled},
 	{Name: "TaskList", Required: false, Enabled: commands.TodoV2Enabled},
 	{Name: "OverflowTest", Required: false, Enabled: func() bool { return featuregates.Feature("OVERFLOW_TEST_TOOL") }},
-	{Name: "CtxInspect", Required: false, Enabled: func() bool { return featuregates.Feature("CONTEXT_COLLAPSE") }},
+	{Name: "CtxInspect", Required: false, Enabled: alwaysEnabled},
 	{Name: "TerminalCapture", Required: false, Enabled: func() bool { return featuregates.Feature("TERMINAL_PANEL") }},
 	{Name: "LSP", Required: false, Enabled: func() bool { return commands.IsEnvTruthy("ENABLE_LSP_TOOL") }},
 	{Name: "SendMessage", Required: false, Enabled: alwaysEnabled},
-	{Name: "ListPeers", Required: false, Enabled: func() bool { return featuregates.Feature("UDS_INBOX") }},
+	{Name: "ListPeers", Required: false, Enabled: alwaysEnabled},
 	{Name: "TeamCreate", Required: false, Enabled: commands.AgentSwarmsEnabled},
 	{Name: "TeamDelete", Required: false, Enabled: commands.AgentSwarmsEnabled},
 	{Name: "VerifyPlanExecution", Required: false, Enabled: func() bool { return commands.IsEnvTruthy("CLAUDE_CODE_VERIFY_PLAN") }},
 	{Name: "REPL", Required: false, Enabled: featuregates.UserTypeAnt},
-	{Name: "Workflow", Required: false, Enabled: func() bool { return featuregates.Feature("WORKFLOW_SCRIPTS") }},
-	{Name: "Sleep", Required: false, Enabled: func() bool { return featuregates.Feature("PROACTIVE") || featuregates.Feature("KAIROS") }},
+	{Name: "workflow", Required: false, Enabled: alwaysEnabled},
+	{Name: "Sleep", Required: false, Enabled: alwaysEnabled},
 	{Name: "RemoteTrigger", Required: false, Enabled: func() bool { return featuregates.Feature("AGENT_TRIGGERS_REMOTE") }},
-	{Name: "Monitor", Required: false, Enabled: func() bool { return featuregates.Feature("MONITOR_TOOL") }},
+	{Name: "Monitor", Required: false, Enabled: alwaysEnabled},
 	{Name: "SendUserMessage", Required: false, Enabled: alwaysEnabled},
-	{Name: "SendUserFile", Required: false, Enabled: func() bool { return featuregates.Feature("KAIROS") }},
-	{Name: "PushNotification", Required: false, Enabled: func() bool { return featuregates.Feature("KAIROS") || featuregates.Feature("KAIROS_PUSH_NOTIFICATION") }},
+	{Name: "SendUserFile", Required: false, Enabled: alwaysEnabled},
+	{Name: "PushNotification", Required: false, Enabled: alwaysEnabled},
 	{Name: "SubscribePR", Required: false, Enabled: func() bool { return featuregates.Feature("KAIROS_GITHUB_WEBHOOKS") }},
 	{Name: "ReviewArtifact", Required: false, Enabled: func() bool { return featuregates.Feature("REVIEW_ARTIFACT") }},
 	{Name: "PowerShell", Required: false, Enabled: func() bool { return runtime.GOOS == "windows" }},
-	{Name: "Snip", Required: false, Enabled: func() bool { return featuregates.Feature("HISTORY_SNIP") }},
+	{Name: "Snip", Required: false, Enabled: alwaysEnabled},
 	{Name: "TestingPermission", Required: false, Enabled: isNodeEnvTest},
 	{Name: "ListMcpResourcesTool", Required: false, Enabled: alwaysEnabled},
 	{Name: "ReadMcpResourceTool", Required: false, Enabled: alwaysEnabled},
@@ -1258,4 +1370,3 @@ func ToolSpecsFromGoWire() []types.ToolSpec {
 	}
 	return buildGoWireToolSpecsFromExportSpecs(specs)
 }
-

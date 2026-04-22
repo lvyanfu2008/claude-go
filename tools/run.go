@@ -91,7 +91,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "Sleep":
 		return SleepFromJSON(ctx, raw)
 	case "ListPeers":
-		return ListPeersFromJSON(raw)
+		return ListPeersFromJSON(raw, cfg)
 	case "VerifyPlanExecution":
 		return VerifyPlanExecutionFromJSON(raw)
 	case "OverflowTest":
@@ -103,15 +103,15 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "LSP":
 		return LSPFromJSON(raw)
 	case "EnterWorktree":
-		return EnterWorktreeFromJSON(raw)
+		return EnterWorktreeFromJSON(raw, cfg)
 	case "ExitWorktree":
-		return ExitWorktreeFromJSON(raw)
+		return ExitWorktreeFromJSON(raw, cfg)
 	case "TeamCreate":
-		return TeamCreateFromJSON(raw)
+		return TeamCreateFromJSON(raw, cfg)
 	case "TeamDelete":
-		return TeamDeleteFromJSON(raw)
+		return TeamDeleteFromJSON(raw, cfg)
 	case "Config":
-		return ConfigFromJSON(raw)
+		return ConfigFromJSON(raw, cfg)
 	case "Tungsten":
 		return TungstenFromJSON(raw)
 	case "SuggestBackgroundPR":
@@ -121,8 +121,8 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "RemoteTrigger":
 		return RemoteTriggerFromJSON(raw)
 	case "Monitor":
-		return MonitorFromJSON(raw)
-	case "Workflow":
+		return MonitorFromJSON(ctx, raw, cfg)
+	case "workflow":
 		return WorkflowFromJSON(raw)
 	case "Snip":
 		return SnipFromJSON(raw)

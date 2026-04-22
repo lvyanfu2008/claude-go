@@ -53,6 +53,14 @@ func GouParityToolList() []ToolDefinition {
 		briefAliasToolDefinition(),
 		listMcpResourcesToolDefinition(),
 		readMcpResourceToolDefinition(),
+		ctxInspectToolDefinition(),
+		listPeersToolDefinition(),
+		monitorToolDefinition(),
+		pushNotificationToolDefinition(),
+		sendUserFileToolDefinition(),
+		sleepToolDefinition(),
+		snipToolDefinition(),
+		workflowToolDefinition(),
 	)
 	out = append(out, DefaultStubTools()...)
 	return out

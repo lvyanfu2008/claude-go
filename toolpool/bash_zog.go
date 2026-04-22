@@ -32,6 +32,8 @@ func ReplaceBashToolSpecIfZogMode(specs []types.ToolSpec) ([]types.ToolSpec, err
 		return nil, err
 	}
 	merged := zogSpec
+	// Keep API-visible name aligned with TS: always expose "Bash".
+	merged.Name = "Bash"
 	for i := range specs {
 		if strings.TrimSpace(specs[i].Name) != "Bash" {
 			continue

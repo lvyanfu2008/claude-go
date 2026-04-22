@@ -157,9 +157,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 	var toolsRaw json.RawMessage
 	var errTools error
 	useExport := cfg.UseEmbeddedToolsAPI || isEnvOn(os.Getenv("GOU_DEMO_USE_EMBEDDED_TOOLS_API"))
-	if cfg.TSContextBridge != nil && len(bytes.TrimSpace(cfg.TSContextBridge.Tools)) > 2 {
-		toolsRaw = append(json.RawMessage(nil), cfg.TSContextBridge.Tools...)
-	} else if useExport {
+	if useExport {
 		permCtx := types.EmptyToolPermissionContextData()
 		var mcpToolSpecs []types.ToolSpec
 		toolsPath := strings.TrimSpace(cfg.MCPToolsJSONPath)
@@ -181,6 +179,8 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		toolSchemaOpts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
 		toolSchemaOpts.Model = model
 		toolsRaw, errTools = toolpool.MarshalToolsAPIDocumentDefinitionsWithOptions(assembled, toolSchemaOpts)
+	} else if cfg.TSContextBridge != nil && len(bytes.TrimSpace(cfg.TSContextBridge.Tools)) > 2 {
+		toolsRaw = append(json.RawMessage(nil), cfg.TSContextBridge.Tools...)
 	} else {
 		toolsRaw, errTools = skilltools.GouDemoParityToolsJSON()
 	}

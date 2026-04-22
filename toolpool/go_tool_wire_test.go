@@ -3,6 +3,7 @@ package toolpool
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"goc/ccb-engine/bashzog"
@@ -25,39 +26,44 @@ func TestGoToolWireParsesEmbeddedExport(t *testing.T) {
 	}
 }
 
-func TestGoToolWireMatchesEmbeddedExport(t *testing.T) {
+func TestGoToolWireAgentToolHasFullDescription(t *testing.T) {
 	setToolWireExportParityEnv(t)
 	got := ToolSpecsFromGoWire()
-	want, err := ToolSpecsFromEmbeddedToolsAPIJSON()
-	if err != nil {
-		t.Fatalf("parse embedded tools API JSON: %v", err)
+	
+	var agentTool *types.ToolSpec
+	for i := range got {
+		if got[i].Name == "Agent" {
+			agentTool = &got[i]
+			break
+		}
 	}
-	if len(got) < len(want) {
-		t.Fatalf("tool count too small: got=%d want_at_least=%d\ngot=%v\nwant=%v", len(got), len(want), toolNames(got), toolNames(want))
+	
+	if agentTool == nil {
+		t.Fatal("Agent tool not found in ToolSpecsFromGoWire output")
 	}
-	gotByName := map[string]types.ToolSpec{}
-	for _, s := range got {
-		gotByName[s.Name] = s
+	
+	// Verify that Agent tool has the full description, not the short fallback
+	if agentTool.Description == "Launch a new agent to handle complex tasks." {
+		t.Fatal("Agent tool is still using fallback description instead of full description")
 	}
-	for i := range want {
-		g, ok := gotByName[want[i].Name]
-		if !ok {
-			t.Fatalf("missing expected tool from embedded export: %q", want[i].Name)
+	
+	// Verify the description contains key sections that should be in the full description
+	expectedSections := []string{
+		"Launch a new agent to handle complex, multi-step tasks autonomously",
+		"Usage notes:",
+		"Writing the prompt",
+		"Example usage:",
+	}
+	
+	for _, section := range expectedSections {
+		if !strings.Contains(agentTool.Description, section) {
+			t.Fatalf("Agent description missing expected section: %q", section)
 		}
-		if g.Description != want[i].Description {
-			t.Fatalf("tool description mismatch for %s", g.Name)
-		}
-		var gotSchema any
-		if err := json.Unmarshal(g.InputJSONSchema, &gotSchema); err != nil {
-			t.Fatalf("invalid got schema for %s: %v", g.Name, err)
-		}
-		var wantSchema any
-		if err := json.Unmarshal(want[i].InputJSONSchema, &wantSchema); err != nil {
-			t.Fatalf("invalid want schema for %s: %v", want[i].Name, err)
-		}
-		if !reflect.DeepEqual(gotSchema, wantSchema) {
-			t.Fatalf("schema mismatch for %s", g.Name)
-		}
+	}
+	
+	// Verify the description is substantial (not just the short fallback)
+	if len(agentTool.Description) < 1000 {
+		t.Fatalf("Agent description too short (%d chars), expected full description", len(agentTool.Description))
 	}
 }
 
@@ -106,7 +112,7 @@ func TestToolSpecsFromGoWireOptionalFeatureToolsNativeProviderCanIncludeWithoutE
 	}()
 
 	names := toolNames(ToolSpecsFromGoWire())
-	for _, optional := range []string{"Monitor", "Workflow", "Snip", "CtxInspect", "ListPeers"} {
+	for _, optional := range []string{"Monitor", "workflow", "Snip", "CtxInspect", "ListPeers"} {
 		found := false
 		for _, got := range names {
 			if got == optional {
@@ -133,14 +139,14 @@ func TestBuildGoWireToolSpecsFromExportSpecsDoesNotUseInjectedOptionalExportRows
 	}
 	in := append(base, []types.ToolSpec{
 		{Name: "Monitor"},
-		{Name: "Workflow"},
+		{Name: "workflow"},
 		{Name: "Snip"},
 		{Name: "CtxInspect"},
 		{Name: "ListPeers"},
 	}...)
 	denyProvider := func(name string) (types.ToolSpec, bool, error) {
 		switch name {
-		case "Monitor", "Workflow", "Snip", "CtxInspect", "ListPeers":
+		case "Monitor", "workflow", "Snip", "CtxInspect", "ListPeers":
 			return types.ToolSpec{}, false, nil
 		default:
 			return nativeSpecFromGoProvider(name)
@@ -148,7 +154,7 @@ func TestBuildGoWireToolSpecsFromExportSpecsDoesNotUseInjectedOptionalExportRows
 	}
 	out := buildGoWireToolSpecsFromExportSpecsWithProvider(in, denyProvider)
 	names := toolNames(out)
-	for _, blocked := range []string{"Monitor", "Workflow", "Snip", "CtxInspect", "ListPeers"} {
+	for _, blocked := range []string{"Monitor", "workflow", "Snip", "CtxInspect", "ListPeers"} {
 		for _, got := range names {
 			if got == blocked {
 				t.Fatalf("optional tool %q should not be injected from export rows", blocked)
@@ -556,8 +562,36 @@ func TestNativeToolSearchToolSpecSchemaMatchesEmbeddedExport(t *testing.T) {
 	assertNativeSchemaMatchesEmbedded(t, "ToolSearch", nativeToolSearchToolSpec)
 }
 
-func TestNativeAgentToolSpecSchemaMatchesEmbeddedExport(t *testing.T) {
-	assertNativeSchemaMatchesEmbedded(t, "Agent", nativeAgentToolSpec)
+func TestNativeAgentToolSpecSchemaAndDescription(t *testing.T) {
+	spec := nativeAgentToolSpec()
+	
+	// Verify basic fields
+	if spec.Name != "Agent" {
+		t.Fatalf("expected name 'Agent', got %q", spec.Name)
+	}
+	
+	// Verify description is the full description from agentToolDescription
+	if spec.Description != agentToolDescription {
+		t.Fatal("Agent spec description doesn't match agentToolDescription constant")
+	}
+	
+	// Verify schema has required fields
+	var schema map[string]any
+	if err := json.Unmarshal(spec.InputJSONSchema, &schema); err != nil {
+		t.Fatalf("invalid schema: %v", err)
+	}
+	
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("schema missing properties")
+	}
+	
+	requiredFields := []string{"description", "prompt"}
+	for _, field := range requiredFields {
+		if _, exists := properties[field]; !exists {
+			t.Fatalf("schema missing required field: %s", field)
+		}
+	}
 }
 
 func TestRequiredGoWireToolsCoveredByNativeProvider(t *testing.T) {

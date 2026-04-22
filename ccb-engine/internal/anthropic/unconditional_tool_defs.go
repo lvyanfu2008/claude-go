@@ -176,3 +176,67 @@ func readMcpResourceToolDefinition() ToolDefinition {
 		},
 	}
 }
+
+func ctxInspectToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "CtxInspect",
+		Description: "Inspect context usage and token allocation.",
+		InputSchema: mustExportInputSchema("CtxInspect"),
+	}
+}
+
+func listPeersToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "ListPeers",
+		Description: "List connected peer sessions.",
+		InputSchema: mustExportInputSchema("ListPeers"),
+	}
+}
+
+func monitorToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "Monitor",
+		Description: "Monitor long-running task output.",
+		InputSchema: mustExportInputSchema("Monitor"),
+	}
+}
+
+func pushNotificationToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "PushNotification",
+		Description: "Send a push notification to the user.",
+		InputSchema: mustExportInputSchema("PushNotification"),
+	}
+}
+
+func sendUserFileToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "SendUserFile",
+		Description: "Send a file artifact to the user.",
+		InputSchema: mustExportInputSchema("SendUserFile"),
+	}
+}
+
+func sleepToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "Sleep",
+		Description: "Wait for a short duration before continuing.",
+		InputSchema: mustExportInputSchema("Sleep"),
+	}
+}
+
+func snipToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "Snip",
+		Description: "Snip conversation history to free context.",
+		InputSchema: mustExportInputSchema("Snip"),
+	}
+}
+
+func workflowToolDefinition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "workflow",
+		Description: "Execute a workflow script.",
+		InputSchema: mustExportInputSchema("workflow"),
+	}
+}
