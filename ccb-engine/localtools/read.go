@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -172,6 +173,9 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
 	}
+	if err := validateReadPath(in.FilePath, roots); err != nil {
+		return "", true, err
+	}
 	if err := ValidateReadPagesParameter(in.Pages); err != nil {
 		return "", true, err
 	}
@@ -301,6 +305,9 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 	var rerr error
 	content, lineCount, totalLines, _, mtimeMs, rerr = readFileInRangeFast(abs, offset0, in.Limit, maxBytes)
 	if rerr != nil {
+		if os.IsNotExist(rerr) {
+			rerr = enrichNotExistError(abs, rerr)
+		}
 		return "", true, rerr
 	}
 	if err := validateReadOutputTokens(content, maxTok); err != nil {
@@ -350,6 +357,108 @@ func isLikelyBinaryExt(ext string) bool {
 	default:
 		return false
 	}
+}
+
+func validateReadPath(filePath string, roots []string) error {
+	trimmed := strings.TrimSpace(filePath)
+	// Catch obvious device paths before workspace-root resolution.
+	if strings.HasPrefix(filepath.Clean(trimmed), "/dev/") {
+		return fmt.Errorf("cannot read from device path: %s", filepath.Clean(trimmed))
+	}
+	abs, err := ResolveUnderRoots(filePath, roots)
+	if err != nil {
+		return nil // Keep existing root/path errors from ResolveUnderRoots in the main path.
+	}
+	if isDevicePath(abs) {
+		return fmt.Errorf("cannot read from device path: %s", abs)
+	}
+	return nil
+}
+
+func isDevicePath(abs string) bool {
+	clean := filepath.Clean(strings.TrimSpace(abs))
+	if clean == "" {
+		return false
+	}
+	// Mirror TS safety intent: block direct reads from OS device files.
+	if strings.HasPrefix(clean, "/dev/") {
+		return true
+	}
+	base := strings.ToUpper(filepath.Base(clean))
+	switch base {
+	case "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+		return true
+	default:
+		return false
+	}
+}
+
+func enrichNotExistError(abs string, baseErr error) error {
+	dir := filepath.Dir(abs)
+	target := filepath.Base(abs)
+	if target == "" || target == "." || target == string(os.PathSeparator) {
+		return baseErr
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return baseErr
+	}
+	type cand struct {
+		name  string
+		score int
+	}
+	var cands []cand
+	targetLower := strings.ToLower(target)
+	for _, e := range entries {
+		name := e.Name()
+		score := similarityScore(targetLower, strings.ToLower(name))
+		if score > 0 {
+			cands = append(cands, cand{name: name, score: score})
+		}
+	}
+	if len(cands) == 0 {
+		return baseErr
+	}
+	sort.Slice(cands, func(i, j int) bool {
+		if cands[i].score == cands[j].score {
+			return cands[i].name < cands[j].name
+		}
+		return cands[i].score > cands[j].score
+	})
+	suggest := cands[0].name
+	return fmt.Errorf("%w. Did you mean %q?", baseErr, filepath.Join(dir, suggest))
+}
+
+func similarityScore(a, b string) int {
+	if a == "" || b == "" {
+		return 0
+	}
+	if a == b {
+		return 1000
+	}
+	score := 0
+	if strings.HasPrefix(b, a) || strings.HasPrefix(a, b) {
+		score += 120
+	}
+	if strings.Contains(b, a) || strings.Contains(a, b) {
+		score += 80
+	}
+	common := 0
+	max := len(a)
+	if len(b) < max {
+		max = len(b)
+	}
+	for i := 0; i < max; i++ {
+		if a[i] != b[i] {
+			break
+		}
+		common++
+	}
+	score += common * 8
+	if score < 40 {
+		return 0
+	}
+	return score
 }
 
 // Mirrors src/tools/FileReadTool/FileReadTool.ts CYBER_RISK_MITIGATION_REMINDER.

@@ -29,8 +29,9 @@ Same flags as elsewhere in `goc/`: e.g. `CCB_ENGINE_LLM=openai`, `CLAUDE_CODE_US
 
 ### LLM request/response body log (TS parity)
 
-Same env as TS `logLlmApiRequestBody` / `logLlmApiResponseBody`:
+Same env as TS `logLlmApiRequestBody` / `logLlmApiResponseBody` (requires debug mode enabled):
 
+- `CLAUDE_CODE_DEBUG=1` (or `GOU_DEMO_DEBUG=1` / `GOU_DEMO_LOG=1`)
 - `CLAUDE_CODE_LOG_API_REQUEST_BODY=1`
 - `CLAUDE_CODE_LOG_API_RESPONSE_BODY=1`
 

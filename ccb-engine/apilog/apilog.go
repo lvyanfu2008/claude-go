@@ -22,20 +22,29 @@ func envTruthy(name string) bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
+// DebugModeEnabled controls whether API body logs may be written to file.
+// The body switches are still required in addition to this gate.
+func DebugModeEnabled() bool {
+	return envTruthy("CLAUDE_CODE_DEBUG") || envTruthy("GOU_DEMO_DEBUG") || envTruthy("GOU_DEMO_LOG")
+}
+
 // ApiBodyLoggingEnabled is true when either CLAUDE_CODE_LOG_API_REQUEST_BODY or
 // CLAUDE_CODE_LOG_API_RESPONSE_BODY is set (same truthy rules as logging).
 func ApiBodyLoggingEnabled() bool {
+	if !DebugModeEnabled() {
+		return false
+	}
 	return envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") || envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
 }
 
 // RequestBodyLoggingEnabled is true when CLAUDE_CODE_LOG_API_REQUEST_BODY is truthy.
 func RequestBodyLoggingEnabled() bool {
-	return envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY")
+	return DebugModeEnabled() && envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY")
 }
 
 // ResponseBodyLoggingEnabled is true when CLAUDE_CODE_LOG_API_RESPONSE_BODY is truthy.
 func ResponseBodyLoggingEnabled() bool {
-	return envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
+	return DebugModeEnabled() && envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
 }
 
 // ResolvedLogPath returns the file path apilog would use — same as
@@ -103,7 +112,7 @@ func appendDiagToLog(path, body string) error {
 //
 // Without this, ~/.claude/debug only appears after the first LLM request when logging is on.
 func PrepareIfEnabled() {
-	if !envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") && !envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY") {
+	if !ApiBodyLoggingEnabled() {
 		return
 	}
 	prepareOnce.Do(prepareLogDestination)
@@ -145,7 +154,7 @@ func prepareLogDestination() {
 // LogRequestBody when CLAUDE_CODE_LOG_API_REQUEST_BODY is truthy.
 // Prefixes the serialized body line with llmRequest-N (no space) for grep.
 func LogRequestBody(label string, rawJSON []byte) {
-	if !envTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") {
+	if !RequestBodyLoggingEnabled() {
 		return
 	}
 	n := llmRequestSeq.Add(1)
@@ -155,7 +164,7 @@ func LogRequestBody(label string, rawJSON []byte) {
 // LogResponseBody when CLAUDE_CODE_LOG_API_RESPONSE_BODY is truthy.
 // Prefixes the serialized body line with llmResponse-N (no space) for grep.
 func LogResponseBody(label string, rawJSON []byte) {
-	if !envTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY") {
+	if !ResponseBodyLoggingEnabled() {
 		return
 	}
 	n := llmResponseSeq.Add(1)

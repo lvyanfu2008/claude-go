@@ -65,7 +65,8 @@ const (
 // FileReadFeatureStatus reports TS parity for a Read feature (for tests / diagnostics).
 func FileReadFeatureStatus(f FileReadFeature) ParityStatus {
 	switch f {
-	case ReadFeatTextOffsetLimit, ReadFeatReadFileStateDedup, ReadFeatBinaryExtensionDeny:
+	case ReadFeatTextOffsetLimit, ReadFeatReadFileStateDedup, ReadFeatBinaryExtensionDeny,
+		ReadFeatDevicePathBlock, ReadFeatSimilarFileENOENT:
 		return ParityImplemented
 	case ReadFeatNotebookRawCells, ReadFeatImageBase64:
 		return ParityPartial
@@ -73,7 +74,7 @@ func FileReadFeatureStatus(f FileReadFeature) ParityStatus {
 		return ParityImplemented
 	case ReadFeatNotebookProcessed, ReadFeatImageTokenBudget, ReadFeatPDFPagesExtract,
 		ReadFeatPDFFullDocument, ReadFeatLargeFileStreaming, ReadFeatPermissionsDenylist,
-		ReadFeatUNCPathHandling, ReadFeatDevicePathBlock, ReadFeatSimilarFileENOENT:
+		ReadFeatUNCPathHandling:
 		return ParityStub
 	default:
 		return ParityStub

@@ -21,7 +21,8 @@
       "Bash(go mod:*)",
       "Bash(go run:*)",
       "Bash(chmod:*)",
-      "Bash(find /Users/lvyanfu/Work/claude/claude-go -name \"*.go\" -type f -exec grep -l \"autoCompact\\\\|microcompact\" {})"
+      "Bash(find /Users/lvyanfu/Work/claude/claude-go -name \"*.go\" -type f -exec grep -l \"autoCompact\\\\|microcompact\" {})",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -610,9 +610,6 @@ type model struct {
 	// msgLastAssistantContentLen tracks len(Content) per assistant UUID so streaming bumps reset the summary delay window.
 	msgLastAssistantContentLen map[string]int
 
-	// streamToolFirstSeen records when a streaming tool was first seen to support progressive revealing.
-	streamToolFirstSeen map[string]time.Time
-
 	// manual rendering mode (buffer events until flushed)
 	manualRenderMode bool
 	pendingEvents    []tea.Msg
@@ -1370,9 +1367,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gouToolSummaryDelayTickMsg:
 		return m.handleUpdateToolSummaryDelayTick(msg)
-
-	case streamToolRevealTickMsg:
-		return m.handleUpdateStreamToolTick(msg)
 
 	case ccbstream.Msg:
 		return m.handleUpdateCCBStream(msg)

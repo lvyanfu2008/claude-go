@@ -96,6 +96,9 @@ func (c *Client) CreateMessage(ctx context.Context, req CreateMessageRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	if apilog.ApiBodyLoggingEnabled() {
+		apilog.PrepareIfEnabled()
+	}
 	msgURL := anthropicmessages.MessagesAPIURL(c.BaseURL)
 	apilog.LogRequestBody("POST "+msgURL, body)
 

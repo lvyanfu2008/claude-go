@@ -1,12 +1,15 @@
 package markdown
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 )
+
+var tableSeparatorPattern = regexp.MustCompile(`^\s*\|?[\s:-]+(?:\|[\s:-]+)+\|?\s*$`)
 
 // paragraphToken mirrors Markdown.tsx cachedLexer fast path (single paragraph).
 func paragraphToken(content string) Token {
@@ -359,9 +362,75 @@ func blockTokens(n ast.Node, src []byte) []Token {
 	}
 }
 
+func isTableHeaderLine(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" || !strings.Contains(trimmed, "|") {
+		return false
+	}
+	// Must include at least one non-pipe cell character.
+	return strings.Trim(trimmed, " |-:\t") != ""
+}
+
+func isTableSeparatorLine(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return false
+	}
+	return tableSeparatorPattern.MatchString(trimmed)
+}
+
+func isTableDataLine(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return trimmed != "" && strings.Contains(trimmed, "|")
+}
+
+// wrapMarkdownTablesAsCodeBlocks protects GFM table blocks from being flattened
+// when using a goldmark build without the table extension in vendor/.
+func wrapMarkdownTablesAsCodeBlocks(content string) string {
+	if !strings.Contains(content, "|") {
+		return content
+	}
+
+	lines := strings.Split(content, "\n")
+	var out []string
+	inFence := false
+	for i := 0; i < len(lines); {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			out = append(out, line)
+			i++
+			continue
+		}
+		if inFence {
+			out = append(out, line)
+			i++
+			continue
+		}
+
+		if i+1 < len(lines) && isTableHeaderLine(lines[i]) && isTableSeparatorLine(lines[i+1]) {
+			j := i + 2
+			for j < len(lines) && isTableDataLine(lines[j]) {
+				j++
+			}
+			out = append(out, "```text")
+			out = append(out, lines[i:j]...)
+			out = append(out, "```")
+			i = j
+			continue
+		}
+
+		out = append(out, line)
+		i++
+	}
+	return strings.Join(out, "\n")
+}
+
 // ParseWithGoldmark runs goldmark parser (GFM-style via default New()).
 func ParseWithGoldmark(content string) []Token {
-	src := []byte(content)
+	normalized := wrapMarkdownTablesAsCodeBlocks(content)
+	src := []byte(normalized)
 	md := goldmark.New()
 	reader := text.NewReader(src)
 	doc := md.Parser().Parse(reader)

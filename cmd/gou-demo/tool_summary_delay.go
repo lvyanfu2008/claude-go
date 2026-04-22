@@ -13,9 +13,6 @@ import (
 	"goc/types"
 )
 
-// streamToolRevealTickMsg drives periodic height rebuild while a streaming tool is in the progressive reveal phase.
-type streamToolRevealTickMsg struct{}
-
 // gouToolSummaryDelayTickMsg drives periodic height rebuild while any assistant row is still in the "detail" phase.
 type gouToolSummaryDelayTickMsg struct{}
 
@@ -122,11 +119,3 @@ func (m *model) handleUpdateToolSummaryDelayTick(_ gouToolSummaryDelayTickMsg) (
 	return m, tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} })
 }
 
-func (m *model) handleUpdateStreamToolTick(_ streamToolRevealTickMsg) (tea.Model, tea.Cmd) {
-	if len(m.store.StreamingToolUses) > 0 {
-		m.vpNeedResizeContent = true
-		m.rebuildHeightCache()
-		//return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
-	}
-	return m, nil
-}

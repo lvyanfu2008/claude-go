@@ -48,10 +48,6 @@ func (m *model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (t
 		m.scrollTop = 1 << 30
 	}
 
-	if len(m.store.StreamingToolUses) > 0 {
-		//return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
-	}
-
 	return m, nil
 }
 
@@ -146,9 +142,6 @@ func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 			m.sticky = true
 			m.scrollTop = 1 << 30
 		}
-	}
-	if ev.Type == "tool_use" {
-		return m, tea.Tick(20*time.Millisecond, func(time.Time) tea.Msg { return streamToolRevealTickMsg{} })
 	}
 	return m, nil
 }
