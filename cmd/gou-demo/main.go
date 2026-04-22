@@ -2165,7 +2165,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			}
 			logg("SegToolUse", piece)
 		case messagerow.SegToolResult:
-			piece = segdiff.FormatToolResultSegmentForTranscript(seg, userRow, toolUseCtrlOHint, withHL, baseMsgStyle)
+			piece = segdiff.FormatToolResultSegmentForTranscript(seg, userRow, toolUseCtrlOHint, cols, withHL, baseMsgStyle)
 			logg("SegToolResult", piece)
 		case messagerow.SegThinking:
 			body := textutil.LinkifyOSC8(seg.Text)

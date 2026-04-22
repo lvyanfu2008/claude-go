@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"goc/gou/layout"
 	"goc/gou/message"
 	"goc/gou/messagerow"
 	"goc/gou/textutil"
@@ -34,6 +35,7 @@ func toolResultSegHeaderAndDiffBody(text string) (header, diffBody string, ok bo
 func FormatToolResultSegmentForTranscript(
 	seg messagerow.Segment,
 	userRow, toolUseCtrlOHint bool,
+	cols int,
 	withHL func(string) string,
 	baseMsgStyle func(userRow bool) lipgloss.Style,
 ) string {
@@ -44,6 +46,7 @@ func FormatToolResultSegmentForTranscript(
 			st = baseMsgStyle(userRow).Foreground(theme.ToolError())
 		}
 		line := st.Render("↩ " + withHL(textutil.LinkifyOSC8(seg.Text)))
+		line = wrapAndClampToolResultLines(line, cols, 10)
 		if seg.ToolBodyOmitted && toolUseCtrlOHint {
 			line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 		}
@@ -62,9 +65,28 @@ func FormatToolResultSegmentForTranscript(
 		b.WriteByte('\n')
 		b.WriteString(message.FormatUnifiedDiffLineForDisplay(textutil.LinkifyOSC8(ln), seg.IsToolError, p))
 	}
-	out := b.String()
+	out := wrapAndClampToolResultLines(b.String(), cols, 10)
 	if seg.ToolBodyOmitted && toolUseCtrlOHint {
 		out += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
 	}
 	return out
+}
+
+func wrapAndClampToolResultLines(s string, cols, maxLines int) string {
+	if strings.TrimSpace(s) == "" {
+		return s
+	}
+	if cols > 0 {
+		s = layout.WrapForViewport(s, cols)
+	}
+	if maxLines < 1 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= maxLines {
+		return s
+	}
+	lines = lines[:maxLines]
+	lines[maxLines-1] += " ..."
+	return strings.Join(lines, "\n")
 }

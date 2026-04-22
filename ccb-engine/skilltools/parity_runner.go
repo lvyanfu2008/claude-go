@@ -9,7 +9,7 @@ import (
 
 	"goc/ccb-engine/bashzog"
 	"goc/ccb-engine/localtools"
-	"goc/ccb-engine/paritytools"
+	"goc/tools"
 )
 
 // ParityToolRunner runs core filesystem/search tools in Go, then delegates Skill (disk + embedded bundled)
@@ -79,15 +79,15 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 	if pr == "" && len(roots) > 0 {
 		pr = roots[0]
 	}
-	cfg := paritytools.Config{
+	cfg := tools.Config{
 		Roots:        roots,
 		WorkDir:      wd,
 		ProjectRoot:  pr,
 		SessionID:    strings.TrimSpace(r.SessionID),
 		AskAutoFirst: r.AskAutoFirst,
 	}
-	s, isErr, perr := paritytools.Run(ctx, name, input, cfg)
-	if perr == nil || !paritytools.IsNotHandled(perr) {
+	s, isErr, perr := tools.Run(ctx, name, input, cfg)
+	if perr == nil || !tools.IsNotHandled(perr) {
 		return s, isErr, perr
 	}
 	if r.ReadFileState == nil {
