@@ -11,7 +11,7 @@ type EventSamplingEntry struct {
 }
 
 // SamplingGetter returns per-event sample rates (0–1). Empty or missing events → 100% log.
-// Set via [SetEventSamplingGetter] for GrowthBook parity; default is nil (always log at 100%).
+// If nil, [parseSamplingConfigFromEnv] reads GOC_TENGU_EVENT_SAMPLING_CONFIG (offline TS parity).
 var (
 	samplingMu     sync.RWMutex
 	samplingGetter func() map[string]EventSamplingEntry
@@ -28,10 +28,10 @@ func getSamplingConfig() map[string]EventSamplingEntry {
 	samplingMu.RLock()
 	g := samplingGetter
 	samplingMu.RUnlock()
-	if g == nil {
-		return nil
+	if g != nil {
+		return g()
 	}
-	return g()
+	return parseSamplingConfigFromEnv()
 }
 
 // ShouldSampleEvent mirrors TS shouldSampleEvent return semantics for the sink:

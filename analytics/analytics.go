@@ -1,6 +1,3 @@
-// Package analytics mirrors claude-code src/services/analytics (queue, sink attach,
-// logEvent / logEventAsync, stripProtoFields, sampling hooks). Default sink forwards
-// to [goc/diagnostics.EmitAnalyticsEvent] after sampling and _PROTO_ stripping.
 package analytics
 
 import (

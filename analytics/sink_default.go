@@ -7,7 +7,7 @@ import (
 )
 
 // InitializeAnalyticsSink attaches the default bridge sink (TS initializeAnalyticsSink).
-// Call after [goc/diagnostics.InitAnalytics] so writers are registered.
+// Only forwards to diagnostics — no Datadog/1P network calls. Call after [goc/diagnostics.InitAnalytics].
 func InitializeAnalyticsSink() {
 	AttachAnalyticsSink(&Sink{
 		LogEvent: bridgeLogEvent,

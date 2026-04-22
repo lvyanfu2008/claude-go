@@ -5,6 +5,20 @@ import (
 	"testing"
 )
 
+func TestSamplingFromEnvJSON(t *testing.T) {
+	t.Cleanup(ResetForTesting)
+	ResetForTesting()
+	t.Setenv("GOC_TENGU_EVENT_SAMPLING_CONFIG", `{"x":{"sample_rate":0}}`)
+	var n int
+	AttachAnalyticsSink(&Sink{
+		LogEvent: func(name string, metadata map[string]any) { n++ },
+	})
+	LogEvent("x", nil)
+	if n != 0 {
+		t.Fatalf("expected env-driven drop, got %d", n)
+	}
+}
+
 func TestStripProtoFields(t *testing.T) {
 	in := map[string]any{"a": 1, "_PROTO_x": "secret", "b": true}
 	out := StripProtoFields(in)
