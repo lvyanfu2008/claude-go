@@ -6,7 +6,10 @@
 //   - Datadog trackDatadogEvent and feature gates
 //   - First-party OpenTelemetry batch export to /api/event_logging/batch
 //
-// Use [SetEventSamplingGetter] for in-process config, or set env GOC_TENGU_EVENT_SAMPLING_CONFIG
-// to a JSON object shaped like TS tengu_event_sampling_config (per-event sample_rate 0–1).
+// Sampling: [SetEventSamplingGetter] takes precedence — when it is non-nil, its return value is
+// used and env GOC_TENGU_EVENT_SAMPLING_CONFIG is ignored. When the getter is nil, set
+// GOC_TENGU_EVENT_SAMPLING_CONFIG to a JSON object shaped like TS tengu_event_sampling_config
+// (per-event sample_rate 0–1).
+//
 // Default sink only forwards to [goc/diagnostics.EmitAnalyticsEvent] (stderr / optional files).
 package analytics
