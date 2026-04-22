@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"goc/analytics"
+	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/diagnostics"
 	"goc/growthbook"
-	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/types"
 )
 
@@ -166,10 +167,10 @@ func inputKindAndPreview(raw json.RawMessage) (kind string, preview string, bloc
 func buildInPayload(args *processuserinput.ProcessUserInputArgs) map[string]any {
 	kind, prev, nBlocks := inputKindAndPreview(args.Input)
 	m := map[string]any{
-		"inputKind":   kind,
+		"inputKind":    kind,
 		"inputPreview": prev,
-		"mode":        args.Mode,
-		"querySource": args.QuerySource,
+		"mode":         args.Mode,
+		"querySource":  args.QuerySource,
 	}
 	if nBlocks != nil {
 		m["blockCount"] = *nBlocks
@@ -311,35 +312,18 @@ func buildResultPayload(path string, r *processuserinput.ProcessUserInputBaseRes
 	return p
 }
 
-// AnalyticsStderrPrefix prefixes JSON analytics lines on stderr (optional host consumption).
-const AnalyticsStderrPrefix = "GOC_ANALYTICS_EVENT:"
-
-func emitAnalyticsEventToStderr(name string, payload map[string]any) {
-	b, err := json.Marshal(map[string]any{"name": name, "payload": payload})
-	if err != nil {
-		return
-	}
-	_, _ = fmt.Fprintf(os.Stderr, "%s%s\n", AnalyticsStderrPrefix, string(b))
-}
-
-// wireProcessUserInputCallbacks sets LogEvent (stderr) and optional debug checkpoint / event mirroring.
+// wireProcessUserInputCallbacks sets LogEvent (analytics queue → default sink → diagnostics writers)
+// and optional debug checkpoint / event mirroring.
 func wireProcessUserInputCallbacks(
 	p *processuserinput.ProcessUserInputParams,
 	logPath string,
 	toStderr bool,
 ) {
-	// Initialize analytics system
-	diagnostics.InitAnalytics()
-
-	// Initialize GrowthBook feature flags
 	growthbook.Init()
+	analytics.InitDefaultPipeline()
 
 	p.LogEvent = func(name string, payload map[string]any) {
-		// Use new diagnostics package for analytics events
-		diagnostics.EmitAnalyticsEvent(name, payload)
-
-		// Keep backward compatibility with stderr output
-		emitAnalyticsEventToStderr(name, payload)
+		analytics.LogEvent(name, payload)
 
 		if processUserInputDebugEnabled() {
 			wrapped := map[string]any{"name": name, "payload": payload}
