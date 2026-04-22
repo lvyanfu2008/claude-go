@@ -6,7 +6,6 @@ import (
 
 	"goc/commands"
 	"goc/commands/featuregates"
-	"goc/tstenv"
 	"goc/types"
 )
 
@@ -66,8 +65,6 @@ func toolSpecPerToolEnabled(t types.ToolSpec) bool {
 		return planModeToolsEnabled()
 	case "TaskOutput":
 		return !featuregates.UserTypeAnt()
-	case "ToolSearch":
-		return tstenv.ToolSearchEnabledOptimistic()
 	case "SendMessage", "TeamCreate", "TeamDelete":
 		return commands.AgentSwarmsEnabled()
 	default:

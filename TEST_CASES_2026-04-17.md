@@ -75,31 +75,27 @@ func TestReplayOpenAIStreamChatResponse_textOnly(t *testing.T) {
 
 ### 测试组 2: gou-demo 流式工具渲染
 
-#### 测试案例 2.1: 流式工具渐进显示 - 标题延迟
-**目标**: 验证工具标题的延迟显示功能
-**输入**: 流式工具调用，设置 `GOU_DEMO_STREAM_TOOL_TITLE_DELAY_MS=50`
+#### 测试案例 2.1: 工具摘要延迟显示
+**目标**: 验证 `GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS` 控制摘要行合并延迟
+**输入**: 流式工具调用，设置 `GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS=1000`
 **预期输出**:
-- 工具标题在 50ms 后显示
-- 50ms 内不显示工具标题
+- 助手消息首次出现后，先显示完整 Search/Read 行
+- 到达 1000ms 后切换为合并摘要行
 - 非阻塞渲染，UI 保持响应
 
-#### 测试案例 2.2: 流式工具渐进显示 - 详情延迟
-**目标**: 验证工具详情的延迟显示功能
-**输入**: 流式工具调用组，设置 `GOU_DEMO_STREAM_TOOL_DETAIL_DELAY_MS=100`
+#### 测试案例 2.2: 工具摘要延迟 - 关闭延迟
+**目标**: 验证延迟关闭行为
+**输入**: 设置 `GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS=0`
 **预期输出**:
-- 工具详情在 100ms 后显示
-- 100ms 内只显示标题，不显示详情路径
-- 详情按项目逐行显示
-- 非阻塞渲染，UI 保持响应
+- 立即显示合并摘要行
+- 不经过“先展示完整行”的延迟阶段
 
-#### 测试案例 2.3: 流式工具渐进显示 - 环境变量配置
-**目标**: 验证环境变量配置的延迟时间
-**输入**: 不同的延迟环境变量值
+#### 测试案例 2.3: 工具摘要延迟 - 无效值
+**目标**: 验证无效配置回退行为
+**输入**: 设置非法值或负值
 **预期输出**:
-- `GOU_DEMO_STREAM_TOOL_TITLE_DELAY_MS` 控制标题延迟
-- `GOU_DEMO_STREAM_TOOL_DETAIL_DELAY_MS` 控制详情延迟
-- 无效值使用默认值（标题 50ms，详情 100ms）
-- 负值使用默认值
+- 非法值或负值按关闭延迟处理
+- 渲染逻辑不报错
 
 #### 测试案例 2.4: 移除 time.Sleep 验证
 **目标**: 验证代码中已移除阻塞的 `time.Sleep` 调用
@@ -145,9 +141,8 @@ func TestReplayOpenAIStreamChatResponse_textOnly(t *testing.T) {
 # OpenAI 适配器测试
 export MODEL=deepseek-reasoner
 
-# gou-demo 流式工具测试
-export GOU_DEMO_STREAM_TOOL_TITLE_DELAY_MS=50
-export GOU_DEMO_STREAM_TOOL_DETAIL_DELAY_MS=100
+# gou-demo 工具摘要延迟测试
+export GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS=1000
 export GOU_DEMO_BUBBLES_VIEWPORT=1
 ```
 

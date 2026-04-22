@@ -59,7 +59,7 @@ type DemoConfig struct {
 	// settings merge + CLAUDE_CODE_LANGUAGE (see gou-demo main / apiparity.GouDemo).
 	Language string `json:"-"`
 	// UseEmbeddedToolsAPI when true (or env GOU_DEMO_USE_EMBEDDED_TOOLS_API=1) builds Options.Tools from
-	// embedded data/tools_api.json via toolpool.GetTools + AssembleToolPool (TS getTools + assembleToolPool).
+	// the Go tool wire via toolpool.GetTools + AssembleToolPool (TS getTools + assembleToolPool semantics).
 	UseEmbeddedToolsAPI bool `json:"-"`
 	// MCPToolsJSONPath optional path to JSON array of MCP tool defs (see mcpcommands.LoadToolsFromPath).
 	// Merged after env GOU_DEMO_MCP_TOOLS_JSON when both set (cfg path tried first).
@@ -178,7 +178,9 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 			return nil, errA
 		}
 		assembled = toolpool.PatchAgentToolDescriptionWithBuiltins(assembled, builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}))
-		toolsRaw, errTools = toolpool.MarshalToolsAPIDocumentDefinitions(assembled)
+		toolSchemaOpts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
+		toolSchemaOpts.Model = model
+		toolsRaw, errTools = toolpool.MarshalToolsAPIDocumentDefinitionsWithOptions(assembled, toolSchemaOpts)
 	} else {
 		toolsRaw, errTools = skilltools.GouDemoParityToolsJSON()
 	}

@@ -102,7 +102,6 @@ func GetTools(permissionContext types.ToolPermissionContextData, exportedBase []
 		}
 		out = append(out, t)
 	}
-	out = filterGlobGrepWhenEmbeddedSearch(out)
 	out = permissionrules.FilterToolsByDenyRules(out, permissionContext)
 	if IsReplModeEnabled() {
 		replPresent := false

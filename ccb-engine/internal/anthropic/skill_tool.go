@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"goc/agents/builtin"
+	"goc/modelenv"
 	"goc/toolpool"
 	"goc/types"
 )
@@ -80,7 +81,9 @@ func GouParityToolsJSON() (json.RawMessage, error) {
 		return nil, err
 	}
 	assembled = toolpool.UniqByName(append(assembled, stubs...))
-	return toolpool.MarshalToolsAPIDocumentDefinitions(assembled)
+	opts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
+	opts.Model = modelenv.ResolveWithFallback("claude-sonnet-4-20250514")
+	return toolpool.MarshalToolsAPIDocumentDefinitionsWithOptions(assembled, opts)
 }
 
 func toolDefinitionsToSpecs(defs []ToolDefinition) ([]types.ToolSpec, error) {

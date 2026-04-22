@@ -6,22 +6,23 @@ import (
 	"goc/types"
 )
 
-// anthropicToolDefinition matches tool objects in tools_api.json (name, description, input_schema).
-type anthropicToolDefinition struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	InputSchema json.RawMessage `json:"input_schema"`
-}
-
 // MarshalToolsAPIDocumentDefinitions encodes tools for ToolUseContext.Options.Tools (Anthropic-style array).
 func MarshalToolsAPIDocumentDefinitions(tools []types.ToolSpec) (json.RawMessage, error) {
-	defs := make([]anthropicToolDefinition, 0, len(tools))
+	return MarshalToolsAPIDocumentDefinitionsWithOptions(tools, DefaultToolToAPISchemaOptionsFromEnv())
+}
+
+// MarshalToolsAPIDocumentDefinitionsWithOptions encodes tools for ToolUseContext.Options.Tools
+// with per-request tool schema overlay behavior mirroring TS toolToAPISchema.
+func MarshalToolsAPIDocumentDefinitionsWithOptions(tools []types.ToolSpec, opts ToolToAPISchemaOptions) (json.RawMessage, error) {
+	defs := make([]APIToolDefinition, 0, len(tools))
 	for _, t := range tools {
-		defs = append(defs, anthropicToolDefinition{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: t.InputJSONSchema,
-		})
+		deferTool := opts
+		// TS defers per-call via options.deferLoading. For current Go callers we
+		// preserve legacy behavior by honoring ToolSpec.ShouldDefer as default.
+		if !opts.DeferLoading && t.ShouldDefer != nil {
+			deferTool.DeferLoading = *t.ShouldDefer
+		}
+		defs = append(defs, ToolToAPISchema(t, deferTool))
 	}
 	return json.Marshal(defs)
 }
