@@ -21,7 +21,6 @@ type goWireToolEntry struct {
 
 type nativeToolSpecProvider func(name string) (types.ToolSpec, bool, error)
 
-
 func indexToolSpecsByName(specs []types.ToolSpec) map[string]types.ToolSpec {
 	out := make(map[string]types.ToolSpec, len(specs))
 	for _, s := range specs {
@@ -78,7 +77,6 @@ func buildGoWireToolSpecsFromExportSpecsWithProvider(specs []types.ToolSpec, pro
 func buildGoWireToolSpecsFromExportSpecs(specs []types.ToolSpec) []types.ToolSpec {
 	return buildGoWireToolSpecsFromExportSpecsWithProvider(specs, nativeSpecFromGoProvider)
 }
-
 
 func mustMarshalJSONRaw(v any) json.RawMessage {
 	b, err := json.Marshal(v)
@@ -176,7 +174,7 @@ func nativeEditToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Edit",
-		Description:     "Performs exact string replacements in files.",
+		Description:     "Performs exact string replacements in files. When editing text, ensure you preserve the exact indentation (tabs/spaces) as it appears before. Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked. The edit will FAIL if old_string is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use replace_all to change every instance of old_string. Use replace_all for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance. If you want to create a new file, use the Write tool instead.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -200,7 +198,7 @@ func nativeGlobToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Glob",
-		Description:     "Find files matching glob patterns.",
+		Description:     "Fast file pattern matching tool that works with any codebase size. Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". Returns matching file paths sorted by modification time. Use this tool when you need to find files by name patterns. When you are doing an open ended search that may require multiple rounds of globbing and grepping, use the Agent tool instead.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -273,7 +271,7 @@ func nativeGrepToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Grep",
-		Description:     "Search file contents using ripgrep.",
+		Description:     "A powerful search tool built on ripgrep. ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access. Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\"). Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\"). Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts. Use Agent tool for open-ended searches requiring multiple rounds. Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code). Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -725,7 +723,7 @@ func nativeSkillToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Skill",
-		Description:     "Execute a skill within the main conversation.",
+		Description:     "Execute a skill within the main conversation. When users ask you to perform tasks, check if any of the available skills match. Skills provide specialized capabilities and domain knowledge. When users reference a \"slash command\" or \"/<something>\" (e.g., \"/commit\", \"/review-pr\"), they are referring to a skill. Use this tool to invoke it. Available skills are listed in system-reminder messages in the conversation. When a skill matches the user's request, this is a BLOCKING REQUIREMENT: invoke the relevant Skill tool BEFORE generating any other response about the task. NEVER mention a skill without actually calling this tool. Do not invoke a skill that is already running. Do not use this tool for built-in CLI commands (like /help, /clear, etc.).",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -782,7 +780,7 @@ func nativeToolSearchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ToolSearch",
-		Description:     "Fetch schemas for deferred tools so they can be called.",
+		Description:     "Fetch schemas for deferred tools so they can be called. When you encounter tools that are not immediately available, use this to discover and load their schemas dynamically. Use \"select:<tool_name>\" for direct selection, or keywords to search for tools by functionality.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -824,7 +822,7 @@ func nativeAgentToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Agent",
-		Description:     agentToolDescription,
+		Description:     AgentToolDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1014,8 +1012,9 @@ func nativeCtxInspectToolSpec() types.ToolSpec {
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "CtxInspect",
-		Description:     "Inspect context usage and token allocation.",
+		Name: "CtxInspect",
+		Description: "Inspect the current context window contents and token usage. Shows token usage, message count, and a breakdown of what's consuming context space. " +
+			"\n\nUse this to understand your context budget before deciding whether to snip old messages or adjust your approach.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1034,7 +1033,7 @@ func nativeListPeersToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ListPeers",
-		Description:     "List connected peer sessions.",
+		Description:     "List connected peer sessions in the current workspace. Shows other Claude sessions that you can communicate with using the SendMessage tool.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1058,7 +1057,7 @@ func nativeMonitorToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Monitor",
-		Description:     "Monitor long-running task output.",
+		Description:     "Monitor long-running task output by running shell commands continuously in the background. Use this for monitoring logs, watching file changes, or observing system processes. The monitor runs until manually stopped and streams output updates.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1087,7 +1086,7 @@ func nativePushNotificationToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "PushNotification",
-		Description:     "Send a push notification to the user.",
+		Description:     "Send a push notification to the user's device. Use this to alert the user when important tasks complete, errors occur, or when you need their attention. Notifications appear outside the chat interface and can be seen even when the user is not actively looking at the conversation.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1111,7 +1110,7 @@ func nativeSendUserFileToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "SendUserFile",
-		Description:     "Send a file artifact to the user.",
+		Description:     "Send a file artifact to the user for download. Use this when you need to provide the user with files you've created or modified, such as generated reports, processed data, or configuration files. The file will be made available for download in the user interface.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1136,7 +1135,7 @@ func nativeSnipToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Snip",
-		Description:     "Snip conversation history to free context.",
+		Description:     "Snip messages from conversation history to free up context window space. Snipped messages are replaced with a compact summary so you retain awareness of what happened without the full content. Use this when: your context is getting full and you need to make room, earlier messages contain large tool outputs you no longer need in full, you want to compact a long exploration sequence into a summary. Guidelines: only snip messages you're confident you won't need verbatim again, the summary replacement preserves key facts (file paths, decisions, errors found), you cannot un-snip — the original content is gone from context.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1259,7 +1258,7 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "REPL":
 		return nativeEmptyObjectSchemaToolSpec("REPL", "Run command(s) in REPL mode."), true, nil
 	case "workflow":
-		return nativeEmptyObjectSchemaToolSpec("workflow", "Execute a workflow script."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("workflow", "Execute a user-defined workflow script from .claude/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks. Specify the workflow name to execute (must match a file in .claude/workflows/). Optionally pass arguments that the workflow can use. Workflows run in the context of the current project."), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions."), true, nil
 	case "Monitor":
