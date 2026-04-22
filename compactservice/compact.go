@@ -70,8 +70,8 @@ type CompactOptions struct {
 // Intentional simplifications (clearly TODO'd vs TS):
 //   - runForkedAgent / cache-sharing is NOT implemented; SummarizerFn is the only path.
 //   - markPostCompaction + reAppendSessionMetadata + prompt-cache-break notifications remain
-//     host-side; on success this path does call querycontext.ClearUserContextCache for
-//     main-thread-like QuerySource values (TS runPostCompactCleanup subset).
+//     host-side; on success, hosts may set Deps.AfterSuccessfulCompact (default adapter clears
+//     user-context memo and resets getMemoryFiles with load_reason=compact, TS runPostCompactCleanup).
 //   - analyzeContext-driven stats in the tengu_compact event are elided (logger gets 0s).
 func CompactConversation(
 	ctx context.Context,

@@ -6,10 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"goc/claudemd"
 )
 
 func TestMain(m *testing.M) {
 	ClearAllContextCaches()
+	claudemd.ClearMemoryFileCaches()
 	os.Exit(m.Run())
 }
 
@@ -40,13 +43,23 @@ func TestUserContextMemoizationAndClear(t *testing.T) {
 		t.Fatalf("memo should keep v1, got %#v", a2)
 	}
 
+	// getMemoryFiles remains memoized until claudemd clear (TS: pair with resetGetMemoryFilesCache).
 	ClearUserContextCache()
+	aStale, err := BuildUserContext(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(aStale["claudeMd"], "v1") {
+		t.Fatalf("user context clear alone should not bust getMemoryFiles memo, got %#v", aStale)
+	}
+	ClearUserContextCache()
+	claudemd.ClearMemoryFileCaches()
 	a3, err := BuildUserContext(dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(a3["claudeMd"], "v2") {
-		t.Fatalf("after clear expected v2, got %#v", a3)
+		t.Fatalf("after user + memory clear expected v2, got %#v", a3)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/settingsfile"
+	"goc/claudemd"
 	"goc/compactquerysource"
 	"goc/compactservice"
 	"goc/hookexec"
@@ -60,6 +61,7 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 			AfterSuccessfulCompact: func(qs string) {
 				if compactquerysource.MainThreadLike(qs) {
 					querycontext.ClearUserContextCache()
+					claudemd.ResetMemoryFilesCache("compact")
 				}
 			},
 		}

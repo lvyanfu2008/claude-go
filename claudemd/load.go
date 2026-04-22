@@ -1,12 +1,9 @@
 package claudemd
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"goc/hookexec"
 )
 
 // LoadOptions drives getMemoryFiles-equivalent loading.
@@ -20,14 +17,35 @@ type LoadOptions struct {
 	ClaudeMdExcludesOverride *[]string
 }
 
-// LoadMemoryFiles mirrors getMemoryFiles (no memoization, no hooks/analytics).
+// LoadMemoryFiles mirrors getMemoryFiles with session-level memo and InstructionsLoaded gating; see
+// [ClearMemoryFileCaches], [ResetMemoryFilesCache], and claudemd.ts clearMemoryFileCaches / resetGetMemoryFilesCache.
 func LoadMemoryFiles(opts LoadOptions) []MemoryFileInfo {
-	// 使用增强版的记忆层次结构管理
-	return LoadMemoryFilesEnhanced(opts)
+	key := memoryFileCacheKey(opts)
+	memFileMu.Lock()
+	if memFileCache != nil {
+		if v, ok := memFileCache[key]; ok {
+			out := cloneMemoryFiles(v)
+			memFileMu.Unlock()
+			return out
+		}
+	}
+	memFileMu.Unlock()
+	out := loadMemoryFilesUncached(opts)
+	memFileMu.Lock()
+	if memFileCache == nil {
+		memFileCache = make(map[string][]MemoryFileInfo)
+	}
+	memFileCache[key] = cloneMemoryFiles(out)
+	memFileMu.Unlock()
+	return cloneMemoryFiles(out)
 }
 
-// LoadMemoryFilesEnhanced 使用完整的记忆层次结构管理加载记忆文件
+// LoadMemoryFilesEnhanced is the same as [LoadMemoryFiles] (TS parity: one memoized entry point).
 func LoadMemoryFilesEnhanced(opts LoadOptions) []MemoryFileInfo {
+	return LoadMemoryFiles(opts)
+}
+
+func loadMemoryFilesUncached(opts LoadOptions) []MemoryFileInfo {
 	original := strings.TrimSpace(opts.OriginalCwd)
 	if original == "" {
 		original, _ = os.Getwd()
@@ -84,29 +102,9 @@ func LoadMemoryFilesEnhanced(opts LoadOptions) []MemoryFileInfo {
 		}
 	}
 
-	// InstructionsLoaded hooks (TS getMemoryFiles): observability-only, fire-and-forget; skip forceIncludeExternal path.
-	if !opts.ForceIncludeExternal {
-		tab, err := hookexec.MergedHooksForCwd(absOrig)
-		if err == nil && hookexec.HasInstructionsLoaded(tab) {
-			base := hookexec.BaseHookInput{
-				SessionID:      "local",
-				TranscriptPath: "",
-				Cwd:            absOrig,
-			}
-			for _, file := range result {
-				if !isInstructionsMemoryType(file.Type) {
-					continue
-				}
-				hookexec.FireInstructionsLoaded(context.Background(), tab, absOrig, base, hookexec.InstructionsLoadedFields{
-					FilePath:       file.Path,
-					MemoryType:     string(file.Type),
-					LoadReason:     "session_start",
-					Globs:          file.Globs,
-					ParentFilePath: file.Parent,
-				}, hookexec.DefaultHookTimeoutMs)
-			}
-		}
-	}
+	// TS getMemoryFiles: one-shot eager InstructionsLoaded on cache miss with reason from
+	// consumeNextEagerLoadReason; forceIncludeExternal path skips.
+	runInstructionsLoadedHooksForLoadResult(&opts, absOrig, result)
 
 	return result
 }

@@ -7,15 +7,18 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"goc/claudemd"
 )
 
 // Session-level memoization for user/system context and git status mirrors lodash memoize
 // on getUserContext, getSystemContext, and getGitStatus in src/context.ts.
 //
 // Invalidation (TS parity):
-//   - [ClearAllContextCaches] — src/commands/clear/caches.ts clearCaches
+//   - [ClearAllContextCaches] — also resets memory file memo (resetGetMemoryFilesCache(session_start) parity)
+//   - [claudemd.ClearMemoryFileCaches] / [claudemd.ResetMemoryFilesCache] for getMemoryFiles alone
 //   - [ClearUserAndSystemContextCaches] — setSystemPromptInjection (not git)
-//   - [ClearUserContextCache] — post-compact cleanup (getUserContext.cache.clear only)
+//   - [ClearUserContextCache] — getUserContext.cache.clear (pair with claudemd [ResetMemoryFilesCache] in compact, see conversation-runtime autocompact adapter)
 
 var sessionCtxMu sync.Mutex
 
@@ -102,11 +105,13 @@ func cloneStrMap(m map[string]string) map[string]string {
 }
 
 // ClearAllContextCaches clears user context, system context, and git status caches
-// (TS: getUserContext.cache.clear + getSystemContext.cache.clear + getGitStatus.cache.clear).
+// (TS: getUserContext.cache.clear + getSystemContext.cache.clear + getGitStatus.cache.clear),
+// and resets the getMemoryFiles-equivalent session memo with load_reason for the next miss.
 func ClearAllContextCaches() {
 	sessionCtxMu.Lock()
-	defer sessionCtxMu.Unlock()
 	sessionCtx = sessionCtxCaches{}
+	sessionCtxMu.Unlock()
+	claudemd.ResetMemoryFilesCache("session_start")
 }
 
 // ClearUserAndSystemContextCaches clears user and system context caches but keeps the

@@ -2,10 +2,10 @@
 // getClaudeMds aggregation for Go-only hosts.
 //
 // Parity notes:
-//   - No getMemoryFiles memoization or analytics events.
-//   - InstructionsLoaded: command hooks run from LoadMemoryFilesEnhanced when hooks are configured
-//     (see goc/hookexec); load_reason uses session_start for this eager path (TS also supports
-//     compact, nested_traversal, path_glob_match, include when lazy/nested parity lands).
+//   - getMemoryFiles-equivalent: [LoadMemoryFiles] is session-memoized; use [ClearMemoryFileCaches] or
+//     [ResetMemoryFilesCache] to invalidate; env fingerprint in memory_files_cache.go keys the cache.
+//   - InstructionsLoaded: runs from uncached [loadMemoryFilesUncached] (see goc/hookexec); one-shot
+//     load_reason is session_start until [ResetMemoryFilesCache] (e.g. "compact" after autocompact).
 //   - GrowthBook flags: CLAUDE_CODE_TENGU_MOTH_COPSE, CLAUDE_CODE_TENGU_PAPER_HALYARD.
 //   - External @include: Force/Has on LoadOptions or CLAUDE_CODE_CLAUDE_MD_EXTERNAL_INCLUDES_APPROVED=1.
 //   - Team memory: FEATURE_TEAMMEM, IsAutoMemoryEnabled, CLAUDE_CODE_TEAM_MEMORY_ENABLED (optional override).
