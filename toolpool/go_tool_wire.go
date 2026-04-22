@@ -1362,11 +1362,7 @@ var goWireBaseTools = []goWireToolEntry{
 }
 
 // ToolSpecsFromGoWire returns model-facing tool specs from the Go-owned base
-// registry and resolves each tool schema from the embedded TS export by name.
+// registry using only native provider implementations, with no dependency on embedded JSON.
 func ToolSpecsFromGoWire() []types.ToolSpec {
-	specs, err := ToolSpecsFromEmbeddedToolsAPIJSON()
-	if err != nil {
-		panic("toolpool: parse embedded tools API JSON: " + err.Error())
-	}
-	return buildGoWireToolSpecsFromExportSpecs(specs)
+	return buildGoWireToolSpecsFromExportSpecsWithProvider(nil, nativeSpecFromGoProvider)
 }

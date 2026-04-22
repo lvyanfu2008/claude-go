@@ -171,7 +171,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 			}
 			mcpToolSpecs = loadedTools
 		}
-		assembled, errA := toolpool.AssembleToolPoolFromEmbedded(permCtx, mcpToolSpecs)
+		assembled, errA := toolpool.AssembleToolPoolFromGoWire(permCtx, mcpToolSpecs)
 		if errA != nil {
 			return nil, errA
 		}

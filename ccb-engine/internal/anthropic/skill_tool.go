@@ -64,7 +64,7 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 // embedded commands/data/tools_api.json (TS export) + deny/REPL filtering + echo_stub for gou-demo / parity wiring.
 // Use [GouParityToolList] only for name/schema stubs in tests and ParityToolRunner dispatch — not for API descriptions.
 func GouParityToolsJSON() (json.RawMessage, error) {
-	assembled, err := toolpool.AssembleToolPoolFromEmbedded(types.EmptyToolPermissionContextData(), nil)
+	assembled, err := toolpool.AssembleToolPoolFromGoWire(types.EmptyToolPermissionContextData(), nil)
 	if err != nil {
 		return nil, err
 	}

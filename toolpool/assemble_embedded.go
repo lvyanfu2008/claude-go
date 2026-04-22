@@ -2,9 +2,9 @@ package toolpool
 
 import "goc/types"
 
-// AssembleToolPoolFromEmbedded mirrors assembleToolPool when built-ins come from embedded
-// tools_api.json: GetTools(permissionContext, embedded) then AssembleToolPool (src/tools.ts).
-func AssembleToolPoolFromEmbedded(permissionContext types.ToolPermissionContextData, mcpTools []types.ToolSpec) ([]types.ToolSpec, error) {
+// AssembleToolPoolFromGoWire mirrors assembleToolPool when built-ins come from Go native providers:
+// GetTools(permissionContext, ToolSpecsFromGoWire()) then AssembleToolPool (src/tools.ts).
+func AssembleToolPoolFromGoWire(permissionContext types.ToolPermissionContextData, mcpTools []types.ToolSpec) ([]types.ToolSpec, error) {
 	base := ToolSpecsFromGoWire()
 	builtIn := GetTools(permissionContext, base)
 	var err error

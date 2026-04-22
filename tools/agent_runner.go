@@ -15,6 +15,7 @@ import (
 	"goc/conversation-runtime/query"
 	"goc/sessiontranscript"
 	"goc/toolexecution"
+	"goc/toolpool"
 	"goc/types"
 )
 
@@ -102,26 +103,20 @@ var (
 
 func loadAgentToolsJSON() []byte {
 	agentToolsJSONOnce.Do(func() {
-		b, err := os.ReadFile(filepath.Join("commands", "data", "tools_api.json"))
-		if err != nil {
-			return
+		// Use Go native tool specs instead of reading from JSON file
+		specs := toolpool.ToolSpecsFromGoWire()
+		var apiSpecs []toolpool.APIToolDefinition
+		opts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
+		
+		for _, spec := range specs {
+			apiSpec := toolpool.ToolToAPISchema(spec, opts)
+			apiSpecs = append(apiSpecs, apiSpec)
+			agentToolNames = append(agentToolNames, spec.Name)
 		}
-		var doc struct {
-			Tools json.RawMessage `json:"tools"`
-		}
-		if err := json.Unmarshal(b, &doc); err != nil || len(doc.Tools) == 0 {
-			return
-		}
-		agentToolsJSON = doc.Tools
-		var defs []struct {
-			Name string `json:"name"`
-		}
-		if json.Unmarshal(doc.Tools, &defs) == nil {
-			for _, d := range defs {
-				if strings.TrimSpace(d.Name) != "" {
-					agentToolNames = append(agentToolNames, d.Name)
-				}
-			}
+		
+		// Marshal to JSON for compatibility with existing code
+		if b, err := json.Marshal(apiSpecs); err == nil {
+			agentToolsJSON = b
 		}
 	})
 	return agentToolsJSON

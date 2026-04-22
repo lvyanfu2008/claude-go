@@ -34,22 +34,7 @@ var deferredBuiltin = map[string]struct{}{
 	"ReadMcpResourceTool":  {},
 	"LSP":                  {},
 	"Config":               {},
-	"VerifyPlanExecution":  {},
-	"Monitor":              {},
-	"SubscribePR":          {},
-	"PushNotification":     {},
-	"SendUserFile":         {},
-	"Sleep":                {},
-	"Workflow":             {},
-	"Snip":                 {},
-	"ListPeers":            {},
-	"TerminalCapture":      {},
-	"WebBrowser":           {},
-	"OverflowTest":         {},
-	"CtxInspect":           {},
-	"PowerShell":           {},
-	"SuggestBackgroundPR":  {},
-	"Tungsten":             {},
+	"AskUserQuestion":      {},
 }
 
 // IsDeferredToolName mirrors isDeferredTool (src/tools/ToolSearchTool/prompt.ts) for wire-only name + MCP prefix.
