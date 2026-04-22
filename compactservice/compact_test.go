@@ -275,6 +275,37 @@ func TestFormatCompactSummary_Idempotent(t *testing.T) {
 
 // ------ CompactConversation end-to-end with injected summarizer ------
 
+func TestCompactConversation_AfterSuccessfulCompactCallback(t *testing.T) {
+	var got string
+	msgs := []types.Message{
+		{Type: types.MessageTypeUser, UUID: "u1", Message: json.RawMessage(`{"role":"user","content":"hello"}`)},
+		{Type: types.MessageTypeAssistant, UUID: "a1", Message: json.RawMessage(`{"role":"assistant","id":"R1","content":[{"type":"text","text":"hi"}]}`), MessageID: strPtr("R1")},
+	}
+	deps := Deps{
+		Summarize: func(_ context.Context, in SummaryStreamInput) (SummaryStreamResult, error) {
+			asst := types.Message{
+				Type:    types.MessageTypeAssistant,
+				UUID:    "s",
+				Message: json.RawMessage(`{"role":"assistant","id":"S1","content":[{"type":"text","text":"<summary>x</summary>"}],"usage":{"input_tokens":1,"output_tokens":1}}`),
+			}
+			return SummaryStreamResult{AssistantMessage: asst, Usage: &TokenUsage{InputTokens: 1, OutputTokens: 1}}, nil
+		},
+		AfterSuccessfulCompact: func(qs string) { got = qs },
+	}
+	_, err := CompactConversation(context.Background(), msgs, deps, CompactOptions{
+		Model:                     "claude-sonnet-4",
+		QuerySource:               `"repl_main_thread"`,
+		SuppressFollowUpQuestions: true,
+		IsAutoCompact:             true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != `"repl_main_thread"` {
+		t.Fatalf("callback querySource = %q", got)
+	}
+}
+
 func TestCompactConversation_EndToEnd(t *testing.T) {
 	msgs := []types.Message{
 		{

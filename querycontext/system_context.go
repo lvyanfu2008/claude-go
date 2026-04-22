@@ -6,13 +6,17 @@ import (
 	"strings"
 )
 
-// BuildSystemContext mirrors src/context.ts getSystemContext (no memoization).
+// BuildSystemContext mirrors src/context.ts getSystemContext (session memo until [ClearAllContextCaches] / [ClearUserAndSystemContextCaches]; git memo survives [ClearUserAndSystemContextCaches] like TS).
 func BuildSystemContext(ctx context.Context, cwd string, systemPromptInjection *string) map[string]string {
+	return systemContextMemoized(ctx, cwd, systemPromptInjection)
+}
+
+func buildSystemContextUncached(ctx context.Context, cwd string, systemPromptInjection *string) map[string]string {
 	out := map[string]string{}
 
 	var gitStatus string
 	if !IsEnvTruthy(os.Getenv("CLAUDE_CODE_REMOTE")) && ShouldIncludeGitInstructions() {
-		gitStatus = BuildGitStatusSnapshot(ctx, cwd)
+		gitStatus = gitStatusForSessionCache(ctx, cwd)
 	}
 	if strings.TrimSpace(gitStatus) != "" {
 		out["gitStatus"] = gitStatus

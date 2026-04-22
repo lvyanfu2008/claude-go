@@ -14,8 +14,10 @@ import (
 // MaxStatusChars matches src/context.ts MAX_STATUS_CHARS.
 const MaxStatusChars = 2000
 
-// BuildGitStatusSnapshot mirrors getGitStatus in src/context.ts (git snapshot string or empty).
-func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
+// buildGitStatusSnapshotUncached mirrors getGitStatus in src/context.ts without the
+// process-level memo from lodash memoize — use [gitStatusForSessionCache] or
+// [BuildGitStatusSnapshot] for TS parity.
+func buildGitStatusSnapshotUncached(ctx context.Context, cwd string) string {
 	startTime := time.Now()
 
 	if ctx.Err() != nil {
@@ -33,11 +35,11 @@ func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
 
 	// Run Git commands in parallel like TS Promise.all
 	commands := [][]string{
-		{"rev-parse", "--abbrev-ref", "HEAD"},                     // branch
+		{"rev-parse", "--abbrev-ref", "HEAD"},                         // branch
 		{"symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"}, // for default branch
-		{"--no-optional-locks", "status", "--short"},              // status
-		{"--no-optional-locks", "log", "--oneline", "-n", "5"},    // log
-		{"config", "user.name"},                                   // userName
+		{"--no-optional-locks", "status", "--short"},                  // status
+		{"--no-optional-locks", "log", "--oneline", "-n", "5"},        // log
+		{"config", "user.name"},                                       // userName
 	}
 
 	results, errs := utils.RunGitCommandsParallel(abs, commands)
@@ -85,6 +87,12 @@ func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
 	fmt.Printf("Git status completed in %v\n", time.Since(startTime))
 
 	return strings.Join(parts, "\n\n")
+}
+
+// BuildGitStatusSnapshot returns the git snapshot with the same session-level memoization
+// as TS getGitStatus (cleared by [ClearAllContextCaches], not by [ClearUserAndSystemContextCaches]).
+func BuildGitStatusSnapshot(ctx context.Context, cwd string) string {
+	return gitStatusForSessionCache(ctx, cwd)
 }
 
 func defaultBranchName(ctx context.Context, cwd string) string {

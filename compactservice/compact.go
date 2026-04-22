@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"goc/types"
 )
@@ -43,6 +44,10 @@ type CompactOptions struct {
 	// ToolUseContext is optional runtime context passed to PostCompactAttachmentProvider
 	// for richer attachment re-injection (tool definitions, agent definitions, MCP clients).
 	ToolUseContext *types.ToolUseContext
+	// QuerySource is optional; after a successful compact, main-thread-like sources trigger
+	// querycontext.ClearUserContextCache (TS runPostCompactCleanup + getUserContext.cache.clear).
+	// Empty uses the same main-thread behavior as TS querySource === undefined.
+	QuerySource string
 }
 
 // CompactConversation mirrors compactConversation in services/compact/compact.ts.
@@ -64,8 +69,9 @@ type CompactOptions struct {
 //
 // Intentional simplifications (clearly TODO'd vs TS):
 //   - runForkedAgent / cache-sharing is NOT implemented; SummarizerFn is the only path.
-//   - runPostCompactCleanup + markPostCompaction + reAppendSessionMetadata + prompt-cache-break
-//     notifications are host-side concerns; hosts wrap CompactConversation and run them.
+//   - markPostCompaction + reAppendSessionMetadata + prompt-cache-break notifications remain
+//     host-side; on success this path does call querycontext.ClearUserContextCache for
+//     main-thread-like QuerySource values (TS runPostCompactCleanup subset).
 //   - analyzeContext-driven stats in the tengu_compact event are elided (logger gets 0s).
 func CompactConversation(
 	ctx context.Context,
@@ -281,6 +287,8 @@ func CompactConversation(
 		}
 	}
 
+	deps.AfterSuccessfulCompact(compactQuerySourceForCleanup(opts))
+
 	return CompactionResult{
 		BoundaryMarker:            boundary,
 		SummaryMessages:           []types.Message{summaryUserMsg},
@@ -292,6 +300,18 @@ func CompactConversation(
 		TruePostCompactTokenCount: truePost,
 		CompactionUsage:           compactionUsage,
 	}, nil
+}
+
+func compactQuerySourceForCleanup(opts CompactOptions) string {
+	if s := strings.TrimSpace(opts.QuerySource); s != "" {
+		return opts.QuerySource
+	}
+	if opts.RecompactionInfo != nil {
+		if s := strings.TrimSpace(opts.RecompactionInfo.QuerySource); s != "" {
+			return opts.RecompactionInfo.QuerySource
+		}
+	}
+	return ""
 }
 
 // newUserPromptMessage builds a user Message {role:user, content:prompt}. Mirrors

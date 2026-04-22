@@ -5,8 +5,12 @@ import (
 	"strings"
 )
 
-// BuildUserContext mirrors src/context.ts getUserContext (no memoization; host may cache).
+// BuildUserContext mirrors src/context.ts getUserContext (session memo until [ClearUserContextCache] / [ClearAllContextCaches] / [ClearUserAndSystemContextCaches]).
 func BuildUserContext(cwd string, extraClaudeMdRoots []string) (map[string]string, error) {
+	return userContextMemoized(cwd, extraClaudeMdRoots)
+}
+
+func buildUserContextUncached(cwd string, extraClaudeMdRoots []string) (map[string]string, error) {
 	shouldDisableClaudeMd := IsEnvTruthy(os.Getenv("CLAUDE_CODE_DISABLE_CLAUDE_MDS")) ||
 		(BareModeFromEnv() && len(extraClaudeMdRoots) == 0)
 

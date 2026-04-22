@@ -303,6 +303,7 @@ func AutoCompactIfNeeded(ctx context.Context, in AutoCompactIfNeededInput) (Auto
 		Model:                     in.Model,
 		AgentID:                   in.AgentID,
 		ToolUseContext:            in.ToolUseContext,
+		QuerySource:               in.QuerySource,
 	})
 	if err != nil {
 		prev := 0

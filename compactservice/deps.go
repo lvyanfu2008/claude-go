@@ -17,9 +17,9 @@ type Deps struct {
 
 	// PreCompactHooks / PostCompactHooks / SessionStartHooks run the
 	// corresponding hook phases. Nil is interpreted as the no-op runner.
-	PreCompactHooks    PreCompactHookRunner
-	PostCompactHooks   PostCompactHookRunner
-	SessionStartHooks  SessionStartHookRunner
+	PreCompactHooks   PreCompactHookRunner
+	PostCompactHooks  PostCompactHookRunner
+	SessionStartHooks SessionStartHookRunner
 
 	// PostCompactAttachments produces the attachments re-appended after the
 	// summary (file re-read, plan, plan_mode, skills, agent listing, MCP,
@@ -43,8 +43,10 @@ type Deps struct {
 	// getCompactUserSummaryMessage. Default false.
 	ProactiveActive bool
 
-	// SuppressFollowUpQuestions mirrors TS auto-compact's hard-coded true.
-	// For manual /compact it's false. Set by the caller.
+	// AfterSuccessfulCompact runs after a successful compaction (TS runPostCompactCleanup
+	// subset). Receives the same query source string as [CompactOptions.QuerySource] /
+	// [RecompactionInfo.QuerySource] via [compactQuerySourceForCleanup]. Nil defaults to no-op.
+	AfterSuccessfulCompact func(querySource string)
 }
 
 // resolve sets sensible defaults on Deps fields that are nil.
@@ -69,6 +71,9 @@ func (d *Deps) resolve() {
 	}
 	if d.Now == nil {
 		d.Now = nowRFC3339
+	}
+	if d.AfterSuccessfulCompact == nil {
+		d.AfterSuccessfulCompact = func(string) {}
 	}
 }
 

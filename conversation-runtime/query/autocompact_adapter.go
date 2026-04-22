@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"goc/ccb-engine/settingsfile"
+	"goc/compactquerysource"
 	"goc/compactservice"
 	"goc/hookexec"
+	"goc/querycontext"
 	"goc/types"
 )
 
@@ -55,6 +57,11 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 			PreCompactHooks:        hookexec.PreCompactHookRunner(projRoot, wd, sid, ""),
 			PostCompactHooks:       hookexec.PostCompactHookRunner(projRoot, wd, sid, ""),
 			SessionStartHooks:      hookexec.SessionStartHookRunner(projRoot, wd, sid, ""),
+			AfterSuccessfulCompact: func(qs string) {
+				if compactquerysource.MainThreadLike(qs) {
+					querycontext.ClearUserContextCache()
+				}
+			},
 		}
 
 		snip := 0
