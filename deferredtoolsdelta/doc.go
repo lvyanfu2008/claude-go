@@ -4,5 +4,5 @@
 // (src/tools/ToolSearchTool/prompt.ts getPrompt / getToolLocationHint; src/utils/toolSearch.ts isDeferredToolsDeltaEnabled).
 //
 // It lives at module root (not under ccb-engine/internal/toolsearch) to avoid an import cycle:
-// toolpool → toolsearch → anthropic → toolpool.
+// goc/tools/toolpool → toolsearch → anthropic → goc/tools/toolpool.
 package deferredtoolsdelta

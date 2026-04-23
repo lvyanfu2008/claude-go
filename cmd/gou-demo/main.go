@@ -81,7 +81,7 @@ import (
 	"goc/modelenv"
 	"goc/querycontext"
 	"goc/sessiontranscript"
-	"goc/toolexecution"
+	"goc/tools/toolexecution"
 	"goc/tscontext"
 	"goc/types"
 )

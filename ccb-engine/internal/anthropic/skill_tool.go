@@ -6,7 +6,7 @@ import (
 	"goc/agents/builtin"
 	"goc/commands"
 	"goc/modelenv"
-	"goc/toolpool"
+	"goc/tools/toolpool"
 	"goc/types"
 )
 

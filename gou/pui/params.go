@@ -15,7 +15,7 @@ import (
 	"goc/gou/conversation"
 	"goc/mcpcommands"
 	"goc/modelenv"
-	"goc/toolpool"
+	"goc/tools/toolpool"
 	"goc/tscontext"
 	"goc/types"
 )

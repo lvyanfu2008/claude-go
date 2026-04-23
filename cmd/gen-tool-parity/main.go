@@ -1,4 +1,4 @@
-// Command gen-tool-parity reads toolparity/catalog.json and writes toolparity/TS_GO_TOOL_PARITY.md.
+// Command gen-tool-parity reads tools/toolparity/catalog.json and writes tools/toolparity/TS_GO_TOOL_PARITY.md.
 //
 // Usage:
 //
@@ -63,7 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	catPath := filepath.Join(modRoot, "toolparity", "catalog.json")
+	catPath := filepath.Join(modRoot, "tools", "toolparity", "catalog.json")
 	raw, err := os.ReadFile(catPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -145,7 +145,7 @@ func main() {
 		fmt.Fprintf(&b, "| %s | %d |\n", k, counts[k])
 	}
 
-	outPath := filepath.Join(modRoot, "toolparity", "TS_GO_TOOL_PARITY.md")
+	outPath := filepath.Join(modRoot, "tools", "toolparity", "TS_GO_TOOL_PARITY.md")
 	if err := os.WriteFile(outPath, b.Bytes(), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

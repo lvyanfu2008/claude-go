@@ -5,7 +5,7 @@ import (
 	"goc/utils"
 )
 
-// kairosCronEnabled matches toolpool/tool_enabled.go kairosCronEnabled function
+// kairosCronEnabled matches tools/toolpool/tool_enabled.go kairosCronEnabled function
 func kairosCronEnabled() bool {
 	return !utils.IsEnvTruthy("CLAUDE_CODE_DISABLE_CRON")
 }

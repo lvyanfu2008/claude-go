@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"goc/anthropicmessages"
-	"goc/toolexecution"
+	"goc/tools/toolexecution"
 	"goc/types"
 )
 

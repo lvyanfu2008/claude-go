@@ -1,6 +1,6 @@
 # ccb-engine
 
-Shared **libraries** under `goc/ccb-engine/...` used by the **gou-demo default path**: [`goc/conversation-runtime/query`](../conversation-runtime/query/) (HTTP streaming parity), [`goc/gou/ccbstream`](../gou/ccbstream/) (NDJSON events → `conversation.Store`), [`goc/toolpool` / `toolexecution`](../toolexecution/) with [`skilltools.ParityToolRunner`](skilltools/parity_runner.go), plus [`apilog`](apilog/) / [`diaglog`](diaglog/) for debug parity.
+Shared **libraries** under `goc/ccb-engine/...` used by the **gou-demo default path**: [`goc/conversation-runtime/query`](../conversation-runtime/query/) (HTTP streaming parity), [`goc/gou/ccbstream`](../gou/ccbstream/) (NDJSON events → `conversation.Store`), [`goc/tools/toolpool`](../tools/toolpool/) / [`goc/tools/toolexecution`](../tools/toolexecution/) with [`skilltools.ParityToolRunner`](skilltools/parity_runner.go), plus [`apilog`](apilog/) / [`diaglog`](diaglog/) for debug parity.
 
 There is **no** in-repo `ccb-engine` CLI or `Session.RunTurn` loop anymore; interactive chat history is **not** driven from here.
 

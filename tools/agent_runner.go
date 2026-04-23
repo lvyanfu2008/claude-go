@@ -14,8 +14,8 @@ import (
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/sessiontranscript"
-	"goc/toolexecution"
-	"goc/toolpool"
+	"goc/tools/toolexecution"
+	"goc/tools/toolpool"
 	"goc/types"
 )
 

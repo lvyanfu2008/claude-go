@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"goc/conversation-runtime/streamingtool"
-	"goc/toolexecution"
+	"goc/tools/toolexecution"
 	"goc/types"
 )
 

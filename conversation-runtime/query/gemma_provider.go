@@ -12,7 +12,7 @@ import (
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"
-	"goc/toolexecution"
+	"goc/tools/toolexecution"
 	"goc/types"
 )
 

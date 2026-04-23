@@ -1,6 +1,6 @@
 package tools
 
-import "goc/toolpool"
+import "goc/tools/toolpool"
 
 // Re-export prompt constants for call sites that imported this package.
 const (

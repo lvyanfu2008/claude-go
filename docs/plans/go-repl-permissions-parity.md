@@ -6,10 +6,10 @@ In [`claude-code/src/utils/permissions/permissions.ts`](../../../claude-code/src
 
 Separately, **rule-based** checks (`checkRuleBasedPermissions` / whole-tool alwaysAsk / Bash sandbox **1b**) apply per **tool name + input** at invocation time.
 
-## Go behavior (`goc/toolexecution` + `skilltools`)
+## Go behavior (`goc/tools/toolexecution` + `skilltools`)
 
 1. **Outer `REPL` `tool_use`**  
-   When the model calls `REPL`, [`RunToolUseChan`](../../toolexecution/run_tool_use.go) runs the usual pipeline: optional `QueryCanUseTool` → [`applyRuleBasedDecisionInRun`](../../toolexecution/run_tool_use.go) (deny/ask from merged rules + Bash **1b** bypass on the **REPL** name/input) → **`ExecutionDeps.InvokeTool`** → [`ParityToolRunner.Run`](../../ccb-engine/skilltools/parity_runner.go) → [`runREPLTool`](../../ccb-engine/skilltools/parity_runner_repl.go).
+   When the model calls `REPL`, [`RunToolUseChan`](../../tools/toolexecution/run_tool_use.go) runs the usual pipeline: optional `QueryCanUseTool` → [`applyRuleBasedDecisionInRun`](../../tools/toolexecution/run_tool_use.go) (deny/ask from merged rules + Bash **1b** bypass on the **REPL** name/input) → **`ExecutionDeps.InvokeTool`** → [`ParityToolRunner.Run`](../../ccb-engine/skilltools/parity_runner.go) → [`runREPLTool`](../../ccb-engine/skilltools/parity_runner_repl.go).
 
 2. **Inner primitives (Read, Bash, …)**  
    REPL execution dispatches inner tools via [`dispatchTool`](../../ccb-engine/skilltools/parity_runner.go) **without** re-entering `RunToolUseChan`. Those calls **do not** receive a second `QueryCanUseTool` / `applyRuleBasedDecisionInRun` pass at the toolexecution layer. Inner Bash still uses [`localtools.BashFromJSON`](../../ccb-engine/localtools/bash.go) and its own permission / sandbox behavior where implemented.

@@ -2,7 +2,7 @@ package processuserinput
 
 import (
 	"goc/conversation-runtime/query"
-	"goc/toolexecution"
+	"goc/tools/toolexecution"
 )
 
 // ApplyQueryHostEnvGates sets [query.QueryParams.StreamingParity] when [query.StreamingParityPathEnabled] allows

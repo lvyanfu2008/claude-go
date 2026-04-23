@@ -13,7 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"goc/commands"
-	"goc/toolexecution"
+	"goc/tools/toolexecution"
 )
 
 type permissionAskReply struct {
