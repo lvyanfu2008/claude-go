@@ -5,7 +5,7 @@
     "modelUsedForSchema": "claude-sonnet-4-20250514",
     "exportedAt": "2026-04-13T02:56:46.549Z",
     "toolCount": 23,
-    "note": "Compare with Go GouParityToolList / GouDemoParityToolsJSON. MCP tools not included. Membership depends on export-time env (FEATURE_*, USER_TYPE, ENABLE_LSP_TOOL, etc.)."
+    "note": "Compare with Go AssembleToolPoolFromGoWire / GouDemoParityToolsJSON. MCP tools not included. Membership depends on export-time env (FEATURE_*, USER_TYPE, ENABLE_LSP_TOOL, etc.)."
   },
   "tools": [
     {

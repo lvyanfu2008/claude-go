@@ -2,8 +2,6 @@ package anthropic
 
 import (
 	"encoding/json"
-	"os"
-	"strings"
 
 	"goc/agents/builtin"
 	"goc/modelenv"
@@ -61,20 +59,15 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 }
 
 // GouParityToolsJSON returns the same tools[] shape as gou-demo with GOU_DEMO_USE_EMBEDDED_TOOLS_API=1:
-// embedded commands/data/tools_api.json (TS export) + deny/REPL filtering + echo_stub for gou-demo / parity wiring.
-// Use [GouParityToolList] only for name/schema stubs in tests and ParityToolRunner dispatch — not for API descriptions.
+// Go wire tool pool + optional DiscoverSkills (see [toolpool.DiscoverSkillsToolSpecFromEnv]) + echo_stub for gou-demo / parity wiring.
 func GouParityToolsJSON() (json.RawMessage, error) {
 	assembled, err := toolpool.AssembleToolPoolFromGoWire(types.EmptyToolPermissionContextData(), nil)
 	if err != nil {
 		return nil, err
 	}
 	assembled = toolpool.PatchAgentToolDescriptionWithBuiltins(assembled, builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}))
-	if n := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME")); n != "" {
-		ds, errD := toolDefinitionsToSpecs([]ToolDefinition{DiscoverSkillsToolDefinition(n)})
-		if errD != nil {
-			return nil, errD
-		}
-		assembled = toolpool.UniqByName(append(ds, assembled...))
+	if ds, ok := toolpool.DiscoverSkillsToolSpecFromEnv(); ok {
+		assembled = toolpool.UniqByName(append([]types.ToolSpec{ds}, assembled...))
 	}
 	stubs, err := toolDefinitionsToSpecs(DefaultStubTools())
 	if err != nil {
