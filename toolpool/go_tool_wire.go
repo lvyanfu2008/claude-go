@@ -763,7 +763,7 @@ func nativeSkillToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Skill",
-		Description:     "Execute a skill within the main conversation. When users ask you to perform tasks, check if any of the available skills match. Skills provide specialized capabilities and domain knowledge. When users reference a \"slash command\" or \"/<something>\" (e.g., \"/commit\", \"/review-pr\"), they are referring to a skill. Use this tool to invoke it. Available skills are listed in system-reminder messages in the conversation. When a skill matches the user's request, this is a BLOCKING REQUIREMENT: invoke the relevant Skill tool BEFORE generating any other response about the task. NEVER mention a skill without actually calling this tool. Do not invoke a skill that is already running. Do not use this tool for built-in CLI commands (like /help, /clear, etc.).",
+		Description:     commands.SkillToolDescriptionPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1041,7 +1041,7 @@ func nativeSleepToolSpec() types.ToolSpec {
 		"properties": map[string]any{
 			"duration_seconds": map[string]any{
 				"type":        "number",
-				"description": "How long to sleep in seconds. Can be interrupted by the user at any time.",
+				"description": "How long to wait in seconds. The user can interrupt the sleep at any time.",
 			},
 		},
 		"required":             []string{"duration_seconds"},
@@ -1049,7 +1049,7 @@ func nativeSleepToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Sleep",
-		Description:     "Wait for a short duration before continuing.",
+		Description:     commands.SleepToolPrompt(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1152,15 +1152,22 @@ func nativePushNotificationToolSpec() types.ToolSpec {
 			"priority": map[string]any{
 				"type":        "string",
 				"enum":        []string{"normal", "high"},
-				"description": "Notification priority.",
+				"description": `Notification priority. Use "high" for blockers or permission prompts.`,
 			},
 		},
 		"required":             []string{"title", "body"},
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "PushNotification",
-		Description:     "Send a push notification to the user's device. Use this to alert the user when important tasks complete, errors occur, or when you need their attention. Notifications appear outside the chat interface and can be seen even when the user is not actively looking at the conversation.",
+		Name: "PushNotification",
+		Description: `Send a push notification to the user's mobile device via Remote Control.
+
+Use this when:
+- A long-running task completes and the user may not be watching
+- A permission prompt is waiting and you need user input
+- Something urgent requires the user's attention
+
+Requires Remote Control to be configured. Respects user notification settings (taskCompleteNotifEnabled, inputNeededNotifEnabled, agentPushNotifEnabled).`,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1183,8 +1190,13 @@ func nativeSendUserFileToolSpec() types.ToolSpec {
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "SendUserFile",
-		Description:     "Send a file artifact to the user for download. Use this when you need to provide the user with files you've created or modified, such as generated reports, processed data, or configuration files. The file will be made available for download in the user interface.",
+		Name: "SendUserFile",
+		Description: `Send a file to the user's device. Use this in assistant mode when the user requests a file or when a file is relevant to the conversation.
+
+Guidelines:
+- Use absolute paths
+- The file must exist and be readable
+- Large files may take time to transfer`,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1197,11 +1209,11 @@ func nativeSnipToolSpec() types.ToolSpec {
 			"message_ids": map[string]any{
 				"type":        "array",
 				"items":       map[string]any{"type": "string"},
-				"description": "IDs of the messages to snip from history.",
+				"description": "IDs of the messages to snip from history. Snipped messages are replaced with a short summary.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
-				"description": "Why these messages are being snipped.",
+				"description": "Why these messages are being snipped. Used in the summary replacement.",
 			},
 		},
 		"required":             []string{"message_ids"},
@@ -1209,7 +1221,7 @@ func nativeSnipToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Snip",
-		Description:     "Snip messages from conversation history to free up context window space. Snipped messages are replaced with a compact summary so you retain awareness of what happened without the full content. Use this when: your context is getting full and you need to make room, earlier messages contain large tool outputs you no longer need in full, you want to compact a long exploration sequence into a summary. Guidelines: only snip messages you're confident you won't need verbatim again, the summary replacement preserves key facts (file paths, decisions, errors found), you cannot un-snip — the original content is gone from context.",
+		Description:     "Snip messages from your conversation history to free up context window space. Snipped messages are replaced with a compact summary so you retain awareness of what happened without the full content.\n\nUse this when:\n- Your context is getting full and you need to make room\n- Earlier messages contain large tool outputs you no longer need in full\n- You want to compact a long exploration sequence into a summary\n\nGuidelines:\n- Only snip messages you're confident you won't need verbatim again\n- The summary replacement preserves key facts (file paths, decisions, errors found)\n- You cannot un-snip — the original content is gone from context.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1332,7 +1344,12 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "REPL":
 		return nativeEmptyObjectSchemaToolSpec("REPL", "Run command(s) in REPL mode."), true, nil
 	case "workflow":
-		return nativeEmptyObjectSchemaToolSpec("workflow", "Execute a user-defined workflow script from .claude/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks. Specify the workflow name to execute (must match a file in .claude/workflows/). Optionally pass arguments that the workflow can use. Workflows run in the context of the current project."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("workflow", `Use the Workflow tool to execute user-defined workflow scripts located in .claude/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks.
+
+Guidelines:
+- Specify the workflow name to execute (must match a file in .claude/workflows/)
+- Optionally pass arguments that the workflow can use
+- Workflows run in the context of the current project`), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions."), true, nil
 	case "Monitor":
