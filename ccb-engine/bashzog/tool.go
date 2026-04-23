@@ -26,24 +26,16 @@ var (
 )
 
 func loadWire() {
-	var raw struct {
-		Name        string          `json:"name"`
-		Description string          `json:"description"`
-		InputSchema json.RawMessage `json:"input_schema"`
-	}
-	if err := json.Unmarshal(bashToolModelWire, &raw); err != nil {
-		wireErr = err
-		return
-	}
+	schemaBytes := []byte(bashModelInputSchemaJSON)
 	var schemaObj map[string]any
-	if err := json.Unmarshal(raw.InputSchema, &schemaObj); err != nil {
+	if err := json.Unmarshal(schemaBytes, &schemaObj); err != nil {
 		wireErr = err
 		return
 	}
 	wire = bashWire{
-		Name:           raw.Name,
-		Description:    raw.Description,
-		InputSchemaRaw: append(json.RawMessage(nil), raw.InputSchema...),
+		Name:           bashModelWireName,
+		Description:    bashModelDescription,
+		InputSchemaRaw: append(json.RawMessage(nil), schemaBytes...),
 		inputSchemaObj: schemaObj,
 	}
 }
@@ -80,7 +72,7 @@ func addMonitorToolDescriptionToBashPrompt(description string) string {
 	// Find the position where we need to insert Monitor tool information
 	// Looking for the sleep section that starts with "Do not sleep between commands..."
 	sleepSectionStart := "  - Do not sleep between commands that can run immediately — just run them."
-	
+
 	if !strings.Contains(description, sleepSectionStart) {
 		// If we can't find the expected structure, return as-is
 		return description
@@ -88,12 +80,12 @@ func addMonitorToolDescriptionToBashPrompt(description string) string {
 
 	// Add Monitor tool description after the first sleep bullet point
 	monitorInstruction := "\n  - Use the Monitor tool to stream events from a background process (each stdout line is a notification). For one-shot \"wait until done,\" use Bash with run_in_background instead."
-	
+
 	// Replace the first sleep instruction with itself plus the monitor instruction
 	modifiedDescription := strings.Replace(
 		description,
 		sleepSectionStart,
-		sleepSectionStart + monitorInstruction,
+		sleepSectionStart+monitorInstruction,
 		1,
 	)
 
@@ -109,7 +101,7 @@ func BashToolSpec() (types.ToolSpec, error) {
 	}
 	// Apply Monitor tool description modifications if feature is enabled
 	description := addMonitorToolDescriptionToBashPrompt(d.Description)
-	
+
 	return types.ToolSpec{
 		Name:            d.Name,
 		Description:     description,
@@ -126,7 +118,7 @@ func BashZogToolSpec() (types.ToolSpec, error) {
 	}
 	// Apply Monitor tool description modifications if feature is enabled
 	description := addMonitorToolDescriptionToBashPrompt(d.Description)
-	
+
 	return types.ToolSpec{
 		Name:            ZogToolName,
 		Description:     description,

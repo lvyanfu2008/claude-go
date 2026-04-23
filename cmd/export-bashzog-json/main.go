@@ -1,4 +1,4 @@
-// Command export-bashzog-json writes the BashZog API-shaped tool row for diffing vs TS / tools_api.
+// Command export-bashzog-json writes the BashZog API-shaped tool row (e.g. for ad-hoc diff vs TS).
 package main
 
 import (
@@ -10,8 +10,7 @@ import (
 )
 
 func main() {
-	stdout := flag.Bool("stdout", false, "write JSON to stdout instead of -out")
-	outPath := flag.String("out", "ccb-engine/bashzog/bash_zog_tool_export.json", "output path (relative to cwd, typically claude-go module root)")
+	outPath := flag.String("out", "-", `output path, or "-" for stdout (default)`)
 	flag.Parse()
 
 	b, err := bashzog.ExportBashZogToolJSON()
@@ -19,7 +18,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "export: %v\n", err)
 		os.Exit(1)
 	}
-	if *stdout {
+	if *outPath == "-" {
 		if _, err := os.Stdout.Write(b); err != nil {
 			fmt.Fprintf(os.Stderr, "write stdout: %v\n", err)
 			os.Exit(1)
