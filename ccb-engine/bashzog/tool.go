@@ -26,17 +26,17 @@ var (
 )
 
 func loadWire() {
-	schemaBytes := []byte(bashModelInputSchemaJSON)
-	var schemaObj map[string]any
-	if err := json.Unmarshal(schemaBytes, &schemaObj); err != nil {
+	schemaMap := bashToolInputSchema()
+	schemaBytes, err := json.Marshal(schemaMap)
+	if err != nil {
 		wireErr = err
 		return
 	}
 	wire = bashWire{
 		Name:           bashModelWireName,
-		Description:    bashModelDescription,
+		Description:    bashToolModelDescription,
 		InputSchemaRaw: append(json.RawMessage(nil), schemaBytes...),
-		inputSchemaObj: schemaObj,
+		inputSchemaObj: schemaMap,
 	}
 }
 
@@ -92,8 +92,8 @@ func addMonitorToolDescriptionToBashPrompt(description string) string {
 	return modifiedDescription
 }
 
-// BashToolSpec returns a [types.ToolSpec] using the embedded snapshot’s name (always "Bash" today),
-// description, and input_schema. Prefer [BashZogToolSpec] when wiring the Zog-specific tool row.
+// BashToolSpec returns a [types.ToolSpec] using [bashModelWireName], [bashToolModelDescription], and [bashToolInputSchema].
+// Prefer [BashZogToolSpec] when wiring the Zog-specific tool row.
 func BashToolSpec() (types.ToolSpec, error) {
 	d, err := LoadAPIData()
 	if err != nil {
@@ -109,8 +109,7 @@ func BashToolSpec() (types.ToolSpec, error) {
 	}, nil
 }
 
-// BashZogToolSpec returns a [types.ToolSpec] for [ZogToolName] using the embedded snapshot’s
-// description and input_schema; the name is always [ZogToolName].
+// BashZogToolSpec returns a [types.ToolSpec] for [ZogToolName] using the same description and schema as [BashToolSpec].
 func BashZogToolSpec() (types.ToolSpec, error) {
 	d, err := LoadAPIData()
 	if err != nil {

@@ -13,7 +13,7 @@ type bashZogAPIExport struct {
 }
 
 // ExportBashZogToolJSON returns pretty-printed JSON for the BashZog tool row: same description
-// and input_schema as the embedded bash snapshot, with name forced to [ZogToolName].
+// and input_schema as [LoadAPIData], with name forced to [ZogToolName].
 func ExportBashZogToolJSON() ([]byte, error) {
 	d, err := LoadAPIData()
 	if err != nil {
