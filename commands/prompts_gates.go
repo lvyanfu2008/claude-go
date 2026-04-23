@@ -114,15 +114,34 @@ func ProactiveModeActive() bool {
 	return envTruthyGo("CLAUDE_CODE_GO_PROACTIVE_ACTIVE")
 }
 
+// coordinatorModeLikeTS matches src/coordinator/coordinatorMode.ts isCoordinatorMode:
+// feature('COORDINATOR_MODE') && truthy CLAUDE_CODE_COORDINATOR_MODE.
+func coordinatorModeLikeTS() bool {
+	if !featuregates.Feature("COORDINATOR_MODE") {
+		return false
+	}
+	return envTruthyGo("CLAUDE_CODE_COORDINATOR_MODE")
+}
+
+// nonInteractiveSessionEnvShim approximates getIsNonInteractiveSession() when no session
+// struct is in scope (static tool schemas). Covers SDK/parity env used across Go.
+func nonInteractiveSessionEnvShim() bool {
+	return envTruthyGo("CLAUDE_CODE_NONINTERACTIVE") ||
+		envTruthyGo("HEADLESS") ||
+		envTruthyGo("GOU_DEMO_NON_INTERACTIVE")
+}
+
 // ForkSubagentEnabled mirrors isForkSubagentEnabled in forkSubagent.ts.
+// Coordinator uses coordinatorModeLikeTS, not o.CoordinatorMode (see CLAUDE_CODE_GO_COORDINATOR_MODE vs TS).
+// Non-interactive: session bit or env shim, matching "fork off" in CI / headless / gou-demo.
 func ForkSubagentEnabled(o GouDemoSystemOpts) bool {
 	if !featuregates.Feature("FORK_SUBAGENT") {
 		return false
 	}
-	if o.CoordinatorMode {
+	if coordinatorModeLikeTS() {
 		return false
 	}
-	if o.NonInteractiveSession {
+	if o.NonInteractiveSession || nonInteractiveSessionEnvShim() {
 		return false
 	}
 	return true
