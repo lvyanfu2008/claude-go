@@ -161,12 +161,12 @@ func getEditToolDescription() string {
 	} else {
 		prefixFormat = "spaces + line number + arrow"
 	}
-	
+
 	var minimalUniquenessHint string
 	if os.Getenv("USER_TYPE") == "ant" {
 		minimalUniquenessHint = "\n- Use the smallest old_string that's clearly unique — usually 2-4 adjacent lines is sufficient. Avoid including 10+ lines of context when less uniquely identifies the target."
 	}
-	
+
 	return fmt.Sprintf(`Performs exact string replacements in files.
 
 Usage:%s- When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: %s. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
@@ -238,7 +238,7 @@ func nativeGlobToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Glob",
-		Description:     "Fast file pattern matching tool that works with any codebase size. Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". Returns matching file paths sorted by modification time. Use this tool when you need to find files by name patterns. When you are doing an open ended search that may require multiple rounds of globbing and grepping, use the Agent tool instead.",
+		Description:     "- Fast file pattern matching tool that works with any codebase size\n- Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\"\n- Returns matching file paths sorted by modification time\n- Use this tool when you need to find files by name patterns\n- When you are doing an open ended search that may require multiple rounds of globbing and grepping, use the Agent tool instead",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -311,7 +311,7 @@ func nativeGrepToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Grep",
-		Description:     "A powerful search tool built on ripgrep. ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access. Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\"). Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\"). Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts. Use Agent tool for open-ended searches requiring multiple rounds. Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code). Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`.",
+		Description:     "A powerful search tool built on ripgrep\n\n  Usage:\n  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.\n  - Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n  - Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\")\n  - Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts\n  - Use Agent tool for open-ended searches requiring multiple rounds\n  - Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n  - Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`\n",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -854,19 +854,20 @@ func nativeAgentToolSpec() types.ToolSpec {
 			"description": "Absolute path to run the agent in. Overrides the working directory for all filesystem and shell operations within this agent. Mutually exclusive with isolation: \"worktree\".",
 		},
 	}
-	
-	// Conditionally add run_in_background parameter based on environment and feature flags
-	// This mirrors the TypeScript logic: include only if background tasks are not disabled and fork is not enabled
+
+	// Conditionally add run_in_background parameter based on environment and feature flags.
+	// Mirrors src/tools/AgentTool/AgentTool.tsx inputSchema: include only if background
+	// tasks are not disabled and isForkSubagentEnabled() is false (forkSubagent.ts).
 	backgroundDisabled := utils.IsEnvTruthy("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS")
-	forkEnabled := featuregates.Feature("FORK_SUBAGENT")
-	
+	forkEnabled := commands.ForkSubagentEnabled(commands.GouDemoSystemOpts{})
+
 	if !backgroundDisabled && !forkEnabled {
 		properties["run_in_background"] = map[string]any{
 			"type":        "boolean",
 			"description": "Set to true to run this agent in the background. You will be notified when it completes.",
 		}
 	}
-	
+
 	schema := map[string]any{
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"type":                 "object",
@@ -1085,9 +1086,17 @@ func nativeListPeersToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": false,
 	}
+	var builder strings.Builder
+	builder.WriteString("List active Claude Code sessions that can receive messages via SendMessage.\n\n")
+	builder.WriteString("Returns an array of peers with their addresses. Use these addresses as the ")
+	builder.WriteString("`to` field in SendMessage:\n")
+	builder.WriteString("- `\"uds:/path/to.sock\"` — local sessions on the same machine (Unix Domain Socket)\n")
+	builder.WriteString("- `\"bridge:session_...\"` — remote sessions via Remote Control\n\n")
+	builder.WriteString("Use this tool to discover messaging targets before sending cross-session messages. Only running sessions with active messaging sockets are returned.")
+
 	return types.ToolSpec{
 		Name:            "ListPeers",
-		Description:     "List connected peer sessions in the current workspace. Shows other Claude sessions that you can communicate with using the SendMessage tool.",
+		Description:     "List connected peer sessions in the current workspace. Shows other Claude sessions that you can communicate with using the SendMessage tool." + builder.String(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1103,15 +1112,26 @@ func nativeMonitorToolSpec() types.ToolSpec {
 			},
 			"description": map[string]any{
 				"type":        "string",
-				"description": "Clear description of what this monitor watches.",
+				"description": `Clear, concise description of what this monitor watches. Used as the label in the background tasks UI.`,
 			},
 		},
 		"required":             []string{"command", "description"},
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "Monitor",
-		Description:     "Monitor long-running task output by running shell commands continuously in the background. Use this for monitoring logs, watching file changes, or observing system processes. The monitor runs until manually stopped and streams output updates.",
+		Name: "Monitor",
+		Description: `Guidelines:
+- Use Monitor for commands that produce ongoing streaming output: ` + "`tail -f`" + `, log watchers, file watchers, API polling loops, ` + "`watch`" + ` commands
+- Do NOT use Monitor for one-shot commands that finish quickly — use Bash for those
+- Do NOT use Monitor for commands that need interactive input — they will hang
+- The description should clearly explain what is being monitored
+- You'll get a task notification when the monitor process exits (stream ends, script fails, or killed)
+- To check output at any time, use Read on the output file path returned by this tool
+
+Examples:
+- Watching a log file: command="tail -f /var/log/app.log", description="Watch app log for errors"
+- Polling an API: command="while true; do curl -s http://localhost:3000/health; sleep 5; done", description="Poll health endpoint every 5s"
+- Watching for file changes: command="inotifywait -m -r ./src", description="Watch src directory for file changes"`,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1418,4 +1438,35 @@ var goWireBaseTools = []goWireToolEntry{
 // registry using only native provider implementations, with no dependency on embedded JSON.
 func ToolSpecsFromGoWire() []types.ToolSpec {
 	return buildGoWireToolSpecsFromExportSpecsWithProvider(nil, nativeSpecFromGoProvider)
+}
+
+// DiscoverSkillsToolSpecFromEnv returns a model tool spec when CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME is set.
+// The tool name is taken from that env var; input schema matches the historical DiscoverSkills ToolDefinition.
+func DiscoverSkillsToolSpecFromEnv() (types.ToolSpec, bool) {
+	name := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME"))
+	if name == "" {
+		return types.ToolSpec{}, false
+	}
+	schema, err := json.Marshal(discoverSkillsInputSchemaObject())
+	if err != nil {
+		return types.ToolSpec{}, false
+	}
+	return types.ToolSpec{
+		Name:            name,
+		Description:     "Search and discover skills relevant to the current task when surfaced skills are insufficient.",
+		InputJSONSchema: schema,
+	}, true
+}
+
+func discoverSkillsInputSchemaObject() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"description": map[string]any{
+				"type":        "string",
+				"description": "Specific description of what you are doing or need skills for",
+			},
+		},
+		"required": []string{"description"},
+	}
 }
