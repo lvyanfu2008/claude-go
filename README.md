@@ -4,7 +4,7 @@ Go mirror of the Claude Code / engine paths: `ccb-engine`, `toolexecution`, `gou
 
 ## `tools_api.json` (tool `input_schema` / Zod → API)
 
-Embedded at [`commands/data/tools_api.json`](commands/data/tools_api.json) via [`commands/tools_api_embed.go`](commands/tools_api_embed.go). Built-in tool shapes used by `anthropic.mustExportInputSchema` / `InputSchemaFromTSAPIExport` must match this file.
+Embedded at [`commands/data/tools_api.json`](commands/data/tools_api.json) via [`commands/tools_api_embed.go`](commands/tools_api_embed.go) — the TypeScript `toolToAPISchema` / Zod export, kept in sync with [`toolpool` go wire](toolpool/go_tool_wire.go) (`InputJSONSchema` from [`ToolSpecsFromGoWire`]). `anthropic.mustExportInputSchema` / `InputSchemaFromTSAPIExport` read **from that Go wire registry**, not from the JSON file at runtime; periodically **`bun run export:tools-registry`** in `claude-code` and copy here so the embed and native Go specs do not drift from TS.
 
 **Regenerate from `claude-code` and install into `claude-go`:**
 

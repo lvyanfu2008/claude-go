@@ -25,7 +25,8 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 	return anthropic.GouDemoDefaultToolsJSON()
 }
 
-// GouDemoParityToolsJSON returns tools[] from embedded tools_api.json (TS export) + echo_stub, same as GOU_DEMO_USE_EMBEDDED_TOOLS_API=1.
+// GouDemoParityToolsJSON returns tools[] from the Go tool wire (AssembleToolPoolFromGoWire), agent listing patch, optional
+// DiscoverSkills when CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME is set, and default stub tools — see [anthropic.GouParityToolsJSON].
 func GouDemoParityToolsJSON() (json.RawMessage, error) {
 	return anthropic.GouParityToolsJSON()
 }

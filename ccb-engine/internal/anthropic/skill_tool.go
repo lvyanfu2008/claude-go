@@ -58,8 +58,8 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 	return json.Marshal(GouDemoDefaultTools())
 }
 
-// GouParityToolsJSON returns the same tools[] shape as gou-demo with GOU_DEMO_USE_EMBEDDED_TOOLS_API=1:
-// Go wire tool pool + optional DiscoverSkills (see [toolpool.DiscoverSkillsToolSpecFromEnv]) + echo_stub for gou-demo / parity wiring.
+// GouParityToolsJSON returns model-facing tools[]: Go tool wire (see [toolpool.AssembleToolPoolFromGoWire]) + built-in
+// agent description patch, optional DiscoverSkills ([toolpool.DiscoverSkillsToolSpecFromEnv]), and [DefaultStubTools] stubs.
 func GouParityToolsJSON() (json.RawMessage, error) {
 	assembled, err := toolpool.AssembleToolPoolFromGoWire(types.EmptyToolPermissionContextData(), nil)
 	if err != nil {
