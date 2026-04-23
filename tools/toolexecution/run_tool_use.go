@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"goc/ccb-engine/localtools"
+	"goc/tools/localtools"
 	"goc/conversation-runtime/streamingtool"
 	"goc/types"
 )

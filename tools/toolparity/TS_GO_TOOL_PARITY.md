@@ -27,9 +27,9 @@ go run ./cmd/gen-tool-parity
 | Glob | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GlobFromJSON |
 | Grep | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GrepFromJSON |
 | ExitPlanMode | — | core | ExitPlanModeV2Tool | full | tools.ExitPlanModeFromJSON |
-| Read | — | core | Implementation has explicit TS parity gaps; see ccb-engine/localtools/filetool_parity.go | partial | localtools.ReadFromJSON |
-| Edit | — | core | Implementation has explicit TS parity gaps; see ccb-engine/localtools/filetool_parity.go | partial | localtools.EditFromJSON |
-| Write | — | core | Implementation has explicit TS parity gaps; see ccb-engine/localtools/filetool_parity.go | partial | localtools.WriteFromJSON |
+| Read | — | core | Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go | partial | localtools.ReadFromJSON |
+| Edit | — | core | Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go | partial | localtools.EditFromJSON |
+| Write | — | core | Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go | partial | localtools.WriteFromJSON |
 | NotebookEdit | — | core | — | full | tools.NotebookEditFromJSON |
 | WebFetch | — | core | — | full | tools.WebFetchFromJSON |
 | TodoWrite | — | core | — | full | tools.TodoWriteFromJSON |

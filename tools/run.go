@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"goc/ccb-engine/localtools"
+	"goc/tools/localtools"
 )
 
 func availableMCPServersFromEnv() []string {

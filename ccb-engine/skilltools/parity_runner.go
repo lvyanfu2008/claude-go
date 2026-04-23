@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/bashzog"
-	"goc/ccb-engine/localtools"
+	"goc/tools/localtools"
 	"goc/tools"
 )
 

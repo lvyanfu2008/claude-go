@@ -225,7 +225,7 @@ func readResultTranscriptLines(raw json.RawMessage) (hint, extra string) {
 	}
 }
 
-// grepStructuredOutput mirrors ccb-engine/localtools grep JSON shape.
+// grepStructuredOutput mirrors goc/tools/localtools grep JSON shape.
 type grepStructuredOutput struct {
 	Mode       string   `json:"mode,omitempty"`
 	NumFiles   int      `json:"numFiles"`

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"goc/ccb-engine/localtools"
+	"goc/tools/localtools"
 )
 
 func randomCellID() string {

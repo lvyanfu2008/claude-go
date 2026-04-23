@@ -12,7 +12,7 @@ Separately, **rule-based** checks (`checkRuleBasedPermissions` / whole-tool alwa
    When the model calls `REPL`, [`RunToolUseChan`](../../tools/toolexecution/run_tool_use.go) runs the usual pipeline: optional `QueryCanUseTool` → [`applyRuleBasedDecisionInRun`](../../tools/toolexecution/run_tool_use.go) (deny/ask from merged rules + Bash **1b** bypass on the **REPL** name/input) → **`ExecutionDeps.InvokeTool`** → [`ParityToolRunner.Run`](../../ccb-engine/skilltools/parity_runner.go) → [`runREPLTool`](../../ccb-engine/skilltools/parity_runner_repl.go).
 
 2. **Inner primitives (Read, Bash, …)**  
-   REPL execution dispatches inner tools via [`dispatchTool`](../../ccb-engine/skilltools/parity_runner.go) **without** re-entering `RunToolUseChan`. Those calls **do not** receive a second `QueryCanUseTool` / `applyRuleBasedDecisionInRun` pass at the toolexecution layer. Inner Bash still uses [`localtools.BashFromJSON`](../../ccb-engine/localtools/bash.go) and its own permission / sandbox behavior where implemented.
+   REPL execution dispatches inner tools via [`dispatchTool`](../../ccb-engine/skilltools/parity_runner.go) **without** re-entering `RunToolUseChan`. Those calls **do not** receive a second `QueryCanUseTool` / `applyRuleBasedDecisionInRun` pass at the toolexecution layer. Inner Bash still uses [`localtools.BashFromJSON`](../../tools/localtools/bash.go) and its own permission / sandbox behavior where implemented.
 
 3. **No TS auto-mode classifier in Go**  
    The Go stack does not implement the TS “auto mode classifier” or the **acceptEdits short-circuit** branch. There is therefore **nothing to exclude** `REPL` from in that layer; parity is “N/A / structural difference”, not a silent bypass of a missing step.
