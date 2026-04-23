@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/bashzog"
+	"goc/ccb-engine/diaglog"
 	"goc/commands"
 	"goc/commands/featuregates"
 	"goc/deferredtoolsdelta"
@@ -769,6 +770,37 @@ func nativeSkillToolSpec() types.ToolSpec {
 	}
 }
 
+// nativeWorkflowToolSpec mirrors claude-code-best/src/tools/WorkflowTool/WorkflowTool.ts inputSchema
+// (workflow required, args optional). Used for LLM tool schema parity with the TypeScript Zod shape.
+func nativeWorkflowToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"workflow": map[string]any{
+				"type":        "string",
+				"description": "Name of the workflow to execute",
+			},
+			"args": map[string]any{
+				"type":        "string",
+				"description": "Arguments to pass to the workflow",
+			},
+		},
+		"required":             []string{"workflow"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name: "workflow",
+		Description: `Use the Workflow tool to execute user-defined workflow scripts located in .claude/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks.
+
+Guidelines:
+- Specify the workflow name to execute (must match a file in .claude/workflows/)
+- Optionally pass arguments that the workflow can use
+- Workflows run in the context of the current project`,
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
 func nativeTaskOutputToolSpec() types.ToolSpec {
 	schema := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -861,8 +893,13 @@ func nativeAgentToolSpec() types.ToolSpec {
 	// tasks are not disabled and isForkSubagentEnabled() is false (forkSubagent.ts).
 	backgroundDisabled := utils.IsEnvTruthy("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS")
 	forkEnabled := commands.ForkSubagentEnabled(commands.GouDemoSystemOpts{})
-
-	if !backgroundDisabled && !forkEnabled {
+	includeRunInBackground := !backgroundDisabled && !forkEnabled
+	if utils.IsEnvTruthy("CLAUDE_CODE_GO_DEBUG_AGENT_TOOL_SCHEMA") {
+		diaglog.Line("[agent-tool-schema] CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=%q backgroundDisabled=%v forkEnabled=%v run_in_background_in_schema=%v",
+			strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS")),
+			backgroundDisabled, forkEnabled, includeRunInBackground)
+	}
+	if includeRunInBackground {
 		properties["run_in_background"] = map[string]any{
 			"type":        "boolean",
 			"description": "Set to true to run this agent in the background. You will be notified when it completes.",
@@ -1068,9 +1105,8 @@ func nativeCtxInspectToolSpec() types.ToolSpec {
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name: "CtxInspect",
-		Description: "Inspect the current context window contents and token usage. Shows token usage, message count, and a breakdown of what's consuming context space. " +
-			"\n\nUse this to understand your context budget before deciding whether to snip old messages or adjust your approach.",
+		Name:            "CtxInspect",
+		Description:     "Inspect the current conversation context. Shows token usage, message count, and a breakdown of what's consuming context space.\n\nUse this to understand your context budget before deciding whether to snip old messages or adjust your approach.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1097,7 +1133,7 @@ func nativeListPeersToolSpec() types.ToolSpec {
 
 	return types.ToolSpec{
 		Name:            "ListPeers",
-		Description:     "List connected peer sessions in the current workspace. Shows other Claude sessions that you can communicate with using the SendMessage tool." + builder.String(),
+		Description:     builder.String(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1121,7 +1157,8 @@ func nativeMonitorToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name: "Monitor",
-		Description: `Guidelines:
+		Description: `Use Monitor to start a long-running background process that streams output (watching logs, polling APIs, tailing files, etc.). The command runs in the background and you receive a notification when it exits. Use the Read tool with the output file path to check its output at any time.
+Guidelines:
 - Use Monitor for commands that produce ongoing streaming output: ` + "`tail -f`" + `, log watchers, file watchers, API polling loops, ` + "`watch`" + ` commands
 - Do NOT use Monitor for one-shot commands that finish quickly — use Bash for those
 - Do NOT use Monitor for commands that need interactive input — they will hang
@@ -1345,12 +1382,7 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "REPL":
 		return nativeEmptyObjectSchemaToolSpec("REPL", "Run command(s) in REPL mode."), true, nil
 	case "workflow":
-		return nativeEmptyObjectSchemaToolSpec("workflow", `Use the Workflow tool to execute user-defined workflow scripts located in .claude/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks.
-
-Guidelines:
-- Specify the workflow name to execute (must match a file in .claude/workflows/)
-- Optionally pass arguments that the workflow can use
-- Workflows run in the context of the current project`), true, nil
+		return nativeWorkflowToolSpec(), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions."), true, nil
 	case "Monitor":
