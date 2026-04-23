@@ -355,6 +355,26 @@ func IsTenguCoralFern() bool {
 	return DefaultManager().IsOn("coral_fern")
 }
 
+// IsTenguGlacier2xr mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_glacier_2xr', false) in
+// src/utils/toolSearch.ts (isDeferredToolsDeltaEnabled) and ToolSearchTool/prompt.ts (getToolLocationHint).
+// Checks live env first so behavior stays correct if variables are set after DefaultManager init.
+func IsTenguGlacier2xr() bool {
+	for _, envKey := range []string{
+		"CLAUDE_CODE_TENGU_GLACIER_2XR",
+		"CLAUDE_CODE_TENGU_TENGU_GLACIER_2XR",
+	} {
+		v := strings.TrimSpace(strings.ToLower(os.Getenv(envKey)))
+		if v == "1" || v == "true" || v == "yes" || v == "on" {
+			return true
+		}
+	}
+	m := DefaultManager()
+	if m.IsOn("tengu_glacier_2xr") {
+		return true
+	}
+	return m.IsOn("glacier_2xr")
+}
+
 // Init initializes the GrowthBook manager
 func Init(config ...Config) {
 	manager := DefaultManager()

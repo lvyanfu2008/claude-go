@@ -10,6 +10,7 @@ import (
 	"goc/ccb-engine/bashzog"
 	"goc/commands"
 	"goc/commands/featuregates"
+	"goc/deferredtoolsdelta"
 	"goc/tstenv"
 	"goc/types"
 	"goc/utils"
@@ -820,7 +821,7 @@ func nativeToolSearchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ToolSearch",
-		Description:     "Fetch schemas for deferred tools so they can be called. When you encounter tools that are not immediately available, use this to discover and load their schemas dynamically. Use \"select:<tool_name>\" for direct selection, or keywords to search for tools by functionality.",
+		Description:     deferredtoolsdelta.ToolSearchToolDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }

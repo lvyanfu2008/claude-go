@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/internal/anthropic"
-	"goc/commands/featuregates"
+	"goc/deferredtoolsdelta"
 	"goc/tstenv"
 )
 
@@ -22,10 +22,7 @@ type WireConfig struct {
 
 // deferredToolsDeltaEnabled mirrors isDeferredToolsDeltaEnabled (src/utils/toolSearch.ts).
 func deferredToolsDeltaEnabled() bool {
-	if featuregates.UserTypeAnt() {
-		return true
-	}
-	return envTruthy("CLAUDE_CODE_GO_DEFERRED_TOOLS_DELTA")
+	return deferredtoolsdelta.Enabled()
 }
 
 func isToolSearchToolAvailable(tools []anthropic.ToolDefinition) bool {

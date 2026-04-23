@@ -8,7 +8,8 @@
 //     so static tools_api.json aligns better with TS tool.prompt() description sizes.
 //   - Unsupported-model patterns beyond "haiku" are not read from Statsig.
 //   - deferred_tools_delta / getDeferredToolsDelta attachments are not synthesized here;
-//     use CLAUDE_CODE_GO_DEFERRED_TOOLS_DELTA=1 or USER_TYPE=ant to skip <available-deferred-tools> prepend only.
+//     use CLAUDE_CODE_GO_DEFERRED_TOOLS_DELTA=1, USER_TYPE=ant, or GrowthBook tengu_glacier_2xr (e.g. CLAUDE_CODE_TENGU_GLACIER_2XR=1)
+//     to match TS isDeferredToolsDeltaEnabled and skip <available-deferred-tools> prepend only.
 //   - isDeferredTool fork/Kairos/Brief branches are approximated via a static builtin map + mcp__ prefix.
 //
 // Gou-demo parity: when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1, tst-auto is treated as tst for wire tools[]
