@@ -60,9 +60,12 @@ func featureTeamMem() bool {
 	return truthy(os.Getenv("FEATURE_TEAMMEM"))
 }
 
-// FilterInjectedMemoryFiles mirrors filterInjectedMemoryFiles when GrowthBook flag is enabled via env.
+// FilterInjectedMemoryFiles mirrors filterInjectedMemoryFiles when memory prefetching is enabled.
+// Defaults to enabled to match TS behavior, can be disabled with CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX=1
 func FilterInjectedMemoryFiles(files []MemoryFileInfo) []MemoryFileInfo {
-	if !truthy(os.Getenv("CLAUDE_CODE_TENGU_MOTH_COPSE")) {
+	// Default to filtering (skip index) unless explicitly disabled
+	skipIndex := truthy(os.Getenv("CLAUDE_CODE_TENGU_MOTH_COPSE")) || !truthy(os.Getenv("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX"))
+	if !skipIndex {
 		return files
 	}
 	var out []MemoryFileInfo

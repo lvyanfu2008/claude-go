@@ -2,6 +2,7 @@ package toolpool
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"goc/commands/featuregates"
 	"goc/tstenv"
 	"goc/types"
+	"goc/utils"
 )
 
 type goWireToolEntry struct {
@@ -146,6 +148,44 @@ func nativeWriteToolSpec() types.ToolSpec {
 	}
 }
 
+// getPreReadInstruction mirrors the TypeScript getPreReadInstruction function
+func getPreReadInstruction() string {
+	return "\n- You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file. "
+}
+
+// getEditToolDescription generates the Edit tool description with dynamic prefix format
+func getEditToolDescription() string {
+	var prefixFormat string
+	if isCompactLinePrefixEnabled() {
+		prefixFormat = "line number + tab"
+	} else {
+		prefixFormat = "spaces + line number + arrow"
+	}
+	
+	var minimalUniquenessHint string
+	if os.Getenv("USER_TYPE") == "ant" {
+		minimalUniquenessHint = "\n- Use the smallest old_string that's clearly unique — usually 2-4 adjacent lines is sufficient. Avoid including 10+ lines of context when less uniquely identifies the target."
+	}
+	
+	return fmt.Sprintf(`Performs exact string replacements in files.
+
+Usage:%s- When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: %s. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
+- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
+- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
+- The edit will FAIL if `+"`old_string`"+` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `+"`replace_all`"+` to change every instance of `+"`old_string`"+`.%s
+- Use `+"`replace_all`"+` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance.`,
+		getPreReadInstruction(),
+		prefixFormat,
+		minimalUniquenessHint)
+}
+
+// isCompactLinePrefixEnabled mirrors the TypeScript isCompactLinePrefixEnabled function
+func isCompactLinePrefixEnabled() bool {
+	val := strings.ToLower(strings.TrimSpace(os.Getenv("TENGU_COMPACT_LINE_PREFIX_KILLSWITCH")))
+	truthy := val == "1" || val == "true" || val == "yes" || val == "on"
+	return !truthy
+}
+
 func nativeEditToolSpec() types.ToolSpec {
 	schema := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -174,7 +214,7 @@ func nativeEditToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Edit",
-		Description:     "Performs exact string replacements in files. When editing text, ensure you preserve the exact indentation (tabs/spaces) as it appears before. Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked. The edit will FAIL if old_string is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use replace_all to change every instance of old_string. Use replace_all for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance. If you want to create a new file, use the Write tool instead.",
+		Description:     getEditToolDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -786,37 +826,51 @@ func nativeToolSearchToolSpec() types.ToolSpec {
 }
 
 func nativeAgentToolSpec() types.ToolSpec {
-	schema := map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"type":    "object",
-		"properties": map[string]any{
-			"description": map[string]any{
-				"type":        "string",
-				"description": "A short (3-5 word) description of the task",
-			},
-			"prompt": map[string]any{
-				"type":        "string",
-				"description": "The task for the agent to perform",
-			},
-			"subagent_type": map[string]any{
-				"type":        "string",
-				"description": "The type of specialized agent to use for this task",
-			},
-			"model": map[string]any{
-				"type":        "string",
-				"description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.",
-				"enum":        []string{"sonnet", "opus", "haiku"},
-			},
-			"run_in_background": map[string]any{
-				"type":        "boolean",
-				"description": "Set to true to run this agent in the background. You will be notified when it completes.",
-			},
-			"isolation": map[string]any{
-				"type":        "string",
-				"description": "Isolation mode. \"worktree\" creates a temporary git worktree so the agent works on an isolated copy of the repo.",
-				"enum":        []string{"worktree"},
-			},
+	properties := map[string]any{
+		"description": map[string]any{
+			"type":        "string",
+			"description": "A short (3-5 word) description of the task",
 		},
+		"prompt": map[string]any{
+			"type":        "string",
+			"description": "The task for the agent to perform",
+		},
+		"subagent_type": map[string]any{
+			"type":        "string",
+			"description": "The type of specialized agent to use for this task",
+		},
+		"model": map[string]any{
+			"type":        "string",
+			"description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.",
+			"enum":        []string{"sonnet", "opus", "haiku"},
+		},
+		"isolation": map[string]any{
+			"type":        "string",
+			"description": "Isolation mode. \"worktree\" creates a temporary git worktree so the agent works on an isolated copy of the repo.",
+			"enum":        []string{"worktree"},
+		},
+		"cwd": map[string]any{
+			"type":        "string",
+			"description": "Absolute path to run the agent in. Overrides the working directory for all filesystem and shell operations within this agent. Mutually exclusive with isolation: \"worktree\".",
+		},
+	}
+	
+	// Conditionally add run_in_background parameter based on environment and feature flags
+	// This mirrors the TypeScript logic: include only if background tasks are not disabled and fork is not enabled
+	backgroundDisabled := utils.IsEnvTruthy("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS")
+	forkEnabled := featuregates.Feature("FORK_SUBAGENT")
+	
+	if !backgroundDisabled && !forkEnabled {
+		properties["run_in_background"] = map[string]any{
+			"type":        "boolean",
+			"description": "Set to true to run this agent in the background. You will be notified when it completes.",
+		}
+	}
+	
+	schema := map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"type":                 "object",
+		"properties":           properties,
 		"required":             []string{"description", "prompt"},
 		"additionalProperties": false,
 	}
@@ -1347,7 +1401,7 @@ var goWireBaseTools = []goWireToolEntry{
 	{Name: "workflow", Required: false, Enabled: alwaysEnabled},
 	{Name: "Sleep", Required: false, Enabled: alwaysEnabled},
 	{Name: "RemoteTrigger", Required: false, Enabled: func() bool { return featuregates.Feature("AGENT_TRIGGERS_REMOTE") }},
-	{Name: "Monitor", Required: false, Enabled: alwaysEnabled},
+	{Name: "Monitor", Required: false, Enabled: func() bool { return featuregates.Feature("MONITOR_TOOL") }},
 	{Name: "SendUserMessage", Required: false, Enabled: alwaysEnabled},
 	{Name: "SendUserFile", Required: false, Enabled: alwaysEnabled},
 	{Name: "PushNotification", Required: false, Enabled: alwaysEnabled},

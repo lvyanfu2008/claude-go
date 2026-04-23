@@ -87,9 +87,9 @@ func TestNativeAgentToolSpecSchemaAndDescription(t *testing.T) {
 		t.Fatalf("expected name 'Agent', got %q", spec.Name)
 	}
 	
-	// Verify description is the full description from agentToolDescription
-	if spec.Description != agentToolDescription {
-		t.Fatal("Agent spec description doesn't match agentToolDescription constant")
+	// Verify description is the full description from AgentToolDescription function
+	if spec.Description != AgentToolDescription() {
+		t.Fatal("Agent spec description doesn't match AgentToolDescription() function result")
 	}
 	
 	// Verify schema has required fields

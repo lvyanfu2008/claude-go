@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/debugpath"
+	"goc/utils"
 )
 
 // ClaudeConfigHome returns ~/.claude or CLAUDE_CONFIG_DIR (same as TS getClaudeConfigHomeDir).
@@ -32,8 +33,7 @@ func ManagedFilePath() string {
 
 // IsEnvTruthy matches TS isEnvTruthy for common true strings.
 func IsEnvTruthy(key string) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
+	return utils.IsEnvTruthy(key)
 }
 
 // DisablePolicySkillsEnv is CLAUDE_CODE_DISABLE_POLICY_SKILLS (skips managed *skills* dir only in TS — not managed /commands).

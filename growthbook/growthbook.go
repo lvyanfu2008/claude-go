@@ -350,6 +350,11 @@ func IsTenguHiveEvidence() bool {
 	return DefaultManager().IsOn("hive_evidence")
 }
 
+// IsTenguCoralFern returns true if the "tengu_coral_fern" flag is enabled
+func IsTenguCoralFern() bool {
+	return DefaultManager().IsOn("coral_fern")
+}
+
 // Init initializes the GrowthBook manager
 func Init(config ...Config) {
 	manager := DefaultManager()

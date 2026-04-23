@@ -211,9 +211,43 @@ func executeAgent(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession, 
 		MainLoopModel: tc.Options.MainLoopModel,
 	}
 
+	// Build system prompt components
+	systemPromptParts := []string{}
+	
+	// Add agent description (whenToUse)
+	if strings.TrimSpace(s.Description) != "" {
+		systemPromptParts = append(systemPromptParts, s.Description)
+	}
+	
+	// Add agent's custom system prompt
+	if strings.TrimSpace(s.SystemPrompt) != "" {
+		systemPromptParts = append(systemPromptParts, s.SystemPrompt)
+	}
+	
+	// Add critical system reminder if present
+	if strings.TrimSpace(s.CriticalSystemReminderExperimental) != "" {
+		systemPromptParts = append(systemPromptParts, s.CriticalSystemReminderExperimental)
+	}
+	
+	// Add skills information if present
+	if len(s.Skills) > 0 {
+		skillsText := "Available skills: " + strings.Join(s.Skills, ", ")
+		systemPromptParts = append(systemPromptParts, skillsText)
+	}
+	
+	// Add MCP server information if present
+	if len(s.AvailableMcpServers) > 0 {
+		mcpText := "Available MCP servers: " + strings.Join(s.AvailableMcpServers, ", ")
+		systemPromptParts = append(systemPromptParts, mcpText)
+		if len(s.RequiredMcpServers) > 0 {
+			requiredMcpText := "Required MCP servers for this agent: " + strings.Join(s.RequiredMcpServers, ", ")
+			systemPromptParts = append(systemPromptParts, requiredMcpText)
+		}
+	}
+	
 	qp := query.QueryParams{
 		Messages:        msgs,
-		SystemPrompt:    query.AsSystemPrompt([]string{s.Description}),
+		SystemPrompt:    query.AsSystemPrompt(systemPromptParts),
 		ToolUseContext:  tc,
 		QuerySource:     types.QuerySource("agent"),
 		StreamingParity: true,

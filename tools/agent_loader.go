@@ -57,13 +57,17 @@ func LoadAgentDefinitionsBuiltins() []AgentDefinition {
 	out := make([]AgentDefinition, 0, len(builtins))
 	for _, b := range builtins {
 		out = append(out, AgentDefinition{
-			AgentType:       b.AgentType,
-			WhenToUse:       b.WhenToUse,
-			Tools:           append([]string(nil), b.Tools...),
-			DisallowedTools: append([]string(nil), b.DisallowedTools...),
-			Source:          b.Source,
-			Model:           b.Model,
-			Background:      b.Background,
+			AgentType:                          b.AgentType,
+			WhenToUse:                          b.WhenToUse,
+			Tools:                              append([]string(nil), b.Tools...),
+			DisallowedTools:                    append([]string(nil), b.DisallowedTools...),
+			Source:                             b.Source,
+			Model:                              b.Model,
+			PermissionMode:                     b.PermissionMode,
+			Background:                         b.Background,
+			SystemPrompt:                       b.SystemPrompt,
+			OmitClaudeMd:                       b.OmitClaudeMd,
+			CriticalSystemReminderExperimental: b.CriticalSystemReminderExperimental,
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].AgentType < out[j].AgentType })
@@ -148,6 +152,13 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	case string:
 		background = strings.EqualFold(strings.TrimSpace(v), "true")
 	}
+	omitClaudeMd := false
+	switch v := fm["omitClaudeMd"].(type) {
+	case bool:
+		omitClaudeMd = v
+	case string:
+		omitClaudeMd = strings.EqualFold(strings.TrimSpace(v), "true")
+	}
 	iso, _ := fm["isolation"].(string)
 	iso = strings.TrimSpace(iso)
 	if iso != "" && iso != "worktree" && iso != "remote" {
@@ -160,20 +171,27 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	permMode, _ := fm["permissionMode"].(string)
 	permMode = strings.TrimSpace(permMode)
 	maxTurns := parsePositiveInt(fm["maxTurns"])
+	systemPrompt, _ := fm["systemPrompt"].(string)
+	systemPrompt = strings.TrimSpace(systemPrompt)
+	criticalReminder, _ := fm["criticalSystemReminder_EXPERIMENTAL"].(string)
+	criticalReminder = strings.TrimSpace(criticalReminder)
 
 	return AgentDefinition{
-		AgentType:          name,
-		WhenToUse:          desc,
-		Tools:              tools,
-		DisallowedTools:    disallowed,
-		Skills:             skills,
-		Source:             source,
-		Model:              model,
-		PermissionMode:     permMode,
-		MaxTurns:           maxTurns,
-		Background:         background,
-		Isolation:          iso,
-		RequiredMcpServers: requiredMcp,
+		AgentType:                          name,
+		WhenToUse:                          desc,
+		Tools:                              tools,
+		DisallowedTools:                    disallowed,
+		Skills:                             skills,
+		Source:                             source,
+		Model:                              model,
+		PermissionMode:                     permMode,
+		MaxTurns:                           maxTurns,
+		Background:                         background,
+		OmitClaudeMd:                       omitClaudeMd,
+		Isolation:                          iso,
+		RequiredMcpServers:                 requiredMcp,
+		SystemPrompt:                       systemPrompt,
+		CriticalSystemReminderExperimental: criticalReminder,
 	}, true, ""
 }
 

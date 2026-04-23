@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"goc/commands/featuregates"
+	"goc/growthbook"
 	"goc/modelenv"
 	"goc/types"
 )
@@ -32,11 +33,12 @@ type GouDemoSystemOpts struct {
 	ReplModeEnabled bool
 	// ExplorePlanAgentsEnabled mirrors areExplorePlanAgentsEnabled() when Agent is enabled.
 	ExplorePlanAgentsEnabled bool
-	// VerificationAgentGuidance mirrors feature VERIFICATION_AGENT + GrowthBook; Go enables via FEATURE_VERIFICATION_AGENT + CLAUDE_CODE_GO_VERIFICATION_AGENT_GUIDANCE=1.
+	// VerificationAgentGuidance mirrors feature VERIFICATION_AGENT + GrowthBook; Go enables via FEATURE_VERIFICATION_AGENT + tengu_hive_evidence GrowthBook flag.
 	VerificationAgentGuidance bool
 	// ScratchpadDir when non-empty appends # Scratchpad Directory (TS getScratchpadInstructions shape).
 	ScratchpadDir string
 	// MemorySkipIndex mirrors tengu_moth_copse (buildMemoryLines skipIndex) — shorter "How to save" without MEMORY.md index step.
+	// Defaults to true to match TS behavior where memories are prefetched via attachments instead of manual indexing.
 	MemorySkipIndex bool
 	// MemorySearchPastContext mirrors tengu_coral_fern buildSearchingPastContextSection.
 	MemorySearchPastContext bool
@@ -124,9 +126,12 @@ func ApplyGouDemoRuntimeEnv(o *GouDemoSystemOpts) {
 	o.UserTypeAnt = featuregates.UserTypeAnt()
 	o.ReplModeEnabled = GouDemoReplModeFromEnv()
 	o.ExplorePlanAgentsEnabled = GouDemoExplorePlanAgentsFromEnv()
-	o.VerificationAgentGuidance = featuregates.Feature("VERIFICATION_AGENT") && envTruthyGo("CLAUDE_CODE_GO_VERIFICATION_AGENT_GUIDANCE")
-	o.MemorySkipIndex = featuregates.Feature("MOTH_COPSE")
-	o.MemorySearchPastContext = featuregates.Feature("CORAL_FERN") || envTruthyGo("CLAUDE_CODE_GO_MEMORY_SEARCH_PAST_CONTEXT")
+	o.VerificationAgentGuidance = featuregates.Feature("VERIFICATION_AGENT") && growthBookTenguHiveEvidence()
+	// Default to true to match TypeScript behavior where tengu_moth_copse defaults to true
+	// This skips the manual MEMORY.md maintenance instruction since memory files are 
+	// prefetched via attachments instead
+	o.MemorySkipIndex = featuregates.Feature("MOTH_COPSE") || !envTruthyGo("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX")
+	o.MemorySearchPastContext = growthbook.IsTenguCoralFern() || featuregates.Feature("CORAL_FERN") || envTruthyGo("CLAUDE_CODE_GO_MEMORY_SEARCH_PAST_CONTEXT")
 	o.KairosActive = envTruthyGo("CLAUDE_CODE_GO_KAIROS_ACTIVE")
 	o.UserMsgOptIn = envTruthyGo("CLAUDE_CODE_GO_USER_MSG_OPT_IN")
 	o.CoordinatorMode = envTruthyGo("CLAUDE_CODE_GO_COORDINATOR_MODE")
@@ -406,4 +411,10 @@ func OutputStyleSection(name, prompt string) string {
 		return ""
 	}
 	return fmt.Sprintf("# Output Style: %s\n%s", strings.TrimSpace(name), strings.TrimSpace(prompt))
+}
+
+// growthBookTenguHiveEvidence checks if the tengu_hive_evidence GrowthBook flag is enabled
+// This mirrors the TypeScript side's GrowthBook feature check
+func growthBookTenguHiveEvidence() bool {
+	return growthbook.IsTenguHiveEvidence()
 }

@@ -78,6 +78,10 @@ func ResolveBundledSkill(cmd types.Command, args, sessionID string, opt *Bundled
 		res = resolveClaudeInChrome(args)
 	case "skillify":
 		res, err = resolveSkillifyBundled(args, opt.SessionMemory, opt.UserMessages)
+	case "cron-list":
+		res = resolveCronList(args)
+	case "cron-delete":
+		res, err = resolveCronDelete(args)
 	default:
 		res, err = resolveDefaultBundledEmbed(cmd.Name, args)
 	}
@@ -174,4 +178,33 @@ func resolveSkillifyBundled(args, sessionMem string, userMsgs []string) (types.S
 		out += "\n\n## User description\n\n" + ub
 	}
 	return types.SlashResolveResult{UserText: out, Source: types.SlashResolveBundledEmbed}, nil
+}
+
+// resolveCronList mirrors registerCronListSkill getPromptForCommand in src/skills/bundled/cronManage.ts
+func resolveCronList(args string) types.SlashResolveResult {
+	text := "Call CronList to list all scheduled cron jobs. Display the results in a table with columns: ID, Schedule, Prompt, Recurring, Durable. If no jobs exist, say \"No scheduled tasks.\""
+	if argsText := strings.TrimSpace(args); argsText != "" {
+		text = appendUserSection(text, argsText)
+	}
+	return types.SlashResolveResult{
+		UserText: text,
+		Source:   types.SlashResolveBundledEmbed,
+	}
+}
+
+// resolveCronDelete mirrors registerCronDeleteSkill getPromptForCommand in src/skills/bundled/cronManage.ts
+func resolveCronDelete(args string) (types.SlashResolveResult, error) {
+	id := strings.TrimSpace(args)
+	if id == "" {
+		text := "Usage: /cron-delete <job-id>\n\nProvide the job ID to cancel. Use /cron-list to see active jobs and their IDs."
+		return types.SlashResolveResult{
+			UserText: text,
+			Source:   types.SlashResolveBundledEmbed,
+		}, nil
+	}
+	text := fmt.Sprintf("Call CronDelete with id \"%s\" to cancel that scheduled job. Confirm the result to the user.", id)
+	return types.SlashResolveResult{
+		UserText: text,
+		Source:   types.SlashResolveBundledEmbed,
+	}, nil
 }

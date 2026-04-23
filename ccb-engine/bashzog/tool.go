@@ -2,8 +2,10 @@ package bashzog
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 
+	"goc/commands/featuregates"
 	"goc/types"
 )
 
@@ -68,6 +70,36 @@ func LoadAPIData() (APIData, error) {
 	}, nil
 }
 
+// addMonitorToolDescriptionToBashPrompt modifies the Bash tool description to include Monitor tool information
+// when MONITOR_TOOL feature is enabled, mirroring TypeScript behavior from prompt.ts
+func addMonitorToolDescriptionToBashPrompt(description string) string {
+	if !featuregates.Feature("MONITOR_TOOL") {
+		return description
+	}
+
+	// Find the position where we need to insert Monitor tool information
+	// Looking for the sleep section that starts with "Do not sleep between commands..."
+	sleepSectionStart := "  - Do not sleep between commands that can run immediately — just run them."
+	
+	if !strings.Contains(description, sleepSectionStart) {
+		// If we can't find the expected structure, return as-is
+		return description
+	}
+
+	// Add Monitor tool description after the first sleep bullet point
+	monitorInstruction := "\n  - Use the Monitor tool to stream events from a background process (each stdout line is a notification). For one-shot \"wait until done,\" use Bash with run_in_background instead."
+	
+	// Replace the first sleep instruction with itself plus the monitor instruction
+	modifiedDescription := strings.Replace(
+		description,
+		sleepSectionStart,
+		sleepSectionStart + monitorInstruction,
+		1,
+	)
+
+	return modifiedDescription
+}
+
 // BashToolSpec returns a [types.ToolSpec] using the embedded snapshot’s name (always "Bash" today),
 // description, and input_schema. Prefer [BashZogToolSpec] when wiring the Zog-specific tool row.
 func BashToolSpec() (types.ToolSpec, error) {
@@ -75,9 +107,12 @@ func BashToolSpec() (types.ToolSpec, error) {
 	if err != nil {
 		return types.ToolSpec{}, err
 	}
+	// Apply Monitor tool description modifications if feature is enabled
+	description := addMonitorToolDescriptionToBashPrompt(d.Description)
+	
 	return types.ToolSpec{
 		Name:            d.Name,
-		Description:     d.Description,
+		Description:     description,
 		InputJSONSchema: append(json.RawMessage(nil), d.InputSchemaRaw...),
 	}, nil
 }
@@ -89,9 +124,12 @@ func BashZogToolSpec() (types.ToolSpec, error) {
 	if err != nil {
 		return types.ToolSpec{}, err
 	}
+	// Apply Monitor tool description modifications if feature is enabled
+	description := addMonitorToolDescriptionToBashPrompt(d.Description)
+	
 	return types.ToolSpec{
 		Name:            ZogToolName,
-		Description:     d.Description,
+		Description:     description,
 		InputJSONSchema: append(json.RawMessage(nil), d.InputSchemaRaw...),
 	}, nil
 }

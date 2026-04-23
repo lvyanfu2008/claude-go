@@ -112,13 +112,53 @@ func ResolveAllowedTools(a AgentDefinition, available []string) []string {
 		deny[t] = struct{}{}
 	}
 	if len(a.Tools) > 0 {
-		var out []string
+		// Check if tools contains wildcard "*"
+		hasWildcard := false
 		for _, t := range a.Tools {
-			if _, blocked := deny[t]; !blocked {
-				out = append(out, t)
+			if strings.TrimSpace(t) == "*" {
+				hasWildcard = true
+				break
 			}
 		}
-		return out
+		
+		if hasWildcard {
+			// Wildcard means all available tools except disallowed
+			var out []string
+			for _, t := range available {
+				if _, blocked := deny[t]; !blocked {
+					out = append(out, t)
+				}
+			}
+			// Also include any explicitly listed tools (non-wildcard)
+			for _, t := range a.Tools {
+				t = strings.TrimSpace(t)
+				if t != "*" && t != "" {
+					if _, blocked := deny[t]; !blocked {
+						// Add if not already included
+						found := false
+						for _, existing := range out {
+							if existing == t {
+								found = true
+								break
+							}
+						}
+						if !found {
+							out = append(out, t)
+						}
+					}
+				}
+			}
+			return out
+		} else {
+			// No wildcard, only include explicitly listed tools
+			var out []string
+			for _, t := range a.Tools {
+				if _, blocked := deny[t]; !blocked {
+					out = append(out, t)
+				}
+			}
+			return out
+		}
 	}
 	var out []string
 	for _, t := range available {
