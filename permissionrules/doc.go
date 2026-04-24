@@ -3,6 +3,7 @@
 //   - getMcpPrefix, buildMcpToolName, mcpInfoFromString, getToolNameForPermissionCheck — src/services/mcp/mcpStringUtils.ts
 //   - normalizeNameForMCP — src/services/mcp/normalization.ts
 //   - getDenyRules, getAskRules, toolMatchesRule, getDenyRuleForTool, getAskRuleForTool — src/utils/permissions/permissions.ts
+//   - getDenyRuleForAgent, filterDeniedAgents — src/utils/permissions/permissions.ts (Agent(AgentName) alwaysDeny)
 //   - filterToolsByDenyRules — src/tools.ts (via FilterToolsByDenyRules)
 //
 // Go export names use PascalCase; behavior is intended to match the cited TS at each step.

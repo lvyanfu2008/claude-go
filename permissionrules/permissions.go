@@ -2,6 +2,7 @@ package permissionrules
 
 import (
 	"encoding/json"
+	"strings"
 
 	"goc/types"
 )
@@ -106,6 +107,75 @@ func GetDenyRuleForTool(ctx types.ToolPermissionContextData, tool types.ToolSpec
 		}
 	}
 	return nil
+}
+
+// GetDenyRuleForAgent mirrors getDenyRuleForAgent in src/utils/permissions/permissions.ts.
+// For example, alwaysDeny "Agent(Explore)" denies the Explore subagent. Compares agent types
+// with [strings.EqualFold] so "explore" matches "Explore".
+func GetDenyRuleForAgent(
+	ctx types.ToolPermissionContextData,
+	agentToolName string,
+	agentType string,
+) *PermissionRule {
+	agentToolName = NormalizeLegacyToolName(agentToolName)
+	for _, rule := range GetDenyRules(ctx) {
+		if rule.RuleValue.ToolName != agentToolName {
+			continue
+		}
+		if rule.RuleValue.RuleContent == nil {
+			continue
+		}
+		if strings.EqualFold(*rule.RuleValue.RuleContent, agentType) {
+			r := rule
+			return &r
+		}
+	}
+	return nil
+}
+
+// FilterDeniedAgents mirrors filterDeniedAgents in src/utils/permissions/permissions.ts
+// (agents with agentType denied via Agent(AgentName) in alwaysDeny are removed).
+func FilterDeniedAgents[T any](
+	agents []T,
+	getAgentType func(T) string,
+	ctx types.ToolPermissionContextData,
+	agentToolName string,
+) []T {
+	agentToolName = NormalizeLegacyToolName(agentToolName)
+	denied := make(map[string]struct{})
+	for _, rule := range GetDenyRules(ctx) {
+		if rule.RuleValue.ToolName != agentToolName {
+			continue
+		}
+		if rule.RuleValue.RuleContent == nil {
+			continue
+		}
+		denied[*rule.RuleValue.RuleContent] = struct{}{}
+	}
+	if len(denied) == 0 {
+		return append([]T(nil), agents...)
+	}
+	out := make([]T, 0, len(agents))
+	for _, a := range agents {
+		t := getAgentType(a)
+		if isAgentTypeDeniedSet(denied, t) {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+func isAgentTypeDeniedSet(denied map[string]struct{}, agentType string) bool {
+	if agentType == "" {
+		return false
+	}
+	for k := range denied {
+		if strings.EqualFold(k, agentType) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetAskRuleForTool mirrors getAskRuleForTool in src/utils/permissions/permissions.ts.

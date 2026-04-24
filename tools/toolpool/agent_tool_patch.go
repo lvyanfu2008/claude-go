@@ -4,23 +4,38 @@ import (
 	"strings"
 
 	"goc/agents/builtin"
+	"goc/permissionrules"
 	"goc/types"
 )
 
 const agentListingAnchor = "Available agent types and the tools they have access to:"
 const agentListingTail = "When using the Agent tool"
 
-// PatchAgentToolDescriptionWithBuiltins fills the empty agent list in the embedded tools_api.json
-// Agent.description (export often omits dynamic lines). Mirrors TS getPrompt when
-// shouldInjectAgentListInMessages() is false — formatAgentLine for each built-in agent.
+// PatchAgentToolDescriptionWithBuiltins is [PatchAgentToolDescriptionWithPermission] with an empty
+// permission context (no per-agent alwaysDeny filtering).
 func PatchAgentToolDescriptionWithBuiltins(specs []types.ToolSpec, agents []builtin.BuiltinAgent) []types.ToolSpec {
+	return PatchAgentToolDescriptionWithPermission(specs, agents, types.EmptyToolPermissionContextData())
+}
+
+// PatchAgentToolDescriptionWithPermission fills the empty agent list in the embedded tools_api.json
+// Agent.description. Built-in rows are filtered with [permissionrules.FilterDeniedAgents] (TS filterDeniedAgents)
+// before [builtin.FormatAgentLine] injection.
+func PatchAgentToolDescriptionWithPermission(
+	specs []types.ToolSpec,
+	agents []builtin.BuiltinAgent,
+	perm types.ToolPermissionContextData,
+) []types.ToolSpec {
 	if len(agents) == 0 {
+		return specs
+	}
+	filtered := permissionrules.FilterDeniedAgents(agents, func(a builtin.BuiltinAgent) string { return a.AgentType }, perm, "Agent")
+	if len(filtered) == 0 {
 		return specs
 	}
 	out := append([]types.ToolSpec(nil), specs...)
 	var lines []string
-	for i := range agents {
-		lines = append(lines, builtin.FormatAgentLine(agents[i]))
+	for i := range filtered {
+		lines = append(lines, builtin.FormatAgentLine(filtered[i]))
 	}
 	block := strings.Join(lines, "\n")
 	for i := range out {

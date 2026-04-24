@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"goc/permissionrules"
 	"goc/types"
@@ -77,6 +78,27 @@ func wholeToolAlwaysDenyAsk(toolName string, input json.RawMessage, perm *types.
 	if dr := permissionrules.GetDenyRuleForTool(pc, spec); dr != nil {
 		d := DenyDecision(fmt.Sprintf("Permission to use %s has been denied.", toolName))
 		return &d
+	}
+	// Per-subagent alwaysDeny, e.g. alwaysDenyRules Agent(Explore) (mirrors getDenyRuleForAgent; resumeAgent.ts skips re-gating).
+	if strings.EqualFold(toolName, "Agent") && len(input) > 0 {
+		var partial struct {
+			Resume       string `json:"resume"`
+			SubagentType string `json:"subagent_type"`
+		}
+		_ = json.Unmarshal(input, &partial)
+		if strings.TrimSpace(partial.Resume) == "" {
+			effective := strings.TrimSpace(partial.SubagentType)
+			if effective == "" {
+				effective = "general-purpose"
+			}
+			if r := permissionrules.GetDenyRuleForAgent(pc, "Agent", effective); r != nil {
+				d := DenyDecision(fmt.Sprintf(
+					"Agent type %q has been denied by permission rule %q from %s.",
+					effective, fmt.Sprintf("Agent(%s)", effective), r.Source,
+				))
+				return &d
+			}
+		}
 	}
 	if ar := permissionrules.GetAskRuleForTool(pc, spec); ar != nil {
 		_ = ar

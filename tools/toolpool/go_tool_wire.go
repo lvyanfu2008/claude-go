@@ -859,6 +859,10 @@ func nativeToolSearchToolSpec() types.ToolSpec {
 }
 
 func nativeAgentToolSpec() types.ToolSpec {
+	// mode enum mirrors src/types/permissions.ts PERMISSION_MODES (AgentTool fullInputSchema).
+	permissionModes := []any{
+		"acceptEdits", "bypassPermissions", "default", "dontAsk", "plan", "auto",
+	}
 	properties := map[string]any{
 		"description": map[string]any{
 			"type":        "string",
@@ -877,15 +881,31 @@ func nativeAgentToolSpec() types.ToolSpec {
 			"description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.",
 			"enum":        []string{"sonnet", "opus", "haiku"},
 		},
+		"name": map[string]any{
+			"type":        "string",
+			"description": "Name for the spawned agent. Makes it addressable via SendMessage({to: name}) while running.",
+		},
+		"team_name": map[string]any{
+			"type":        "string",
+			"description": "Team name for spawning. Uses current team context if omitted.",
+		},
+		"mode": map[string]any{
+			"type":        "string",
+			"description": `Permission mode for spawned teammate (e.g., "plan" to require plan approval).`,
+			"enum":        permissionModes,
+		},
 		"isolation": map[string]any{
 			"type":        "string",
 			"description": "Isolation mode. \"worktree\" creates a temporary git worktree so the agent works on an isolated copy of the repo.",
 			"enum":        []string{"worktree"},
 		},
-		"cwd": map[string]any{
+	}
+	// TS AgentTool: fullInputSchema().omit({ cwd: true }) unless feature('KAIROS').
+	if featuregates.Feature("KAIROS") {
+		properties["cwd"] = map[string]any{
 			"type":        "string",
 			"description": "Absolute path to run the agent in. Overrides the working directory for all filesystem and shell operations within this agent. Mutually exclusive with isolation: \"worktree\".",
-		},
+		}
 	}
 
 	// Conditionally add run_in_background parameter based on environment and feature flags.

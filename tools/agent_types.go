@@ -9,7 +9,10 @@ type AgentToolInput struct {
 	Model           string `json:"model,omitempty"`
 	RunInBackground bool   `json:"run_in_background,omitempty"`
 	Isolation       string `json:"isolation,omitempty"`
+	Cwd             string `json:"cwd,omitempty"`
 	Name            string `json:"name,omitempty"`
+	TeamName        string `json:"team_name,omitempty"`
+	Mode            string `json:"mode,omitempty"`
 	Resume          string `json:"resume,omitempty"`
 }
 
@@ -42,6 +45,7 @@ type AgentDefinition struct {
 type AgentSession struct {
 	ID                                 string    `json:"id"`
 	Name                               string    `json:"name,omitempty"`
+	TeamName                           string    `json:"teamName,omitempty"`
 	AgentType                          string    `json:"agentType"`
 	Description                        string    `json:"description"`
 	Model                              string    `json:"model,omitempty"`

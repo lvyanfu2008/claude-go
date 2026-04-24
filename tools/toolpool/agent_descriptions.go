@@ -3,6 +3,8 @@ package toolpool
 import (
 	"goc/agents/builtin"
 	"goc/commands"
+	"goc/permissionrules"
+	"goc/types"
 )
 
 // AgentInfo holds information about an agent for description formatting
@@ -37,10 +39,18 @@ func agentInfosFromBuiltins(agents []builtin.BuiltinAgent) []AgentInfo {
 }
 
 // AgentToolDescription returns the full description with comprehensive usage guidance.
-// Builtin rows come from GetBuiltInAgents(ConfigFromEnv(), empty GuideContext), consistent
-// with runtime agent loading; prompt body is built in this package (no tools.init side effect).
+// It is [AgentToolDescriptionWithPermission] with an empty [types.ToolPermissionContextData].
+// Builtin rows are filtered the same way as in TS (filterDeniedAgents) when permission is non-empty
+// via [AgentToolDescriptionWithPermission].
 func AgentToolDescription() string {
+	return AgentToolDescriptionWithPermission(types.EmptyToolPermissionContextData())
+}
+
+// AgentToolDescriptionWithPermission returns the native Agent tool description, omitting
+// subagent types that alwaysDeny (e.g. Agent(Explore)) from the list — mirrors filterDeniedAgents in TS.
+func AgentToolDescriptionWithPermission(perm types.ToolPermissionContextData) string {
 	infos := agentInfosFromBuiltins(builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}))
+	infos = permissionrules.FilterDeniedAgents(infos, func(a AgentInfo) string { return a.AgentType }, perm, "Agent")
 	opts := AgentPromptOptions{
 		IsForkEnabled:     commands.ForkSubagentEnabled(commands.GouDemoSystemOpts{}),
 		HasEmbeddedSearch: !EmbeddedSearchToolsActive(),

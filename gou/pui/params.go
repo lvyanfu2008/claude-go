@@ -73,6 +73,9 @@ type DemoConfig struct {
 	PreExpansionInput *string `json:"-"`
 	// PermissionMode optional; when non-nil, sets [processuserinput.ProcessUserInputParams.PermissionMode] (TS toolPermissionContext.mode).
 	PermissionMode *types.PermissionMode `json:"-"`
+	// ToolPermissionContext optional merged alwaysDeny/alwaysAsk (TS appState.toolPermissionContext); when set, filters Agent tool
+	// listing in [toolpool.PatchAgentToolDescriptionWithPermission] (filterDeniedAgents parity).
+	ToolPermissionContext *types.ToolPermissionContextData `json:"-"`
 }
 
 // BuildDemoParams builds params for gou-demo: prompt mode, skip attachments, minimal ToolUseContext.
@@ -159,6 +162,10 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 	useExport := cfg.UseEmbeddedToolsAPI || isEnvOn(os.Getenv("GOU_DEMO_USE_EMBEDDED_TOOLS_API"))
 	if useExport {
 		permCtx := types.EmptyToolPermissionContextData()
+		if cfg.ToolPermissionContext != nil {
+			permCtx = *cfg.ToolPermissionContext
+			types.NormalizeToolPermissionContextData(&permCtx)
+		}
 		var mcpToolSpecs []types.ToolSpec
 		toolsPath := strings.TrimSpace(cfg.MCPToolsJSONPath)
 		if toolsPath == "" {
@@ -175,7 +182,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		if errA != nil {
 			return nil, errA
 		}
-		assembled = toolpool.PatchAgentToolDescriptionWithBuiltins(assembled, builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}))
+		assembled = toolpool.PatchAgentToolDescriptionWithPermission(assembled, builtin.GetBuiltInAgents(builtin.ConfigFromEnv(), builtin.GuideContext{}), permCtx)
 		toolSchemaOpts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
 		toolSchemaOpts.Model = model
 		toolsRaw, errTools = toolpool.MarshalToolsAPIDocumentDefinitionsWithOptions(assembled, toolSchemaOpts)
@@ -200,6 +207,11 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 	perm := types.PermissionDefault
 	if cfg.PermissionMode != nil && *cfg.PermissionMode != "" {
 		perm = *cfg.PermissionMode
+	}
+	if cfg.ToolPermissionContext != nil {
+		tpc := *cfg.ToolPermissionContext
+		types.NormalizeToolPermissionContextData(&tpc)
+		rc.ToolPermissionContext = &tpc
 	}
 	out := &processuserinput.ProcessUserInputParams{
 		Input:                raw,

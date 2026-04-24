@@ -5,11 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 func getenv(k string) string { return os.Getenv(k) }
+
+// resolveAgentWorkDirFromCwd mirrors TS: cwd must be an absolute path to a directory
+// (mutually exclusive with isolation "worktree" / "remote" — checked in [RunAgentTool]).
+func resolveAgentWorkDirFromCwd(cwd string) (string, error) {
+	clean := filepath.Clean(strings.TrimSpace(cwd))
+	if clean == "" || clean == "." {
+		return "", fmt.Errorf("cwd is empty")
+	}
+	if !filepath.IsAbs(clean) {
+		return "", fmt.Errorf("cwd must be an absolute path, got %q", cwd)
+	}
+	st, err := os.Stat(clean)
+	if err != nil {
+		return "", fmt.Errorf("cwd: %w", err)
+	}
+	if !st.IsDir() {
+		return "", fmt.Errorf("cwd is not a directory: %q", clean)
+	}
+	return clean, nil
+}
 
 func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	var in AgentToolInput
@@ -43,13 +64,18 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	if name == "" {
 		name = strings.ToLower(strings.TrimSpace(selected.AgentType))
 	}
+	pm := selected.PermissionMode
+	if m := strings.TrimSpace(in.Mode); m != "" {
+		pm = m
+	}
 	s := &AgentSession{
 		ID:                                 agentID,
 		Name:                               name,
+		TeamName:                           strings.TrimSpace(in.TeamName),
 		AgentType:                          selected.AgentType,
 		Description:                        strings.TrimSpace(in.Description),
 		Model:                              model,
-		PermissionMode:                     selected.PermissionMode,
+		PermissionMode:                     pm,
 		MaxTurns:                           selected.MaxTurns,
 		AllowedTools:                       ResolveAllowedTools(selected, availableAgentToolNames()),
 		Skills:                             append([]string(nil), selected.Skills...),
@@ -70,6 +96,16 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	}
 	if s.Isolation == "" {
 		s.Isolation = strings.TrimSpace(selected.Isolation)
+	}
+
+	cwdTrim := strings.TrimSpace(in.Cwd)
+	if cwdTrim != "" {
+		if s.Isolation == "worktree" {
+			return "", true, fmt.Errorf("cwd is mutually exclusive with isolation %q", "worktree")
+		}
+		if s.Isolation == "remote" {
+			return "", true, fmt.Errorf("cwd is mutually exclusive with isolation %q", "remote")
+		}
 	}
 
 	switch s.Isolation {
@@ -95,6 +131,14 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		}
 	default:
 		return "", true, fmt.Errorf("unsupported isolation %q", s.Isolation)
+	}
+
+	if s.Isolation != "worktree" && cwdTrim != "" {
+		abs, err := resolveAgentWorkDirFromCwd(cwdTrim)
+		if err != nil {
+			return "", true, err
+		}
+		s.WorkDir = abs
 	}
 
 	agentSessionsMu.Lock()
