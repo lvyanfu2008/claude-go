@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"goc/gou/pui"
 	"goc/modelenv"
 	"goc/types"
 )
@@ -100,13 +99,8 @@ func (m *model) builtinStatusLineView() string {
 	if gouDemoBuiltinStatusLineDisabled() || m.uiScreen == gouDemoScreenTranscript {
 		return ""
 	}
-	modelName := strings.TrimSpace(m.lastMainLoopModel)
-	if modelName == "" {
-		modelName = modelenv.FirstNonEmpty()
-	}
-	if modelName == "" {
-		modelName = pui.DefaultMainLoopModelForDemo()
-	}
+	// Match next API turn ([pui.BuildDemoParams] /model chain); not only last query snapshot.
+	modelName := modelenv.EffectiveMainLoopModel()
 	used := m.effectiveUsedTokens()
 	win := defaultContextWindowForModel(modelName)
 	pct := 0

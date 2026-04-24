@@ -300,6 +300,12 @@ func segmentsFromContentArray(msg types.Message, opts *RenderOpts) []Segment {
 	}
 	var blocks []types.MessageContentBlock
 	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
+		// System/informational rows often store Content as a JSON string (json.Marshal(text)),
+		// not a content block array — unwrap so newlines render as real line breaks.
+		var plain string
+		if err2 := json.Unmarshal(msg.Content, &plain); err2 == nil && plain != "" {
+			return []Segment{{Kind: SegTextMarkdown, Text: plain}}
+		}
 		return []Segment{{Kind: SegTextMarkdown, Text: string(msg.Content)}}
 	}
 	if len(blocks) == 0 {

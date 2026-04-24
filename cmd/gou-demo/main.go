@@ -388,6 +388,21 @@ func gouDemoPreferQueryStreamingParity() bool {
 	return query.StreamingParityPathEnabled(cfg)
 }
 
+// gouDemoQueryMainLoopModel is the model id for HTTP streaming parity + ParityToolRunner.
+// /model sets CLAUDE_CODE_MODEL in-process; that must override ToolUseContext.Options from
+// [pui.BuildDemoParams] when they disagree (otherwise the API keeps an older id).
+func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string {
+	if cm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MODEL")); cm != "" {
+		return cm
+	}
+	if params != nil && params.RuntimeContext != nil {
+		if m := strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel); m != "" {
+			return m
+		}
+	}
+	return modelenv.EffectiveMainLoopModel()
+}
+
 // gouDemoUserContextMapForQuery copies live user context for [query.PrependUserContext].
 // Values must be raw (no <system-reminder> wrapper): TS prependUserContext wraps once per #key/value.
 // Do not pass [querycontext.FormatUserContextReminder] here — that string is already wrapped for ccbhydrate lead-in only.
@@ -516,6 +531,8 @@ type model struct {
 	slashPick         *slashPickerOverlay
 	slashCommands     []types.Command
 	slashCommandsOnce bool
+	// slashResultPanel is local slash text output shown below the input until Esc (prompt screen only).
+	slashResultPanel *string
 
 	scrollTop    int
 	pendingDelta int
@@ -733,10 +750,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		FileHistorySnapshotOnce: fhSnap && !fhEachUser,
 	}
 
-	lm := strings.TrimSpace(modelenv.FirstNonEmpty())
-	if lm == "" {
-		lm = pui.DefaultMainLoopModelForDemo()
-	}
+	lm := modelenv.EffectiveMainLoopModel()
 	return &model{
 		store:               st,
 		pr:                  pr,
@@ -829,7 +843,9 @@ func promptAboveInputRuleLine(cols int) string {
 // bottomChromeHeight is prompt input height or transcript footer height (TS transcript has no prompt).
 func (m *model) bottomChromeHeight() int {
 	if m.uiScreen != gouDemoScreenTranscript {
-		return m.inputAreaHeight()
+		h := m.inputAreaHeight()
+		h += m.slashResultPanelChromeExtra()
+		return h
 	}
 	narrow := m.cols > 0 && m.cols < 80
 	foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
@@ -921,6 +937,11 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			m.slashPick = nil
 			return m, nil
 		}
+		if m.slashResultPanel != nil {
+			m.clearSlashResultPanel()
+			m.rebuildHeightCache()
+			return m, nil
+		}
 		if m.uiScreen == gouDemoScreenTranscript {
 			return m, m.exitTranscriptScreenWithPostCmd()
 		}
@@ -1009,13 +1030,19 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			m.scrollTop = 1 << 30
 			return m, cmd
 		}
-		out := pui.ApplyBaseResult(m.store, r, &m.processUserInputBaseResultHandoff)
+		rStore := r
+		if r != nil && strings.HasPrefix(line, "/") && r.Execution == nil && !r.ShouldQuery &&
+			extractSlashLocalPanelText(r) != "" {
+			rStore = slashResultForStoreOmittingPanelDupes(r)
+		}
+		out := pui.ApplyBaseResult(m.store, rStore, &m.processUserInputBaseResultHandoff)
 		gouDemoLogStoreMessages("after_apply_user_input", m.store)
 		gouDemoTracef("after ApplyBaseResult shouldQuery=%v effectiveShouldQuery=%v hadExecutionRequest=%v messagesAppended=%d",
-			r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(r.Messages))
+			r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(rStore.Messages))
 		if out.NextInput != "" {
 			m.pr.SetValue(out.NextInput)
 		}
+		m.applySlashResultPanelFromSubmit(line, r, out)
 		m.rebuildHeightCache()
 		m.sticky = true
 		m.scrollTop = 1 << 30
@@ -1078,13 +1105,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 						skillListing = commands.SkillToolCommands(params.Commands)
 					}
 					discoverNm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME"))
-					// Prefer ToolUseContext (from [pui.BuildDemoParams]); live model env chain (incl. settings merge) vs default.
-					mainLoopModel := pui.DefaultMainLoopModelForDemo()
-					if params.RuntimeContext != nil && strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel) != "" {
-						mainLoopModel = strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel)
-					} else if m := modelenv.FirstNonEmpty(); m != "" {
-						mainLoopModel = m
-					}
+					mainLoopModel := gouDemoQueryMainLoopModel(params)
 					m.lastMainLoopModel = mainLoopModel
 					gouOpts := commands.GouDemoSystemOpts{
 						EnabledToolNames:       commands.EnabledToolNames(names),
@@ -1196,6 +1217,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 							if params.RuntimeContext != nil {
 								tcx = params.RuntimeContext.ToolUseContext
 							}
+							tcx.Options.MainLoopModel = mainLoopModel
 							qdeps := query.ProductionDeps()
 							te := toolexecution.ExecutionDeps{
 								InvokeTool:     runner.Run,
@@ -1285,18 +1307,6 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			return m, nil
 		}
 		gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
-		if !out.EffectiveShouldQuery && !out.HadExecutionRequest {
-			sq := false
-			if r != nil {
-				sq = r.ShouldQuery
-			}
-			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf(
-				"gou-demo: 未调用模型（shouldQuery=%v）。全屏 TUI 里看回复；本终端 shell 不会打印对话正文。调试: GOU_DEMO_LOG=1 stderr",
-				sq)))
-			m.rebuildHeightCache()
-			m.sticky = true
-			m.scrollTop = 1 << 30
-		}
 		return m, cmd
 	}
 	return m, nil
@@ -1740,6 +1750,10 @@ func (m *model) View() tea.View {
 		b.WriteByte('\n')
 		promptView := userInputViewWithPromptPrefix(m)
 		b.WriteString(promptView)
+		if blk := m.slashResultPanelViewBlock(); blk != "" {
+			b.WriteByte('\n')
+			b.WriteString(blk)
+		}
 	}
 	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
 	if m.permAsk != nil {

@@ -6,6 +6,8 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+
+	"goc/modelenv"
 )
 
 // StatusResult is the JSON payload returned by /status.
@@ -25,10 +27,7 @@ func HandleStatusCommand() ([]byte, error) {
 		}
 	}
 
-	model := os.Getenv("CLAUDE_CODE_MODEL")
-	if model == "" {
-		model = "claude-sonnet-4-6 (default)"
-	}
+	model := modelenv.EffectiveMainLoopModel()
 
 	effort := os.Getenv("CLAUDE_CODE_EFFORT_LEVEL")
 	effortStr := "auto"

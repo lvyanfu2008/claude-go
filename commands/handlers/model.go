@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"goc/modelenv"
 )
 
 // ModelResult is the JSON payload returned by /model.
@@ -15,21 +17,15 @@ type ModelResult struct {
 
 // HandleModelCommand handles /model [modelName].
 // Mirrors TS src/commands/model/ (local-jsx -> ModelPicker).
-// In gou-demo, model is set via CLAUDE_CODE_MODEL env var.
+// Sets CLAUDE_CODE_MODEL, which [modelenv.LookupKeys] reads first so the next turn matches this display.
 func HandleModelCommand(args string) ([]byte, error) {
 	args = strings.TrimSpace(args)
 
 	if args == "" {
-		current := os.Getenv("CLAUDE_CODE_MODEL")
-		if current == "" {
-			return json.Marshal(ModelResult{
-				Type:  "text",
-				Value: "Current model: default (claude-sonnet-4-6)\nRun /model [modelName] to set a different model, or /model --help for usage.",
-			})
-		}
+		current := modelenv.EffectiveMainLoopModel()
 		return json.Marshal(ModelResult{
 			Type:  "text",
-			Value: fmt.Sprintf("Current model: %s", current),
+			Value: fmt.Sprintf("Current model: %s\nRun /model [modelName] to set a different model, or /model --help for usage.", current),
 		})
 	}
 
@@ -37,13 +33,14 @@ func HandleModelCommand(args string) ([]byte, error) {
 	case "help", "-h", "--help":
 		return json.Marshal(ModelResult{
 			Type:  "text",
-			Value: "Usage: /model [modelName]\n\nSet the AI model for Claude Code.\nExamples:\n  /model claude-sonnet-4-6\n  /model claude-opus-4-6\n  /model default    (reset to default)",
+			Value: fmt.Sprintf("Usage: /model [modelName]\n\nSet the AI model for Claude Code (sets CLAUDE_CODE_MODEL).\nExamples:\n  /model %s\n  /model claude-opus-4-20250514\n  /model default    (unset CLAUDE_CODE_MODEL; fall back to other env or %s)",
+				modelenv.DefaultMainLoopModelID, modelenv.DefaultMainLoopModelID),
 		})
 	case "default":
 		_ = os.Unsetenv("CLAUDE_CODE_MODEL")
 		return json.Marshal(ModelResult{
 			Type:  "text",
-			Value: "Set model to claude-sonnet-4-6 (default)",
+			Value: fmt.Sprintf("Unset CLAUDE_CODE_MODEL. Effective model: %s", modelenv.EffectiveMainLoopModel()),
 		})
 	default:
 		_ = os.Setenv("CLAUDE_CODE_MODEL", args)

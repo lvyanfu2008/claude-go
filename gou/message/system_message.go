@@ -10,6 +10,19 @@ import (
 	"goc/types"
 )
 
+// systemMessageDecodedString returns the body text for system message Content.
+// Handlers often store Content as json.Marshal(string) (a JSON string document), not raw prose.
+func systemMessageDecodedString(content []byte) string {
+	if len(content) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(content, &s); err == nil {
+		return s
+	}
+	return strings.Trim(string(content), `"`)
+}
+
 // SystemMessageRenderer renders system messages.
 type SystemMessageRenderer struct{}
 
@@ -81,14 +94,7 @@ func (r *SystemMessageRenderer) renderCompactBoundary(msg *types.Message, ctx *R
 
 // renderLocalCommand renders a local command message.
 func (r *SystemMessageRenderer) renderLocalCommand(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	// Extract content
-	content := ""
-	if msg.Content != nil {
-		// Try to parse as string
-		content = string(msg.Content)
-		// Remove quotes if present
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return []string{"[Local command]"}, nil
@@ -105,11 +111,7 @@ func (r *SystemMessageRenderer) renderLocalCommand(msg *types.Message, ctx *Rend
 
 // measureLocalCommand measures a local command message.
 func (r *SystemMessageRenderer) measureLocalCommand(msg *types.Message, ctx *RenderContext) (int, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return 1, nil
@@ -121,11 +123,7 @@ func (r *SystemMessageRenderer) measureLocalCommand(msg *types.Message, ctx *Ren
 
 // renderInformational renders an informational system message.
 func (r *SystemMessageRenderer) renderInformational(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return []string{"ℹ [System message]"}, nil
@@ -141,11 +139,7 @@ func (r *SystemMessageRenderer) renderInformational(msg *types.Message, ctx *Ren
 
 // measureInformational measures an informational system message.
 func (r *SystemMessageRenderer) measureInformational(msg *types.Message, ctx *RenderContext) (int, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return 1, nil
@@ -156,11 +150,7 @@ func (r *SystemMessageRenderer) measureInformational(msg *types.Message, ctx *Re
 
 // renderApiError renders an API error message.
 func (r *SystemMessageRenderer) renderApiError(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return []string{"✗ [API error]"}, nil
@@ -175,11 +165,7 @@ func (r *SystemMessageRenderer) renderApiError(msg *types.Message, ctx *RenderCo
 
 // measureApiError measures an API error message.
 func (r *SystemMessageRenderer) measureApiError(msg *types.Message, ctx *RenderContext) (int, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return 1, nil
@@ -214,11 +200,7 @@ func (r *SystemMessageRenderer) measureStopHookSummary(msg *types.Message, ctx *
 
 // renderGenericSystemMessage renders a generic system message.
 func (r *SystemMessageRenderer) renderGenericSystemMessage(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return []string{"[System]"}, nil
@@ -229,11 +211,7 @@ func (r *SystemMessageRenderer) renderGenericSystemMessage(msg *types.Message, c
 
 // measureGenericSystemMessage measures a generic system message.
 func (r *SystemMessageRenderer) measureGenericSystemMessage(msg *types.Message, ctx *RenderContext) (int, error) {
-	content := ""
-	if msg.Content != nil {
-		content = string(msg.Content)
-		content = strings.Trim(content, `"`)
-	}
+	content := systemMessageDecodedString(msg.Content)
 
 	if content == "" {
 		return 1, nil

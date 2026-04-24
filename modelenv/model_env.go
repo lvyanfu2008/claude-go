@@ -7,8 +7,13 @@ import (
 	"strings"
 )
 
+// DefaultMainLoopModelID is used when no env key in [LookupKeys] is set (matches [gou/pui] demo default).
+const DefaultMainLoopModelID = "claude-sonnet-4-20250514"
+
 // LookupKeys is the env precedence for HTTP model id and (before Gou.ModelID) system # Environment.
+// CLAUDE_CODE_MODEL first so /model and merged Claude Code settings override generic ANTHROPIC_* defaults.
 var LookupKeys = []string{
+	"CLAUDE_CODE_MODEL",
 	"CCB_ENGINE_MODEL",
 	"ANTHROPIC_MODEL",
 	"ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -32,4 +37,9 @@ func ResolveWithFallback(fallbackWhenUnset string) string {
 		return v
 	}
 	return strings.TrimSpace(fallbackWhenUnset)
+}
+
+// EffectiveMainLoopModel returns the model id for the next API turn: env chain ([LookupKeys]) or [DefaultMainLoopModelID].
+func EffectiveMainLoopModel() string {
+	return ResolveWithFallback(DefaultMainLoopModelID)
 }

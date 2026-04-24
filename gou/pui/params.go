@@ -20,12 +20,10 @@ import (
 	"goc/types"
 )
 
-const defaultMainLoopModel = "claude-sonnet-4-20250514"
-
 // DefaultMainLoopModelForDemo returns the model id used when DemoConfig.MainLoopModel is empty
-// and neither TS bridge nor ANTHROPIC_MODEL supplies one (see [BuildDemoParams]).
+// and neither TS bridge nor env ([modelenv.LookupKeys]) supplies one (see [BuildDemoParams]).
 func DefaultMainLoopModelForDemo() string {
-	return defaultMainLoopModel
+	return modelenv.DefaultMainLoopModelID
 }
 
 // SlashGated is true when the trimmed line starts with "/".
@@ -98,7 +96,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 			model = strings.TrimSpace(cfg.TSContextBridge.MainLoopModel)
 		}
 		if model == "" {
-			model = defaultMainLoopModel
+			model = modelenv.DefaultMainLoopModelID
 		}
 	}
 	// When UUID is unset, leave nil so process-user-input newUserMessage uses
