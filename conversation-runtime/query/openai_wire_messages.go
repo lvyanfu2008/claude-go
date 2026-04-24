@@ -8,7 +8,9 @@ import (
 
 // anthropicWireMessagesToOpenAI mirrors src/api-client/openai/convertMessages.ts
 // anthropicMessagesToOpenAI for wire JSON from [ccbhydrate.MessagesJSONNormalized].
-func anthropicWireMessagesToOpenAI(msgsJSON json.RawMessage, systemPrompt []string) ([]map[string]any, error) {
+// model controls whether thinking blocks map to reasoning_content (see [IsOpenAIThinkingEnabled]).
+func anthropicWireMessagesToOpenAI(msgsJSON json.RawMessage, systemPrompt []string, model string) ([]map[string]any, error) {
+	preserveReasoning := IsOpenAIThinkingEnabled(model)
 	var arr []json.RawMessage
 	if err := json.Unmarshal(msgsJSON, &arr); err != nil {
 		return nil, fmt.Errorf("messages json: %w", err)
@@ -34,7 +36,7 @@ func anthropicWireMessagesToOpenAI(msgsJSON json.RawMessage, systemPrompt []stri
 			}
 			out = append(out, part...)
 		case "assistant":
-			part, err := wireAssistantToOpenAI(m.Content)
+			part, err := wireAssistantToOpenAI(m.Content, preserveReasoning)
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +131,7 @@ func fallbackBlockSummary(b map[string]any) string {
 	return line
 }
 
-func wireAssistantToOpenAI(content json.RawMessage) ([]map[string]any, error) {
+func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]map[string]any, error) {
 	if len(content) == 0 || string(content) == "null" {
 		return []map[string]any{{"role": "assistant", "content": ""}}, nil
 	}
@@ -142,6 +144,7 @@ func wireAssistantToOpenAI(content json.RawMessage) ([]map[string]any, error) {
 		return nil, fmt.Errorf("assistant content: %w", err)
 	}
 	var textParts []string
+	var reasoningParts []string
 	var toolCalls []map[string]any
 	for _, b := range blocks {
 		typ, _ := b["type"].(string)
@@ -149,6 +152,13 @@ func wireAssistantToOpenAI(content json.RawMessage) ([]map[string]any, error) {
 		case "text":
 			if tx, ok := b["text"].(string); ok {
 				textParts = append(textParts, tx)
+			}
+		case "thinking":
+			if !preserveReasoning {
+				break
+			}
+			if th, ok := b["thinking"].(string); ok && strings.TrimSpace(th) != "" {
+				reasoningParts = append(reasoningParts, th)
 			}
 		case "tool_use":
 			id, _ := b["id"].(string)
@@ -189,11 +199,16 @@ func wireAssistantToOpenAI(content json.RawMessage) ([]map[string]any, error) {
 	} else {
 		msg["content"] = nil
 	}
+	if len(reasoningParts) > 0 {
+		msg["reasoning_content"] = strings.Join(reasoningParts, "\n")
+	}
 	if len(toolCalls) > 0 {
 		msg["tool_calls"] = toolCalls
 	}
 	if msg["content"] == nil && len(toolCalls) == 0 {
-		msg["content"] = ""
+		if len(reasoningParts) == 0 {
+			msg["content"] = ""
+		}
 	}
 	return []map[string]any{msg}, nil
 }

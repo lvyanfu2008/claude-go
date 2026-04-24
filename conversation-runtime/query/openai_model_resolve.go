@@ -34,9 +34,11 @@ func openaiModelFamilyUpper(model string) (string, bool) {
 	}
 }
 
-// ResolveOpenAIModel mirrors src/api-client/openai/modelMapping.ts resolveOpenAIModel.
+// ResolveOpenAIModel mirrors src/api-client/openai/modelMapping.ts resolveOpenAIModel
+// except the env override: Go uses CCB_ENGINE_MODEL (same as [goc/modelenv] first key) so the
+// wire model id and main-loop / TUI model stay one value.
 func ResolveOpenAIModel(anthropicModel string) string {
-	if v := strings.TrimSpace(os.Getenv("OPENAI_MODEL")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("CCB_ENGINE_MODEL")); v != "" {
 		return v
 	}
 	clean := strings.TrimSuffix(strings.TrimSpace(anthropicModel), "[1m]")

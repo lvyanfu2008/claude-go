@@ -53,7 +53,7 @@ func runOpenAINonStreamingParityModelLoop(
 		if err != nil {
 			return err
 		}
-		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(in.SystemPrompt))
+		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(in.SystemPrompt), model)
 		if err != nil {
 			return err
 		}

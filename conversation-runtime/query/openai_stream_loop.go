@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"goc/anthropicmessages"
-	"goc/tools/toolsearchwire"
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"
 	"goc/tools/toolexecution"
+	"goc/tools/toolsearchwire"
 	"goc/types"
 )
 
@@ -64,7 +64,7 @@ func runOpenAIStreamingParityModelLoop(
 		if err != nil {
 			return err
 		}
-		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(in.SystemPrompt))
+		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(in.SystemPrompt), model)
 		if err != nil {
 			return err
 		}

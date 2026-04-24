@@ -143,7 +143,7 @@ func summarizeAutocompactOpenAIStream(ctx context.Context, in compactservice.Sum
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact openai hydrate: %w", err)
 	}
-	openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, in.SystemPrompt)
+	openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, in.SystemPrompt, model)
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact openai wire: %w", err)
 	}
@@ -204,7 +204,7 @@ func summarizeAutocompactOpenAINoStream(ctx context.Context, in compactservice.S
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact openai hydrate: %w", err)
 	}
-	openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, in.SystemPrompt)
+	openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, in.SystemPrompt, model)
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact openai wire: %w", err)
 	}
