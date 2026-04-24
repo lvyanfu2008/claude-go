@@ -9,8 +9,14 @@ import (
 type LocalCommandHandler func(args string) ([]byte, error)
 
 // localCommandHandlers maps command names to their handlers
+// Handlers with an Args suffix (e.g. args string) receive the raw argument string.
 var localCommandHandlers = map[string]LocalCommandHandler{
-	"keybindings": func(args string) ([]byte, error) { return HandleKeybindingsCommand() },
+	"keybindings":   func(args string) ([]byte, error) { return HandleKeybindingsCommand() },
+	"cost":          func(args string) ([]byte, error) { return HandleCostCommand() },
+	"version":       func(args string) ([]byte, error) { return HandleVersionCommand() },
+	"release-notes": func(args string) ([]byte, error) { return HandleReleaseNotesCommand() },
+	"context":       func(args string) ([]byte, error) { return HandleContextCommand() },
+	"vim":           func(args string) ([]byte, error) { return HandleVimCommand(args) },
 }
 
 // HandleLocalCommand routes local commands to their appropriate handlers

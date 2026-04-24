@@ -46,3 +46,18 @@ func (s *ReadFileState) Set(absPath string, e *ReadFileEntry) {
 	defer s.mu.Unlock()
 	s.m[absPath] = e
 }
+
+// Keys returns all file paths currently tracked in the state (mirrors TS FileStateCache.keys()).
+// The returned slice is a snapshot copy.
+func (s *ReadFileState) Keys() []string {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := make([]string, 0, len(s.m))
+	for k := range s.m {
+		keys = append(keys, k)
+	}
+	return keys
+}

@@ -80,6 +80,7 @@ import (
 	"goc/modelenv"
 	"goc/querycontext"
 	"goc/sessiontranscript"
+	"goc/tools/localtools"
 	"goc/tools/toolexecution"
 	"goc/tscontext"
 	"goc/types"
@@ -540,6 +541,9 @@ type model struct {
 	// mcpToolsJSONPath is -mcp-tools-json (overrides GOU_DEMO_MCP_TOOLS_JSON when set).
 	mcpToolsJSONPath string
 
+	// readFileState is the session-scoped read file state, used by /files and tool execution.
+	readFileState *localtools.ReadFileState
+
 	// tsBridge when non-nil supplies in-process snapshot for commands/tools/prompt parts (tests; former TS bridge removed).
 	tsBridge *tscontext.Snapshot
 
@@ -747,6 +751,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		mcpToolsJSONPath:    mcpToolsJSONPath,
 		tsBridge:            tsBridge,
 		transcript:          tr,
+		readFileState:       localtools.NewReadFileState(),
 		permissionMode:      gouDemoPermissionModeFromEnv(),
 		useMsgViewport:      gouDemoBubblesViewport(),
 	}
@@ -990,6 +995,9 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 		params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
 			SessionID: m.store.ConversationID,
+			Store:     m.store,
+			ReadFileState: m.readFileState,
+			Cwd:     cwd,
 		})
 		gouDemoTracef("ProcessUserInput start priorMsgs=%d", len(m.store.Messages))
 		r, err := processuserinput.ProcessUserInput(context.Background(), params)

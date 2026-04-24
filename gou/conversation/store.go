@@ -45,6 +45,15 @@ func (s *Store) ClearStreaming() {
 	s.StreamingText = ""
 }
 
+// ClearMessages removes all conversation messages and resets usage counters.
+func (s *Store) ClearMessages() {
+	s.Messages = nil
+	s.StreamingText = ""
+	s.StreamingToolUses = nil
+	s.UsageInputTotal = 0
+	s.UsageOutputTotal = 0
+}
+
 // AppendMessage appends a normalized message (caller sets Type / UUID / fields).
 func (s *Store) AppendMessage(m types.Message) {
 	s.Messages = append(s.Messages, m)

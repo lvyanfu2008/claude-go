@@ -7,8 +7,11 @@ import (
 	"runtime"
 	"strings"
 
+	"goc/commands/handlers"
 	processuserinput "goc/conversation-runtime/process-user-input"
+	"goc/gou/conversation"
 	"goc/slashresolve"
+	"goc/tools/localtools"
 	"goc/types"
 )
 
@@ -16,6 +19,14 @@ import (
 type SlashResolveHandlerOptions struct {
 	// SessionID substitutes ${CLAUDE_SESSION_ID} in disk skills.
 	SessionID string
+	// Store is the conversation store, needed for state-mutating local commands
+	// like /clear. When nil, those commands return a notice instead.
+	Store *conversation.Store
+	// ReadFileState is the session-scoped read file state, needed by /files.
+	// May be nil (no files tracked yet).
+	ReadFileState *localtools.ReadFileState
+	// Cwd is the current working directory, used by /files to relativize paths.
+	Cwd string
 }
 
 // NewSlashResolveProcessSlashCommand returns a [processuserinput.ProcessUserInputParams.ProcessSlashCommand]
@@ -34,6 +45,8 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 	if sid == "" {
 		sid = "gou-demo"
 	}
+	rfs := opt.ReadFileState
+	cwd := strings.TrimSpace(opt.Cwd)
 
 	return func(
 		ctx context.Context,
@@ -81,11 +94,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		switch cmd.Type {
 		case "local", "local-jsx":
-			return &processuserinput.ProcessUserInputBaseResult{
-				Messages: []types.Message{SystemNotice(fmt.Sprintf(
-					"gou-demo: /%s is a local command — not executed in this TUI (use TS CLI).", cmd.Name))},
-				ShouldQuery: false,
-			}, nil
+			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd)
 		case "prompt":
 			// handled below
 		default:
@@ -126,6 +135,75 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			ShouldQuery: false,
 		}, nil
 	}
+}
+
+// handleLocalCommand dispatches a local or local-jsx command.
+// Pure-text handlers go through the handlers registry; state-mutating commands
+// like /clear are handled inline with store access.
+func handleLocalCommand(
+	name string,
+	args string,
+	cmd *types.Command,
+	store *conversation.Store,
+	attachmentMessages []types.Message,
+	uuid *string,
+	p *processuserinput.ProcessUserInputParams,
+	rfs *localtools.ReadFileState,
+	cwd string,
+) (*processuserinput.ProcessUserInputBaseResult, error) {
+	// State-mutating commands that need store access.
+	if name == "clear" || name == "reset" || name == "new" {
+		return handleClearCommand(store)
+	}
+	// compact is complex (needs API call) — not yet implemented in Go TUI.
+	if name == "compact" {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice("/compact is not yet implemented in gou-demo. Use the TS CLI instead.")},
+			ShouldQuery: false,
+		}, nil
+	}
+
+	if name == "files" {
+		return handleFilesCommand(rfs, cwd)
+	}
+	if name == "advisor" {
+		return handleAdvisorCommand(args)
+	}
+
+	// Pure-text local commands: try the handler registry.
+	result, err := handlers.HandleLocalCommand(name, args)
+	if err == nil {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(string(result))},
+			ShouldQuery: false,
+		}, nil
+	}
+
+	// Explicitly handled local commands that gou-demo doesn't support yet.
+	switch name {
+	case "all", "doctor", "effort", "help", "init", "model", "plugins", "session", "status", "stickers", "mobile":
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("/%s is a local command — not yet implemented in gou-demo. Use the TS CLI.", name))},
+			ShouldQuery: false,
+		}, nil
+	}
+
+	// Unknown local command or local-jsx (React-rendered commands).
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice(fmt.Sprintf("/%s is a %s command — not executed in gou-demo TUI (use TS CLI for interactive handling).", name, cmd.Type))},
+		ShouldQuery: false,
+	}, nil
+}
+
+// handleClearCommand builds the result for /clear, /reset, /new.
+func handleClearCommand(store *conversation.Store) (*processuserinput.ProcessUserInputBaseResult, error) {
+	if store != nil {
+		store.ClearMessages()
+	}
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice("Cleared conversation history.")},
+		ShouldQuery: false,
+	}, nil
 }
 
 func strictSlashUnknown() bool {
@@ -195,4 +273,34 @@ func slashResultToBase(
 		out.Effort = res.Effort
 	}
 	return out
+}
+
+// handleFilesCommand builds a system notice from handler/files (ReadFileState + cwd).
+func handleFilesCommand(rfs *localtools.ReadFileState, cwd string) (*processuserinput.ProcessUserInputBaseResult, error) {
+	b, err := handlers.HandleFilesCommand(rfs, cwd)
+	if err != nil {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("/files: %v", err))},
+			ShouldQuery: false,
+		}, nil
+	}
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice(string(b))},
+		ShouldQuery: false,
+	}, nil
+}
+
+// handleAdvisorCommand builds a system notice from the advisor handler.
+func handleAdvisorCommand(args string) (*processuserinput.ProcessUserInputBaseResult, error) {
+	b, err := handlers.HandleAdvisorCommand(args)
+	if err != nil {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("/advisor: %v", err))},
+			ShouldQuery: false,
+		}, nil
+	}
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice(string(b))},
+		ShouldQuery: false,
+	}, nil
 }
