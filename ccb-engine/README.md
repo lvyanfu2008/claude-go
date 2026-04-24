@@ -27,6 +27,8 @@ Existing non-empty environment variables are **not** overwritten.
 
 Same flags as elsewhere in `goc/`: e.g. `CCB_ENGINE_LLM=openai`, `CLAUDE_CODE_USE_OPENAI=1`, or `ANTHROPIC_BASE_URL` containing `deepseek`. Model id chain: [`goc/modelenv.ResolveWithFallback`](../modelenv/model_env.go).
 
+For **DeepSeek-V4-Pro** (and `deepseek-reasoner` / **DeepSeek-V3.2**), the OpenAI-compat query path adds DeepSeek **thinking** body fields (`thinking`, `enable_thinking`, `chat_template_kwargs`) — see [`IsOpenAIThinkingEnabled`](../conversation-runtime/query/openai_thinking.go). **DeepSeek-V4-Flash** skips those unless `OPENAI_ENABLE_THINKING=1`.
+
 ### LLM request/response body log (TS parity)
 
 Same env as TS `logLlmApiRequestBody` / `logLlmApiResponseBody` (requires debug mode enabled):

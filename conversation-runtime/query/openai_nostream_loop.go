@@ -74,6 +74,7 @@ func runOpenAINonStreamingParityModelLoop(
 			"messages":    openaiMsgs,
 			"max_tokens":  maxTok,
 		}
+		mergeOpenAIThinkingBodyFields(req, model)
 		if len(toolsOA) > 0 {
 			req["tools"] = toolsOA
 		}
