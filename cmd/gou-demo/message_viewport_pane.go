@@ -101,14 +101,21 @@ func (m *model) msgViewportSyncGeometry() {
 	}
 }
 
-// applyMsgViewportContentFromView rebuilds the full-document content for bubbles/viewport using the new renderer.
+// applyMsgViewportContentFromView rebuilds bubbles/viewport content from the new renderer.
+// It skips rebuild if the content signature is unchanged (unless vpNeedResizeContent forces it).
+// On rebuild failure, it sets msgViewportFallback=true so the caller falls back to the old renderer.
+// When sticky (auto-scroll), it calls GotoBottom after a no-op or successful content refresh.
 func (m *model) applyMsgViewportContentFromView() {
+	// Viewport 不可用时直接返回（例如 fallback 模式）
 	if !m.msgViewportWanted() {
 		diaglog.Line("[viewport] applyMsgViewportContentFromView: msgViewportWanted=false, returning")
 		return
 	}
+
+	// 计算内容签名，与上次对比判断是否需要重建
 	sig := m.messagePaneContentSig()
 	if sig == m.lastVpContentSig && !m.vpNeedResizeContent {
+		// 内容未变化：仅 sticky 模式下滚动到底部保持跟随
 		if m.sticky {
 			m.msgViewport.GotoBottom()
 		}
@@ -116,21 +123,23 @@ func (m *model) applyMsgViewportContentFromView() {
 		return
 	}
 
-	diaglog.Line("[viewport] applyMsgViewportContentFromView: building content, sig=%s", sig)
+	// 内容有变化：用新渲染器生成完整文档内容
 	s, ok := m.tryBuildFullMessagePaneContentWithNewRenderer()
 	if !ok {
+		// 新渲染器失败：切回 fallback 模式，清除签名以便下次完整重建
 		diaglog.Line("[viewport] applyMsgViewportContentFromView: build failed, setting fallback")
 		m.msgViewportFallback = true
 		m.lastVpContentSig = ""
 		m.vpNeedResizeContent = false
 		return
 	}
-	diaglog.Line("[viewport] applyMsgViewportContentFromView: setting content, length=%d, lines≈%d", len(s), strings.Count(s, "\n")+1)
+
+	// 将构建好的内容设置到 viewport 中，更新签名标记
 	m.msgViewport.SetContent(s)
-	diaglog.Line("[viewport] applyMsgViewportContentFromView: after SetContent, totalLines=%d, height=%d, AtTop=%v, AtBottom=%v",
-		m.msgViewport.TotalLineCount(), m.msgViewport.Height(), m.msgViewport.AtTop(), m.msgViewport.AtBottom())
 	m.lastVpContentSig = sig
 	m.vpNeedResizeContent = false
+
+	// sticky 模式下自动滚动到底部
 	if m.sticky {
 		m.msgViewport.GotoBottom()
 	}
