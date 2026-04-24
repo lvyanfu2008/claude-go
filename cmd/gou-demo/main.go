@@ -1180,6 +1180,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 							},
 							WorkDir:          cwdAbs,
 							ProjectRoot:      toolProjectRoot,
+							ReadFileState:    m.readFileState,
 							LocalBashDefault: true,
 							AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
 							MainLoopModel:    mainLoopModel,

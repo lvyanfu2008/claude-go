@@ -2,6 +2,7 @@ package pui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -174,7 +175,7 @@ func handleLocalCommand(
 	result, err := handlers.HandleLocalCommand(name, args)
 	if err == nil {
 		return &processuserinput.ProcessUserInputBaseResult{
-			Messages:    []types.Message{SystemNotice(string(result))},
+			Messages:    []types.Message{localTextResultNotice(result)},
 			ShouldQuery: false,
 		}, nil
 	}
@@ -285,7 +286,7 @@ func handleFilesCommand(rfs *localtools.ReadFileState, cwd string) (*processuser
 		}, nil
 	}
 	return &processuserinput.ProcessUserInputBaseResult{
-		Messages:    []types.Message{SystemNotice(string(b))},
+		Messages:    []types.Message{localTextResultNotice(b)},
 		ShouldQuery: false,
 	}, nil
 }
@@ -300,7 +301,18 @@ func handleAdvisorCommand(args string) (*processuserinput.ProcessUserInputBaseRe
 		}, nil
 	}
 	return &processuserinput.ProcessUserInputBaseResult{
-		Messages:    []types.Message{SystemNotice(string(b))},
+		Messages:    []types.Message{localTextResultNotice(b)},
 		ShouldQuery: false,
 	}, nil
+}
+
+// localTextResultNotice turns handler JSON payloads like {"type":"text","value":"…"} into a readable system row.
+func localTextResultNotice(raw []byte) types.Message {
+	var v struct {
+		Value string `json:"value"`
+	}
+	if json.Unmarshal(raw, &v) == nil && v.Value != "" {
+		return SystemNotice(v.Value)
+	}
+	return SystemNotice(string(raw))
 }
