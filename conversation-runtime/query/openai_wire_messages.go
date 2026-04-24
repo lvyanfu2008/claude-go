@@ -153,12 +153,12 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 			if tx, ok := b["text"].(string); ok {
 				textParts = append(textParts, tx)
 			}
-		case "thinking":
+		case "thinking", "redacted_thinking":
 			if !preserveReasoning {
 				break
 			}
-			if th, ok := b["thinking"].(string); ok && strings.TrimSpace(th) != "" {
-				reasoningParts = append(reasoningParts, th)
+			if s := thinkingBlockReasoningPayload(b); s != "" {
+				reasoningParts = append(reasoningParts, s)
 			}
 		case "tool_use":
 			id, _ := b["id"].(string)
@@ -211,4 +211,21 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 		}
 	}
 	return []map[string]any{msg}, nil
+}
+
+// thinkingBlockReasoningPayload returns text to send as OpenAI reasoning_content for one block.
+// Supports Anthropic thinking ({thinking: "..."}) and redacted_thinking ({data: "..."}).
+func thinkingBlockReasoningPayload(b map[string]any) string {
+	typ, _ := b["type"].(string)
+	switch typ {
+	case "thinking":
+		if th, ok := b["thinking"].(string); ok && strings.TrimSpace(th) != "" {
+			return th
+		}
+	case "redacted_thinking":
+		if d, ok := b["data"].(string); ok && d != "" {
+			return d
+		}
+	}
+	return ""
 }

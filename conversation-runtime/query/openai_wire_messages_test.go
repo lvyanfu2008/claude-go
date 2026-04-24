@@ -45,6 +45,23 @@ func TestAnthropicWireMessagesToOpenAI_ThinkingOmittedWhenThinkingDisabled(t *te
 	}
 }
 
+func TestAnthropicWireMessagesToOpenAI_RedactedThinkingAsReasoning(t *testing.T) {
+	msgs := []byte(`[
+  {"role":"assistant","content":[
+    {"type":"redacted_thinking","data":"opaque"},
+    {"type":"text","text":"ok"}
+  ]}
+]`)
+	out, err := anthropicWireMessagesToOpenAI(json.RawMessage(msgs), nil, "deepseek-v4-pro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := out[len(out)-1]
+	if rc, _ := a["reasoning_content"].(string); rc != "opaque" {
+		t.Fatalf("reasoning_content: %#v", a["reasoning_content"])
+	}
+}
+
 func TestAnthropicWireMessagesToOpenAI_MultipleThinkingJoins(t *testing.T) {
 	msgs := []byte(`[
   {"role":"assistant","content":[

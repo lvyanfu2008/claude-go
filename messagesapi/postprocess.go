@@ -519,6 +519,37 @@ func ensureNonEmptyAssistantContent(messages []types.Message) ([]types.Message, 
 	return out, nil
 }
 
+func prependThinkingBlocksToAssistant(dst types.Message, prefix []map[string]any) (types.Message, error) {
+	if len(prefix) == 0 {
+		return dst, nil
+	}
+	dst, err := cloneMessage(dst)
+	if err != nil {
+		return types.Message{}, err
+	}
+	inner, err := getInner(&dst)
+	if err != nil {
+		return types.Message{}, err
+	}
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil {
+		return types.Message{}, err
+	}
+	merged := make([]map[string]any, 0, len(prefix)+len(blocks))
+	merged = append(merged, prefix...)
+	merged = append(merged, blocks...)
+	raw, err := marshalContentBlocks(merged)
+	if err != nil {
+		return types.Message{}, err
+	}
+	inner.Content = raw
+	if err := setInner(&dst, inner); err != nil {
+		return types.Message{}, err
+	}
+	dst.Content = raw
+	return dst, nil
+}
+
 func filterOrphanedThinkingOnlyMessages(messages []types.Message) ([]types.Message, error) {
 	idsWithNonThinking := make(map[string]struct{})
 	for _, msg := range messages {
@@ -544,8 +575,9 @@ func filterOrphanedThinkingOnlyMessages(messages []types.Message) ([]types.Messa
 			idsWithNonThinking[inner.ID] = struct{}{}
 		}
 	}
-	var filtered []types.Message
-	for _, msg := range messages {
+	filtered := make([]types.Message, 0, len(messages))
+	for i := 0; i < len(messages); i++ {
+		msg := messages[i]
 		if msg.Type != types.MessageTypeAssistant {
 			filtered = append(filtered, msg)
 			continue
@@ -579,7 +611,17 @@ func filterOrphanedThinkingOnlyMessages(messages []types.Message) ([]types.Messa
 				continue
 			}
 		}
-		// drop orphaned
+		// Orphaned thinking-only: dropping loses chain-of-thought required by OpenAI-style
+		// thinking APIs on replay. Prepend into the immediately following assistant when present.
+		if i+1 < len(messages) && messages[i+1].Type == types.MessageTypeAssistant {
+			merged, err := prependThinkingBlocksToAssistant(messages[i+1], blocks)
+			if err != nil {
+				return nil, err
+			}
+			messages[i+1] = merged
+			continue
+		}
+		// drop truly orphaned (no following assistant to absorb)
 	}
 	return filtered, nil
 }

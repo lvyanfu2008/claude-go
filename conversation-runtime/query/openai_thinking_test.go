@@ -52,7 +52,11 @@ func TestMergeOpenAIThinkingBodyFields(t *testing.T) {
 
 	req2 := map[string]any{"model": "deepseek-v4-flash"}
 	mergeOpenAIThinkingBodyFields(req2, "deepseek-v4-flash")
-	if _, ok := req2["thinking"]; ok {
-		t.Fatal("flash should not get thinking fields without env enable")
+	th2, _ := req2["thinking"].(map[string]any)
+	if th2 == nil || th2["type"] != "disabled" {
+		t.Fatalf("flash should request thinking disabled by default, got %#v", req2["thinking"])
+	}
+	if _, ok := req2["enable_thinking"]; ok {
+		t.Fatal("flash should not set enable_thinking without OPENAI_ENABLE_THINKING")
 	}
 }
