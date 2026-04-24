@@ -5,8 +5,12 @@ import (
 	"strings"
 
 	"goc/ccb-engine/diaglog"
+	"goc/compactservice"
 	"goc/types"
 )
+
+// maxAPIErrorChars mirrors MAX_API_ERROR_CHARS in AssistantTextMessage.tsx.
+const maxAPIErrorChars = 1000
 
 // AssistantMessageRenderer renders assistant messages.
 type AssistantMessageRenderer struct{
@@ -116,12 +120,13 @@ func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interfac
 // renderTextBlock renders a text block.
 func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	text, _ := block["text"].(string)
+	trimmed := strings.TrimSpace(text)
 
-	// Check for error messages
-	if isRateLimitError(text) {
+	// Match AssistantTextMessage.tsx: rate limits via startsWith prefixes, API errors via "API Error" prefix only.
+	if compactservice.IsRateLimitErrorMessage(text) {
 		return r.renderRateLimitError(text, ctx)
 	}
-	if isApiError(text) {
+	if compactservice.StartsWithApiErrorPrefix(trimmed) {
 		return r.renderApiError(text, ctx)
 	}
 
@@ -143,6 +148,10 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 // measureTextBlock measures a text block.
 func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}, ctx *RenderContext) int {
 	text, _ := block["text"].(string)
+	trimmed := strings.TrimSpace(text)
+	if compactservice.IsRateLimitErrorMessage(text) || compactservice.StartsWithApiErrorPrefix(trimmed) {
+		return 1
+	}
 	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 	return len(lines)
 }
@@ -155,10 +164,9 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 
 	// In verbose mode or transcript, we might show more detail
 	if ctx.Verbose || ctx.IsTranscript {
-		if text, ok := block["text"].(string); ok && text != "" {
-			// Show the actual thinking text
-			lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
-			// Add thinking prefix to first line
+		thinkingBody := thinkingBlockString(block)
+		if thinkingBody != "" {
+			lines := renderMarkdown(thinkingBody, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 			if len(lines) > 0 {
 				lines[0] = "💭 " + lines[0]
 			}
@@ -176,9 +184,8 @@ func (r *AssistantMessageRenderer) measureThinkingBlock(block map[string]interfa
 		return 1
 	}
 
-	// In verbose mode or transcript, measure actual content
-	if text, ok := block["text"].(string); ok && text != "" {
-		lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+	if thinkingBody := thinkingBlockString(block); thinkingBody != "" {
+		lines := renderMarkdown(thinkingBody, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 		return len(lines)
 	}
 
@@ -193,37 +200,23 @@ func (r *AssistantMessageRenderer) renderRateLimitError(text string, ctx *Render
 
 // renderApiError renders an API error.
 func (r *AssistantMessageRenderer) renderApiError(text string, ctx *RenderContext) ([]string, error) {
-	// Extract error message from text
 	errorMsg := "API error"
-	if len(text) > 100 {
-		errorMsg = text[:100] + "..."
-	} else if text != "" {
+	if text != "" {
 		errorMsg = text
+	}
+	if !ctx.Verbose && len(errorMsg) > maxAPIErrorChars {
+		errorMsg = errorMsg[:maxAPIErrorChars] + "…"
 	}
 	return []string{"⚠ " + errorMsg}, nil
 }
 
-// Helper functions for error detection
-
-func isRateLimitError(text string) bool {
-	// Similar to TS isRateLimitErrorMessage
-	return strings.Contains(text, "rate limit") || strings.Contains(text, "Rate limit")
-}
-
-func isApiError(text string) bool {
-	// Check for common API error prefixes
-	errorPrefixes := []string{
-		"Invalid API key",
-		"API key",
-		"Authentication",
-		"Context limit",
-		"Prompt too long",
+// thinkingBlockString returns displayable thinking body (Anthropic uses "thinking", not "text").
+func thinkingBlockString(block map[string]interface{}) string {
+	if s, ok := block["thinking"].(string); ok && strings.TrimSpace(s) != "" {
+		return s
 	}
-
-	for _, prefix := range errorPrefixes {
-		if strings.Contains(text, prefix) {
-			return true
-		}
+	if s, ok := block["text"].(string); ok && strings.TrimSpace(s) != "" {
+		return s
 	}
-	return false
+	return ""
 }

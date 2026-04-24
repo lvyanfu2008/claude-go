@@ -1,6 +1,9 @@
 package compactservice
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // Sentinel error messages mirror the exported TS strings so UI/tests can match them verbatim.
 var (
@@ -10,12 +13,28 @@ var (
 	ErrIncompleteResponse       = errors.New("Compaction interrupted · This may be due to network issues — please try again.")
 )
 
+// rateLimitErrorPrefixes mirrors RATE_LIMIT_ERROR_PREFIXES in services/rateLimitMessages.ts.
+var rateLimitErrorPrefixes = []string{
+	"You've hit your",
+	"You've used",
+	"You're now using extra usage",
+	"You're close to",
+	"You're out of extra usage",
+}
+
+// IsRateLimitErrorMessage mirrors isRateLimitErrorMessage in services/rateLimitMessages.ts.
+func IsRateLimitErrorMessage(text string) bool {
+	for _, p := range rateLimitErrorPrefixes {
+		if strings.HasPrefix(text, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // StartsWithApiErrorPrefix mirrors startsWithApiErrorPrefix in services/api/errors.ts.
-// TS treats any text starting with "API Error" as a failure marker.
 func StartsWithApiErrorPrefix(s string) bool {
 	const prefix = "API Error"
-	if len(s) < len(prefix) {
-		return false
-	}
-	return s[:len(prefix)] == prefix
+	const loginPrefix = "Please run /login · API Error"
+	return strings.HasPrefix(s, prefix) || strings.HasPrefix(s, loginPrefix)
 }
