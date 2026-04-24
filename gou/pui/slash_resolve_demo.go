@@ -180,15 +180,6 @@ func handleLocalCommand(
 		}, nil
 	}
 
-	// Explicitly handled local commands that gou-demo doesn't support yet.
-	switch name {
-	case "all", "doctor", "effort", "help", "init", "model", "plugins", "session", "status", "stickers", "mobile":
-		return &processuserinput.ProcessUserInputBaseResult{
-			Messages:    []types.Message{SystemNotice(fmt.Sprintf("/%s is a local command — not yet implemented in gou-demo. Use the TS CLI.", name))},
-			ShouldQuery: false,
-		}, nil
-	}
-
 	// Unknown local command or local-jsx (React-rendered commands).
 	return &processuserinput.ProcessUserInputBaseResult{
 		Messages:    []types.Message{SystemNotice(fmt.Sprintf("/%s is a %s command — not executed in gou-demo TUI (use TS CLI for interactive handling).", name, cmd.Type))},

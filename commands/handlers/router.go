@@ -17,6 +17,16 @@ var localCommandHandlers = map[string]LocalCommandHandler{
 	"release-notes": func(args string) ([]byte, error) { return HandleReleaseNotesCommand() },
 	"context":       func(args string) ([]byte, error) { return HandleContextCommand() },
 	"vim":           func(args string) ([]byte, error) { return HandleVimCommand(args) },
+	"all":           func(args string) ([]byte, error) { return HandleAllCommand() },
+	"doctor":        func(args string) ([]byte, error) { return HandleDoctorCommand() },
+	"effort":        func(args string) ([]byte, error) { return HandleEffortCommand(args) },
+	"help":          func(args string) ([]byte, error) { return HandleHelpCommand() },
+	"model":         func(args string) ([]byte, error) { return HandleModelCommand(args) },
+	"plugins":       func(args string) ([]byte, error) { return HandlePluginsCommand() },
+	"session":       func(args string) ([]byte, error) { return HandleSessionCommand() },
+	"status":        func(args string) ([]byte, error) { return HandleStatusCommand() },
+	"stickers":      func(args string) ([]byte, error) { return HandleStickersCommand() },
+	"mobile":        func(args string) ([]byte, error) { return HandleMobileCommand() },
 }
 
 // HandleLocalCommand routes local commands to their appropriate handlers

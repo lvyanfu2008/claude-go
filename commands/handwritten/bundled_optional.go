@@ -131,6 +131,28 @@ func skillRunSkillGenerator() types.Command {
 }
 
 
+// skillInit mirrors TS src/commands/init.ts — type "prompt" that generates CLAUDE.md.
+func skillInit() types.Command {
+	src := "bundled"
+	pm := "analyzing your codebase"
+	d := "Initialize a new CLAUDE.md file with codebase documentation"
+	return types.Command{
+		CommandBase: types.CommandBase{
+			Name:                        "init",
+			Description:                 d,
+			HasUserSpecifiedDescription: ptrBool(true),
+			IsHidden:                    ptrBool(false),
+			LoadedFrom:                  ptrStr(src),
+			UserInvocable:               ptrBool(true),
+		},
+		Type:            "prompt",
+		AllowedTools:    []string{},
+		ContentLength:   ptrInt(0),
+		Source:          ptrStr(src),
+		ProgressMessage: &pm,
+	}
+}
+
 // AssembleBundledSkills matches src/skills/bundled/index.ts initBundledSkills order, then feature-gated skills.
 func AssembleBundledSkills() []types.Command {
 	out := make([]types.Command, 0, 24)
@@ -141,6 +163,7 @@ func AssembleBundledSkills() []types.Command {
 	out = append(out, bundledSimplifyBatch()...)
 	out = append(out, bundledAntStuck()...)
 	out = append(out, bundledLoopDream()...)
+	out = append(out, skillInit())
 	out = append(out, bundledOptionalSkills()...)
 	return out
 }
