@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"goc/agents/builtin"
-	"goc/ccb-engine/skilltools"
+	"goc/tools/skilltools"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/gou/conversation"

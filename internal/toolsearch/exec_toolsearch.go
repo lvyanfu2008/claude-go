@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 // ExecToolSearchForRunner mirrors ToolSearchTool.call + mapToolResultToToolResultBlockParam (src/tools/ToolSearchTool/ToolSearchTool.ts):

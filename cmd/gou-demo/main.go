@@ -57,7 +57,7 @@ import (
 	"goc/ccb-engine/apilog"
 	"goc/ccb-engine/debugpath"
 	"goc/ccb-engine/settingsfile"
-	"goc/ccb-engine/skilltools"
+	"goc/tools/skilltools"
 	"goc/claudeinit"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"

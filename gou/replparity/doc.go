@@ -60,7 +60,7 @@
 //
 // # Query / tools (local parity, not remote ReplBridge)
 //
-//   - TS query engine + tool runner → goc/conversation-runtime/query, goc/ccb-engine/skilltools
+//   - TS query engine + tool runner → goc/conversation-runtime/query, goc/tools/skilltools
 //   - gou-demo turn: processuserinput.ProcessUserInput, pui.BuildDemoParams / ApplyBaseResult (cmd/gou-demo/main.go)
 //   - ReplBridge / remote REPL: explicitly non-goal — docs/plans/gou-demo-repl-bridge-scope.md
 //

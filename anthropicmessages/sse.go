@@ -1,5 +1,5 @@
 // Package anthropicmessages implements Anthropic Messages API SSE streaming for callers
-// outside goc/ccb-engine/internal/anthropic (e.g. conversation-runtime/query).
+// outside goc/internal/anthropic (e.g. conversation-runtime/query).
 package anthropicmessages
 
 import (

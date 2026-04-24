@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 	"goc/deferredtoolsdelta"
 	"goc/tstenv"
 )

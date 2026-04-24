@@ -3,6 +3,6 @@
 // vs <available-deferred-tools> prepends, and the ToolSearch tool description shown to the model
 // (src/tools/ToolSearchTool/prompt.ts getPrompt / getToolLocationHint; src/utils/toolSearch.ts isDeferredToolsDeltaEnabled).
 //
-// It lives at module root (not under ccb-engine/internal/toolsearch) to avoid an import cycle:
+// It lives at module root (not under goc/internal/toolsearch) to avoid an import cycle:
 // goc/tools/toolpool → toolsearch → anthropic → goc/tools/toolpool.
 package deferredtoolsdelta

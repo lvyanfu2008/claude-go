@@ -3,7 +3,7 @@ package toolstub
 import (
 	"context"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 type toolRegistryCtxKey struct{}

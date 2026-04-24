@@ -7,8 +7,8 @@ go run ./cmd/gen-tool-parity
 ```
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
-- **Go anchor:** [ccb-engine/skilltools/parity_runner.go](ccb-engine/skilltools/parity_runner.go) — ParityToolRunner.Run + tools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-23T13:20:31Z
+- **Go anchor:** [tools/skilltools/parity_runner.go](tools/skilltools/parity_runner.go) — ParityToolRunner.Run + tools.Run; toolexecution JSON tools are host-defined (not listed).
+- **Generated:** 2026-04-24T07:45:44Z
 
 ## Status legend
 
@@ -74,7 +74,7 @@ go run ./cmd/gen-tool-parity
 | TestingPermission | — | NODE_ENV=test | — | full | tools.TestingPermissionFromJSON |
 | ListMcpResourcesTool | — | core | — | full | tools.ListMcpResourcesFromJSON |
 | ReadMcpResourceTool | — | core | — | full | tools.ReadMcpResourceFromJSON |
-| ToolSearch | — | tool_search_optimistic | — | full | ccb-engine/internal/toolsearch |
+| ToolSearch | — | tool_search_optimistic | — | full | internal/toolsearch |
 | echo_stub | — | not_ts_builtin | Go tests / demos only | full | tools.Run |
 | ReviewArtifact | — | REVIEW_ARTIFACT | — | full | tools.ReviewArtifactFromJSON |
 

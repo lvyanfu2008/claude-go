@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/diaglog"
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 	"goc/tstenv"
 )
 

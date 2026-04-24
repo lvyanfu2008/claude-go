@@ -1,5 +1,5 @@
-// Package skilltools exposes tool list helpers for ccb-engine callers outside internal/anthropic
-// (e.g. gou/pui cannot import …/internal/anthropic).
+// Package skilltools exposes tool list helpers for callers outside goc/internal/anthropic
+// (e.g. gou/pui cannot import that package directly).
 package skilltools
 
 import (
@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 // DiscoverSkillsToolNameFromEnv returns CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME (empty = TS default off / no tool).

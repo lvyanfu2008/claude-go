@@ -1,5 +1,5 @@
 // Package ccbhydrate builds JSON message arrays for model / query hosts
-// (`goc/ccb-engine/internal/anthropic.Message`-shaped: role + content string or block array).
+// (`goc/internal/anthropic.Message`-shaped: role + content string or block array).
 package ccbhydrate
 
 import (

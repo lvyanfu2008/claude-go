@@ -4,7 +4,7 @@ TS components [`claude-code/src/bridge/replBridge.ts`](../../../claude-code/src/
 
 ## Non-goal for gou-demo / `goc` TUI
 
-**gou-demo does not implement ReplBridge clients.** Local tool execution uses [`goc/ccb-engine/skilltools.ParityToolRunner`](../../ccb-engine/skilltools/parity_runner.go) (including the **REPL** batch runner in `parity_runner_repl.go`). There is no WebSocket/SDK bridge from the Bubble Tea demo to a remote Claude Code host.
+**gou-demo does not implement ReplBridge clients.** Local tool execution uses [`goc/tools/skilltools.ParityToolRunner`](../../tools/skilltools/parity_runner.go) (including the **REPL** batch runner in `parity_runner_repl.go`). There is no WebSocket/SDK bridge from the Bubble Tea demo to a remote Claude Code host.
 
 ## When a Go ReplBridge would matter
 

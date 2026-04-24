@@ -19,7 +19,7 @@ func envTruthyBetas(name string) bool {
 }
 
 // AnthropicBetaHeaderForToolSearch returns the anthropic-beta token when tools[] still includes ToolSearch
-// (dynamic tool loading). Mirrors [goc/ccb-engine/internal/toolsearch.AnthropicBetaHeader] without importing ccb-engine.
+// (dynamic tool loading). Mirrors [goc/internal/toolsearch.AnthropicBetaHeader] without importing toolsearch.
 func AnthropicBetaHeaderForToolSearch() string {
 	base := strings.ToLower(strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL")))
 	if strings.Contains(base, "vertex") || strings.Contains(base, "bedrock") {

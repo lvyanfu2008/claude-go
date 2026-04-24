@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 // WireToolsJSON returns tools[] after the same BuildWireConfig + ApplyWire pass as

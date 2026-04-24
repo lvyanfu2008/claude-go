@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/gemma"
-	"goc/ccb-engine/toolsearchwire"
+	"goc/tools/toolsearchwire"
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"

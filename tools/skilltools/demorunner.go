@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"goc/ccb-engine/toolstub"
+	"goc/tools/toolstub"
 	"goc/commands"
 	"goc/slashresolve"
 	"goc/types"

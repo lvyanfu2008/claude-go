@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 // PrepareAnthropicMessages mirrors claude.ts post-normalize steps for tool search:

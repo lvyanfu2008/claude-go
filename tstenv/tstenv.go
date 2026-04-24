@@ -1,7 +1,7 @@
 // Package tstenv mirrors TS ENABLE_TOOL_SEARCH / ANTHROPIC_BASE_URL gates from
 // src/utils/toolSearch.ts (getToolSearchMode, isToolSearchEnabledOptimistic proxy check)
 // and src/utils/model/providers.ts (getAPIProvider, isFirstPartyAnthropicBaseUrl).
-// It has no ccb-engine/internal dependency so messagesapi and ccb-engine can share it.
+// It has no goc/internal dependency so messagesapi and ccb-engine can share it.
 package tstenv
 
 import (

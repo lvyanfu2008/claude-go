@@ -1,7 +1,7 @@
 package toolsearch
 
 import (
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 // ApplyWire returns the tools[] slice for the Messages API (mirrors filteredTools + defer_loading in src/services/api/claude.ts).

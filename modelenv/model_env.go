@@ -1,5 +1,5 @@
 // Package modelenv resolves LLM model id from process environment (Claude Code / gou-demo / ccb-engine).
-// Kept outside ccb-engine/internal so goc/commands and goc/querycontext can import it.
+// Kept at module root (not under goc/internal/anthropic) so goc/commands and goc/querycontext can import it without the Messages client stack.
 package modelenv
 
 import (

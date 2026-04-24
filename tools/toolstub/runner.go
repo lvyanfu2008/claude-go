@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"goc/ccb-engine/internal/toolsearch"
+	"goc/internal/toolsearch"
 )
 
 // ToolRunner produces tool_result content strings for parity / stub execution.

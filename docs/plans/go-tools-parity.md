@@ -1,6 +1,6 @@
 # gou-demo local tools parity (Go vs TS)
 
-The gou-demo TUI streams tool calls through [`goc/ccb-engine/skilltools.ParityToolRunner`](../../ccb-engine/skilltools/parity_runner.go) (REPL batch path: `parity_runner_repl.go`). Tool envelopes and behavior are tracked in [`tools/toolparity/TS_GO_TOOL_PARITY.md`](../../tools/toolparity/TS_GO_TOOL_PARITY.md) (regenerate with `go run ./cmd/gen-tool-parity`).
+The gou-demo TUI streams tool calls through [`goc/tools/skilltools.ParityToolRunner`](../../tools/skilltools/parity_runner.go) (REPL batch path: `parity_runner_repl.go`). Tool envelopes and behavior are tracked in [`tools/toolparity/TS_GO_TOOL_PARITY.md`](../../tools/toolparity/TS_GO_TOOL_PARITY.md) (regenerate with `go run ./cmd/gen-tool-parity`).
 
 ## Environment gates (subset)
 

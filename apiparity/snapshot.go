@@ -1,5 +1,5 @@
 // Package apiparity builds deterministic snapshots of gou-demo API fields (tools[], system)
-// without importing goc/commands from goc/ccb-engine/skilltools (avoids an import cycle).
+// without importing goc/commands from goc/tools/skilltools (avoids an import cycle).
 package apiparity
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/settingsfile"
-	"goc/ccb-engine/skilltools"
+	"goc/tools/skilltools"
 	"goc/commands"
 	"goc/querycontext"
 	"goc/types"

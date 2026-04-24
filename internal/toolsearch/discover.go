@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"goc/ccb-engine/internal/anthropic"
+	"goc/internal/anthropic"
 )
 
 // ExtractDiscoveredToolNames scans messages for tool_reference blocks and compact_boundary
