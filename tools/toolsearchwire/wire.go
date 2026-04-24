@@ -1,5 +1,4 @@
-// Package toolsearchwire exposes tool-list shaping for non-engine callers (e.g. query streaming)
-// without importing goc/internal/toolsearch from packages that should stay narrow.
+// Package toolsearchwire is a thin facade over goc/internal/toolsearch for callers that want a stable tools/* import (e.g. query streaming).
 package toolsearchwire
 
 import (
