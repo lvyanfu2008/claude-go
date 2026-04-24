@@ -20,7 +20,7 @@
 | `goc/gou/messagerow` | `SegmentsFromMessage` — content 块 + `grouped_tool_use` / `collapsed_read_search` + `server_tool_use` / `advisor_tool_result`；**`collapsed_read_search`** 摘要文案由 [`SearchReadSummaryText`](messagerow/search_read_summary.go) 对齐 TS [`getSearchReadSummaryText`](../../claude-code/src/utils/collapseReadSearch.ts)，行末附带 **[`CtrlOToExpandHint`](messagerow/search_read_summary.go)**（与 Ink `CtrlOToExpand` 字面一致）。gou-demo 下 **`ctrl+o`** 绑定 **transcript 全屏**（冻结进入时刻的消息列表；`Esc`/`q`/`ctrl+c` 关闭，`ctrl+e` 切换 show-all 提示），见 [`docs/plans/gou-demo-transcript-ts-parity.md`](../docs/plans/gou-demo-transcript-ts-parity.md)。 |
 | `goc/gou/transcript` | 从 JSON 加载消息：UI 形 `[]Message`（含 `type`）或 API 形 `[{role,content}]` |
 | `goc/gou/ccbstream` | 将 ccb-engine 风格 NDJSON `StreamEvent` 应用到 `conversation.Store`（`Apply` / `Feed` / `ReplayFile`） |
-| `goc/conversation-runtime/query` | gou-demo **真实模型**：HTTP 流式 parity（`StreamingParity` + env 门控 + 密钥）；`-fake-stream` 为纯模拟 |
+| `goc/conversation-runtime/query` | gou-demo **真实模型**：HTTP 流式 parity（`StreamingParity` + env 门控 + 密钥）；`GOU_DEMO_CCB_INLINE=0` 时关闭该路径 |
 | `goc/gou/ccbhydrate` | `types.Message[]` → `payload.messages` JSON（`HydrateFromMessages` 形状） |
 | `goc/gou/pui` | 进程内 `processuserinput.ProcessUserInput`：`BuildDemoParams`、`ApplyProcessUserInputBaseResult`、`ProcessUserInputBaseResultHandoff`（标量字段与 TS `ProcessUserInputBaseResult` 同名 + `json` camelCase） |
 
@@ -36,7 +36,7 @@
 | 载入 transcript JSON（UI / API 形） | — / `goc/gou/transcript` | **已做** |
 | 回放 / 管道 NDJSON → `ccbstream.Apply` | `goEngine` / `goc/gou/ccbstream` | **已做** |
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
-| 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ 宿主打开流式 parity（`ApplyQueryHostEnvGates` / `QueryParams.StreamingParity`）；可选 `GOU_QUERY_STREAMING_PARITY=1`；`-fake-stream` / `GOU_DEMO_USE_FAKE_STREAM` 为纯模拟；未配置时 **降级** 假 `streamTick` 并 system 提示。 |
+| 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ 宿主打开流式 parity（`ApplyQueryHostEnvGates` / `QueryParams.StreamingParity`）；可选 `GOU_QUERY_STREAMING_PARITY=1`；未配置或出错时仅 **system 提示**（无模拟流式）。`GOU_DEMO_CCB_INLINE=0` 关闭 HTTP 流式。 |
 | `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `result.execution`（bash/slash prepare 桩） | `bashprepare` / `slashprepare` 仍可能填充 `Execution` | **TUI 未执行**（仅 system 提示）；无 TS 侧 `attachments_plan` 等多步执行 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动、**`[`** 滚动条 dump、**`v`** 外编辑器）；其余见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
@@ -94,8 +94,6 @@ cd goc && cat /path/to/stream.ndjson | go run ./cmd/gou-demo -stream-stdin
 
 # 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json
 cd goc && go run ./cmd/gou-demo
-# 仅 UI 模拟流、不调模型：
-cd goc && go run ./cmd/gou-demo -fake-stream
 ```
 
 **`execute_tool`**：`ccbstream.Apply` 不会执行客户端工具，但会追加一条 **system** 占位说明（工具名、`tool_use_id`），便于管道/回放时看见流里曾有过待执行工具；完整对话形状仍需在同一条 NDJSON 流中提供对应的 **`tool_result`**（或由宿主注入）。

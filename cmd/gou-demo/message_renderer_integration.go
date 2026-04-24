@@ -100,8 +100,8 @@ func (mri *MessageRendererIntegration) ComputeTotalHeight(messages []*types.Mess
 
 // RenderVisibleRange renders the visible range of messages.
 func (mri *MessageRendererIntegration) RenderVisibleRange(messages []*types.Message, startIdx, endIdx int, width int, isTranscript, verbose, shouldAnimate, shouldShowDot bool) string {
-	diaglog.Line("[new-renderer] RenderVisibleRange: messages=%d, range=[%d,%d), width=%d, isTranscript=%v, verbose=%v, shouldAnimate=%v",
-		len(messages), startIdx, endIdx, width, isTranscript, verbose, shouldAnimate)
+	//diaglog.Line("[new-renderer] RenderVisibleRange: messages=%d, range=[%d,%d), width=%d, isTranscript=%v, verbose=%v, shouldAnimate=%v",
+	//	len(messages), startIdx, endIdx, width, isTranscript, verbose, shouldAnimate)
 
 	ctx := &message.RenderContext{
 		Width:         width,
@@ -121,7 +121,7 @@ func (mri *MessageRendererIntegration) RenderVisibleRange(messages []*types.Mess
 		return "[Error rendering message range]"
 	}
 
-	diaglog.Line("[new-renderer] RenderVisibleRange result: %d lines", len(lines))
+	//diaglog.Line("[new-renderer] RenderVisibleRange result: %d lines", len(lines))
 	return strings.Join(lines, "\n")
 }
 
@@ -217,8 +217,8 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 
 	// Get messages from store
 	messages := m.store.Messages
-	diaglog.Line("[new-renderer] renderMessagePaneWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s'",
-		len(messages), len(m.store.StreamingToolUses), m.store.StreamingText)
+	//diaglog.Line("[new-renderer] renderMessagePaneWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s'",
+	//	len(messages), len(m.store.StreamingToolUses), m.store.StreamingText)
 
 	// Convert []types.Message to []*types.Message
 	var messagesPtr []*types.Message
@@ -386,8 +386,8 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 
 	// Get messages from store
 	messages := m.store.Messages
-	diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s', uiScreen=%v, msgViewportWanted=%v",
-		len(messages), len(m.store.StreamingToolUses), m.store.StreamingText, m.uiScreen, m.msgViewportWanted())
+	//diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s', uiScreen=%v, msgViewportWanted=%v",
+	//	len(messages), len(m.store.StreamingToolUses), m.store.StreamingText, m.uiScreen, m.msgViewportWanted())
 
 	// Convert []types.Message to []*types.Message
 	var messagesPtr []*types.Message
@@ -413,7 +413,7 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 		shouldAnimate,
 		shouldShowDot,
 	)
-	diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: RenderVisibleRange returned, content length=%d", len(content))
+	//diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: RenderVisibleRange returned, content length=%d", len(content))
 
 	// Add streaming tools and streaming text if needed (similar to renderMessagePaneWithNewRenderer)
 	if m.uiScreen != gouDemoScreenTranscript {
@@ -532,7 +532,7 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 		}
 	}
 
-	diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer returning: content length=%d, lines≈%d", len(content), strings.Count(content, "\n")+1)
+	//diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer returning: content length=%d, lines≈%d", len(content), strings.Count(content, "\n")+1)
 
 	return content, true
 }

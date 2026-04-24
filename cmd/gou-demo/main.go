@@ -1,5 +1,5 @@
 // Command gou-demo is a minimal Bubble Tea full-screen UI: new message renderer + markdown + tool blocks (Phase 4 messagerow).
-// Extracted [model.Update] branches: update_streaming.go (query yield / NDJSON / fake stream), update_layout.go (window resize).
+// Extracted [model.Update] branches: update_streaming.go (query yield / NDJSON), update_layout.go (window resize).
 // Layout uses the full terminal size (main buffer by default). Optional GOU_DEMO_ALT_SCREEN=1 uses the alternate buffer (no shell scrollback mixing).
 // With GOU_DEMO_LOG=1, trace uses the same path rules as TS debug log (see goc/ccb-engine/debugpath); on TTY without GOU_DEMO_LOG_FILE, trace goes to that file, not stderr.
 //
@@ -8,7 +8,6 @@
 // Flags: -transcript=file.json (UI or API messages), -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
 // Real model: [goc/conversation-runtime/query.Query] HTTP streaming parity when ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) is set
 // and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]).
-// Use -fake-stream (or GOU_DEMO_USE_FAKE_STREAM=1) for a UI-only simulated stream with no HTTP (no apilog bodies on send).
 // When a tool gate returns ask, GOU_QUERY_ASK_STRATEGY=allow auto-allows for headless demo (maps to [toolexecution.ExecutionDeps.AskResolver]).
 // GOU_TOOLEXEC_BASH_SANDBOX_1B=1 enables permissions.ts whole-tool ask bypass on Bash when the tool input carries a non-empty command without dangerously_disable_sandbox (see toolexecution.WholeToolAskSkippedForBash1b).
 // Go-side init port (subset of TS init.ts): gou-demo runs [goc/claudeinit.Init] (includes [settingsfile.EnsureProjectClaudeEnvOnce]). See docs/plans/go-init-port.md.
@@ -333,8 +332,8 @@ func gouDemoWarnApilogExpectations(ccbInline bool) {
 	}
 	if !ccbInline {
 		fmt.Fprintf(os.Stderr,
-			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but this run uses -fake-stream (or GOU_DEMO_USE_FAKE_STREAM / GOU_DEMO_CCB_INLINE=0).\n"+
-				"           No HTTP → apilog will not append request/response lines. For real HTTP logs, omit -fake-stream and set ANTHROPIC_API_KEY plus GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1.\n")
+			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but this run has real HTTP / streaming parity disabled (GOU_DEMO_CCB_INLINE=0).\n"+
+				"           No HTTP → apilog will not append request/response lines. Unset GOU_DEMO_CCB_INLINE and set ANTHROPIC_API_KEY plus GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 for real API logs.\n")
 		return
 	}
 	if !gouDemoHasLLMKeys() {
@@ -437,8 +436,6 @@ func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams
 	}()
 }
 
-type streamTick struct{}
-
 // teardropAsterisk matches TS constants/figures.ts TEARDROP_ASTERISK (Spinner.tsx).
 const teardropAsterisk = "\u273b"
 
@@ -523,10 +520,6 @@ type model struct {
 	pendingDelta int
 	sticky       bool
 	heightCache  map[string]int
-
-	// streamChunks appends whole fragments so ``` fences stay valid while streaming.
-	streamChunks []string
-	streamIdx    int
 
 	// processUserInputBaseResultHandoff mirrors TS ProcessUserInputBaseResult non-messages fields after last Apply (shouldQuery, model, allowedTools, effort, resultText, nextInput, submitNextInput).
 	processUserInputBaseResultHandoff pui.ProcessUserInputBaseResultHandoff
@@ -652,11 +645,10 @@ func main() {
 	transcriptPath := flag.String("transcript", "", "load initial messages from JSON file (UI []Message or API [{role,content}]); default session starts empty")
 	replayCC := flag.String("replay-cc", "", "apply ccb-engine NDJSON stream events from file (protocol-v1 StreamEvent lines), then open TUI")
 	streamStdin := flag.Bool("stream-stdin", false, "read NDJSON stream events from stdin (pipe from ccb-engine); open /dev/tty for keys when available")
-	fakeStreamFlag := flag.Bool("fake-stream", false, "do not call the model: simulated stream only (no HTTP; no apilog bodies)")
 	mcpCommandsJSON := flag.String("mcp-commands-json", "", "JSON array file of MCP prompt commands (types.Command); overrides "+mcpcommands.EnvCommandsJSONPath)
 	mcpToolsJSON := flag.String("mcp-tools-json", "", "JSON array file of MCP tool definitions for assembleToolPool; overrides "+mcpcommands.EnvToolsJSONPath)
 	// Backward compat: real LLM used to be opt-in via -ccb-inline; it is now the default. Flag is a no-op.
-	ccbInlineCompat := flag.Bool("ccb-inline", false, "deprecated: no-op (real LLM is default). Use -fake-stream for simulation only")
+	ccbInlineCompat := flag.Bool("ccb-inline", false, "deprecated: no-op (real LLM is the default; use GOU_DEMO_CCB_INLINE=0 to disable HTTP streaming parity only)")
 	flag.Parse()
 	_ = ccbInlineCompat
 
@@ -694,13 +686,7 @@ func main() {
 		}
 	}
 	inlineCCB := true
-	if *fakeStreamFlag {
-		inlineCCB = false
-	}
-	if gouDemoEnvTruthy("GOU_DEMO_USE_FAKE_STREAM") {
-		inlineCCB = false
-	}
-	// Legacy: explicit disable (used when real LLM was opt-in)
+	// Legacy: disable HTTP / streaming parity (e.g. UI-only or tests without keys).
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_CCB_INLINE"))); v == "0" || v == "false" || v == "off" || v == "no" {
 		inlineCCB = false
 	}
@@ -777,7 +763,7 @@ func (m *model) maybeRecordTranscript() {
 	}
 }
 
-// BindCCB wires Bubble Tea Send and whether real HTTP streaming parity is allowed (vs simulated stream only).
+// BindCCB wires Bubble Tea Send and whether real HTTP streaming parity is allowed.
 func (m *model) BindCCB(send func(tea.Msg), inline bool) {
 	m.ccbSend = send
 	m.ccbInline = inline
@@ -1051,12 +1037,12 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			if m.ccbInline && m.ccbSend != nil {
 				baseMsgs, err := tryMsgs()
 				if err != nil {
-					gouDemoTracef("gou-demo: ccbhydrate.MessagesJSON error: %v (fallback fake stream)", err)
-					m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: ccb messages JSON: %v (fallback fake stream)", err)))
+					gouDemoTracef("gou-demo: ccbhydrate.MessagesJSON error: %v", err)
+					m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: ccb messages JSON: %v", err)))
 					m.rebuildHeightCache()
 				} else if len(bytes.TrimSpace(baseMsgs)) < 3 || bytes.Equal(bytes.TrimSpace(baseMsgs), []byte("[]")) {
-					gouDemoTracef("gou-demo: empty messages JSON bytes=%d (fake stream)", len(baseMsgs))
-					m.store.AppendMessage(pui.SystemNotice("gou-demo: empty chat transcript (fallback fake stream)"))
+					gouDemoTracef("gou-demo: empty messages JSON bytes=%d", len(baseMsgs))
+					m.store.AppendMessage(pui.SystemNotice("gou-demo: empty chat transcript (cannot call model)"))
 					m.rebuildHeightCache()
 				} else {
 					var toolsJSON json.RawMessage
@@ -1263,7 +1249,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 							usedCCB = true
 						} else {
 							m.store.AppendMessage(pui.SystemNotice(
-								"gou-demo: ccb-engine/localturn was removed. For a real model reply, set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1. Or use -fake-stream for a simulated reply only.",
+								"gou-demo: ccb-engine/localturn was removed. For a real model reply, set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1.",
 							))
 							m.rebuildHeightCache()
 						}
@@ -1276,20 +1262,18 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 				}
 				return m, spinnerTickCmd()
 			}
-			gouDemoTracef("starting fake streamTick path")
-			m.beginQuerySpinner()
-			m.queryBusy = true
-			m.streamChunks = []string{
-				"## Streamed reply\n\n",
-				"Chunks preserve ``` fences.\n\n```go\n",
-				`fmt.Println("gou-demo")`,
-				"\n```\n\n",
-				"Done.",
+			if !m.ccbInline {
+				m.store.AppendMessage(pui.SystemNotice(
+					"gou-demo: real HTTP / streaming parity is disabled (GOU_DEMO_CCB_INLINE=0). Unset it and set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) with GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 for a model reply.",
+				))
+				m.rebuildHeightCache()
+				m.sticky = true
+				m.scrollTop = 1 << 30
 			}
-			m.streamIdx = 0
-			m.store.ClearStreaming()
-			m.store.ClearStreamingToolUses()
-			return m, tea.Batch(cmd, tea.Tick(90*time.Millisecond, func(time.Time) tea.Msg { return streamTick{} }), spinnerTickCmd())
+			if cmd != nil {
+				return m, cmd
+			}
+			return m, nil
 		}
 		gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
 		if !out.EffectiveShouldQuery && !out.HadExecutionRequest {
@@ -1312,7 +1296,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.manualRenderMode {
 		switch msg.(type) {
-		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, streamTick, gouToolSummaryDelayTickMsg:
+		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg:
 			m.pendingEvents = append(m.pendingEvents, msg)
 			return m, nil
 		}
@@ -1361,9 +1345,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gouQueryDoneMsg:
 		return m.handleUpdateGouQueryDone(msg)
-
-	case streamTick:
-		return m.handleUpdateStreamTick(msg)
 
 	case gouToolSummaryDelayTickMsg:
 		return m.handleUpdateToolSummaryDelayTick(msg)

@@ -1,15 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
-	"time"
 
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
 	"goc/gou/pui"
-	"goc/types"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -74,39 +70,6 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 		m.maybeRecordTranscript()
 	}
 	m.rebuildHeightCache()
-	if m.uiScreen != gouDemoScreenTranscript {
-		m.sticky = true
-		m.scrollTop = 1 << 30
-	}
-	return m, nil
-}
-
-func (m *model) handleUpdateStreamTick(_ streamTick) (tea.Model, tea.Cmd) {
-	if len(m.streamChunks) == 0 || m.streamIdx >= len(m.streamChunks) {
-		return m, nil
-	}
-	m.store.AppendStreamingChunk(m.streamChunks[m.streamIdx])
-	m.streamIdx++
-	if m.streamIdx < len(m.streamChunks) {
-		return m, tea.Tick(90*time.Millisecond, func(time.Time) tea.Msg { return streamTick{} })
-	}
-	raw, _ := json.Marshal([]map[string]string{{"type": "text", "text": strings.TrimSpace(m.store.StreamingText)}})
-	m.store.AppendMessage(types.Message{
-		UUID:    fmt.Sprintf("a-%d", time.Now().UnixNano()),
-		Type:    types.MessageTypeAssistant,
-		Content: raw,
-	})
-	m.store.ClearStreaming()
-	m.store.ClearStreamingToolUses()
-	m.streamChunks = nil
-	m.streamIdx = 0
-	m.queryBusy = false
-	m.endQuerySpinner()
-	m.rebuildHeightCache()
-	gouDemoTracef("fake streamTick finished storeMessages=%d", len(m.store.Messages))
-	if m.transcript != nil {
-		m.maybeRecordTranscript()
-	}
 	if m.uiScreen != gouDemoScreenTranscript {
 		m.sticky = true
 		m.scrollTop = 1 << 30

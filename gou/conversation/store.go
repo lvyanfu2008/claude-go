@@ -13,7 +13,7 @@ type Store struct {
 
 	// StreamingToolUses mirrors REPL.tsx streamingToolUses (in-flight tool_use rows before the turn finalizes).
 	// NDJSON ccbstream typically keeps this empty (atomic tool_use lines); HTTP SSE wiring can append deltas later.
-	// Cleared on turn_complete / response_end (TS message_stop), query turn boundaries, and gou-demo fake stream end.
+	// Cleared on turn_complete / response_end (TS message_stop), query turn boundaries, and completed gou-demo streaming turns.
 	StreamingToolUses []StreamingToolUse
 
 	// UsageInputTotal / UsageOutputTotal sum ccbstream "usage" events (TS getTotalInputTokens / getTotalOutputTokens path).

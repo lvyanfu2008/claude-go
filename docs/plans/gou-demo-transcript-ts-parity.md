@@ -27,7 +27,7 @@ Reference: [`claude-code/src/screens/REPL.tsx`](../../../claude-code/src/screens
 5. In transcript, press **`/`**, type a substring (e.g. `seed`), confirm status shows matches and **`n`/`N`** jumps between hits; while **not** in **`[`** dump mode, matching substrings in the message pane should show **search highlight** (lipgloss background on hits, same intent as TS `useSearchHighlight`). **`Esc`** in the bar clears search; resize terminal clears search.
 6. With search bar **closed**, **home** / **end** and **ctrl+home** / **ctrl+end** jump to top / bottom, **space** page-downs one viewport, **ctrl+n** / **ctrl+p** move one line (TS `modalPagerAction` + `scroll:top`/`scroll:bottom`). With search bar **open**, **arrows** and those pager keys do **not** scroll (TS `isModal={!searchOpen}`).
 7. **`[`** (search bar closed): footer switches to dump hint; plain transcript prints to **scrollback** via **`tea.Printf`**; **`/`** / **`n`/`N`** and **pager keys** are inactive until exit transcript (TS `!dumpMode` / no `ScrollKeybindingHandler`). **`v`** writes temp file and runs **`$VISUAL`/`$EDITOR`** (blocking `tea.ExecProcess`); empty env shows **wrote … · no $VISUAL/$EDITOR set**.
-8. Trigger a **streaming** turn (fake stream or real query): while in transcript, the pane must **not** jump to new assistant chunks; exit transcript to see live tail.
+8. Trigger a **streaming** turn (real `query` parity, or **`-replay-cc`** / **`-stream-stdin`**): while in transcript, the pane must **not** jump to new assistant chunks; exit transcript to see live tail.
 
 ## Automated
 
