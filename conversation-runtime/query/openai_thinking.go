@@ -19,7 +19,8 @@ func isDeepSeekV4FlashModel(model string) bool {
 	return strings.Contains(m, "deepseek-v4-flash") || strings.Contains(m, "v4-flash")
 }
 
-// IsOpenAIThinkingEnabled mirrors src/services/api/openai/index.ts isOpenAIThinkingEnabled.
+// IsOpenAIThinkingEnabled mirrors claude-code src/api-client/openai/openaiThinking.ts
+// (and legacy re-exports under services/api/openai).
 // DeepSeek-V4-Pro (and API ids containing deepseek-v4-pro) request chain-of-thought params;
 // DeepSeek-V4-Flash is treated as a fast non-thinking path unless OPENAI_ENABLE_THINKING=1.
 func IsOpenAIThinkingEnabled(model string) bool {
