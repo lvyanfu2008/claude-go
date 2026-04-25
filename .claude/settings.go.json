@@ -1,7 +1,7 @@
 {
   "env": {
     "FEATURE_WORKFLOW_SCRIPTS": "0",
-    "USER_TYPE": "ant",
+    "USER_TYPE": "lvyanfu",
     "CLAUDE_CODE_USE_OPENAI": "1",
     "CLAUDE_CODE_DEBUG_LOGS_DIR": "debug/goc",
     "CLAUDE_CODE_LOG_API_REQUEST_BODY": "1",
