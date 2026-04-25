@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"goc/internal/jsonschemavalidate"
 	"goc/types"
 )
 
@@ -72,6 +73,24 @@ func syntheticPreToolHookDenied(deps ExecutionDeps, toolUseID, assistantUUID, re
 	return CreateUserMessage(deps, []map[string]any{{
 		"type":        "tool_result",
 		"content":     `<tool_use_error>` + msg + `</tool_use_error>`,
+		"is_error":    true,
+		"tool_use_id": toolUseID,
+	}}, msg, assistantUUID)
+}
+
+// syntheticInputValidationError creates a tool_result message with InputValidationError prefix
+// and optional deferred-tool schema hint. Mirrors TS formatZodValidationError + buildSchemaNotSentHint.
+func syntheticInputValidationError(deps ExecutionDeps, toolUseID, assistantUUID, toolName string, err error) types.Message {
+	formatted := jsonschemavalidate.FormatInputValidationError(toolName, err)
+	msg := "InputValidationError: " + formatted
+	if deps.SchemaHintBuilder != nil {
+		if hint := deps.SchemaHintBuilder(toolName); hint != "" {
+			msg += hint
+		}
+	}
+	return CreateUserMessage(deps, []map[string]any{{
+		"type":        "tool_result",
+		"content":     "<tool_use_error>" + msg + "</tool_use_error>",
 		"is_error":    true,
 		"tool_use_id": toolUseID,
 	}}, msg, assistantUUID)

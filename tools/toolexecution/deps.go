@@ -36,6 +36,16 @@ type ExecutionDeps struct {
 	MainLoopModel  string
 	ReadToolRoots  []string
 	ReadToolMemCWD string
+
+	// SchemaHintBuilder returns a deferred-tool discovery hint string for the given tool name.
+	// Returned hint is appended to InputValidationError tool_results. When nil or returns "",
+	// no hint is appended. Mirrors buildSchemaNotSentHint in TS.
+	SchemaHintBuilder func(toolName string) string
+
+	// MultiMessageToolHandler, when set, allows a tool to produce multiple result
+	// messages (e.g., Skill tool metadata + content). Checked before InvokeTool.
+	// Returns (messages, true) if handled, (nil, false) to fall through to InvokeTool.
+	MultiMessageToolHandler func(ctx context.Context, name, toolUseID string, input json.RawMessage, assistantUUID string) (messages []types.Message, handled bool)
 }
 
 // WithExecutionDeps attaches deps for [DepsFromContext] (used by check_permissions path).

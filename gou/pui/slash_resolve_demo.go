@@ -159,12 +159,8 @@ func handleLocalCommand(
 	if name == "clear" || name == "reset" || name == "new" {
 		return handleClearCommand(store)
 	}
-	// compact is complex (needs API call) — not yet implemented in Go TUI.
 	if name == "compact" {
-		return &processuserinput.ProcessUserInputBaseResult{
-			Messages:    []types.Message{SystemNotice("/compact is not yet implemented in gou-demo. Use the TS CLI instead.")},
-			ShouldQuery: false,
-		}, nil
+		return handleCompactCommand(store)
 	}
 
 	if name == "files" {

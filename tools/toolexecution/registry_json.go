@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/bashzog"
+	"goc/internal/jsonschemavalidate"
 	"goc/internal/toolvalidator"
 	"goc/types"
 )
@@ -105,7 +106,7 @@ func (t *jsonSchemaTool) Call(
 	}
 	if !(toolvalidator.InputValidatorMode() == "zog" && strings.EqualFold(t.name, bashzog.ZogToolName)) {
 		if err := ValidateInputAgainstSchema(t.name, t.schema, input); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("InputValidationError: %s", jsonschemavalidate.FormatInputValidationError(t.name, err))
 		}
 	}
 	data := append(json.RawMessage(nil), input...)

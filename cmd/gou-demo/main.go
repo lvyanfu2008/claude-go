@@ -21,7 +21,7 @@
 // Read/Grep/Glob stream tail: default keeps each tool_use + tool_result as separate rows (avoids looking like history was cleared). Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 for TS-style merge into collapsed_read_search (gou/ccbstream/apply.go).
 // Prompt: merged one-line Grep/Glob/Read summaries (GOU_DEMO_TOOL_USE_SUMMARY_LINE) wait GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS after each assistant message first appears (default 2000 ms) while full Search/Read rows are shown; set to 0 to collapse immediately.
 //
-// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom. Prompt: default Enter send; Alt+Enter or Option+Enter (macOS) newline when the terminal sends Meta; Ctrl+J / LF newline. GOU_DEMO_REPL_ENTER_SUBMITS=0 for chat mode (Enter newline, Alt+Enter send). Shift+↑↓ move line. F2 toggles slash picker. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e show-all expands collapsed/grouped + full tool_result bodies except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript (compact): same omission + tool_result folded on user rows; assistant rows show ⏺+⎿ summaries. Ctrl+e show-all or [ dump shows full blocks. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom. Prompt: default Enter send; Alt+Enter or Option+Enter (macOS) newline when the terminal sends Meta; Ctrl+J / LF newline. GOU_DEMO_REPL_ENTER_SUBMITS=0 for chat mode (Enter newline, Alt+Enter send). Shift+↑↓ move line. F2 toggles the slash list when not already shown; typing / in the first line (TS-style) opens the list; ↑/↓ move selection; input stays in the main field. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e show-all expands collapsed/grouped + full tool_result bodies except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript (compact): same omission + tool_result folded on user rows; assistant rows show ⏺+⎿ summaries. Ctrl+e show-all or [ dump shows full blocks. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
 // Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
 // Message pane: new renderer ([message.VirtualList] in [gou/message]) drives both prompt and transcript screens. Prompt uses [bubbles/viewport] by default (full-document scroll + ctrl+y fold-all); disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no to render the visible slice directly on top of m.scrollTop.
 // Mouse: SGR mouse (cell motion) enables wheel + plain left-drag on the message list when not disabled by env. Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse (keyboard scroll still works), unless GOU_DEMO_DISALLOW_DISABLE_MOUSE=1. One-column TUI scrollbar is on by default when the pane is wide enough; GOU_DEMO_MESSAGE_SCROLLBAR=0|false|off|no or GOU_DEMO_NO_SCROLLBAR=1 turns it off. Alternate screen: opt-in GOU_DEMO_ALT_SCREEN=1 (default main buffer). Bubbles viewport: at-top wheel-up can release mouse for host scrollback; opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
@@ -529,9 +529,12 @@ type model struct {
 	msgScrollbarW int
 
 	permAsk           *permissionAskOverlay
-	slashPick         *slashPickerOverlay
 	slashCommands     []types.Command
 	slashCommandsOnce bool
+	// slashListUser: F2 toggles the command list when not in TS auto-suggest (e.g. empty input).
+	// slashListSel is the index in the filtered list shown beside the input (TS-style / suggestions).
+	slashListUser bool
+	slashListSel  int
 	// slashResultPanel is local slash text output shown below the input until Esc (prompt screen only).
 	slashResultPanel *string
 
@@ -879,11 +882,6 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	if m.handlePermissionKey(msg) {
 		return m, nil
 	}
-	if m.slashPick != nil {
-		if m.handleSlashPickerKey(msg) {
-			return m, nil
-		}
-	}
 	if msg.String() == "ctrl+l" {
 		return m, teaGlobalRedrawCmd()
 	}
@@ -893,7 +891,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m, nil
 	}
 	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
-		m.slashPick = nil
+		m.slashListUser = false
 		return m, m.enterTranscriptScreen()
 	}
 	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
@@ -934,8 +932,8 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	case "ctrl+c":
 		return m, tea.Quit
 	case "esc":
-		if m.slashPick != nil {
-			m.slashPick = nil
+		if m.slashListUser {
+			m.slashListUser = false
 			return m, nil
 		}
 		if m.slashResultPanel != nil {
@@ -948,7 +946,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 		return m, tea.Quit
 	case "f2":
-		m.toggleSlashPicker()
+		m.toggleSlashListUser()
 		return m, nil
 	}
 	if m.uiScreen == gouDemoScreenTranscript {
@@ -978,7 +976,11 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 		return m, nil
 	}
+	if m.uiScreen == gouDemoScreenPrompt && m.handleSlashListNavKey(msg) {
+		return m, nil
+	}
 	m.pr.Update(prompt.NormalizeTTYNewlineKey(msg))
+	m.syncSlashListAfterPrompt()
 	if m.pr.Submitted() {
 		fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
 		m.pr.SetValue("")
@@ -1042,6 +1044,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(rStore.Messages))
 		if out.NextInput != "" {
 			m.pr.SetValue(out.NextInput)
+			m.syncSlashListAfterPrompt()
 		}
 		m.applySlashResultPanelFromSubmit(line, r, out)
 		m.rebuildHeightCache()
@@ -1234,10 +1237,11 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 							tcx.Options.MainLoopModel = mainLoopModel
 							qdeps := query.ProductionDeps()
 							te := toolexecution.ExecutionDeps{
-								InvokeTool:     runner.Run,
-								MainLoopModel:  mainLoopModel,
-								ReadToolRoots:  runner.ToolReadMappingRoots(),
-								ReadToolMemCWD: runner.ToolReadMappingMemCWD(),
+								InvokeTool:              runner.Run,
+								MainLoopModel:           mainLoopModel,
+								ReadToolRoots:           runner.ToolReadMappingRoots(),
+								ReadToolMemCWD:          runner.ToolReadMappingMemCWD(),
+								MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(params.Commands, m.store.ConversationID),
 							}
 							// Opt-in TS permissions.ts 1b: whole-tool alwaysAsk on Bash skipped when input looks sandboxed (see toolexecution.BashSandboxRule1b).
 							if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
@@ -1774,7 +1778,7 @@ func (m *model) View() tea.View {
 		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.width))
 		out = lipgloss.JoinVertical(lipgloss.Left, out, mod)
 	}
-	if m.slashPick != nil {
+	if m.slashListVisible() {
 		overlay := m.renderSlashPicker(m.width, min(14, m.height/3))
 		out = lipgloss.JoinVertical(lipgloss.Left, out, overlay)
 	}

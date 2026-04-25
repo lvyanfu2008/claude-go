@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"goc/ccb-engine/apilog"
+	"goc/ccb-engine/debugpath"
 	"goc/commands"
 	"goc/types"
 )
@@ -29,8 +31,10 @@ func debugLogPath(sessionID string) string {
 }
 
 func resolveDebugBundled(args, sessionID string) types.SlashResolveResult {
+	// TS side-effect parity: enable debug logging so future API calls are captured.
+	enableDebugLogging()
+
 	logPath := debugLogPath(sessionID)
-	// TS enableDebugLogging side effect omitted — log file may not exist until host enables debug.
 	tail, err := tailTextFile(logPath, debugTailBytes, debugTailLines)
 	logInfo := ""
 	if err != nil {
@@ -121,4 +125,27 @@ func tailTextFile(path string, maxBytes, maxLines int) (string, error) {
 	}
 	body := strings.Join(lines, "\n")
 	return fmt.Sprintf("Log size: %d bytes\n\n### Last %d lines\n\n```\n%s\n```", fi.Size(), maxLines, body), nil
+}
+
+// enableDebugLogging mirrors src/utils/debug.ts enableDebugLogging: enables debug
+// logging mid-session so subsequent API activity is captured. Returns true if
+// logging was already active.
+func enableDebugLogging() bool {
+	wasActive := apilog.DebugModeEnabled()
+	if !wasActive {
+		os.Setenv("CLAUDE_CODE_DEBUG", "1")
+		// Ensure the log file exists for the current session.
+		if p := debugpath.ResolveLogPath(); p != "" {
+			dir := filepath.Dir(p)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return false
+			}
+			f, err := os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+			if err == nil {
+				f.Close()
+				debugpath.MaybeUpdateLatestSymlink(p)
+			}
+		}
+	}
+	return wasActive
 }

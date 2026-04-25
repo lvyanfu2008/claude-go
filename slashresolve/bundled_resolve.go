@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"goc/commands/featuregates"
 	"goc/types"
 )
 
@@ -57,12 +58,24 @@ func ResolveBundledSkill(cmd types.Command, args, sessionID string, opt *Bundled
 	case "keybindings-help":
 		res, err = resolveKeybindingsHelp(args)
 	case "hunter":
+		if !featuregates.Feature("REVIEW_ARTIFACT") {
+			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate REVIEW_ARTIFACT disabled)", cmd.Name)
+		}
 		res, err = resolveBundledMarkdownUserRequest("hunter.md", args)
 	case "schedule":
+		if !featuregates.Feature("AGENT_TRIGGERS_REMOTE") {
+			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate AGENT_TRIGGERS_REMOTE disabled)", cmd.Name)
+		}
 		res, err = resolveSchedule(args, opt)
 	case "claude-api":
+		if !featuregates.Feature("BUILDING_CLAUDE_APPS") {
+			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate BUILDING_CLAUDE_APPS disabled)", cmd.Name)
+		}
 		res, err = resolveClaudeAPI(args, opt.Cwd)
 	case "run-skill-generator":
+		if !featuregates.Feature("RUN_SKILL_GENERATOR") {
+			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate RUN_SKILL_GENERATOR disabled)", cmd.Name)
+		}
 		res, err = resolveBundledMarkdownUserRequest("run-skill-generator.md", args)
 	case "loop":
 		res, err = resolveLoop(args)
@@ -75,6 +88,9 @@ func ResolveBundledSkill(cmd types.Command, args, sessionID string, opt *Bundled
 	case "verify":
 		res, err = resolveVerifyBundled(args)
 	case "claude-in-chrome":
+		if !featuregates.BundledChromeSkillEnabled() {
+			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate CHICAGO_MCP disabled)", cmd.Name)
+		}
 		res = resolveClaudeInChrome(args)
 	case "skillify":
 		res, err = resolveSkillifyBundled(args, opt.SessionMemory, opt.UserMessages)

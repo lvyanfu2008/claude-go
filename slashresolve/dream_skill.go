@@ -2,7 +2,9 @@ package slashresolve
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"goc/claudemd"
@@ -90,7 +92,7 @@ Return a brief summary of what you consolidated, updated, or pruned. If nothing 
 	return s
 }
 
-// resolveDream mirrors src/skills/bundled/dream.ts getPromptForCommand (recordConsolidation omitted — TS side effect).
+// resolveDream mirrors src/skills/bundled/dream.ts getPromptForCommand.
 func resolveDream(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) {
 	cwd := "."
 	if opt != nil && strings.TrimSpace(opt.Cwd) != "" {
@@ -103,10 +105,26 @@ func resolveDream(args string, opt *BundledResolveOptions) (types.SlashResolveRe
 	memoryRoot := claudemd.GetAutoMemPath(absCwd)
 	transcriptDir := sessiontranscript.ProjectDirForOriginalCwd(absCwd, sessiontranscript.ConfigHomeDir())
 
+	// Stamp the consolidation lock optimistically (best-effort, TS side-effect parity).
+	recordConsolidation(memoryRoot)
+
 	base := buildConsolidationPrompt(memoryRoot, transcriptDir, "")
 	text := dreamPromptPrefix + base
 	if s := strings.TrimSpace(args); s != "" {
 		text += "\n\n## Additional context from user\n\n" + s
 	}
 	return types.SlashResolveResult{UserText: text, Source: types.SlashResolveBundledEmbed}, nil
+}
+
+// recordConsolidation stamps the consolidation lock for manual /dream (best-effort).
+// Mirrors src/services/autoDream/consolidationLock.ts recordConsolidation.
+func recordConsolidation(memoryRoot string) {
+	if memoryRoot == "" {
+		return
+	}
+	lockPath := filepath.Join(memoryRoot, ".consolidate-lock")
+	if err := os.MkdirAll(memoryRoot, 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(lockPath, []byte(strconv.Itoa(os.Getpid())), 0o644)
 }

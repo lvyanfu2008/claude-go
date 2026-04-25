@@ -80,6 +80,15 @@ func RunToolUseChan(
 		}
 
 		if deps.InvokeTool != nil {
+			// Multi-message handler takes precedence over single-result InvokeTool
+			if deps.MultiMessageToolHandler != nil {
+				if msgs, handled := deps.MultiMessageToolHandler(ctx, block.Name, block.ID, block.Input, assistant.UUID); handled {
+					for _, msg := range msgs {
+						ch <- streamingtool.ToolRunUpdate{Message: &msg}
+					}
+					return
+				}
+			}
 			content, isErr, err := deps.InvokeTool(ctx, block.Name, block.ID, block.Input)
 			if ctx.Err() != nil {
 				m := syntheticAborted(deps, block.ID, assistant.UUID)

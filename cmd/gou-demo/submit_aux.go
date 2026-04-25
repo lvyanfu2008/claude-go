@@ -4,16 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"slices"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"goc/commands"
 	"goc/tools/toolexecution"
+	"goc/types"
 )
 
 type permissionAskReply struct {
@@ -38,12 +37,8 @@ type gouPermissionAskMsg struct {
 	replyCh   chan permissionAskReply
 }
 
-type slashPickerOverlay struct {
-	allNames []string
-	filter   string
-	idx      int
-}
-
+// slashFilterFromPrompt returns the text after the leading "/" on the first line (for filtering),
+// or "" if the first line is not a slash command.
 func slashFilterFromPrompt(prompt string) string {
 	line := prompt
 	if i := strings.IndexByte(prompt, '\n'); i >= 0 {
@@ -56,35 +51,97 @@ func slashFilterFromPrompt(prompt string) string {
 	return strings.TrimPrefix(line, "/")
 }
 
-func (o *slashPickerOverlay) filtered() []string {
-	if o == nil {
+func cursorOnFirstLine(value string, cursorRune int) bool {
+	if cursorRune < 0 {
+		return false
+	}
+	rs := []rune(value)
+	if cursorRune > len(rs) {
+		return false
+	}
+	for i := 0; i < cursorRune; i++ {
+		if rs[i] == '\n' {
+			return false
+		}
+	}
+	return true
+}
+
+func isAtEndWithWhitespaceRune(value string, cursorRune int) bool {
+	rs := []rune(value)
+	if len(rs) == 0 || cursorRune != len(rs) {
+		return false
+	}
+	return rs[cursorRune-1] == ' '
+}
+
+// hasCommandWithArgumentsTS matches useTypeahead.tsx hasCommandWithArguments.
+func hasCommandWithArgumentsTS(value string, isAtEndWithWhitespace bool) bool {
+	return !isAtEndWithWhitespace && strings.Contains(value, " ") && !strings.HasSuffix(value, " ")
+}
+
+// shouldShowTSSlashList mirrors src/hooks/useTypeahead slash command list visibility
+// (isCommandInput + cursor position + not in "command with real arguments" state).
+func shouldShowTSSlashList(value string, cursorRune int) bool {
+	if !strings.HasPrefix(value, "/") {
+		return false
+	}
+	if !cursorOnFirstLine(value, cursorRune) {
+		return false
+	}
+	if cursorRune <= 0 {
+		return false
+	}
+	isAt := isAtEndWithWhitespaceRune(value, cursorRune)
+	if hasCommandWithArgumentsTS(value, isAt) {
+		return false
+	}
+	return true
+}
+
+func filterSlashCommandNames(all []string, filter string) []string {
+	if len(all) == 0 {
 		return nil
 	}
-	f := strings.ToLower(strings.TrimSpace(o.filter))
+	f := strings.ToLower(strings.TrimSpace(filter))
 	if f == "" {
-		return slices.Clone(o.allNames)
+		return append([]string(nil), all...)
 	}
 	var out []string
-	for _, n := range o.allNames {
-		if strings.Contains(strings.ToLower(n), f) {
+	lf := strings.ToLower(f)
+	for _, n := range all {
+		if strings.Contains(strings.ToLower(n), lf) {
 			out = append(out, n)
 		}
 	}
 	return out
 }
 
-func (o *slashPickerOverlay) clampIdx() {
-	vis := o.filtered()
-	if len(vis) == 0 {
-		o.idx = 0
-		return
+func sortedSlashDisplayNames(commands []types.Command) []string {
+	if len(commands) == 0 {
+		return nil
 	}
-	if o.idx >= len(vis) {
-		o.idx = len(vis) - 1
+	seen := map[string]struct{}{}
+	var names []string
+	for _, c := range commands {
+		nm := strings.TrimSpace(c.Name)
+		if nm == "" {
+			continue
+		}
+		if !strings.HasPrefix(nm, "/") {
+			nm = "/" + nm
+		}
+		if _, ok := seen[nm]; ok {
+			continue
+		}
+		seen[nm] = struct{}{}
+		names = append(names, nm)
 	}
-	if o.idx < 0 {
-		o.idx = 0
+	sort.Strings(names)
+	if len(names) > 200 {
+		names = names[:200]
 	}
+	return names
 }
 
 func (m *model) installAskResolver(te *toolexecution.ExecutionDeps) {
@@ -156,87 +213,83 @@ func (m *model) loadSlashCommandsOnce() {
 	m.slashCommands = lc
 }
 
-func (m *model) toggleSlashPicker() {
-	if m.slashPick != nil {
-		m.slashPick = nil
+// slashListVisible is true when the command list should show (TS auto-suggest from "/" or F2).
+func (m *model) slashListVisible() bool {
+	m.loadSlashCommandsOnce()
+	if len(sortedSlashDisplayNames(m.slashCommands)) == 0 {
+		return false
+	}
+	if m.uiScreen != gouDemoScreenPrompt {
+		return false
+	}
+	if m.slashListUser {
+		return true
+	}
+	return shouldShowTSSlashList(m.pr.Value(), m.pr.CursorRuneIndex())
+}
+
+func (m *model) syncSlashListAfterPrompt() {
+	if m.uiScreen != gouDemoScreenPrompt {
 		return
 	}
 	m.loadSlashCommandsOnce()
-	seen := map[string]struct{}{}
-	var names []string
-	for _, c := range m.slashCommands {
-		nm := strings.TrimSpace(c.Name)
-		if nm == "" {
-			continue
-		}
-		if !strings.HasPrefix(nm, "/") {
-			nm = "/" + nm
-		}
-		if _, ok := seen[nm]; ok {
-			continue
-		}
-		seen[nm] = struct{}{}
-		names = append(names, nm)
+	names := sortedSlashDisplayNames(m.slashCommands)
+	if len(names) == 0 {
+		m.slashListSel = 0
+		return
 	}
-	sort.Strings(names)
-	if len(names) > 200 {
-		names = names[:200]
+	should := shouldShowTSSlashList(m.pr.Value(), m.pr.CursorRuneIndex())
+	visible := should || m.slashListUser
+	if !visible {
+		m.slashListSel = 0
+		return
 	}
-	m.slashPick = &slashPickerOverlay{
-		allNames: names,
-		filter:   slashFilterFromPrompt(m.pr.Value()),
-		idx:      0,
+	vis := filterSlashCommandNames(names, slashFilterFromPrompt(m.pr.Value()))
+	if m.slashListSel >= len(vis) {
+		if len(vis) == 0 {
+			m.slashListSel = 0
+		} else {
+			m.slashListSel = len(vis) - 1
+		}
 	}
-	m.slashPick.clampIdx()
+	if m.slashListSel < 0 {
+		m.slashListSel = 0
+	}
 }
 
-// handleSlashPickerKey returns true when consumed by the slash picker.
-func (m *model) handleSlashPickerKey(msg tea.KeyPressMsg) bool {
-	if m.slashPick == nil {
+// toggleSlashListUser toggles F2 manual list (when input is empty or not in /… mode).
+func (m *model) toggleSlashListUser() {
+	m.loadSlashCommandsOnce()
+	if len(sortedSlashDisplayNames(m.slashCommands)) == 0 {
+		m.slashListUser = false
+		return
+	}
+	m.slashListUser = !m.slashListUser
+	m.slashListSel = 0
+	m.syncSlashListAfterPrompt()
+}
+
+// handleSlashListNavKey handles ↑/↓ for the inline slash list; text keys always go to the prompt.
+func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
+	if m.uiScreen != gouDemoScreenPrompt || !m.slashListVisible() {
 		return false
 	}
 	switch msg.String() {
-	case "esc", "f2":
-		m.slashPick = nil
-		return true
 	case "up":
-		if m.slashPick.idx > 0 {
-			m.slashPick.idx--
+		if m.slashListSel > 0 {
+			m.slashListSel--
 		}
 		return true
 	case "down":
-		vis := m.slashPick.filtered()
-		if m.slashPick.idx+1 < len(vis) {
-			m.slashPick.idx++
+		names := sortedSlashDisplayNames(m.slashCommands)
+		vis := filterSlashCommandNames(names, slashFilterFromPrompt(m.pr.Value()))
+		if m.slashListSel+1 < len(vis) {
+			m.slashListSel++
 		}
 		return true
-	case "enter":
-		vis := m.slashPick.filtered()
-		if len(vis) == 0 {
-			m.slashPick = nil
-			return true
-		}
-		sel := vis[m.slashPick.idx]
-		m.pr.SetValue(sel + " ")
-		m.slashPick = nil
-		return true
-	case "backspace":
-		if m.slashPick.filter == "" {
-			return true
-		}
-		_, size := utf8.DecodeLastRuneInString(m.slashPick.filter)
-		if size > 0 {
-			m.slashPick.filter = m.slashPick.filter[:len(m.slashPick.filter)-size]
-		}
-		m.slashPick.clampIdx()
-		return true
+	default:
+		return false
 	}
-	if kt := msg.Key(); kt.Text != "" {
-		m.slashPick.filter += kt.Text
-		m.slashPick.clampIdx()
-		return true
-	}
-	return false
 }
 
 func (m *model) renderPermissionModal(width int) string {
@@ -267,30 +320,46 @@ func (m *model) renderPermissionModal(width int) string {
 }
 
 func (m *model) renderSlashPicker(width, maxH int) string {
-	if m.slashPick == nil {
+	if !m.slashListVisible() {
 		return ""
 	}
+	names := sortedSlashDisplayNames(m.slashCommands)
+	filter := slashFilterFromPrompt(m.pr.Value())
+	vis := filterSlashCommandNames(names, filter)
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render("Slash (F2) filter: "))
-	b.WriteString(lipgloss.NewStyle().Faint(true).Render("/" + m.slashPick.filter))
+	b.WriteString(lipgloss.NewStyle().Bold(true).Render("Slash commands  "))
+	b.WriteString(lipgloss.NewStyle().Faint(true).Render(prSlashFilterLabel(filter) + "  ↑/↓  F2  Esc closes F2-only"))
 	b.WriteByte('\n')
-	vis := m.slashPick.filtered()
 	start := 0
-	if m.slashPick.idx >= maxH-2 {
-		start = m.slashPick.idx - (maxH - 3)
+	idx := m.slashListSel
+	if len(vis) > 0 && idx >= len(vis) {
+		idx = len(vis) - 1
+	}
+	if len(vis) > 0 && idx >= maxH-2 {
+		start = idx - (maxH - 3)
 		if start < 0 {
 			start = 0
 		}
 	}
 	for i := start; i < len(vis) && i < start+maxH-2; i++ {
 		line := vis[i]
-		if i == m.slashPick.idx {
+		if i == idx {
 			b.WriteString(lipgloss.NewStyle().Reverse(true).Render(line))
 		} else {
 			b.WriteString(line)
 		}
 		b.WriteByte('\n')
 	}
+	if len(vis) == 0 {
+		b.WriteString(lipgloss.NewStyle().Faint(true).Render("(no matches)"))
+	}
 	box := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(0, 1).Width(min(width-4, 50)).Render(strings.TrimSuffix(b.String(), "\n"))
 	return lipgloss.Place(width, max(6, maxH), lipgloss.Right, lipgloss.Bottom, box)
+}
+
+func prSlashFilterLabel(filter string) string {
+	if strings.TrimSpace(filter) == "" {
+		return "/…"
+	}
+	return "/" + filter
 }

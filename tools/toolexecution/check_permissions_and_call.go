@@ -63,7 +63,7 @@ func CheckPermissionsAndCallTool(
 	}
 	if st, ok := tool.(interface{ InputSchemaAny() any }); ok {
 		if err := toolvalidator.ValidateInput(tool.Name(), st.InputSchemaAny(), input); err != nil {
-			um := syntheticPreToolHookDenied(deps, toolUseID, assistant.UUID, err.Error())
+			um := syntheticInputValidationError(deps, toolUseID, assistant.UUID, tool.Name(), err)
 			return []types.Message{um}, nil
 		}
 	}

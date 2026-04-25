@@ -54,6 +54,12 @@ func (m Model) Value() string {
 	return string(m.value)
 }
 
+// CursorRuneIndex is the insert position in the buffer as a 0..len(rune value) rune index
+// (alias of internal cursor; matches the slice index over UTF-8 runes in [Value] for ASCII text).
+func (m Model) CursorRuneIndex() int {
+	return m.cursor
+}
+
 // SetValue replaces buffer content and places cursor at end.
 func (m *Model) SetValue(s string) {
 	m.value = []rune(s)
