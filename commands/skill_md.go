@@ -37,7 +37,7 @@ type skillFrontmatter struct {
 	Paths                  interface{} `yaml:"paths"`
 }
 
-func splitYAMLFrontmatter(raw []byte) (yamlBytes []byte, body []byte, ok bool) {
+func SplitYAMLFrontmatter(raw []byte) (yamlBytes []byte, body []byte, ok bool) {
 	s := bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 	if !bytes.HasPrefix(s, []byte("---")) {
 		return nil, s, false
@@ -134,7 +134,7 @@ func commandFromSkillMarkdown(
 	loadedFrom string,
 	descriptionFallback string,
 ) (types.Command, error) {
-	yamlBytes, mdBody, hasFM := splitYAMLFrontmatter(body)
+	yamlBytes, mdBody, hasFM := SplitYAMLFrontmatter(body)
 	if !hasFM {
 		return types.Command{}, fmt.Errorf("markdown missing YAML frontmatter: %s", markdownPath)
 	}

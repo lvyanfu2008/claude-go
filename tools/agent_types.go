@@ -47,6 +47,7 @@ type AgentDefinition struct {
 	Skills                             []string `json:"skills,omitempty"`
 	Source                             string   `json:"source,omitempty"`
 	Model                              string   `json:"model,omitempty"`
+	Color                              string   `json:"color,omitempty"`
 	PermissionMode                     string   `json:"permissionMode,omitempty"`
 	MaxTurns                           int      `json:"maxTurns,omitempty"`
 	Background                         bool     `json:"background,omitempty"`
@@ -54,6 +55,9 @@ type AgentDefinition struct {
 	RequiredMcpServers                 []string `json:"requiredMcpServers,omitempty"`
 	SystemPrompt                       string   `json:"systemPrompt,omitempty"`
 	OmitClaudeMd                       bool     `json:"omitClaudeMd,omitempty"`
+	// Memory mirrors TS custom agent frontmatter memory field.
+	// Valid values: "user", "project", "local" (AgentMemoryScope).
+	Memory string `json:"memory,omitempty"`
 	// Hooks mirrors TS custom agent frontmatter hooks — parsed from agent markdown frontmatter hooks field.
 	// Stored as json.RawMessage to round-trip through JSON serialization for settings/tool API schemas.
 	Hooks json.RawMessage `json:"hooks,omitempty"`
@@ -80,12 +84,15 @@ type AgentSession struct {
 	SystemPrompt                       string    `json:"systemPrompt,omitempty"`
 	OmitClaudeMd                       bool      `json:"omitClaudeMd,omitempty"`
 	CriticalSystemReminderExperimental string    `json:"criticalSystemReminder_EXPERIMENTAL,omitempty"`
+	Memory                             string    `json:"memory,omitempty"`
 	CreatedAt                          time.Time `json:"createdAt"`
 	UpdatedAt                          time.Time `json:"updatedAt"`
 	LastOutput                         string            `json:"lastOutput,omitempty"`
 	ProgressMessages                   []json.RawMessage `json:"progressMessages,omitempty"`
 	// Hooks mirrors the agent definition's hooks frontmatter; stored for runtime hook execution.
 	Hooks json.RawMessage `json:"hooks,omitempty"`
+	// Summary holds the latest agent summarization text (set periodically by the summary goroutine).
+	Summary string `json:"summary,omitempty"`
 }
 
 type AgentToolResponse struct {

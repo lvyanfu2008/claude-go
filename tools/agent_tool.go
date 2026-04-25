@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"goc/claudemd"
+	"goc/commands"
+	"goc/tools/toolpool"
 	"goc/types"
 )
 
@@ -103,6 +106,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		ProjectRoot:                        cfg.ProjectRoot,
 		Isolation:                          strings.TrimSpace(in.Isolation),
 		SystemPrompt:                       selected.SystemPrompt,
+		Memory:                            selected.Memory,
 		OmitClaudeMd:                       selected.OmitClaudeMd,
 		Hooks:                             selected.Hooks,
 		CreatedAt:                          time.Now().UTC(),
@@ -117,6 +121,20 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	if s.TeamName == "" {
 		s.TeamName = strings.TrimSpace(cfg.TeamName)
 	}
+
+	// Append agent memory prompt if memory scope is configured and auto-memory is enabled.
+	if s.Memory != "" && claudemd.IsAutoMemoryEnabled() {
+		scope := claudemd.AgentMemoryScope(s.Memory)
+		memPrompt := claudemd.LoadAgentMemoryPrompt(s.AgentType, scope)
+		if memPrompt != "" {
+			if s.SystemPrompt != "" {
+				s.SystemPrompt += "\n\n" + memPrompt
+			} else {
+				s.SystemPrompt = memPrompt
+			}
+		}
+	}
+
 	// Register the spawned agent with the team roster if team context is set.
 	if s.TeamName != "" {
 		_ = addTeamMember(s.TeamName, TeamFileMember{
@@ -216,7 +234,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		forkOpts = opts
 	}
 
-	if in.RunInBackground || selected.Background {
+	if in.RunInBackground || selected.Background || toolpool.CoordinatorMergeFilterActive() || commands.ProactiveModeActive() {
 		outFile, err := writeBackgroundOutput(cfg.TasksDir, s.ID, "Agent started")
 		if err != nil {
 			return "", true, err

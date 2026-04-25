@@ -11,10 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/hookexec"
 	"goc/sessiontranscript"
+	"goc/slashresolve"
 	"goc/tools/toolexecution"
 	"goc/tools/toolpool"
 	"goc/types"
@@ -210,6 +212,16 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		msgs = append(append([]types.Message{}, history...), pr.Messages...)
 	}
 
+	// Preload skill messages and insert between history and current prompt.
+	if skillMsgs := preloadAgentSkills(ctx, s, s.WorkDir, cfg.SessionID); len(skillMsgs) > 0 {
+		offset := len(history)
+		combined := make([]types.Message, 0, len(msgs)+len(skillMsgs))
+		combined = append(combined, msgs[:offset]...)
+		combined = append(combined, skillMsgs...)
+		combined = append(combined, msgs[offset:]...)
+		msgs = combined
+	}
+
 	tc := types.ToolUseContext{}
 	tc.Options.MainLoopModel = strings.TrimSpace(s.Model)
 	tc.Options.IsNonInteractiveSession = true
@@ -269,12 +281,6 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			systemPromptParts = append(systemPromptParts, s.CriticalSystemReminderExperimental)
 		}
 
-		// Add skills information if present
-		if len(s.Skills) > 0 {
-			skillsText := "Available skills: " + strings.Join(s.Skills, ", ")
-			systemPromptParts = append(systemPromptParts, skillsText)
-		}
-
 		// Add MCP server information if present
 		if len(s.AvailableMcpServers) > 0 {
 			mcpText := "Available MCP servers: " + strings.Join(s.AvailableMcpServers, ", ")
@@ -314,15 +320,31 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		qp.MaxTurns = &mt
 	}
 	processuserinput.ApplyQueryHostEnvGates(&qp)
+
+	// Shared message buffer for summarization goroutine.
+	msgBuf := &sharedMessageBuffer{}
+	msgBuf.Append(msgs...)
+
+	// Start background summarization when the agent has a progress callback.
+	var stopSummary func()
+	if cfg.ProgressCallback != nil && s.ID != "" && s.AgentType != "" {
+		stopSummary = startAgentSummarization(s, cfg, msgBuf)
+	}
+
 	var assistantChunks []string
 	var progressMsgs []json.RawMessage
 	for y, qerr := range query.Query(ctx, qp) {
 		if qerr != nil {
+			if stopSummary != nil {
+				stopSummary()
+			}
 			return runAgentNow(s, msg)
 		}
 		if y.Message == nil {
 			continue
 		}
+		// Feed yield messages into the shared buffer for summarization.
+		msgBuf.Append(*y.Message)
 		if y.Message.Type == types.MessageTypeProgress {
 			if b, err := json.Marshal(y.Message); err == nil {
 				progressMsgs = append(progressMsgs, b)
@@ -338,6 +360,10 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		if text := assistantMessageText(*y.Message); strings.TrimSpace(text) != "" {
 			assistantChunks = append(assistantChunks, text)
 		}
+	}
+	// Stop summarization when the agent's main query loop completes.
+	if stopSummary != nil {
+		stopSummary()
 	}
 	s.ProgressMessages = progressMsgs
 	if len(assistantChunks) == 0 {
@@ -369,6 +395,128 @@ func assistantMessageText(m types.Message) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// preloadAgentSkills loads skill content for each skill name in s.Skills and returns
+// isMeta user messages that are prepended to the agent's conversation context.
+// TS parity: runAgent.ts lines 583-651 (skills preloading)
+func preloadAgentSkills(ctx context.Context, s *AgentSession, workDir string, sessionID string) []types.Message {
+	if len(s.Skills) == 0 {
+		return nil
+	}
+
+	cmds, err := commands.LoadAllCommands(ctx, workDir, commands.DefaultLoadOptions())
+	if err != nil {
+		return nil
+	}
+
+	var skillMsgs []types.Message
+	for _, skillName := range s.Skills {
+		cmd := resolveAgentSkillName(skillName, cmds)
+		if cmd == nil || cmd.Type != "prompt" {
+			continue
+		}
+
+		content := getAgentSkillContent(cmd, sessionID)
+		if content == "" {
+			continue
+		}
+
+		// TS formatSkillLoadingMetadata: <command-message>name</command-message>\n<command-name>name</command-name>\n<skill-format>true</skill-format>
+		metadata := fmt.Sprintf(
+			"<command-message>%s</command-message>\n<command-name>%s</command-name>\n<skill-format>true</skill-format>\n\n%s",
+			cmd.Name, cmd.Name, content,
+		)
+
+		trueVal := true
+		msgInner, _ := json.Marshal(map[string]any{"role": "user", "content": metadata})
+		msg := types.Message{
+			Type:    types.MessageTypeUser,
+			UUID:    sessiontranscript.NewUUID(),
+			Message: json.RawMessage(msgInner),
+			IsMeta:  &trueVal,
+		}
+		skillMsgs = append(skillMsgs, msg)
+	}
+
+	return skillMsgs
+}
+
+// resolveAgentSkillName resolves a skill name from agent frontmatter against loaded commands.
+// TS parity: runAgent.ts resolveSkillName (3 strategies: exact, pluginPrefix:name, :name suffix)
+func resolveAgentSkillName(name string, cmds []types.Command) *types.Command {
+	// Strategy 1: exact match on Name or Aliases
+	for _, cmd := range cmds {
+		if strings.EqualFold(cmd.Name, name) {
+			return &cmd
+		}
+		for _, alias := range cmd.Aliases {
+			if strings.EqualFold(alias, name) {
+				return &cmd
+			}
+		}
+	}
+
+	// Strategy 2: pluginPrefix:name match (e.g., "notion:read" matches command named "read")
+	if colonIdx := strings.Index(name, ":"); colonIdx > 0 {
+		suffix := name[colonIdx+1:]
+		for _, cmd := range cmds {
+			if strings.EqualFold(cmd.Name, suffix) {
+				return &cmd
+			}
+			for _, alias := range cmd.Aliases {
+				if strings.EqualFold(alias, suffix) {
+					return &cmd
+				}
+			}
+		}
+	}
+
+	// Strategy 3: :name suffix match
+	if strings.HasPrefix(name, ":") {
+		suffix := name[1:]
+		for _, cmd := range cmds {
+			if strings.EqualFold(cmd.Name, suffix) {
+				return &cmd
+			}
+			for _, alias := range cmd.Aliases {
+				if strings.EqualFold(alias, suffix) {
+					return &cmd
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// getAgentSkillContent retrieves the body text of a skill command.
+// TS parity: getPromptForCommand for skill preloading (bundled and disk-based)
+func getAgentSkillContent(cmd *types.Command, sessionID string) string {
+	// Bundled skills: resolve via slashresolve.ResolveBundledSkill
+	if slashresolve.IsBundledPrompt(*cmd) {
+		result, err := slashresolve.ResolveBundledSkill(*cmd, "", sessionID, nil)
+		if err == nil {
+			return result.UserText
+		}
+		return ""
+	}
+
+	// Disk-based skills (SKILL.md directories): read body via SplitYAMLFrontmatter
+	if cmd.SkillRoot != nil && *cmd.SkillRoot != "" {
+		mdPath := filepath.Join(*cmd.SkillRoot, "SKILL.md")
+		raw, err := os.ReadFile(mdPath)
+		if err != nil {
+			return ""
+		}
+		_, body, ok := commands.SplitYAMLFrontmatter(raw)
+		if !ok {
+			return ""
+		}
+		return string(body)
+	}
+
+	return ""
 }
 
 func persistSidechain(cfg AgentRuntimeConfig, session *AgentSession, userPrompt, assistantOutput string) {

@@ -10,6 +10,7 @@ import (
 
 	"goc/claudemd"
 	"goc/commands"
+	"goc/tools/agentcolor"
 	"goc/tools/hookstypes"
 )
 
@@ -46,6 +47,19 @@ func LoadAgentDefinitionsReport(cwd string) AgentDefinitionsReport {
 	}
 
 	active := dedupeAgentsByTypeOrder(all)
+
+	// Initialize agent colors from active agent definitions (mirrors TS loadAgentsDir.ts).
+	colorSetters := make([]agentcolor.AgentColorSetter, 0, len(active))
+	for _, a := range active {
+		if a.Color != "" {
+			colorSetters = append(colorSetters, agentcolor.AgentColorSetter{
+				AgentType: a.AgentType,
+				Color:     a.Color,
+			})
+		}
+	}
+	agentcolor.InitAgentColors(colorSetters)
+
 	return AgentDefinitionsReport{
 		ActiveAgents: active,
 		AllAgents:    all,
@@ -65,6 +79,7 @@ func LoadAgentDefinitionsBuiltins() []AgentDefinition {
 			DisallowedTools:                    append([]string(nil), b.DisallowedTools...),
 			Source:                             b.Source,
 			Model:                              b.Model,
+			Color:                              b.Color,
 			PermissionMode:                     b.PermissionMode,
 			Background:                         b.Background,
 			SystemPrompt:                       b.SystemPrompt,
@@ -154,6 +169,11 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	case string:
 		background = strings.EqualFold(strings.TrimSpace(v), "true")
 	}
+	color, _ := fm["color"].(string)
+	color = strings.TrimSpace(color)
+	if color != "" && !agentcolor.IsValidColorName(color) {
+		return AgentDefinition{}, false, `invalid "color" value: must be one of: red, blue, green, yellow, purple, orange, pink, cyan`
+	}
 	omitClaudeMd := false
 	switch v := fm["omitClaudeMd"].(type) {
 	case bool:
@@ -177,6 +197,11 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	criticalReminder, _ := fm["criticalSystemReminder_EXPERIMENTAL"].(string)
 	criticalReminder = strings.TrimSpace(criticalReminder)
+	memory, _ := fm["memory"].(string)
+	memory = strings.TrimSpace(memory)
+	if memory != "" && memory != "user" && memory != "project" && memory != "local" {
+		return AgentDefinition{}, false, `invalid "memory" value: must be "user", "project", or "local"`
+	}
 	hooks := parseHooksFromFrontmatter(fm)
 
 	return AgentDefinition{
@@ -187,6 +212,7 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 		Skills:                             skills,
 		Source:                             source,
 		Model:                              model,
+		Color:                             color,
 		PermissionMode:                     permMode,
 		MaxTurns:                           maxTurns,
 		Background:                         background,
@@ -194,6 +220,7 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 		Isolation:                          iso,
 		RequiredMcpServers:                 requiredMcp,
 		SystemPrompt:                       systemPrompt,
+		Memory:                            memory,
 		Hooks:                             hooks,
 	}, true, ""
 }
