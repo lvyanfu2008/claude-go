@@ -157,28 +157,50 @@ func filterToolsForAgent(raw json.RawMessage, allowed []string) json.RawMessage 
 	return raw
 }
 
+// executeAgentOpts carries optional overrides for the fork path.
+type executeAgentOpts struct {
+	// ForkSystemPrompt is the parent's system prompt to use instead of building
+	// one from the agent definition (cache-identical API prefixes on fork).
+	ForkSystemPrompt []string
+	// ForkMessages are pre-built messages (from buildForkedMessages) to use
+	// instead of calling ProcessTextPrompt on the prompt string.
+	ForkMessages []types.Message
+}
+
 func executeAgent(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession, prompt string, history []types.Message) string {
+	return executeAgentWithOpts(ctx, cfg, s, prompt, history, executeAgentOpts{})
+}
+
+func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession, prompt string, history []types.Message, opts executeAgentOpts) string {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	msg := strings.TrimSpace(prompt)
-	if msg == "" {
-		msg = s.Prompt
-	}
-	if msg == "" {
-		msg = "continue"
-	}
 
-	var pm *types.PermissionMode
-	if strings.TrimSpace(s.PermissionMode) != "" {
-		mode := types.PermissionMode(s.PermissionMode)
-		pm = &mode
+	var msgs []types.Message
+	msg := strings.TrimSpace(prompt)
+	if len(opts.ForkMessages) > 0 {
+		// Fork path: use pre-built messages from buildForkedMessages
+		msgs = append(append([]types.Message{}, history...), opts.ForkMessages...)
+		msg = prompt
+	} else {
+		if msg == "" {
+			msg = s.Prompt
+		}
+		if msg == "" {
+			msg = "continue"
+		}
+
+		var pm *types.PermissionMode
+		if strings.TrimSpace(s.PermissionMode) != "" {
+			mode := types.PermissionMode(s.PermissionMode)
+			pm = &mode
+		}
+		pr, err := processuserinput.ProcessTextPrompt(msg, nil, nil, nil, nil, nil, pm, nil, nil)
+		if err != nil || len(pr.Messages) == 0 {
+			return runAgentNow(s, msg)
+		}
+		msgs = append(append([]types.Message{}, history...), pr.Messages...)
 	}
-	pr, err := processuserinput.ProcessTextPrompt(msg, nil, nil, nil, nil, nil, pm, nil, nil)
-	if err != nil || len(pr.Messages) == 0 {
-		return runAgentNow(s, msg)
-	}
-	msgs := append(append([]types.Message{}, history...), pr.Messages...)
 
 	tc := types.ToolUseContext{}
 	tc.Options.MainLoopModel = strings.TrimSpace(s.Model)
@@ -212,36 +234,42 @@ func executeAgent(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession, 
 	}
 
 	// Build system prompt components
-	systemPromptParts := []string{}
-	
-	// Add agent description (whenToUse)
-	if strings.TrimSpace(s.Description) != "" {
-		systemPromptParts = append(systemPromptParts, s.Description)
-	}
-	
-	// Add agent's custom system prompt
-	if strings.TrimSpace(s.SystemPrompt) != "" {
-		systemPromptParts = append(systemPromptParts, s.SystemPrompt)
-	}
-	
-	// Add critical system reminder if present
-	if strings.TrimSpace(s.CriticalSystemReminderExperimental) != "" {
-		systemPromptParts = append(systemPromptParts, s.CriticalSystemReminderExperimental)
-	}
-	
-	// Add skills information if present
-	if len(s.Skills) > 0 {
-		skillsText := "Available skills: " + strings.Join(s.Skills, ", ")
-		systemPromptParts = append(systemPromptParts, skillsText)
-	}
-	
-	// Add MCP server information if present
-	if len(s.AvailableMcpServers) > 0 {
-		mcpText := "Available MCP servers: " + strings.Join(s.AvailableMcpServers, ", ")
-		systemPromptParts = append(systemPromptParts, mcpText)
-		if len(s.RequiredMcpServers) > 0 {
-			requiredMcpText := "Required MCP servers for this agent: " + strings.Join(s.RequiredMcpServers, ", ")
-			systemPromptParts = append(systemPromptParts, requiredMcpText)
+	var systemPromptParts []string
+	if len(opts.ForkSystemPrompt) > 0 {
+		// Fork path: inherit parent's rendered system prompt for cache-identical prefixes
+		systemPromptParts = opts.ForkSystemPrompt
+	} else {
+		systemPromptParts = []string{}
+
+		// Add agent description (whenToUse)
+		if strings.TrimSpace(s.Description) != "" {
+			systemPromptParts = append(systemPromptParts, s.Description)
+		}
+
+		// Add agent's custom system prompt
+		if strings.TrimSpace(s.SystemPrompt) != "" {
+			systemPromptParts = append(systemPromptParts, s.SystemPrompt)
+		}
+
+		// Add critical system reminder if present
+		if strings.TrimSpace(s.CriticalSystemReminderExperimental) != "" {
+			systemPromptParts = append(systemPromptParts, s.CriticalSystemReminderExperimental)
+		}
+
+		// Add skills information if present
+		if len(s.Skills) > 0 {
+			skillsText := "Available skills: " + strings.Join(s.Skills, ", ")
+			systemPromptParts = append(systemPromptParts, skillsText)
+		}
+
+		// Add MCP server information if present
+		if len(s.AvailableMcpServers) > 0 {
+			mcpText := "Available MCP servers: " + strings.Join(s.AvailableMcpServers, ", ")
+			systemPromptParts = append(systemPromptParts, mcpText)
+			if len(s.RequiredMcpServers) > 0 {
+				requiredMcpText := "Required MCP servers for this agent: " + strings.Join(s.RequiredMcpServers, ", ")
+				systemPromptParts = append(systemPromptParts, requiredMcpText)
+			}
 		}
 	}
 	

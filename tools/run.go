@@ -69,6 +69,8 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 			SessionID:           cfg.SessionID,
 			TasksDir:            cfg.TasksDir(),
 			AvailableMCPServers: availableMCPServersFromEnv(),
+			Messages:            cfg.Messages,
+			SystemPrompt:        cfg.SystemPrompt,
 		})
 	case "SendMessage":
 		return RunSendMessageTool(raw, AgentRuntimeConfig{

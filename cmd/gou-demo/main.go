@@ -1205,6 +1205,9 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 							LocalBashDefault: true,
 							AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
 							MainLoopModel:    mainLoopModel,
+							Messages:         m.store.Messages,
+							MessagesFunc:     func() []types.Message { return m.store.Messages },
+							SystemPrompt:     []string{guidance},
 						}
 						if gouDemoPreferQueryStreamingParity() {
 							var userCtx map[string]string

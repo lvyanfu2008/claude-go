@@ -375,10 +375,11 @@ func ExitWorktreeFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	return string(b), false, nil
 }
 
-// TeamCreateFromJSON — agent swarms not in Go runner.
+// TeamCreateFromJSON creates a new agent team with proper roster file (TS TeamCreateTool).
 func TeamCreateFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	var in struct {
-		TeamName string `json:"team_name"`
+		TeamName    string `json:"team_name"`
+		Description string `json:"description,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
@@ -387,49 +388,130 @@ func TeamCreateFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	if team == "" {
 		return "", true, fmt.Errorf("team_name is required for TeamCreate")
 	}
-	root := strings.TrimSpace(cfg.ProjectRoot)
-	if root == "" {
-		root = strings.TrimSpace(cfg.WorkDir)
+
+	// Check if team already exists
+	existing, err := readTeamFile(team)
+	if err != nil {
+		return "", true, fmt.Errorf("read team: %w", err)
 	}
-	teamDir := filepath.Join(root, ".claude", ".gou-team")
-	if err := os.MkdirAll(teamDir, 0o700); err != nil {
-		return "", true, err
+	if existing != nil {
+		out := map[string]any{
+			"data": map[string]any{
+				"team_name":      team,
+				"team_file_path": getTeamFilePath(team),
+				"lead_agent_id":  existing.LeadAgentID,
+				"message":        "Team already exists",
+				"member_count":   len(existing.Members),
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
 	}
-	teamPath := filepath.Join(teamDir, sanitizeName(team)+".json")
+
 	leadID := "team-lead@" + team
-	payload := map[string]any{
-		"team_name":     team,
-		"lead_agent_id": leadID,
-		"created_at":    time.Now().UTC().Format(time.RFC3339Nano),
+	sessionID := strings.TrimSpace(cfg.SessionID)
+	tf := &TeamFile{
+		Name:          team,
+		Description:   strings.TrimSpace(in.Description),
+		CreatedAt:     time.Now().UnixMilli(),
+		LeadAgentID:   leadID,
+		LeadSessionID: sessionID,
+		Members: []TeamFileMember{
+			{
+				AgentID:    leadID,
+				Name:       "lead",
+				AgentType:  "general-purpose",
+				JoinedAt:   time.Now().UnixMilli(),
+				Subscriptions: []string{},
+				IsActive:   true,
+				SessionID:  sessionID,
+			},
+		},
 	}
-	if b, err := json.MarshalIndent(payload, "", "  "); err == nil {
-		_ = os.WriteFile(teamPath, append(b, '\n'), 0o600)
+
+	var memberSubs []string
+	for _, m := range tf.Members {
+		memberSubs = append(memberSubs, m.AgentID)
 	}
+	tf.Members[0].Subscriptions = memberSubs
+
+	teamPath := getTeamFilePath(team)
+	if err := writeTeamFile(team, tf); err != nil {
+		return "", true, fmt.Errorf("write team file: %w", err)
+	}
+
+	// Ensure inbox directory exists
+	_ = ensureInboxDir(team)
+
 	out := map[string]any{
 		"data": map[string]any{
 			"team_name":      team,
 			"team_file_path": teamPath,
 			"lead_agent_id":  leadID,
+			"message":        "Team created",
+			"member_count":   len(tf.Members),
 		},
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }
 
-// TeamDeleteFromJSON — agent swarms not in Go runner.
+// TeamDeleteFromJSON deletes an agent team and its inboxes (TS TeamDeleteTool).
 func TeamDeleteFromJSON(raw []byte, cfg Config) (string, bool, error) {
-	_ = raw
-	root := strings.TrimSpace(cfg.ProjectRoot)
-	if root == "" {
-		root = strings.TrimSpace(cfg.WorkDir)
+	var in struct {
+		TeamName string `json:"team_name"`
 	}
-	teamDir := filepath.Join(root, ".claude", ".gou-team")
-	_ = os.RemoveAll(teamDir)
+	_ = json.Unmarshal(raw, &in)
+	team := strings.TrimSpace(in.TeamName)
+	if team == "" {
+		team = strings.TrimSpace(getenv("CLAUDE_CODE_TEAM_NAME"))
+	}
+
+	if team == "" {
+		out := map[string]any{
+			"data": map[string]any{
+				"success":   true,
+				"message":   "No team name found, nothing to clean up",
+				"team_name": nil,
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	tf, err := readTeamFile(team)
+	if err != nil || tf == nil {
+		// Try old path for backwards compatibility
+		root := strings.TrimSpace(cfg.ProjectRoot)
+		if root == "" {
+			root = strings.TrimSpace(cfg.WorkDir)
+		}
+		oldDir := filepath.Join(root, ".claude", ".gou-team")
+		_ = os.RemoveAll(oldDir)
+
+		out := map[string]any{
+			"data": map[string]any{
+				"success":   true,
+				"message":   "Team cleaned up",
+				"team_name": team,
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	// Remove the entire team directory (roster + inboxes)
+	teamDir := getTeamDir(team)
+	if err := os.RemoveAll(teamDir); err != nil {
+		return "", true, fmt.Errorf("remove team dir: %w", err)
+	}
+
 	out := map[string]any{
 		"data": map[string]any{
-			"success":   true,
-			"message":   "No team name found, nothing to clean up",
-			"team_name": nil,
+			"success":      true,
+			"message":      "Team deleted",
+			"team_name":    team,
+			"member_count": len(tf.Members),
 		},
 	}
 	b, _ := json.Marshal(out)

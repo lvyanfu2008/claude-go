@@ -1,6 +1,10 @@
 package tools
 
-import "time"
+import (
+	"time"
+
+	"goc/types"
+)
 
 type AgentToolInput struct {
 	Description     string `json:"description"`
@@ -22,6 +26,8 @@ type AgentRuntimeConfig struct {
 	SessionID           string
 	TasksDir            string
 	AvailableMCPServers []string
+	Messages            []types.Message
+	SystemPrompt        []string
 }
 
 type AgentDefinition struct {

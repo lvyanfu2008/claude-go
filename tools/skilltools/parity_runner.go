@@ -10,6 +10,7 @@ import (
 	"goc/ccb-engine/bashzog"
 	"goc/tools/localtools"
 	"goc/tools"
+	"goc/types"
 )
 
 // ParityToolRunner runs core filesystem/search tools in Go, then delegates Skill (disk + embedded bundled)
@@ -29,6 +30,16 @@ type ParityToolRunner struct {
 	LocalBashDefault bool
 	// MainLoopModel is optional; when set it drives Read tool_result cyber-risk mitigation (TS shouldIncludeFileReadMitigation).
 	MainLoopModel string
+	// Messages is a snapshot of conversation messages at runner construction time.
+	// For the fork subagent Agent tool, use MessagesFunc for the latest messages.
+	Messages []types.Message
+	// SystemPrompt is the parent's rendered system prompt parts, forwarded to Agent tool
+	// for the fork subagent path (cache-identical API prefixes).
+	SystemPrompt []string
+	// MessagesFunc returns the current conversation messages at tool dispatch time.
+	// Used by the Agent tool (fork subagent) to access the in-progress assistant message.
+	// Takes precedence over Messages when set.
+	MessagesFunc func() []types.Message
 }
 
 func (r *ParityToolRunner) roots() []string {
@@ -79,12 +90,18 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 	if pr == "" && len(roots) > 0 {
 		pr = roots[0]
 	}
+	msgs := r.Messages
+	if r.MessagesFunc != nil {
+		msgs = r.MessagesFunc()
+	}
 	cfg := tools.Config{
 		Roots:        roots,
 		WorkDir:      wd,
 		ProjectRoot:  pr,
 		SessionID:    strings.TrimSpace(r.SessionID),
 		AskAutoFirst: r.AskAutoFirst,
+		Messages:     msgs,
+		SystemPrompt: r.SystemPrompt,
 	}
 	s, isErr, perr := tools.Run(ctx, name, input, cfg)
 	if perr == nil || !tools.IsNotHandled(perr) {

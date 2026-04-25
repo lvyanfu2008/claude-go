@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"goc/types"
 )
 
 func getenv(k string) string { return os.Getenv(k) }
@@ -43,8 +45,23 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return "", true, fmt.Errorf("prompt is required")
 	}
-	defs := LoadAgentDefinitionsForCwd(cfg.ProjectRoot)
-	selected := ResolveAgentDefinition(defs, in.SubagentType)
+
+	messages := cfg.Messages
+	forkEnabled := isForkSubagentEnabled()
+	isForkPath := strings.TrimSpace(in.SubagentType) == "" && forkEnabled
+
+	// Recursive fork guard
+	if isForkPath && isInForkChild(messages) {
+		return "", true, fmt.Errorf("Fork is not available inside a forked worker. Complete your task directly using your tools.")
+	}
+
+	var selected AgentDefinition
+	if isForkPath {
+		selected = ForkAgentDef()
+	} else {
+		defs := LoadAgentDefinitionsForCwd(cfg.ProjectRoot)
+		selected = ResolveAgentDefinition(defs, in.SubagentType)
+	}
 	if !AgentMeetsRequiredMCPServers(selected, cfg.AvailableMCPServers) {
 		resp, _ := json.Marshal(AgentToolResponse{
 			Data: AgentToolResponseData{
@@ -147,6 +164,23 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	agentSessionsMu.Unlock()
 	persistAgentMetadata(cfg, s)
 
+	// Build fork execution options if this is a fork path.
+	var forkOpts *executeAgentOpts
+	if isForkPath {
+		opts := &executeAgentOpts{
+			ForkSystemPrompt: cfg.SystemPrompt,
+		}
+		var parentAssistantMsg types.Message
+		for i := len(cfg.Messages) - 1; i >= 0; i-- {
+			if cfg.Messages[i].Type == types.MessageTypeAssistant {
+				parentAssistantMsg = cfg.Messages[i]
+				break
+			}
+		}
+		opts.ForkMessages = buildForkedMessages(in.Prompt, parentAssistantMsg)
+		forkOpts = opts
+	}
+
 	if in.RunInBackground || selected.Background {
 		outFile, err := writeBackgroundOutput(cfg.TasksDir, s.ID, "Agent started")
 		if err != nil {
@@ -167,7 +201,12 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 				writeBackgroundStatus(cfg.TasksDir, s.ID, "stopped", msg, false)
 				return
 			}
-			output := executeAgent(context.Background(), cfg, s, in.Prompt, nil)
+			var output string
+			if forkOpts != nil {
+				output = executeAgentWithOpts(context.Background(), cfg, s, in.Prompt, nil, *forkOpts)
+			} else {
+				output = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
+			}
 			_, _ = writeBackgroundOutput(cfg.TasksDir, s.ID, output)
 			persistSidechain(cfg, s, in.Prompt, output)
 			persistAgentMetadata(cfg, s)
@@ -192,7 +231,12 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		return string(resp), false, nil
 	}
 
-	output := executeAgent(context.Background(), cfg, s, in.Prompt, nil)
+	var output string
+	if forkOpts != nil {
+		output = executeAgentWithOpts(context.Background(), cfg, s, in.Prompt, nil, *forkOpts)
+	} else {
+		output = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
+	}
 	persistSidechain(cfg, s, in.Prompt, output)
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{
