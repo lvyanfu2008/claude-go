@@ -104,7 +104,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		Isolation:                          strings.TrimSpace(in.Isolation),
 		SystemPrompt:                       selected.SystemPrompt,
 		OmitClaudeMd:                       selected.OmitClaudeMd,
-		CriticalSystemReminderExperimental: selected.CriticalSystemReminderExperimental,
+		Hooks:                             selected.Hooks,
 		CreatedAt:                          time.Now().UTC(),
 		UpdatedAt:                          time.Now().UTC(),
 	}
@@ -113,6 +113,41 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	}
 	if s.Isolation == "" {
 		s.Isolation = strings.TrimSpace(selected.Isolation)
+	}
+	if s.TeamName == "" {
+		s.TeamName = strings.TrimSpace(cfg.TeamName)
+	}
+	// Register the spawned agent with the team roster if team context is set.
+	if s.TeamName != "" {
+		_ = addTeamMember(s.TeamName, TeamFileMember{
+			AgentID:   s.ID,
+			Name:      s.Name,
+			AgentType: s.AgentType,
+			Model:     s.Model,
+			Prompt:    s.Prompt,
+			JoinedAt:  time.Now().UnixMilli(),
+			CWD:       s.WorkDir,
+			SessionID: cfg.SessionID,
+			IsActive:  true,
+		})
+		// Subscribe to all existing team members by default.
+		if tf, err := readTeamFile(s.TeamName); err == nil && tf != nil {
+			var subs []string
+			for _, m := range tf.Members {
+				if m.AgentID != s.ID {
+					subs = append(subs, m.AgentID)
+				}
+			}
+			if len(subs) > 0 {
+				_ = addTeamMember(s.TeamName, TeamFileMember{
+					AgentID:       s.ID,
+					Name:          s.Name,
+					JoinedAt:      time.Now().UnixMilli(),
+					Subscriptions: subs,
+					IsActive:      true,
+				})
+			}
+		}
 	}
 
 	cwdTrim := strings.TrimSpace(in.Cwd)
@@ -218,14 +253,15 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		}()
 		resp, _ := json.Marshal(AgentToolResponse{
 			Data: AgentToolResponseData{
-				Success:      true,
-				AgentID:      s.ID,
-				Name:         s.Name,
-				AgentType:    s.AgentType,
-				Message:      "Agent started in background",
-				OutputFile:   outFile,
-				IsBackground: true,
-				WorktreePath: s.WorktreePath,
+				Success:          true,
+				AgentID:          s.ID,
+				Name:             s.Name,
+				AgentType:        s.AgentType,
+				Message:          "Agent started in background",
+				OutputFile:       outFile,
+				IsBackground:     true,
+				WorktreePath:     s.WorktreePath,
+				ProgressMessages: s.ProgressMessages,
 			},
 		})
 		return string(resp), false, nil
@@ -245,8 +281,9 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 			Name:         s.Name,
 			AgentType:    s.AgentType,
 			Message:      "Agent completed",
-			Output:       output,
-			WorktreePath: s.WorktreePath,
+			Output:           output,
+			WorktreePath:     s.WorktreePath,
+			ProgressMessages: s.ProgressMessages,
 		},
 	})
 	return string(resp), false, nil
@@ -315,12 +352,26 @@ func ResumeAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 			AgentID:      s.ID,
 			Name:         s.Name,
 			AgentType:    s.AgentType,
-			Message:      "Agent resumed",
-			Output:       output,
-			WorktreePath: s.WorktreePath,
+			Message:          "Agent resumed",
+			Output:           output,
+			WorktreePath:     s.WorktreePath,
+			ProgressMessages: s.ProgressMessages,
 		},
 	})
 	return string(resp), false, nil
+}
+
+// isSubscribedTo checks if a team member's subscriptions include the given sender identity.
+func isSubscribedTo(member TeamFileMember, senderIdentity string) bool {
+	if len(member.Subscriptions) == 0 {
+		return true // no subscriptions means subscribe to all
+	}
+	for _, sub := range member.Subscriptions {
+		if sub == senderIdentity {
+			return true
+		}
+	}
+	return false
 }
 
 func RunSendMessageTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
@@ -331,8 +382,83 @@ func RunSendMessageTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error
 	if strings.TrimSpace(in.To) == "" {
 		return "", true, fmt.Errorf("to is required")
 	}
+
+	// Resolve team context
+	teamName := strings.TrimSpace(getenv("CLAUDE_CODE_TEAM_NAME"))
+	senderName := strings.TrimSpace(getenv("CLAUDE_CODE_AGENT_NAME"))
+	senderID := strings.TrimSpace(getenv("CLAUDE_CODE_AGENT_ID"))
+	if senderName == "" {
+		senderName = senderID
+	}
+	if senderName == "" {
+		senderName = "unknown"
+	}
+
+	to := strings.TrimSpace(in.To)
+
+	// Broadcast to all team members (*)
+	if to == "*" {
+		if teamName == "" {
+			resp, _ := json.Marshal(map[string]any{
+				"data": map[string]any{"success": false, "message": "Broadcast requires team context (CLAUDE_CODE_TEAM_NAME)"},
+			})
+			return string(resp), false, nil
+		}
+		tf, err := readTeamFile(teamName)
+		if err != nil || tf == nil {
+			resp, _ := json.Marshal(map[string]any{
+				"data": map[string]any{"success": false, "message": "Team not found for broadcast", "team": teamName},
+			})
+			return string(resp), false, nil
+		}
+		broadcastCount := 0
+		for _, m := range tf.Members {
+			if m.AgentID == senderID || m.Name == senderName {
+				continue // skip sender
+			}
+			targetName := m.Name
+			if targetName == "" {
+				targetName = m.AgentID
+			}
+			// Only deliver if target subscribes to sender
+			if !isSubscribedTo(m, senderID) && !isSubscribedTo(m, senderName) {
+				continue
+			}
+			if err := writeToMailbox(targetName, teamName, senderName, in.Message); err == nil {
+				broadcastCount++
+			}
+		}
+		resp, _ := json.Marshal(map[string]any{
+			"data": map[string]any{
+				"success": true,
+				"message": fmt.Sprintf("Broadcast delivered to %d team members", broadcastCount),
+				"count":   broadcastCount,
+			},
+		})
+		return string(resp), false, nil
+	}
+
+	// Single-target delivery: write to mailbox with subscription check
+	if teamName != "" {
+		shouldDeliver := true
+		if tf, err := readTeamFile(teamName); err == nil && tf != nil {
+			for _, m := range tf.Members {
+				if m.Name == to || m.AgentID == to {
+					if !isSubscribedTo(m, senderID) && !isSubscribedTo(m, senderName) {
+						shouldDeliver = false
+					}
+					break
+				}
+			}
+		}
+		if shouldDeliver {
+			_ = writeToMailbox(to, teamName, senderName, in.Message)
+		}
+	}
+
+	// Look up and run the target agent session
 	agentSessionsMu.RLock()
-	id := strings.TrimSpace(in.To)
+	id := to
 	if mapped, ok := agentByName[id]; ok {
 		id = mapped
 	}
@@ -350,7 +476,7 @@ func RunSendMessageTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error
 			agentSessionsMu.Unlock()
 		}
 		if !ok {
-			if persisted := loadAgentMetadataByName(cfg, strings.TrimSpace(in.To)); persisted != nil {
+			if persisted := loadAgentMetadataByName(cfg, to); persisted != nil {
 				s = persisted
 				ok = true
 				agentSessionsMu.Lock()
@@ -364,7 +490,7 @@ func RunSendMessageTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error
 	}
 	if !ok {
 		resp, _ := json.Marshal(map[string]any{
-			"data": map[string]any{"success": false, "message": "SendMessage target not found", "to": in.To},
+			"data": map[string]any{"success": false, "message": "SendMessage target not found", "to": to},
 		})
 		return string(resp), false, nil
 	}
@@ -372,6 +498,12 @@ func RunSendMessageTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error
 	output := executeAgent(context.Background(), cfg, s, in.Message, history)
 	persistSidechain(cfg, s, in.Message, output)
 	persistAgentMetadata(cfg, s)
+
+	// Mark mailbox messages as read after processing
+	if teamName != "" && s.Name != "" {
+		_ = markMessagesAsRead(s.Name, teamName)
+	}
+
 	resp, _ := json.Marshal(map[string]any{
 		"data": map[string]any{
 			"success":  true,

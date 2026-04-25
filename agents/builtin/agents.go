@@ -1,5 +1,7 @@
 package builtin
 
+import "encoding/json"
+
 // BuiltinAgent is a resolved built-in definition (system prompt expanded; mirrors AgentDefinition fields used by TS).
 type BuiltinAgent struct {
 	AgentType string `json:"agentType"`
@@ -17,6 +19,8 @@ type BuiltinAgent struct {
 	// CriticalSystemReminderExperimental matches TS criticalSystemReminder_EXPERIMENTAL.
 	CriticalSystemReminderExperimental string `json:"criticalSystemReminder_EXPERIMENTAL,omitempty"`
 	SystemPrompt                       string `json:"systemPrompt"`
+	// Hooks mirrors TS frontmatter hooks field; nil for built-in agents.
+	Hooks json.RawMessage `json:"hooks,omitempty"`
 }
 
 const (

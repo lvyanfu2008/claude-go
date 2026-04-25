@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"goc/claudemd"
 	"goc/commands"
+	"goc/tools/hookstypes"
 )
 
 type AgentLoadFailure struct {
@@ -67,7 +69,7 @@ func LoadAgentDefinitionsBuiltins() []AgentDefinition {
 			Background:                         b.Background,
 			SystemPrompt:                       b.SystemPrompt,
 			OmitClaudeMd:                       b.OmitClaudeMd,
-			CriticalSystemReminderExperimental: b.CriticalSystemReminderExperimental,
+			Hooks:                             b.Hooks,
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].AgentType < out[j].AgentType })
@@ -175,6 +177,7 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	criticalReminder, _ := fm["criticalSystemReminder_EXPERIMENTAL"].(string)
 	criticalReminder = strings.TrimSpace(criticalReminder)
+	hooks := parseHooksFromFrontmatter(fm)
 
 	return AgentDefinition{
 		AgentType:                          name,
@@ -191,8 +194,30 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 		Isolation:                          iso,
 		RequiredMcpServers:                 requiredMcp,
 		SystemPrompt:                       systemPrompt,
-		CriticalSystemReminderExperimental: criticalReminder,
+		Hooks:                             hooks,
 	}, true, ""
+}
+
+func parseHooksFromFrontmatter(fm map[string]interface{}) json.RawMessage {
+	v, ok := fm["hooks"]
+	if !ok || v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	// Validate that top-level keys are known hook events (mirrors TS HooksSchema).safeParse).
+	var raw map[string]interface{}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil
+	}
+	for key := range raw {
+		if !hookstypes.KnownHookEvent(key) {
+			return nil
+		}
+	}
+	return json.RawMessage(b)
 }
 
 func parseToolList(v any) []string {

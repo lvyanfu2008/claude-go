@@ -13,4 +13,10 @@ type Config struct {
 	Messages []types.Message
 	// SystemPrompt carries the parent's rendered system prompt parts (needed for fork subagent).
 	SystemPrompt []string
+	// Team identity for multi-agent teams.
+	AgentName string
+	AgentID   string
+	TeamName  string
+	// ProgressCallback forwards agent progress messages in real time to the UI.
+	ProgressCallback func(*types.Message)
 }

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"time"
 
 	"goc/types"
@@ -28,6 +29,14 @@ type AgentRuntimeConfig struct {
 	AvailableMCPServers []string
 	Messages            []types.Message
 	SystemPrompt        []string
+	// Team identity for multi-agent teams.
+	TeamName  string
+	AgentName string
+	AgentID   string
+	// ProgressCallback forwards progress messages (MessageTypeProgress) from the
+	// inner agent's query loop in real time so the UI can render them while the
+	// agent is still executing, matching TS AgentTool/UI.tsx streaming behavior.
+	ProgressCallback func(*types.Message)
 }
 
 type AgentDefinition struct {
@@ -45,7 +54,9 @@ type AgentDefinition struct {
 	RequiredMcpServers                 []string `json:"requiredMcpServers,omitempty"`
 	SystemPrompt                       string   `json:"systemPrompt,omitempty"`
 	OmitClaudeMd                       bool     `json:"omitClaudeMd,omitempty"`
-	CriticalSystemReminderExperimental string   `json:"criticalSystemReminder_EXPERIMENTAL,omitempty"`
+	// Hooks mirrors TS custom agent frontmatter hooks — parsed from agent markdown frontmatter hooks field.
+	// Stored as json.RawMessage to round-trip through JSON serialization for settings/tool API schemas.
+	Hooks json.RawMessage `json:"hooks,omitempty"`
 }
 
 type AgentSession struct {
@@ -71,7 +82,10 @@ type AgentSession struct {
 	CriticalSystemReminderExperimental string    `json:"criticalSystemReminder_EXPERIMENTAL,omitempty"`
 	CreatedAt                          time.Time `json:"createdAt"`
 	UpdatedAt                          time.Time `json:"updatedAt"`
-	LastOutput                         string    `json:"lastOutput,omitempty"`
+	LastOutput                         string            `json:"lastOutput,omitempty"`
+	ProgressMessages                   []json.RawMessage `json:"progressMessages,omitempty"`
+	// Hooks mirrors the agent definition's hooks frontmatter; stored for runtime hook execution.
+	Hooks json.RawMessage `json:"hooks,omitempty"`
 }
 
 type AgentToolResponse struct {
@@ -85,9 +99,10 @@ type AgentToolResponseData struct {
 	AgentType    string `json:"agent_type,omitempty"`
 	Message      string `json:"message,omitempty"`
 	Output       string `json:"output,omitempty"`
-	OutputFile   string `json:"output_file,omitempty"`
-	IsBackground bool   `json:"is_background,omitempty"`
-	WorktreePath string `json:"worktree_path,omitempty"`
+	OutputFile       string            `json:"output_file,omitempty"`
+	IsBackground     bool              `json:"is_background,omitempty"`
+	WorktreePath     string            `json:"worktree_path,omitempty"`
+	ProgressMessages []json.RawMessage `json:"progressMessages,omitempty"`
 }
 
 type SendMessageInput struct {

@@ -13,6 +13,7 @@ import (
 
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
+	"goc/hookexec"
 	"goc/sessiontranscript"
 	"goc/tools/toolexecution"
 	"goc/tools/toolpool"
@@ -176,6 +177,13 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		ctx = context.Background()
 	}
 
+	// Register agent frontmatter hooks as session-scoped hooks (TS registerFrontmatterHooks).
+	if len(s.Hooks) > 0 {
+		hookexec.RegisterFrontmatterHooks(s.ID, s.Hooks, true)
+	}
+	// Cleanup session hooks when agent finishes (TS clearSessionHooks).
+	defer hookexec.ClearAgentSessionHooks(s.ID)
+
 	var msgs []types.Message
 	msg := strings.TrimSpace(prompt)
 	if len(opts.ForkMessages) > 0 {
@@ -225,12 +233,17 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		ProjectRoot:  cfg.ProjectRoot,
 		SessionID:    cfg.SessionID,
 		AskAutoFirst: true,
+		TeamName:     s.TeamName,
+		AgentName:    s.Name,
+		AgentID:      s.ID,
 	}
+	pretoolHook := hookexec.AgentPreToolUseHookFromSession(s.ID, s.WorkDir)
 	qdeps.ToolexecutionDeps = toolexecution.ExecutionDeps{
 		InvokeTool: func(ctx context.Context, name, _ string, input json.RawMessage) (string, bool, error) {
 			return Run(ctx, name, input, toolCfg)
 		},
-		MainLoopModel: tc.Options.MainLoopModel,
+		MainLoopModel:  tc.Options.MainLoopModel,
+		PreToolUseHook: pretoolHook,
 	}
 
 	// Build system prompt components
@@ -271,6 +284,21 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 				systemPromptParts = append(systemPromptParts, requiredMcpText)
 			}
 		}
+
+		// Inject unread teammate mailbox messages into the agent's context
+		agentName := strings.TrimSpace(s.Name)
+		teamName := strings.TrimSpace(s.TeamName)
+		if agentName != "" && teamName != "" {
+			if msgs, err := readMailbox(agentName, teamName); err == nil && len(msgs) > 0 {
+				formatted := formatTeammateMessages(msgs)
+				if formatted != "" {
+					systemPromptParts = append(systemPromptParts,
+						"You have unread teammate messages:\n"+formatted)
+				}
+				// Mark messages as read after injecting into context
+				_ = markMessagesAsRead(agentName, teamName)
+			}
+		}
 	}
 	
 	qp := query.QueryParams{
@@ -287,17 +315,31 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	}
 	processuserinput.ApplyQueryHostEnvGates(&qp)
 	var assistantChunks []string
+	var progressMsgs []json.RawMessage
 	for y, qerr := range query.Query(ctx, qp) {
 		if qerr != nil {
 			return runAgentNow(s, msg)
 		}
-		if y.Message == nil || y.Message.Type != types.MessageTypeAssistant {
+		if y.Message == nil {
+			continue
+		}
+		if y.Message.Type == types.MessageTypeProgress {
+			if b, err := json.Marshal(y.Message); err == nil {
+				progressMsgs = append(progressMsgs, b)
+			}
+			if cfg.ProgressCallback != nil {
+				cfg.ProgressCallback(y.Message)
+			}
+			continue
+		}
+		if y.Message.Type != types.MessageTypeAssistant {
 			continue
 		}
 		if text := assistantMessageText(*y.Message); strings.TrimSpace(text) != "" {
 			assistantChunks = append(assistantChunks, text)
 		}
 	}
+	s.ProgressMessages = progressMsgs
 	if len(assistantChunks) == 0 {
 		return runAgentNow(s, msg)
 	}

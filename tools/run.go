@@ -71,7 +71,11 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 			AvailableMCPServers: availableMCPServersFromEnv(),
 			Messages:            cfg.Messages,
 			SystemPrompt:        cfg.SystemPrompt,
-		})
+			TeamName:            cfg.TeamName,
+			AgentName:           cfg.AgentName,
+			AgentID:             cfg.AgentID,
+		ProgressCallback:    cfg.ProgressCallback,
+	})
 	case "SendMessage":
 		return RunSendMessageTool(raw, AgentRuntimeConfig{
 			WorkDir:             cfg.WorkDir,
@@ -79,6 +83,9 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 			SessionID:           cfg.SessionID,
 			TasksDir:            cfg.TasksDir(),
 			AvailableMCPServers: availableMCPServersFromEnv(),
+			TeamName:            cfg.TeamName,
+			AgentName:           cfg.AgentName,
+			AgentID:             cfg.AgentID,
 		})
 	case "SendUserMessage", "Brief":
 		return BriefFromJSON(raw)
@@ -112,6 +119,10 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return TeamCreateFromJSON(raw, cfg)
 	case "TeamDelete":
 		return TeamDeleteFromJSON(raw, cfg)
+	case "TeamAddMember":
+		return TeamAddMemberFromJSON(raw, cfg)
+	case "TeamRemoveMember":
+		return TeamRemoveMemberFromJSON(raw, cfg)
 	case "Config":
 		return ConfigFromJSON(raw, cfg)
 	case "Tungsten":

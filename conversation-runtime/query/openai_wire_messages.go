@@ -8,9 +8,10 @@ import (
 
 // anthropicWireMessagesToOpenAI mirrors src/api-client/openai/convertMessages.ts
 // anthropicMessagesToOpenAI for wire JSON from [ccbhydrate.MessagesJSONNormalized].
-// model controls whether thinking blocks map to reasoning_content (see [IsOpenAIThinkingEnabled]).
+// Per-assistant: thinking maps to reasoning_content if [IsOpenAIThinkingEnabled] OR the
+// wire row already contains thinking blocks (replay contract when resolved model id does not
+// match heuristics, e.g. gpt-4o name against a reasoning-capable endpoint).
 func anthropicWireMessagesToOpenAI(msgsJSON json.RawMessage, systemPrompt []string, model string) ([]map[string]any, error) {
-	preserveReasoning := IsOpenAIThinkingEnabled(model)
 	var arr []json.RawMessage
 	if err := json.Unmarshal(msgsJSON, &arr); err != nil {
 		return nil, fmt.Errorf("messages json: %w", err)
@@ -36,7 +37,8 @@ func anthropicWireMessagesToOpenAI(msgsJSON json.RawMessage, systemPrompt []stri
 			}
 			out = append(out, part...)
 		case "assistant":
-			part, err := wireAssistantToOpenAI(m.Content, preserveReasoning)
+			pr := IsOpenAIThinkingEnabled(model) || wireAssistantContentHasThinking(m.Content)
+			part, err := wireAssistantToOpenAI(m.Content, pr)
 			if err != nil {
 				return nil, err
 			}
@@ -129,6 +131,27 @@ func fallbackBlockSummary(b map[string]any) string {
 	}
 	line += "]"
 	return line
+}
+
+func wireAssistantContentHasThinking(content json.RawMessage) bool {
+	if len(content) == 0 || string(content) == "null" {
+		return false
+	}
+	var s string
+	if json.Unmarshal(content, &s) == nil {
+		return false
+	}
+	var blocks []map[string]any
+	if err := json.Unmarshal(content, &blocks); err != nil {
+		return false
+	}
+	for _, b := range blocks {
+		typ, _ := b["type"].(string)
+		if typ == "thinking" || typ == "redacted_thinking" {
+			return true
+		}
+	}
+	return false
 }
 
 func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]map[string]any, error) {

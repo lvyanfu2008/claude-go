@@ -65,7 +65,7 @@ func toolSpecPerToolEnabled(t types.ToolSpec) bool {
 		return planModeToolsEnabled()
 	case "TaskOutput":
 		return !featuregates.UserTypeAnt()
-	case "SendMessage", "TeamCreate", "TeamDelete":
+	case "SendMessage", "TeamCreate", "TeamDelete", "TeamAddMember", "TeamRemoveMember":
 		return commands.AgentSwarmsEnabled()
 	default:
 		return true

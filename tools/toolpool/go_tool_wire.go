@@ -954,6 +954,43 @@ func nativeEmptyObjectSchemaToolSpec(name, fallbackDescription string) types.Too
 	}
 }
 
+func nativeTeamAddMemberToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"type":                 "object",
+		"properties":           map[string]any{
+			"team_name": map[string]any{"type": "string", "description": "Team name to add member to"},
+			"agent_id":  map[string]any{"type": "string", "description": "Agent ID to add"},
+			"name":      map[string]any{"type": "string", "description": "Display name for the member"},
+		},
+		"required":             []string{"team_name", "agent_id"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "TeamAddMember",
+		Description:     "Add a member to an agent team.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeTeamRemoveMemberToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"type":                 "object",
+		"properties":           map[string]any{
+			"team_name": map[string]any{"type": "string", "description": "Team name to remove member from"},
+			"agent_id":  map[string]any{"type": "string", "description": "Agent ID to remove"},
+		},
+		"required":             []string{"team_name", "agent_id"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "TeamRemoveMember",
+		Description:     "Remove a member from an agent team.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
 func nativeSendMessageToolSpec() types.ToolSpec {
 	schema := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1397,6 +1434,10 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 		return nativeEmptyObjectSchemaToolSpec("TeamCreate", "Create an agent team context."), true, nil
 	case "TeamDelete":
 		return nativeEmptyObjectSchemaToolSpec("TeamDelete", "Delete an agent team context."), true, nil
+	case "TeamAddMember":
+		return nativeTeamAddMemberToolSpec(), true, nil
+	case "TeamRemoveMember":
+		return nativeTeamRemoveMemberToolSpec(), true, nil
 	case "VerifyPlanExecution":
 		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result."), true, nil
 	case "REPL":
@@ -1486,6 +1527,8 @@ var goWireBaseTools = []goWireToolEntry{
 	{Name: "ListPeers", Required: false, Enabled: alwaysEnabled},
 	{Name: "TeamCreate", Required: false, Enabled: commands.AgentSwarmsEnabled},
 	{Name: "TeamDelete", Required: false, Enabled: commands.AgentSwarmsEnabled},
+	{Name: "TeamAddMember", Required: false, Enabled: commands.AgentSwarmsEnabled},
+	{Name: "TeamRemoveMember", Required: false, Enabled: commands.AgentSwarmsEnabled},
 	{Name: "VerifyPlanExecution", Required: false, Enabled: func() bool { return commands.IsEnvTruthy("CLAUDE_CODE_VERIFY_PLAN") }},
 	{Name: "REPL", Required: false, Enabled: featuregates.UserTypeAnt},
 	{Name: "workflow", Required: false, Enabled: alwaysEnabled},

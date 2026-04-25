@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -80,25 +81,13 @@ func runOpenAIStreamingParityModelLoop(
 		}
 
 		maxTok := openAIMaxTokensForChatCompletion(params, in.ModelID)
-		req := map[string]any{
-			"model":    model,
-			"messages": openaiMsgs,
-			"stream":   true,
-			"stream_options": map[string]any{
-				"include_usage": true,
-			},
-			"max_tokens": maxTok,
-		}
-		mergeOpenAIThinkingBodyFields(req, model)
-		if len(toolsOA) > 0 {
-			req["tools"] = toolsOA
-		}
-		body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
-		if err != nil {
-			return err
+		enableThinking := openAIEnableThinkingForRequest(model, cur)
+		enforceReasoning := OpenAIEnforcesReasoningInThinkingMode(model, enableThinking)
+		maxA := 1
+		if enforceReasoning {
+			maxA = GetDeepSeekStrictThinkingMaxAttempts()
 		}
 
-		acc := newAssistantStreamAccumulator()
 		toolAbortRoot := streamingtool.NewAbortController()
 		go func() {
 			<-ctx.Done()
@@ -127,41 +116,92 @@ func runOpenAIStreamingParityModelLoop(
 		if params.CanUseTool != nil {
 			execCanUse = toolexecution.QueryCanUseToolFn(params.CanUseTool)
 		}
-		ex := streamingtool.NewStreamingToolExecutor(makeFindToolBehavior(in.Tools), execCanUse, port, runner)
 
-		if err := openAIPost(ctx, OpenAIPostStreamParams{
-			BaseURL: base,
-			APIKey:  apiKey,
-			Body:    body,
-			HTTP:    httpClient,
-			Emit: func(ev anthropicmessages.MessageStreamEvent) error {
-				if err := acc.OnEvent(ev); err != nil {
-					return err
+		var acc *assistantStreamAccumulator
+		var innerMsg json.RawMessage
+		// Mirror TS: retry with an extra user turn when v4 flash/pro omits thinking in thinking mode.
+		for attempt := 0; attempt < maxA; attempt++ {
+			wire := openaiMsgs
+			if enforceReasoning && attempt > 0 {
+				wire = append(append([]map[string]any{}, openaiMsgs...), map[string]any{
+					"role":    "user",
+					"content": DeepSeekThinkingRetryUserEN,
+				})
+			}
+			req := map[string]any{
+				"model":    model,
+				"messages": wire,
+				"stream":   true,
+				"stream_options": map[string]any{
+					"include_usage": true,
+				},
+				"max_tokens": maxTok,
+			}
+			mergeOpenAIThinkingBodyFields(req, model)
+			if len(toolsOA) > 0 {
+				req["tools"] = toolsOA
+			}
+			body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
+			if err != nil {
+				return err
+			}
+			acc = newAssistantStreamAccumulator()
+			if err := openAIPost(ctx, OpenAIPostStreamParams{
+				BaseURL: base,
+				APIKey:  apiKey,
+				Body:    body,
+				HTTP:    httpClient,
+				Emit: func(ev anthropicmessages.MessageStreamEvent) error {
+					if err := acc.OnEvent(ev); err != nil {
+						return err
+					}
+					switch ev.Type {
+					case "content_block_start", "content_block_delta", "content_block_stop":
+						notifyStreamingToolUsesSnapshot(ctx, deps, acc)
+					case "message_stop":
+						notifyStreamingToolUsesClear(ctx, deps)
+					}
+					return nil
+				},
+			}); err != nil {
+				return err
+			}
+			inner, errW := acc.AssistantWire("wire")
+			if errW != nil {
+				return errW
+			}
+			innerMsg = inner
+			if !enforceReasoning {
+				break
+			}
+			if acc.StopReason() == "max_tokens" || assistantWireMessageHasNonEmptyThinkingBlock(innerMsg) {
+				break
+			}
+			if attempt+1 >= maxA {
+				errUUID := randomUUID()
+				if deps.NewUUID != nil {
+					errUUID = deps.NewUUID()
 				}
-				switch ev.Type {
-				case "content_block_start", "content_block_delta", "content_block_stop":
-					notifyStreamingToolUsesSnapshot(ctx, deps, acc)
-				case "message_stop":
-					notifyStreamingToolUsesClear(ctx, deps)
+				errAsst, errB := buildDeepseekThinkingErrorAssistant(errUUID)
+				if errB != nil {
+					return errB
+				}
+				if !yieldStreamingParity(ctx, deps, QueryYield{Message: &errAsst}, yield) {
+					return context.Canceled
 				}
 				return nil
-			},
-		}); err != nil {
-			return err
+			}
 		}
+		ex := streamingtool.NewStreamingToolExecutor(makeFindToolBehavior(in.Tools), execCanUse, port, runner)
 
 		asstUUID := randomUUID()
 		if deps.NewUUID != nil {
 			asstUUID = deps.NewUUID()
 		}
-		inner, err := acc.AssistantWire(asstUUID)
-		if err != nil {
-			return err
-		}
 		asst := types.Message{
 			Type:    types.MessageTypeAssistant,
 			UUID:    asstUUID,
-			Message: inner,
+			Message: innerMsg,
 		}
 		types.SyncAssistantMessageID(&asst)
 		if !yieldStreamingParity(ctx, deps, QueryYield{Message: &asst}, yield) {

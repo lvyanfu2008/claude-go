@@ -18,8 +18,6 @@ import (
 )
 
 // TS parity reference: claude-code/src/utils/tasks.ts (layout, locks, high water mark, CRUD).
-// TODO(ts parity): TaskCreate/TaskUpdate hooks, teammate mailbox, verification nudge,
-// GrowthBook / agent-swarm owner auto-set, completed-task blocking hooks.
 
 const (
 	v2HighWaterMarkFile = ".highwatermark"
@@ -35,13 +33,18 @@ func sanitizePathComponentV2(s string) string {
 }
 
 // taskListID resolves the task list directory name (getTaskListId in TS).
-// TODO(ts parity): in-process teammate / leader team name not wired in Go.
 func taskListID(cfg Config) string {
 	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TASK_LIST_ID")); v != "" {
 		return v
 	}
 	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TEAM_NAME")); v != "" {
 		return v
+	}
+	// In-process teammate: resolve team name from agent identity in team roster
+	if agentName := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME")); agentName != "" {
+		if teamName, _, _ := findTeamMemberByName(agentName); teamName != "" {
+			return teamName
+		}
 	}
 	if v := strings.TrimSpace(cfg.SessionID); v != "" {
 		return v
@@ -262,11 +265,19 @@ func v2CreateTask(taskListID string, subject, description, activeForm string, me
 		if len(md) == 0 {
 			md = nil
 		}
+		owner := ""
+		if commands.AgentSwarmsEnabled() {
+			owner = strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME"))
+			if owner == "" {
+				owner = strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_ID"))
+			}
+		}
 		t := &v2Task{
 			ID:          newID,
 			Subject:     subject,
 			Description: description,
 			ActiveForm:  activeForm,
+			Owner:       owner,
 			Status:      "pending",
 			Blocks:      []string{},
 			BlockedBy:   []string{},
@@ -478,6 +489,38 @@ func errTodoV2Disabled(tool string) error {
 	return fmt.Errorf("%s: Todo v2 tools disabled (non-interactive). Set CLAUDE_CODE_ENABLE_TASKS=1 to enable", tool)
 }
 
+// broadcastTaskEvent sends a task-related notification to all team members except self.
+func broadcastTaskEvent(taskID, subject, event string) {
+	agentName := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME"))
+	agentID := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_ID"))
+	teamName := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TEAM_NAME"))
+	if teamName == "" {
+		return
+	}
+	sender := agentName
+	if sender == "" {
+		sender = agentID
+	}
+	if sender == "" {
+		return
+	}
+	tf, err := readTeamFile(teamName)
+	if err != nil || tf == nil {
+		return
+	}
+	msg := fmt.Sprintf("Task #%s \"%s\" %s", taskID, subject, event)
+	for _, m := range tf.Members {
+		if m.AgentID == agentID || m.Name == agentName {
+			continue
+		}
+		targetName := m.Name
+		if targetName == "" {
+			targetName = m.AgentID
+		}
+		_ = writeToMailbox(targetName, teamName, sender, msg)
+	}
+}
+
 // TaskCreateFromJSON implements TaskCreate (TS TaskCreateTool); skips executeTaskCreatedHooks.
 func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
@@ -501,6 +544,7 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 	if err != nil {
 		return "", true, err
 	}
+	broadcastTaskEvent(id, in.Subject, "created")
 	out := map[string]any{
 		"data": map[string]any{
 			"task": map[string]any{"id": id, "subject": in.Subject},
@@ -705,10 +749,31 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 			return "", true, fmt.Errorf("invalid status %q", st)
 		}
 		if st != existing.Status {
-			// TODO(ts parity): executeTaskCompletedHooks when status becomes completed.
 			updates["status"] = st
 			updatedFields = append(updatedFields, "status")
 			statusChange = map[string]string{"from": existing.Status, "to": st}
+			if st == "completed" {
+				// Block completion if any blockers are still unresolved.
+				if len(existing.BlockedBy) > 0 {
+					resolved := map[string]bool{}
+					for _, id := range existing.BlockedBy {
+						bt, err := v2GetTask(tid, id)
+						if err == nil && bt != nil && bt.Status == "completed" {
+							resolved[id] = true
+						}
+					}
+					var unresolved []string
+					for _, id := range existing.BlockedBy {
+						if !resolved[id] {
+							unresolved = append(unresolved, id)
+						}
+					}
+					if len(unresolved) > 0 {
+						return "", true, fmt.Errorf("cannot complete task: blocked by unresolved task(s): %s", strings.Join(unresolved, ", "))
+					}
+				}
+				broadcastTaskEvent(in.TaskID, existing.Subject, "completed")
+			}
 		}
 	}
 
@@ -770,6 +835,9 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 	}
 	if statusChange != nil {
 		out["data"].(map[string]any)["statusChange"] = statusChange
+		if statusChange["to"] == "completed" {
+			out["data"].(map[string]any)["verificationNudge"] = "Task \"" + existing.Subject + "\" is complete. Consider running verification steps to confirm the work is correct."
+		}
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil

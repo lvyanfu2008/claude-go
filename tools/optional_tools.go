@@ -518,6 +518,79 @@ func TeamDeleteFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	return string(b), false, nil
 }
 
+// TeamAddMemberFromJSON adds a member to an existing team roster.
+func TeamAddMemberFromJSON(raw []byte, cfg Config) (string, bool, error) {
+	var in struct {
+		TeamName string `json:"team_name"`
+		AgentID  string `json:"agent_id"`
+		Name     string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return "", true, err
+	}
+	team := strings.TrimSpace(in.TeamName)
+	if team == "" {
+		return "", true, fmt.Errorf("team_name is required")
+	}
+	agentID := strings.TrimSpace(in.AgentID)
+	if agentID == "" {
+		return "", true, fmt.Errorf("agent_id is required")
+	}
+	member := TeamFileMember{
+		AgentID:       agentID,
+		Name:          strings.TrimSpace(in.Name),
+		JoinedAt:      time.Now().UnixMilli(),
+		Subscriptions: []string{},
+		IsActive:      true,
+		SessionID:     strings.TrimSpace(cfg.SessionID),
+	}
+	if err := addTeamMember(team, member); err != nil {
+		return "", true, fmt.Errorf("add team member: %w", err)
+	}
+	out := map[string]any{
+		"data": map[string]any{
+			"success":   true,
+			"team_name": team,
+			"agent_id":  agentID,
+			"message":   "Member added to team",
+		},
+	}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
+}
+
+// TeamRemoveMemberFromJSON removes a member from a team roster.
+func TeamRemoveMemberFromJSON(raw []byte, cfg Config) (string, bool, error) {
+	var in struct {
+		TeamName string `json:"team_name"`
+		AgentID  string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return "", true, err
+	}
+	team := strings.TrimSpace(in.TeamName)
+	if team == "" {
+		return "", true, fmt.Errorf("team_name is required")
+	}
+	agentID := strings.TrimSpace(in.AgentID)
+	if agentID == "" {
+		return "", true, fmt.Errorf("agent_id is required")
+	}
+	if err := removeTeamMember(team, agentID); err != nil {
+		return "", true, fmt.Errorf("remove team member: %w", err)
+	}
+	out := map[string]any{
+		"data": map[string]any{
+			"success":   true,
+			"team_name": team,
+			"agent_id":  agentID,
+			"message":   "Member removed from team",
+		},
+	}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
+}
+
 // ConfigFromJSON — ant-only tool.
 func ConfigFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	var in struct {

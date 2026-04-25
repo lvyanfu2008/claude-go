@@ -29,6 +29,26 @@ func TestAnthropicWireMessagesToOpenAI_ReasoningContentWhenThinkingEnabled(t *te
 
 func TestAnthropicWireMessagesToOpenAI_ThinkingOmittedWhenThinkingDisabled(t *testing.T) {
 	t.Setenv("OPENAI_ENABLE_THINKING", "0")
+	// No thinking blocks in content — gpt-4o should not get reasoning_content.
+	msgs := []byte(`[
+  {"role":"assistant","content":[
+    {"type":"text","text":"out"}
+  ]}
+]`)
+	out, err := anthropicWireMessagesToOpenAI(json.RawMessage(msgs), nil, "gpt-4o")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := out[len(out)-1]
+	if _, ok := a["reasoning_content"]; ok {
+		t.Fatalf("did not want reasoning_content on gpt-4o with text-only: %#v", a)
+	}
+}
+
+func TestAnthropicWireMessagesToOpenAI_ReplayThinkingWhenModelHeuristicOff(t *testing.T) {
+	t.Setenv("OPENAI_ENABLE_THINKING", "0")
+	// API replay: prior turn has thinking; must map to reasoning_content even if resolved id is gpt-4o
+	// and IsOpenAIThinkingEnabled is false (per convertMessages.ts fromContent guard).
 	msgs := []byte(`[
   {"role":"assistant","content":[
     {"type":"thinking","thinking":"internal"},
@@ -40,8 +60,8 @@ func TestAnthropicWireMessagesToOpenAI_ThinkingOmittedWhenThinkingDisabled(t *te
 		t.Fatal(err)
 	}
 	a := out[len(out)-1]
-	if _, ok := a["reasoning_content"]; ok {
-		t.Fatalf("did not want reasoning_content on gpt-4o: %#v", a)
+	if rc, _ := a["reasoning_content"].(string); rc != "internal" {
+		t.Fatalf("reasoning_content: %#v", a["reasoning_content"])
 	}
 }
 

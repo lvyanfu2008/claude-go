@@ -40,6 +40,9 @@ type ParityToolRunner struct {
 	// Used by the Agent tool (fork subagent) to access the in-progress assistant message.
 	// Takes precedence over Messages when set.
 	MessagesFunc func() []types.Message
+	// ProgressCallback forwards agent progress messages in real time to the UI.
+	// Set by gou-demo to forward progress from inner agent query loops via ccbSend.
+	ProgressCallback func(*types.Message)
 }
 
 func (r *ParityToolRunner) roots() []string {
@@ -95,13 +98,14 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		msgs = r.MessagesFunc()
 	}
 	cfg := tools.Config{
-		Roots:        roots,
-		WorkDir:      wd,
-		ProjectRoot:  pr,
-		SessionID:    strings.TrimSpace(r.SessionID),
-		AskAutoFirst: r.AskAutoFirst,
-		Messages:     msgs,
-		SystemPrompt: r.SystemPrompt,
+		Roots:             roots,
+		WorkDir:           wd,
+		ProjectRoot:       pr,
+		SessionID:         strings.TrimSpace(r.SessionID),
+		AskAutoFirst:      r.AskAutoFirst,
+		Messages:          msgs,
+		SystemPrompt:      r.SystemPrompt,
+		ProgressCallback:  r.ProgressCallback,
 	}
 	s, isErr, perr := tools.Run(ctx, name, input, cfg)
 	if perr == nil || !tools.IsNotHandled(perr) {

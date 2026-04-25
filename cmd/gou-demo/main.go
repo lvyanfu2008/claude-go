@@ -1208,6 +1208,11 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 							Messages:         m.store.Messages,
 							MessagesFunc:     func() []types.Message { return m.store.Messages },
 							SystemPrompt:     []string{guidance},
+							ProgressCallback: func(msg *types.Message) {
+								if send := m.ccbSend; send != nil {
+									send(gouQueryYieldMsg{Message: *msg})
+								}
+							},
 						}
 						if gouDemoPreferQueryStreamingParity() {
 							var userCtx map[string]string

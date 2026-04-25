@@ -11,11 +11,11 @@ import (
 
 	"goc/anthropicmessages"
 	"goc/ccb-engine/apilog"
-	"goc/tools/toolsearchwire"
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"
 	"goc/tools/toolexecution"
+	"goc/tools/toolsearchwire"
 	"goc/types"
 )
 
@@ -69,51 +69,96 @@ func runOpenAINonStreamingParityModelLoop(
 		}
 
 		maxTok := openAIMaxTokensForChatCompletion(params, in.ModelID)
-		req := map[string]any{
-			"model":       model,
-			"messages":    openaiMsgs,
-			"max_tokens":  maxTok,
-		}
-		mergeOpenAIThinkingBodyFields(req, model)
-		if len(toolsOA) > 0 {
-			req["tools"] = toolsOA
-		}
-		body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
-		if err != nil {
-			return err
+		enableThinking := openAIEnableThinkingForRequest(model, cur)
+		enforceReasoning := OpenAIEnforcesReasoningInThinkingMode(model, enableThinking)
+		maxA := 1
+		if enforceReasoning {
+			maxA = GetDeepSeekStrictThinkingMaxAttempts()
 		}
 
-		if apilog.ApiBodyLoggingEnabled() {
-			apilog.PrepareIfEnabled()
-		}
-		apilog.LogRequestBody("POST "+url+" (no-stream)", body)
+		var acc *assistantStreamAccumulator
+		var innerMsg []byte
+		for attempt := 0; attempt < maxA; attempt++ {
+			wire := openaiMsgs
+			if enforceReasoning && attempt > 0 {
+				wire = append(append([]map[string]any{}, openaiMsgs...), map[string]any{
+					"role":    "user",
+					"content": DeepSeekThinkingRetryUserEN,
+				})
+			}
+			req := map[string]any{
+				"model":      model,
+				"messages":   wire,
+				"max_tokens": maxTok,
+			}
+			mergeOpenAIThinkingBodyFields(req, model)
+			if len(toolsOA) > 0 {
+				req["tools"] = toolsOA
+			}
+			body, err := anthropicmessages.MarshalJSONNoEscapeHTML(req)
+			if err != nil {
+				return err
+			}
 
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-		if err != nil {
-			return err
-		}
-		httpReq.Header.Set("authorization", "Bearer "+apiKey)
-		httpReq.Header.Set("content-type", "application/json")
+			if apilog.ApiBodyLoggingEnabled() {
+				apilog.PrepareIfEnabled()
+			}
+			apilog.LogRequestBody("POST "+url+" (no-stream)", body)
 
-		resp, err := httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		respBody, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			return err
-		}
-		apilog.LogResponseBody("POST "+url+" (no-stream "+resp.Status+")", respBody)
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return fmt.Errorf("openai chat non-stream %s: %s", resp.Status, truncateOpenAIErr(string(respBody), 800))
-		}
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+			if err != nil {
+				return err
+			}
+			httpReq.Header.Set("authorization", "Bearer "+apiKey)
+			httpReq.Header.Set("content-type", "application/json")
 
-		acc := newAssistantStreamAccumulator()
-		if err := ReplayOpenAINonStreamChatResponse(respBody, model, func(ev anthropicmessages.MessageStreamEvent) error {
-			return acc.OnEvent(ev)
-		}); err != nil {
-			return err
+			resp, err := httpClient.Do(httpReq)
+			if err != nil {
+				return err
+			}
+			respBody, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err != nil {
+				return err
+			}
+			apilog.LogResponseBody("POST "+url+" (no-stream "+resp.Status+")", respBody)
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				return fmt.Errorf("openai chat non-stream %s: %s", resp.Status, truncateOpenAIErr(string(respBody), 800))
+			}
+
+			acc = newAssistantStreamAccumulator()
+			if err := ReplayOpenAINonStreamChatResponse(respBody, model, func(ev anthropicmessages.MessageStreamEvent) error {
+				return acc.OnEvent(ev)
+			}); err != nil {
+				return err
+			}
+			wireInner, errI := acc.AssistantWire("wire")
+			if errI != nil {
+				return errI
+			}
+			innerMsg = wireInner
+			if !enforceReasoning {
+				break
+			}
+			if acc.StopReason() == "max_tokens" || assistantWireMessageHasNonEmptyThinkingBlock(wireInner) {
+				break
+			}
+			if attempt+1 >= maxA {
+				errUUID := randomUUID()
+				if deps.NewUUID != nil {
+					errUUID = deps.NewUUID()
+				}
+				errAsst, errB := buildDeepseekThinkingErrorAssistant(errUUID)
+				if errB != nil {
+					return errB
+				}
+				if !yieldStreamingParity(ctx, deps, QueryYield{Message: &errAsst}, yield) {
+					notifyStreamingToolUsesClear(ctx, deps)
+					return context.Canceled
+				}
+				notifyStreamingToolUsesClear(ctx, deps)
+				return nil
+			}
 		}
 
 		toolAbortRoot := streamingtool.NewAbortController()
@@ -152,15 +197,10 @@ func runOpenAINonStreamingParityModelLoop(
 		if deps.NewUUID != nil {
 			asstUUID = deps.NewUUID()
 		}
-		inner, err := acc.AssistantWire(asstUUID)
-		if err != nil {
-			notifyStreamingToolUsesClear(ctx, deps)
-			return err
-		}
 		asst := types.Message{
 			Type:    types.MessageTypeAssistant,
 			UUID:    asstUUID,
-			Message: inner,
+			Message: innerMsg,
 		}
 		types.SyncAssistantMessageID(&asst)
 		if !yieldStreamingParity(ctx, deps, QueryYield{Message: &asst}, yield) {

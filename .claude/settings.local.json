@@ -22,7 +22,12 @@
       "Bash(go run:*)",
       "Bash(chmod:*)",
       "Bash(find /Users/lvyanfu/Work/claude/claude-go -name \"*.go\" -type f -exec grep -l \"autoCompact\\\\|microcompact\" {})",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(go build:*)",
+      "Bash(python3:*)",
+      "Bash(xxd)",
+      "Bash(go vet:*)",
+      "Bash(go test:*)"
     ]
   }
 }
