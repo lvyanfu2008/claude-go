@@ -1,8 +1,9 @@
 package main
 
 // isListViewportScrollKey reports keys forwarded to bubbles/viewport for the prompt message pane
-// (see gouDemoMsgViewportKeyMap + handleMsgViewportScrollKey). Must run before m.pr.Update so ↑/↓
-// scroll the list instead of being dropped or only affecting the prompt.
+// (see gouDemoMsgViewportKeyMap + handleMsgViewportScrollKey). In handleKeyMsgPreserving, slash
+// command list nav runs *before* this so ↑/↓ move the slash menu when it is open; otherwise ↑/↓
+// scroll the message list. Must run before m.pr.Update so scroll keys are not swallowed by the prompt.
 // Intentionally omit "j", "k", " ", and "b" so those keys type in the prompt (transcript mode still binds j/k via handleTranscriptKey).
 func isListViewportScrollKey(s string) bool {
 	switch s {

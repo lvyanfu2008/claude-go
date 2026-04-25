@@ -99,24 +99,6 @@ func shouldShowTSSlashList(value string, cursorRune int) bool {
 	return true
 }
 
-func filterSlashCommandNames(all []string, filter string) []string {
-	if len(all) == 0 {
-		return nil
-	}
-	f := strings.ToLower(strings.TrimSpace(filter))
-	if f == "" {
-		return append([]string(nil), all...)
-	}
-	var out []string
-	lf := strings.ToLower(f)
-	for _, n := range all {
-		if strings.Contains(strings.ToLower(n), lf) {
-			out = append(out, n)
-		}
-	}
-	return out
-}
-
 func sortedSlashDisplayNames(commands []types.Command) []string {
 	if len(commands) == 0 {
 		return nil
@@ -213,10 +195,11 @@ func (m *model) loadSlashCommandsOnce() {
 	m.slashCommands = lc
 }
 
-// slashListVisible is true when the command list should show (TS auto-suggest from "/" or F2).
+// slashListVisible is true when the command list should show: leading "/" (TS), mid-input
+// whitespace+"/token", or F2.
 func (m *model) slashListVisible() bool {
 	m.loadSlashCommandsOnce()
-	if len(sortedSlashDisplayNames(m.slashCommands)) == 0 {
+	if len(m.slashCommands) == 0 {
 		return false
 	}
 	if m.uiScreen != gouDemoScreenPrompt {
@@ -225,7 +208,12 @@ func (m *model) slashListVisible() bool {
 	if m.slashListUser {
 		return true
 	}
-	return shouldShowTSSlashList(m.pr.Value(), m.pr.CursorRuneIndex())
+	v := m.pr.Value()
+	cur := m.pr.CursorRuneIndex()
+	if shouldShowTSSlashList(v, cur) {
+		return true
+	}
+	return findMidInputSlashCommand(v, cur) != nil
 }
 
 func (m *model) syncSlashListAfterPrompt() {
@@ -233,18 +221,11 @@ func (m *model) syncSlashListAfterPrompt() {
 		return
 	}
 	m.loadSlashCommandsOnce()
-	names := sortedSlashDisplayNames(m.slashCommands)
-	if len(names) == 0 {
+	if !m.slashListVisible() {
 		m.slashListSel = 0
 		return
 	}
-	should := shouldShowTSSlashList(m.pr.Value(), m.pr.CursorRuneIndex())
-	visible := should || m.slashListUser
-	if !visible {
-		m.slashListSel = 0
-		return
-	}
-	vis := filterSlashCommandNames(names, slashFilterFromPrompt(m.pr.Value()))
+	vis := m.visibleSlashList()
 	if m.slashListSel >= len(vis) {
 		if len(vis) == 0 {
 			m.slashListSel = 0
@@ -269,27 +250,60 @@ func (m *model) toggleSlashListUser() {
 	m.syncSlashListAfterPrompt()
 }
 
-// handleSlashListNavKey handles ↑/↓ for the inline slash list; text keys always go to the prompt.
+// isPromptEnterKey is true for a normal Enter (submit) but not Alt+Enter (insert newline in REPL).
+func isPromptEnterKey(msg tea.KeyPressMsg) bool {
+	if msg.String() == "enter" {
+		return true
+	}
+	k := msg.Key()
+	if k.Mod.Contains(tea.ModAlt) {
+		return false
+	}
+	return k.Code == tea.KeyEnter
+}
+
+// handleSlashListNavKey handles ↑/↓/Tab for the inline slash list. Must run before message
+// viewport scroll so ↑/↓ change selection instead of the transcript (see main.handleKeyMsgPreserving).
 func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
 	if m.uiScreen != gouDemoScreenPrompt || !m.slashListVisible() {
 		return false
 	}
+	if msg.String() == "tab" || msg.Key().Code == tea.KeyTab {
+		m.applySlashTab()
+		return true
+	}
+	dir := 0
 	switch msg.String() {
 	case "up":
+		dir = -1
+	case "down":
+		dir = 1
+	default:
+		k := msg.Key()
+		// Multiline: Shift+↑/↓ moves lines; do not hijack for slash.
+		if k.Mod.Contains(tea.ModShift) {
+			return false
+		}
+		if k.Code == tea.KeyUp {
+			dir = -1
+		} else if k.Code == tea.KeyDown {
+			dir = 1
+		}
+	}
+	if dir == 0 {
+		return false
+	}
+	if dir < 0 {
 		if m.slashListSel > 0 {
 			m.slashListSel--
 		}
-		return true
-	case "down":
-		names := sortedSlashDisplayNames(m.slashCommands)
-		vis := filterSlashCommandNames(names, slashFilterFromPrompt(m.pr.Value()))
+	} else {
+		vis := m.visibleSlashList()
 		if m.slashListSel+1 < len(vis) {
 			m.slashListSel++
 		}
-		return true
-	default:
-		return false
 	}
+	return true
 }
 
 func (m *model) renderPermissionModal(width int) string {
@@ -319,47 +333,100 @@ func (m *model) renderPermissionModal(width int) string {
 		Render(body)
 }
 
-func (m *model) renderSlashPicker(width, maxH int) string {
+// slashPickerListRows returns the number of list body lines shown (0 if none, 1 for empty hint).
+func slashPickerListRows(vis []string, maxListRows int) int {
+	if maxListRows < 1 {
+		maxListRows = 1
+	}
+	if len(vis) == 0 {
+		return 1
+	}
+	if len(vis) < maxListRows {
+		return len(vis)
+	}
+	return maxListRows
+}
+
+// slashListChromeExtra is the terminal row count for the slash list below the input (rule + list block).
+func (m *model) slashListChromeExtra() int {
+	if !m.slashListVisible() {
+		return 0
+	}
+	rows := slashPickerListRows(m.visibleSlashList(), slashPickerMaxListRows(m.height))
+	// 1 faint rule, 1 title line, then list rows
+	return 1 + 1 + rows
+}
+
+func slashPickerMaxListRows(termHeight int) int {
+	if termHeight < 1 {
+		termHeight = 24
+	}
+	// keep modest so message pane stays primary
+	return min(12, max(3, termHeight/4))
+}
+
+// renderSlashPicker draws a full-width block directly below the input: separator rule, then
+// title + left-aligned list (not a corner overlay).
+func (m *model) renderSlashPicker(width, termHeight int) string {
 	if !m.slashListVisible() {
 		return ""
 	}
-	names := sortedSlashDisplayNames(m.slashCommands)
-	filter := slashFilterFromPrompt(m.pr.Value())
-	vis := filterSlashCommandNames(names, filter)
+	if width < 1 {
+		width = 40
+	}
+	vis := m.visibleSlashList()
+	maxList := slashPickerMaxListRows(termHeight)
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render("Slash commands  "))
-	b.WriteString(lipgloss.NewStyle().Faint(true).Render(prSlashFilterLabel(filter) + "  ↑/↓  F2  Esc closes F2-only"))
+	rule := strings.Repeat("─", max(1, width))
+	b.WriteString(lipgloss.NewStyle().Faint(true).Width(width).Render(rule))
+	b.WriteByte('\n')
+	title := lipgloss.NewStyle().Bold(true).Render("Slash commands  ") +
+		lipgloss.NewStyle().Faint(true).Render(m.slashListFooterHint()+"  F2  Esc  Tab  Enter run")
+	b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(title))
 	b.WriteByte('\n')
 	start := 0
 	idx := m.slashListSel
 	if len(vis) > 0 && idx >= len(vis) {
 		idx = len(vis) - 1
 	}
-	if len(vis) > 0 && idx >= maxH-2 {
-		start = idx - (maxH - 3)
+	if len(vis) > 0 && idx >= maxList {
+		start = idx - (maxList - 1)
 		if start < 0 {
 			start = 0
 		}
 	}
-	for i := start; i < len(vis) && i < start+maxH-2; i++ {
+	indent := "  "
+	for i := start; i < len(vis) && i < start+maxList; i++ {
 		line := vis[i]
 		if i == idx {
+			b.WriteString(indent)
 			b.WriteString(lipgloss.NewStyle().Reverse(true).Render(line))
 		} else {
+			b.WriteString(indent)
 			b.WriteString(line)
 		}
 		b.WriteByte('\n')
 	}
 	if len(vis) == 0 {
+		b.WriteString(indent)
 		b.WriteString(lipgloss.NewStyle().Faint(true).Render("(no matches)"))
 	}
-	box := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(0, 1).Width(min(width-4, 50)).Render(strings.TrimSuffix(b.String(), "\n"))
-	return lipgloss.Place(width, max(6, maxH), lipgloss.Right, lipgloss.Bottom, box)
+	return b.String()
 }
 
-func prSlashFilterLabel(filter string) string {
-	if strings.TrimSpace(filter) == "" {
-		return "/…"
+// slashListFooterHint is a short filter hint (leading "/" vs mid-input …/q).
+func (m *model) slashListFooterHint() string {
+	q, start := m.currentSlashQuery()
+	v := m.pr.Value()
+	cur := m.pr.CursorRuneIndex()
+	if !start && findMidInputSlashCommand(v, cur) != nil {
+		if strings.TrimSpace(q) == "" {
+			return "…/…  ↑/↓"
+		}
+		return "…/" + q + "  ↑/↓"
 	}
-	return "/" + filter
+	if strings.TrimSpace(q) == "" {
+		return "/…  ↑/↓"
+	}
+	return "/" + q + "  ↑/↓"
 }
