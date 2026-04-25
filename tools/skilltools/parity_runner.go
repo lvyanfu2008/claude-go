@@ -43,6 +43,12 @@ type ParityToolRunner struct {
 	// ProgressCallback forwards agent progress messages in real time to the UI.
 	// Set by gou-demo to forward progress from inner agent query loops via ccbSend.
 	ProgressCallback func(*types.Message)
+	// WriteDeps holds optional callbacks for Write tool parity features.
+	// When nil or individual callbacks are nil, the corresponding TS feature is skipped.
+	WriteDeps *localtools.WriteDeps
+	// EditDeps holds optional callbacks for Edit tool parity features.
+	// When nil or individual callbacks are nil, the corresponding TS feature is skipped.
+	EditDeps *localtools.EditDeps
 }
 
 func (r *ParityToolRunner) roots() []string {
@@ -121,9 +127,9 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		// while embedding this string as structured toolUseResult (see syntheticToolMessageAfterInvoke).
 		return localtools.ReadFromJSON(input, roots, st, nil)
 	case "Write":
-		return localtools.WriteFromJSON(input, roots, st)
+		return localtools.WriteFromJSONDeps(input, roots, st, r.WriteDeps)
 	case "Edit":
-		return localtools.EditFromJSON(input, roots, st, r.UserModified)
+		return localtools.EditFromJSONDeps(input, roots, st, r.UserModified, r.EditDeps)
 	case "Glob":
 		return localtools.GlobFromJSON(ctx, input, roots)
 	case "Grep":

@@ -190,6 +190,10 @@ func (m *summaryManager) runSummary() {
 
 	m.previousSummary = summaryText
 
+	// Persist summary to session metadata (TS parity: agentSummary.ts sets session.Summary).
+	m.session.Summary = summaryText
+	persistAgentMetadata(m.cfg, m.session)
+
 	// Forward summary via progress callback.
 	if m.cfg.ProgressCallback != nil {
 		payload := map[string]any{

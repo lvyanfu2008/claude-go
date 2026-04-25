@@ -17,7 +17,7 @@
     {"name": "Grep", "ts_presence": "core_if_not_embedded_search", "ts_note": "Omitted when hasEmbeddedSearchTools()", "go_status": "full", "go_location": "localtools.GrepFromJSON"},
     {"name": "ExitPlanMode", "ts_presence": "core", "ts_note": "ExitPlanModeV2Tool", "go_status": "full", "go_location": "tools.ExitPlanModeFromJSON"},
     {"name": "Read", "ts_presence": "core", "ts_note": "Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go", "go_status": "partial", "go_location": "localtools.ReadFromJSON"},
-    {"name": "Edit", "ts_presence": "core", "ts_note": "Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go", "go_status": "partial", "go_location": "localtools.EditFromJSON"},
+    {"name": "Edit", "ts_presence": "core", "ts_note": "Feature-level parity tracked in tools/localtools/filetool_parity.go (EditDeps hooks for permissions, denylist, secrets, settings validation, LSP, git diff)", "go_status": "full", "go_location": "localtools.EditFromJSONDeps"},
     {"name": "Write", "ts_presence": "core", "ts_note": "Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go", "go_status": "partial", "go_location": "localtools.WriteFromJSON"},
     {"name": "NotebookEdit", "ts_presence": "core", "go_status": "full", "go_location": "tools.NotebookEditFromJSON"},
     {"name": "WebFetch", "ts_presence": "core", "go_status": "full", "go_location": "tools.WebFetchFromJSON"},

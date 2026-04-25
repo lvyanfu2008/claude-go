@@ -217,6 +217,11 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	agentSessionsMu.Unlock()
 	persistAgentMetadata(cfg, s)
 
+	// Persist fork system prompt so ResumeAgentTool can reconstruct cache-identical prefixes.
+	if isForkPath {
+		s.ForkSystemPrompt = cfg.SystemPrompt
+	}
+
 	// Build fork execution options if this is a fork path.
 	var forkOpts *executeAgentOpts
 	if isForkPath {
@@ -230,7 +235,12 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 				break
 			}
 		}
-		opts.ForkMessages = buildForkedMessages(in.Prompt, parentAssistantMsg)
+		forkMsgs := buildForkedMessages(in.Prompt, parentAssistantMsg)
+		// Load and prepend any existing sidechain history (resume scenario).
+		if existing := loadSidechainMessages(cfg, agentID); len(existing) > 0 {
+			forkMsgs = append(existing, forkMsgs...)
+		}
+		opts.ForkMessages = forkMsgs
 		forkOpts = opts
 	}
 
@@ -261,7 +271,6 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 				output = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
 			}
 			_, _ = writeBackgroundOutput(cfg.TasksDir, s.ID, output)
-			persistSidechain(cfg, s, in.Prompt, output)
 			persistAgentMetadata(cfg, s)
 			if isTaskStopRequested(cfg.TasksDir, s.ID) {
 				writeBackgroundStatus(cfg.TasksDir, s.ID, "stopped", "Agent stopped", false)
@@ -291,7 +300,6 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	} else {
 		output = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
 	}
-	persistSidechain(cfg, s, in.Prompt, output)
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{
 			Success:      true,
@@ -356,13 +364,30 @@ func ResumeAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	history := loadSidechainMessages(cfg, s.ID)
 	if strings.TrimSpace(in.Prompt) == "" {
 		if len(history) > 0 {
-			in.Prompt = fmt.Sprintf("resume from transcript with %d messages", len(history))
+			var sb strings.Builder
+			sb.WriteString("You are resuming an agent session with previously recorded context.\n")
+			sb.WriteString(fmt.Sprintf("Previous session recorded %d messages.\n", len(history)))
+			if s.Summary != "" {
+				sb.WriteString(fmt.Sprintf("Last known state: %s\n", s.Summary))
+			}
+			if s.LastOutput != "" {
+				sb.WriteString(fmt.Sprintf("Last output: %s\n", s.LastOutput))
+			}
+			sb.WriteString(fmt.Sprintf("Current time: %s\n", time.Now().UTC().Format(time.RFC3339)))
+			sb.WriteString("Continue your work where you left off. Review the conversation history and pick up the task.")
+			in.Prompt = sb.String()
 		} else {
 			in.Prompt = "resume"
 		}
 	}
-	output := executeAgent(context.Background(), cfg, s, in.Prompt, history)
-	persistSidechain(cfg, s, in.Prompt, output)
+	var output string
+	if len(s.ForkSystemPrompt) > 0 {
+		output = executeAgentWithOpts(context.Background(), cfg, s, in.Prompt, history, executeAgentOpts{
+			ForkSystemPrompt: s.ForkSystemPrompt,
+		})
+	} else {
+		output = executeAgent(context.Background(), cfg, s, in.Prompt, history)
+	}
 	persistAgentMetadata(cfg, s)
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{
@@ -514,7 +539,6 @@ func RunSendMessageTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error
 	}
 	history := loadSidechainMessages(cfg, s.ID)
 	output := executeAgent(context.Background(), cfg, s, in.Message, history)
-	persistSidechain(cfg, s, in.Message, output)
 	persistAgentMetadata(cfg, s)
 
 	// Mark mailbox messages as read after processing

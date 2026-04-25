@@ -142,6 +142,9 @@ type RecordOpts struct {
 	Team               *TeamInfo
 	// AllMessages when non-nil is used for REPL id collection (TS cleanMessagesForLogging third arg).
 	AllMessages []types.Message
+	// IsSidechain when true stamps isSidechain:true on each line (TS recordSidechainTranscript),
+	// distinguishing sidechain messages from main chain messages in the same JSONL file.
+	IsSidechain bool
 }
 
 // IsCompactBoundaryMessage mirrors messages.ts isCompactBoundaryMessage.
@@ -412,7 +415,7 @@ func (s *Store) RecordTranscript(ctx context.Context, messages []types.Message, 
 			line["parentUuid"] = nil
 		}
 
-		line["isSidechain"] = false
+		line["isSidechain"] = opts.IsSidechain
 		if opts.Team != nil {
 			if opts.Team.TeamName != "" {
 				line["teamName"] = opts.Team.TeamName

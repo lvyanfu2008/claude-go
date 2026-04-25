@@ -27,6 +27,9 @@ var localCommandHandlers = map[string]LocalCommandHandler{
 	"status":        func(args string) ([]byte, error) { return HandleStatusCommand() },
 	"stickers":      func(args string) ([]byte, error) { return HandleStickersCommand() },
 	"mobile":        func(args string) ([]byte, error) { return HandleMobileCommand() },
+		"reload-plugins": func(args string) ([]byte, error) { return HandleReloadPluginsCommand() },
+		"extra-usage":    func(args string) ([]byte, error) { return HandleExtraUsageCommand() },
+		"rewind":         func(args string) ([]byte, error) { return HandleRewindCommand(args) },
 }
 
 // HandleLocalCommand routes local commands to their appropriate handlers

@@ -67,7 +67,7 @@ func applyUserPromptSubmitHookItem(p *ProcessUserInputParams, result *ProcessUse
 		return result, "hook-prevent-continuation", nil
 	}
 	if len(hookResult.AdditionalContexts) > 0 {
-		parts := make([]string, len(hookResult.AdditionalContexts))
+		parts := make([]string, 0, len(hookResult.AdditionalContexts))
 		for i, s := range hookResult.AdditionalContexts {
 			parts[i] = applyTruncation(s)
 		}
@@ -116,8 +116,6 @@ type ProcessUserInputBaseResult struct {
 	SubmitNextInput bool `json:"submitNextInput,omitempty"`
 	StatePatchBatch *StatePatchBatch `json:"statePatchBatch,omitempty"`
 }
-
-const userImageRejectMessage = "当前版本不支持在消息中加入图片（粘贴或图片块）。请去掉图片后重试。"
 
 // commandsForFind mirrors TS findCommand(..., context.options.commands); prefers [ProcessUserInputParams.Commands], else RuntimeContext.Options.Commands.
 func commandsForFind(p *ProcessUserInputParams) []types.Command {
@@ -261,28 +259,44 @@ func processUserInputBase(
 	isString bool,
 ) (*ProcessUserInputBaseResult, error) {
 	var err error
-	if blocksHaveImage(blocks) {
-		p.logEvent("tengu_multimodal_images_disabled", map[string]any{"reason": "user_images_rejected", "source": "array_input"})
-		return rejectImageResult(), nil
-	}
-	if pastedHasImagePaste(p.PastedContents) {
-		p.logEvent("tengu_multimodal_images_disabled", map[string]any{"reason": "user_images_rejected", "source": "paste"})
-		return rejectImageResult(), nil
-	}
 
 	var inputString *string
 	var normalizedStr string
 	var normalizedBlocks []types.ContentBlockParam
 
+	imageMetadataTexts := []string{}
+	var imageContentBlocks []types.ContentBlockParam
+	var imagePasteIDs []int
+
 	if isString {
 		inputString = &text
 		normalizedStr = text
 	} else if len(blocks) > 0 {
-		last := blocks[len(blocks)-1]
-		normalizedBlocks = blocks
-		if last.Type == "text" {
-			s := last.Text
-			inputString = &s
+		p.checkpoint("query_image_processing_start")
+		processed := make([]types.ContentBlockParam, 0, len(blocks))
+		for _, block := range blocks {
+			if block.Type == "image" && len(block.Source) > 0 {
+				resized := processInputImageBlock(block)
+				if resized != nil {
+					if len(resized.metadataText) > 0 {
+						imageMetadataTexts = append(imageMetadataTexts, resized.metadataText)
+					}
+					processed = append(processed, resized.block)
+				} else {
+					processed = append(processed, block)
+				}
+			} else {
+				processed = append(processed, block)
+			}
+		}
+		normalizedBlocks = processed
+		p.checkpoint("query_image_processing_end")
+		if len(processed) > 0 {
+			last := processed[len(processed)-1]
+			if last.Type == "text" {
+				s := last.Text
+				inputString = &s
+			}
 		}
 	}
 
@@ -290,7 +304,86 @@ func processUserInputBase(
 		return nil, fmt.Errorf("processUserInput: mode %q requires a string input", p.Mode)
 	}
 
-	imageMetadataTexts := []string{}
+	// Process pasted images (extract, resize, store to disk)
+	if len(p.PastedContents) > 0 {
+		p.checkpoint("query_pasted_image_processing_start")
+
+		// Store images to disk so Claude can reference paths
+		storedPaths, _ := storeImages(p.PastedContents)
+
+		// Collect pasted image entries for processing
+		type pastedImageEntry struct {
+			id         int
+			content    string
+			mediaType  string
+			dimensions *ImageDimensions
+			sourcePath string
+		}
+
+		var pastedImages []pastedImageEntry
+		for _, pc := range p.PastedContents {
+			if !isValidImagePaste(pc) {
+				continue
+			}
+			entry := pastedImageEntry{
+				id:        pc.ID,
+				content:   pc.Content,
+				mediaType: "image/png",
+				sourcePath: func() string {
+					if pc.SourcePath != nil {
+						return *pc.SourcePath
+					}
+					if storedPaths != nil {
+						return storedPaths[pc.ID]
+					}
+					return ""
+				}(),
+			}
+			if pc.MediaType != nil {
+				entry.mediaType = *pc.MediaType
+			}
+			if pc.Dimensions != nil {
+				entry.dimensions = &ImageDimensions{
+					OriginalWidth:  pc.Dimensions.Width,
+					OriginalHeight: pc.Dimensions.Height,
+					DisplayWidth:   pc.Dimensions.Width,
+					DisplayHeight:  pc.Dimensions.Height,
+				}
+			}
+			pastedImages = append(pastedImages, entry)
+			imagePasteIDs = append(imagePasteIDs, pc.ID)
+		}
+
+		// Resize each pasted image
+		for _, pi := range pastedImages {
+			resized, rErr := resizeAndDownsampleImageBlock(pi.content, pi.mediaType)
+			if rErr != nil || resized == nil {
+				// Fallback: use original
+				if pi.dimensions != nil {
+					meta := createImageMetadataText(pi.dimensions, pi.sourcePath)
+					if meta != "" {
+						imageMetadataTexts = append(imageMetadataTexts, meta)
+					}
+				} else if pi.sourcePath != "" {
+					imageMetadataTexts = append(imageMetadataTexts, fmt.Sprintf("[Image source: %s]", pi.sourcePath))
+				}
+				imageContentBlocks = append(imageContentBlocks, newImageBlock(pi.content, pi.mediaType))
+				continue
+			}
+
+			// Collect metadata from resized dimensions
+			if resized.dimensions != nil {
+				meta := createImageMetadataText(resized.dimensions, pi.sourcePath)
+				if meta != "" {
+					imageMetadataTexts = append(imageMetadataTexts, meta)
+				}
+			} else if pi.sourcePath != "" {
+				imageMetadataTexts = append(imageMetadataTexts, fmt.Sprintf("[Image source: %s]", pi.sourcePath))
+			}
+			imageContentBlocks = append(imageContentBlocks, resized.block)
+		}
+		p.checkpoint("query_pasted_image_processing_end")
+	}
 
 	skipSlash := boolVal(p.SkipSlashCommands)
 	bridge := boolVal(p.BridgeOrigin)
@@ -381,8 +474,7 @@ func processUserInputBase(
 	if inputString != nil && !effectiveSkipSlash && strings.HasPrefix(inputStr, "/") {
 		if p.ProcessSlashCommand != nil {
 			prec := precedingBlocksForNormalized(isString, normalizedBlocks)
-			var imageBlocks []types.ContentBlockParam
-			r, err := p.ProcessSlashCommand(ctx, inputStr, prec, imageBlocks, attachmentMessages, p.UUID, p.IsAlreadyProcessing, p)
+			r, err := p.ProcessSlashCommand(ctx, inputStr, prec, imageContentBlocks, attachmentMessages, p.UUID, p.IsAlreadyProcessing, p)
 			if err != nil {
 				return nil, err
 			}
@@ -430,7 +522,7 @@ func processUserInputBase(
 	// Regular user prompt (TS processUserInputBase: processTextPrompt for string input).
 	// UserPromptSubmit hooks run in [ProcessUserInput] after base, not via Execution.
 	if isString {
-		tp, err := ProcessTextPrompt(normalizedStr, nil, nil, nil, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
+		tp, err := ProcessTextPrompt(normalizedStr, nil, imageContentBlocks, imagePasteIDs, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
 		if err != nil {
 			return nil, err
 		}
@@ -438,8 +530,8 @@ func processUserInputBase(
 		return addImageMetadataMessage(base, imageMetadataTexts), nil
 	}
 
-	// Non-string fallback keeps previous behavior (rare for current callers).
-	tp, err := ProcessTextPrompt("", normalizedBlocks, nil, nil, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
+	// Non-string fallback keeps previous behavior.
+	tp, err := ProcessTextPrompt("", normalizedBlocks, imageContentBlocks, imagePasteIDs, attachmentMessages, p.UUID, permModePtr(p), p.IsMeta, textPromptLog(p))
 	if err != nil {
 		return nil, err
 	}
@@ -453,14 +545,6 @@ func permModePtr(p *ProcessUserInputParams) *types.PermissionMode {
 	}
 	pm := p.PermissionMode
 	return &pm
-}
-
-func rejectImageResult() *ProcessUserInputBaseResult {
-	return &ProcessUserInputBaseResult{
-		Messages:    []types.Message{newSystemInformationalMessage(userImageRejectMessage, "warning")},
-		ShouldQuery: false,
-		ResultText:  userImageRejectMessage,
-	}
 }
 
 func findAgentMention(msgs []types.Message) *string {
@@ -498,4 +582,41 @@ func addImageMetadataMessage(result *ProcessUserInputBaseResult, imageMetadataTe
 	}
 	result.Messages = append(result.Messages, um)
 	return result
+}
+
+// processInputImageBlock resizes an image ContentBlockParam and returns the
+// resized block with optional metadata text. Returns nil if the block cannot
+// be processed (non-base64 source, decode failure, etc.).
+func processInputImageBlock(block types.ContentBlockParam) *processedImageBlock {
+	var src struct {
+		Type      string `json:"type"`
+		MediaType string `json:"media_type"`
+		Data      string `json:"data"`
+	}
+	if err := json.Unmarshal(block.Source, &src); err != nil {
+		return nil
+	}
+	if src.Type != "base64" || src.Data == "" {
+		return nil
+	}
+
+	resized, err := resizeAndDownsampleImageBlock(src.Data, src.MediaType)
+	if err != nil || resized == nil {
+		return nil
+	}
+
+	metaText := ""
+	if resized.dimensions != nil {
+		metaText = createImageMetadataText(resized.dimensions, "")
+	}
+
+	return &processedImageBlock{
+		block:        resized.block,
+		metadataText: metaText,
+	}
+}
+
+type processedImageBlock struct {
+	block        types.ContentBlockParam
+	metadataText string
 }

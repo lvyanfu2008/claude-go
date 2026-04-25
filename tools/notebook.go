@@ -116,7 +116,7 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 			out = append(out, cells[idx+1:]...)
 			nb["cells"] = out
 		}
-		in.CellID = cellIDFromCell(nm)
+		in.CellID = CellIDFromCell(nm)
 	}
 
 	ctOut := strings.TrimSpace(in.CellType)
@@ -172,13 +172,83 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 	return string(b), false, nil
 }
 
-func cellIDFromCell(cell map[string]any) string {
+// CellIDFromCell extracts the cell ID from a notebook cell's metadata.
+func CellIDFromCell(cell map[string]any) string {
 	if meta, ok := cell["metadata"].(map[string]any); ok {
 		if id, ok := meta["id"].(string); ok && id != "" {
 			return id
 		}
 	}
 	return ""
+}
+
+// CellSourceText reconstructs the source text of a notebook cell from its source array.
+func CellSourceText(cell map[string]any) string {
+	raw, ok := cell["source"]
+	if !ok {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return v
+	case []any:
+		var parts []string
+		for _, line := range v {
+			if s, ok := line.(string); ok {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, "")
+	case []string:
+		return strings.Join(v, "")
+	}
+	return ""
+}
+
+// NotebookEditFromEdit converts a FileEdit request targeting .ipynb to a NotebookEdit call.
+// This is the redirect path: when Edit detects .ipynb, it routes here instead of erroring.
+func NotebookEditFromEdit(absPath, oldString, newString string, replaceAll bool, roots []string) (string, bool, error) {
+	_ = replaceAll // .ipynb edits always replace first occurrence within a single cell
+	data, err := readFileLimited(absPath, 32<<20)
+	if err != nil {
+		return "", true, err
+	}
+	var nb map[string]any
+	if err := json.Unmarshal(data, &nb); err != nil {
+		return "", true, fmt.Errorf("notebook is not valid JSON: %w", err)
+	}
+	rawCells, ok := nb["cells"]
+	if !ok {
+		return "", true, fmt.Errorf("notebook missing cells array")
+	}
+	cells, ok := rawCells.([]any)
+	if !ok {
+		return "", true, fmt.Errorf("notebook cells must be an array")
+	}
+
+	for _, c := range cells {
+		cell, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		cellSource := CellSourceText(cell)
+		if strings.Contains(cellSource, oldString) {
+			cellID := CellIDFromCell(cell)
+			newSource := strings.Replace(cellSource, oldString, newString, 1)
+
+			nbInput := map[string]any{
+				"notebook_path": absPath,
+				"cell_id":       cellID,
+				"new_source":    newSource,
+				"cell_type":     "",
+				"edit_mode":     "replace",
+			}
+			nbRaw, _ := json.Marshal(nbInput)
+			return NotebookEditFromJSON(nbRaw, roots)
+		}
+	}
+
+	return "", true, fmt.Errorf("String to replace not found in notebook cells.\nString: %s", oldString)
 }
 
 func findCellIndexByID(cells []any, id string) (int, error) {
@@ -188,7 +258,7 @@ func findCellIndexByID(cells []any, id string) (int, error) {
 		if !ok {
 			continue
 		}
-		if cellIDFromCell(cm) == id {
+		if CellIDFromCell(cm) == id {
 			return i, nil
 		}
 	}

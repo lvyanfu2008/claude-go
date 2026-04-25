@@ -186,6 +186,13 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	// Cleanup session hooks when agent finishes (TS clearSessionHooks).
 	defer hookexec.ClearAgentSessionHooks(s.ID)
 
+	// Reapply tool_result content replacements to sidechain history on resume,
+	// restoring tool_result content that was compacted during the prior execution.
+	// TS parity: ReapplyToolResultReplacementsFromState in query.ts resume path.
+	if len(s.ContentReplacementState) > 0 && len(history) > 0 {
+		history = query.ReapplyToolResultReplacementsFromState(history, s.ContentReplacementState)
+	}
+
 	var msgs []types.Message
 	msg := strings.TrimSpace(prompt)
 	if len(opts.ForkMessages) > 0 {
@@ -222,6 +229,53 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		msgs = combined
 	}
 
+	// --- Incremental sidechain persistence ---
+	// Create a Store once and persist each chain-participant message as it is yielded,
+	// matching TS recordSidechainTranscript call-per-turn behavior.
+	var sidechainStore *sessiontranscript.Store
+	var sidechainParentUUID string
+	if strings.TrimSpace(cfg.SessionID) != "" && sessiontranscript.IsValidUUID(cfg.SessionID) {
+		sidechainStore = &sessiontranscript.Store{
+			SessionID:   cfg.SessionID,
+			OriginalCwd: cfg.ProjectRoot,
+			Cwd:         s.WorkDir,
+		}
+		// Persist initial messages on first execution (history is empty).
+		// Skip meta messages (skills, system-injected) since they are regenerated on resume.
+		if len(history) == 0 {
+			var initialMsgs []types.Message
+			for _, m := range msgs {
+				if m.Type == types.MessageTypeProgress || (m.IsMeta != nil && *m.IsMeta) {
+					continue
+				}
+				initialMsgs = append(initialMsgs, m)
+			}
+			if len(initialMsgs) > 0 {
+				_ = sidechainStore.RecordSidechainTranscript(nil, s.ID, initialMsgs, "")
+				// TS parity: also write sidechain messages to main session JSONL.
+				rOpts := sessiontranscript.RecordOpts{IsSidechain: true}
+				if s.TeamName != "" || s.Name != "" {
+					rOpts.Team = &sessiontranscript.TeamInfo{TeamName: s.TeamName, AgentName: s.Name}
+				}
+				_, _ = sidechainStore.RecordTranscript(nil, initialMsgs, rOpts)
+				for _, m := range initialMsgs {
+					if sessiontranscript.IsChainParticipant(m) {
+						sidechainParentUUID = m.UUID
+					}
+				}
+			}
+		} else {
+			// Resume path: use the last chain participant UUID from history as the
+			// starting parent UUID so new yield messages are chained correctly.
+			for i := len(history) - 1; i >= 0; i-- {
+				if sessiontranscript.IsChainParticipant(history[i]) {
+					sidechainParentUUID = history[i].UUID
+					break
+				}
+			}
+		}
+	}
+
 	tc := types.ToolUseContext{}
 	tc.Options.MainLoopModel = strings.TrimSpace(s.Model)
 	tc.Options.IsNonInteractiveSession = true
@@ -237,6 +291,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		tc.AgentType = &at
 	}
 	tc.ConversationID = &cfg.SessionID
+	tc.ContentReplacementState = s.ContentReplacementState
 
 	qdeps := query.ProductionDeps()
 	toolCfg := Config{
@@ -256,6 +311,20 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		},
 		MainLoopModel:  tc.Options.MainLoopModel,
 		PreToolUseHook: pretoolHook,
+	}
+
+	// Wrap Autocompact to capture updated ContentReplacementState so it can be
+	// persisted back to AgentSession for the next resume (TS applyAutocompactSideEffects).
+	var captureCRS json.RawMessage
+	origAC := qdeps.Autocompact
+	if origAC != nil {
+		qdeps.Autocompact = func(ctx context.Context, in *query.AutocompactInput) (*query.AutocompactResult, error) {
+			res, err := origAC(ctx, in)
+			if err == nil && res != nil && len(res.UpdatedContentReplacementState) > 0 {
+				captureCRS = append(json.RawMessage(nil), res.UpdatedContentReplacementState...)
+			}
+			return res, err
+		}
 	}
 
 	// Build system prompt components
@@ -345,6 +414,22 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		}
 		// Feed yield messages into the shared buffer for summarization.
 		msgBuf.Append(*y.Message)
+
+		// Incremental sidechain persistence: persist every chain-participant message
+		// as it is yielded from the query loop, matching TS recordSidechainTranscript.
+		if sidechainStore != nil && y.Message.Type != types.MessageTypeProgress {
+			_ = sidechainStore.RecordSidechainTranscript(nil, s.ID, []types.Message{*y.Message}, sidechainParentUUID)
+			// TS parity: also write sidechain messages to main session JSONL.
+			rOpts := sessiontranscript.RecordOpts{StartingParentUUID: sidechainParentUUID, IsSidechain: true}
+			if s.TeamName != "" || s.Name != "" {
+				rOpts.Team = &sessiontranscript.TeamInfo{TeamName: s.TeamName, AgentName: s.Name}
+			}
+			_, _ = sidechainStore.RecordTranscript(nil, []types.Message{*y.Message}, rOpts)
+			if sessiontranscript.IsChainParticipant(*y.Message) {
+				sidechainParentUUID = y.Message.UUID
+			}
+		}
+
 		if y.Message.Type == types.MessageTypeProgress {
 			if b, err := json.Marshal(y.Message); err == nil {
 				progressMsgs = append(progressMsgs, b)
@@ -364,6 +449,10 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	// Stop summarization when the agent's main query loop completes.
 	if stopSummary != nil {
 		stopSummary()
+	}
+	// Persist updated ContentReplacementState for next resume.
+	if len(captureCRS) > 0 {
+		s.ContentReplacementState = captureCRS
 	}
 	s.ProgressMessages = progressMsgs
 	if len(assistantChunks) == 0 {
@@ -517,32 +606,6 @@ func getAgentSkillContent(cmd *types.Command, sessionID string) string {
 	}
 
 	return ""
-}
-
-func persistSidechain(cfg AgentRuntimeConfig, session *AgentSession, userPrompt, assistantOutput string) {
-	if strings.TrimSpace(cfg.SessionID) == "" {
-		return
-	}
-	st := &sessiontranscript.Store{
-		SessionID:   cfg.SessionID,
-		OriginalCwd: cfg.ProjectRoot,
-		Cwd:         session.WorkDir,
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	userMsg := types.Message{
-		Type: types.MessageTypeUser,
-		UUID: fmt.Sprintf("agent-user-%d", time.Now().UnixNano()),
-	}
-	assistantMsg := types.Message{
-		Type:      types.MessageTypeAssistant,
-		UUID:      fmt.Sprintf("agent-assistant-%d", time.Now().UnixNano()),
-		Timestamp: &now,
-	}
-	userContent, _ := json.Marshal(map[string]any{"role": "user", "content": userPrompt})
-	asstContent, _ := json.Marshal(map[string]any{"role": "assistant", "content": assistantOutput})
-	userMsg.Message = userContent
-	assistantMsg.Message = asstContent
-	_ = st.RecordSidechainTranscript(nil, session.ID, []types.Message{userMsg, assistantMsg}, "")
 }
 
 func writeBackgroundOutput(tasksDir, agentID, output string) (string, error) {

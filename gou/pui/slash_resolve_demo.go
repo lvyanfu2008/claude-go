@@ -85,7 +85,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			if strictSlashUnknown() &&
 				processuserinput.LooksLikeSlashCommandName(parsed.CommandName) &&
 				!rootSlashPathExists(parsed.CommandName) {
-				return unknownSkillSlashResult(parsed, attachmentMessages), nil
+				return unknownSkillSlashResult(parsed, attachmentMessages, suggestAvailableCommands(parsed.CommandName)), nil
 			}
 			return slashResultToBase(types.SlashResolveResult{
 				UserText: strings.TrimSpace(inputString),
@@ -212,9 +212,13 @@ func rootSlashPathExists(commandName string) bool {
 	return err == nil
 }
 
-func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attachmentMessages []types.Message) *processuserinput.ProcessUserInputBaseResult {
+func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attachmentMessages []types.Message, suggestion string) *processuserinput.ProcessUserInputBaseResult {
 	msgs := append([]types.Message(nil), attachmentMessages...)
-	msgs = append(msgs, SystemNotice(fmt.Sprintf("Unknown skill: %s", parsed.CommandName)))
+	msg := fmt.Sprintf("Unknown skill: %s", parsed.CommandName)
+	if suggestion != "" {
+		msg += ". " + suggestion
+	}
+	msgs = append(msgs, SystemNotice(msg))
 	if a := strings.TrimSpace(parsed.Args); a != "" {
 		msgs = append(msgs, SystemNotice(fmt.Sprintf("Args from unknown skill: %s", a)))
 	}
@@ -222,6 +226,25 @@ func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attach
 		Messages:    msgs,
 		ShouldQuery: false,
 	}
+}
+
+// suggestAvailableCommands returns a fuzzy suggestion for a command name that was not found.
+// It scans the available commands and suggests the closest match or a general tip.
+func suggestAvailableCommands(name string) string {
+	// Check if the name matches any known local command alias.
+	aliases := map[string]string{
+		"new":    "clear",
+		"reset":  "clear",
+		"fork":   "branch",
+		"quit":   "exit",
+		"remote": "session",
+		"ios":    "mobile",
+		"android": "mobile",
+	}
+	if canonical, ok := aliases[name]; ok {
+		return fmt.Sprintf("Did you mean /%s?", canonical)
+	}
+	return ""
 }
 
 func permissionModePtrPI(p *processuserinput.ProcessUserInputParams) *types.PermissionMode {

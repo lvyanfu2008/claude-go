@@ -19,7 +19,7 @@ type skillFileYAML struct {
 
 // ResolveDiskSkill builds SlashResolveResult from a disk skill Command (prompt + SkillRoot).
 // sessionID is substituted for ${CLAUDE_SESSION_ID}; use empty to replace with empty string.
-// Does not run executeShellCommandsInPrompt (TS-only); see docs/plans/go-slash-resolve.md.
+// Shell command substitutions (${...} and backtick patterns) are executed via sh -c.
 func ResolveDiskSkill(cmd types.Command, args string, sessionID string) (types.SlashResolveResult, error) {
 	if cmd.Type != "prompt" {
 		return types.SlashResolveResult{}, fmt.Errorf("slashresolve: command type %q not prompt", cmd.Type)
@@ -56,6 +56,15 @@ func ResolveDiskSkill(cmd types.Command, args string, sessionID string) (types.S
 		final = strings.ReplaceAll(final, "${CLAUDE_SKILL_DIR}", sd)
 	}
 	final = strings.ReplaceAll(final, "${CLAUDE_SESSION_ID}", sessionID)
+
+	// Execute shell command substitutions (${...} and backtick patterns) in the resolved prompt.
+	if shellResult, shellErr := ExecuteShellCommandsInPrompt(final); shellErr != nil {
+		// Non-fatal: substitute what we can, log errors in user text.
+		final = shellResult
+		_ = shellErr // errors are embedded in-place by shell_exec.go
+	} else {
+		final = shellResult
+	}
 
 	res := types.SlashResolveResult{
 		UserText:     final,

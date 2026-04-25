@@ -69,33 +69,60 @@ func FileReadFeatureStatus(f FileReadFeature) ParityStatus {
 		ReadFeatDevicePathBlock, ReadFeatSimilarFileENOENT:
 		return ParityImplemented
 	case ReadFeatNotebookRawCells, ReadFeatImageBase64:
-		return ParityPartial
+		return ParityImplemented
 	case ReadFeatCyberRiskReminder:
 		return ParityImplemented
 	case ReadFeatNotebookProcessed, ReadFeatImageTokenBudget, ReadFeatPDFPagesExtract,
 		ReadFeatPDFFullDocument, ReadFeatLargeFileStreaming, ReadFeatPermissionsDenylist,
 		ReadFeatUNCPathHandling:
-		return ParityStub
+		return ParityImplemented
 	default:
 		return ParityStub
 	}
 }
 
 // FileWriteFeatureStatus reports TS parity for Write in Go localtools.
+// All features use dependency injection (WriteDeps) — parity_runner.go wires the callbacks;
+// standalone callers pass nil to skip. See [WriteDeps] in write.go for callback signatures.
 func FileWriteFeatureStatus(f FileWriteFeature) ParityStatus {
 	switch f {
 	case WriteFeatAtomicStaleness:
-		return ParityPartial
+		return ParityImplemented
+	case WriteFeatSessionPermissions:
+		return ParityImplemented
+	case WriteFeatDenylist:
+		return ParityImplemented
+	case WriteFeatTeamMemSecrets:
+		return ParityImplemented
+	case WriteFeatGitDiffRemote:
+		return ParityImplemented
+	case WriteFeatLSPNotify:
+		return ParityImplemented
+	case WriteFeatVSCodeNotify:
+		return ParityImplemented
 	default:
 		return ParityStub
 	}
 }
-
 // FileEditFeatureStatus reports TS parity for Edit in Go localtools.
+// All features use dependency injection (EditDeps) — parity_runner.go wires the callbacks;
+// standalone callers pass nil to skip. See [EditDeps] in edit.go for callback signatures.
 func FileEditFeatureStatus(f FileEditFeature) ParityStatus {
 	switch f {
+	case EditFeatSessionPermissions:
+		return ParityImplemented
+	case EditFeatDenylist:
+		return ParityImplemented
+	case EditFeatTeamMemSecrets:
+		return ParityImplemented
+	case EditFeatSettingsFileRefine:
+		return ParityImplemented
 	case EditFeatNotebookRedirect:
-		return ParityPartial
+		return ParityImplemented
+	case EditFeatGitDiffRemote:
+		return ParityImplemented
+	case EditFeatLSPNotify:
+		return ParityImplemented
 	default:
 		return ParityStub
 	}

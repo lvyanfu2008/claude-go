@@ -9,6 +9,45 @@ import (
 	"unicode/utf16"
 )
 
+// WriteDeps holds optional callbacks for Write tool parity features.
+// Each field maps to a TS FileWriteTool feature; nil means "not available / skip".
+type WriteDeps struct {
+	// CheckWritePermission mirrors TS checkWritePermissionForTool (validateInput).
+	// Called after path resolution, before stat. Returned non-nil DenyResult denies the write.
+	CheckWritePermission func(filePath string) *DenyResult
+
+	// CheckDenyRule mirrors TS matchingRuleForInput (validateInput).
+	// Called after CheckWritePermission. Returned non-nil DenyResult denies the write.
+	CheckDenyRule func(filePath string) *DenyResult
+
+	// CheckSecrets mirrors TS checkTeamMemSecrets (validateInput).
+	// Called after CheckDenyRule. Returned error string denies the write.
+	CheckSecrets func(filePath, content string) string
+
+	// GitDiffFn mirrors TS fetchSingleFileGitDiff (call).
+	// Called after write succeeds, produces a git diff for telemetry.
+	// Returned value is serialized into WriteOutput.GitDiff.
+	GitDiffFn func(absPath string) (any, error)
+
+	// OnFileChange mirrors TS lspManager.changeFile (call).
+	// Called after write succeeds; signals to LSP that content changed.
+	OnFileChange func(absPath, content string)
+
+	// OnFileSave mirrors TS lspManager.saveFile (call).
+	// Called after OnFileChange; signals to LSP that file was saved.
+	OnFileSave func(absPath string)
+
+	// OnFileUpdated mirrors TS notifyVscodeFileUpdated (call).
+	// Called after LSP notifications; notifies VSCode of the file change.
+	OnFileUpdated func(absPath, oldContent, newContent string)
+}
+
+// DenyResult carries the reason a write was denied (permissions / deny-rule).
+type DenyResult struct {
+	Message string
+	Code    int
+}
+
 const fileUnexpectedlyModified = "File has been unexpectedly modified. Read it again before attempting to write it."
 
 // isUNCPath mirrors FileWriteTool / FileEditTool validateInput: skip stat-based checks (NTLM safety).
@@ -23,11 +62,18 @@ type WriteOutput struct {
 	Content         string                `json:"content"`
 	StructuredPatch []StructuredPatchHunk `json:"structuredPatch"`
 	OriginalFile    *string               `json:"originalFile"`
+	GitDiff         any                   `json:"gitDiff,omitempty"` // TS ToolUseDiff; omitted in Go (no remote git diff infrastructure)
 }
 
-// WriteFromJSON mirrors FileWriteTool.validateInput + call.
-// Gaps vs TS: see [FileWriteFeatureStatus] in filetool_parity.go (permissions, team memory, LSP, …).
+// WriteFromJSON mirrors FileWriteTool.validateInput + call (backward-compatible, no deps).
 func WriteFromJSON(raw []byte, roots []string, state *ReadFileState) (string, bool, error) {
+	return WriteFromJSONDeps(raw, roots, state, nil)
+}
+
+// WriteFromJSONDeps mirrors FileWriteTool.validateInput + call with optional dependency callbacks.
+// When deps is nil or a callback is nil, the corresponding TS feature is skipped.
+// See [FileWriteFeatureStatus] in filetool_parity.go for the parity matrix.
+func WriteFromJSONDeps(raw []byte, roots []string, state *ReadFileState, deps *WriteDeps) (string, bool, error) {
 	var in struct {
 		FilePath string `json:"file_path"`
 		Content  string `json:"content"`
@@ -40,9 +86,30 @@ func WriteFromJSON(raw []byte, roots []string, state *ReadFileState) (string, bo
 		return "", true, err
 	}
 
+	// pre-write: check write permission (TS validateInput checkPermissions → checkWritePermissionForTool)
+	if deps != nil && deps.CheckWritePermission != nil {
+		if dr := deps.CheckWritePermission(abs); dr != nil {
+			return "", true, fmt.Errorf("Write permission denied: %s (code %d)", dr.Message, dr.Code)
+		}
+	}
+
+	// pre-write: check deny rule (TS validateInput matchingRuleForInput)
+	if deps != nil && deps.CheckDenyRule != nil {
+		if dr := deps.CheckDenyRule(abs); dr != nil {
+			return "", true, fmt.Errorf("File is in a directory that is denied by your permission settings: %s (code %d)", dr.Message, dr.Code)
+		}
+	}
+
+	// pre-write: check team memory secrets (TS validateInput checkTeamMemSecrets)
+	if deps != nil && deps.CheckSecrets != nil {
+		if msg := deps.CheckSecrets(abs, in.Content); msg != "" {
+			return "", true, fmt.Errorf("Team memory secret check failed: %s", msg)
+		}
+	}
+
 	// validateInput: UNC — skip filesystem (TS returns { result: true }).
 	if isUNCPath(abs) {
-		return writeCall(in.FilePath, abs, in.Content, state)
+		return writeCall(in.FilePath, abs, in.Content, state, deps)
 	}
 
 	st, statErr := os.Stat(abs)
@@ -50,7 +117,7 @@ func WriteFromJSON(raw []byte, roots []string, state *ReadFileState) (string, bo
 		return "", true, statErr
 	}
 	if os.IsNotExist(statErr) {
-		return writeCall(in.FilePath, abs, in.Content, state)
+		return writeCall(in.FilePath, abs, in.Content, state, deps)
 	}
 	if st.IsDir() {
 		return "", true, fmt.Errorf("path is a directory: %s", abs)
@@ -69,11 +136,11 @@ func WriteFromJSON(raw []byte, roots []string, state *ReadFileState) (string, bo
 		return "", true, fmt.Errorf("File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.")
 	}
 
-	return writeCall(in.FilePath, abs, in.Content, state)
+	return writeCall(in.FilePath, abs, in.Content, state, deps)
 }
 
 // writeCall mirrors FileWriteTool.call (mkdir, atomic read, write, readFileState update).
-func writeCall(filePath, abs, content string, state *ReadFileState) (string, bool, error) {
+func writeCall(filePath, abs, content string, state *ReadFileState, deps *WriteDeps) (string, bool, error) {
 	if err := os.MkdirAll(pathpkg.Dir(abs), 0o755); err != nil {
 		return "", true, err
 	}
@@ -129,6 +196,21 @@ func writeCall(filePath, abs, content string, state *ReadFileState) (string, boo
 		})
 	}
 
+	// Post-write: LSP change notification (TS call lspManager.changeFile)
+	if deps != nil && deps.OnFileChange != nil {
+		deps.OnFileChange(abs, toWrite)
+	}
+
+	// Post-write: LSP save notification (TS call lspManager.saveFile)
+	if deps != nil && deps.OnFileSave != nil {
+		deps.OnFileSave(abs)
+	}
+
+	// Post-write: VSCode update notification (TS call notifyVscodeFileUpdated)
+	if deps != nil && deps.OnFileUpdated != nil {
+		deps.OnFileUpdated(abs, oldNorm, toWrite)
+	}
+
 	var out WriteOutput
 	out.Content = content
 	out.FilePath = filePath
@@ -141,6 +223,15 @@ func writeCall(filePath, abs, content string, state *ReadFileState) (string, boo
 		out.StructuredPatch = []StructuredPatchHunk{}
 		out.OriginalFile = nil
 	}
+
+	// Post-write: git diff for telemetry (TS call fetchSingleFileGitDiff)
+	if deps != nil && deps.GitDiffFn != nil {
+		diff, dErr := deps.GitDiffFn(abs)
+		if dErr == nil && diff != nil {
+			out.GitDiff = diff
+		}
+	}
+
 	b, err := json.Marshal(out)
 	if err != nil {
 		return "", true, err
@@ -184,4 +275,21 @@ func decodeTextBytes(b []byte) string {
 
 func utf16ToRunes(u []uint16) []rune {
 	return utf16.Decode(u)
+}
+
+// MapWriteToolResultToAssistantText mirrors FileWriteTool.mapToolResultToToolResultBlockParam.
+// Converts a WriteOutput JSON to a short assistant-facing text summary.
+func MapWriteToolResultToAssistantText(dataJSON string) (string, error) {
+	var out WriteOutput
+	if err := json.Unmarshal([]byte(dataJSON), &out); err != nil {
+		return dataJSON, nil
+	}
+	switch out.Type {
+	case "create":
+		return fmt.Sprintf("File created successfully at: %s", out.FilePath), nil
+	case "update":
+		return fmt.Sprintf("The file %s has been updated successfully.", out.FilePath), nil
+	default:
+		return dataJSON, nil
+	}
 }

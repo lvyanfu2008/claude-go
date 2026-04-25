@@ -8,7 +8,7 @@ go run ./cmd/gen-tool-parity
 
 - **TS source:** [claude-code/src/tools.ts](claude-code/src/tools.ts) `getAllBaseTools`
 - **Go anchor:** [tools/skilltools/parity_runner.go](tools/skilltools/parity_runner.go) — ParityToolRunner.Run + tools.Run; toolexecution JSON tools are host-defined (not listed).
-- **Generated:** 2026-04-24T07:45:44Z
+- **Generated:** 2026-04-25T15:19:36Z
 
 ## Status legend
 
@@ -28,7 +28,7 @@ go run ./cmd/gen-tool-parity
 | Grep | — | core_if_not_embedded_search | Omitted when hasEmbeddedSearchTools() | full | localtools.GrepFromJSON |
 | ExitPlanMode | — | core | ExitPlanModeV2Tool | full | tools.ExitPlanModeFromJSON |
 | Read | — | core | Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go | partial | localtools.ReadFromJSON |
-| Edit | — | core | Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go | partial | localtools.EditFromJSON |
+| Edit | — | core | Feature-level parity tracked in tools/localtools/filetool_parity.go (EditDeps hooks for permissions, denylist, secrets, settings validation, LSP, git diff) | full | localtools.EditFromJSONDeps |
 | Write | — | core | Implementation has explicit TS parity gaps; see tools/localtools/filetool_parity.go | partial | localtools.WriteFromJSON |
 | NotebookEdit | — | core | — | full | tools.NotebookEditFromJSON |
 | WebFetch | — | core | — | full | tools.WebFetchFromJSON |
@@ -82,5 +82,5 @@ go run ./cmd/gen-tool-parity
 
 | Go status | Count |
 |-----------|------:|
-| full | 53 |
-| partial | 3 |
+| full | 54 |
+| partial | 2 |

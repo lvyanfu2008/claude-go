@@ -80,6 +80,7 @@ import (
 	"goc/modelenv"
 	"goc/querycontext"
 	"goc/sessiontranscript"
+	"goc/tools"
 	"goc/tools/localtools"
 	"goc/tools/toolexecution"
 	"goc/tscontext"
@@ -1212,6 +1213,11 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 								if send := m.ccbSend; send != nil {
 									send(gouQueryYieldMsg{Message: *msg})
 								}
+							},
+							EditDeps: &localtools.EditDeps{
+								OnNotebookEdit: func(absPath, oldString, newString string, replaceAll bool, roots []string, state *localtools.ReadFileState, userModified bool) (string, bool, error) {
+									return tools.NotebookEditFromEdit(absPath, oldString, newString, replaceAll, roots)
+								},
 							},
 						}
 						if gouDemoPreferQueryStreamingParity() {

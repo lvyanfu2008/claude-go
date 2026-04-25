@@ -93,6 +93,12 @@ type AgentSession struct {
 	Hooks json.RawMessage `json:"hooks,omitempty"`
 	// Summary holds the latest agent summarization text (set periodically by the summary goroutine).
 	Summary string `json:"summary,omitempty"`
+	// ContentReplacementState is the serialized tool_result replacement map from autocompaction,
+	// used to reapply compacted tool_result content on resume (TS ContentReplacementState parity).
+	ContentReplacementState json.RawMessage `json:"contentReplacementState,omitempty"`
+	// ForkSystemPrompt is the parent's system prompt captured at fork time, persisted so
+	// ResumeAgentTool can reconstruct cache-identical system prompt prefixes for fork agents.
+	ForkSystemPrompt []string `json:"forkSystemPrompt,omitempty"`
 }
 
 type AgentToolResponse struct {

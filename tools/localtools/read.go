@@ -1,7 +1,6 @@
 package localtools
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"unicode/utf8"
 
 	"goc/claudemd"
+	"goc/permissionrules"
+	"goc/types"
 )
 
 // Mirrors src/tools/FileReadTool/prompt.ts FILE_UNCHANGED_STUB.
@@ -50,9 +51,10 @@ type readNotebookOutput struct {
 type readImageOutput struct {
 	Type string `json:"type"`
 	File struct {
-		Base64       string `json:"base64"`
-		Type         string `json:"type"`
-		OriginalSize int    `json:"originalSize"`
+		Base64       string            `json:"base64"`
+		Type         string            `json:"type"`
+		OriginalSize int               `json:"originalSize"`
+		Dimensions   *ImageDimensions  `json:"dimensions,omitempty"`
 	} `json:"file"`
 }
 
@@ -67,6 +69,10 @@ type readFileUnchangedOutput struct {
 type FileReadingLimits struct {
 	MaxTokens    *int
 	MaxSizeBytes *int
+
+	// ToolPermissionContext for deny-rule checks (mirrors validateInput deny in TS).
+	// Nil means no deny-rule check is performed (legacy behavior).
+	ToolPermissionContext *types.ToolPermissionContextData
 }
 
 func defaultReadLimits() (maxBytes, maxTokens int) {
@@ -96,6 +102,7 @@ func validateReadOutputTokens(content string, maxTokens int) error {
 }
 
 // readFileInRangeFast mirrors src/utils/readFileInRange.ts readFileInRangeFast (offset is 0-based line index).
+// When limit is specified, large files are streamed (read only the requested lines instead of rejecting the whole file).
 func readFileInRangeFast(absPath string, offset0 int, maxLines *int, maxFileBytes int) (content string, lineCount, totalLines int, totalBytes int64, mtimeMs int64, err error) {
 	st, err := os.Stat(absPath)
 	if err != nil {
@@ -104,7 +111,10 @@ func readFileInRangeFast(absPath string, offset0 int, maxLines *int, maxFileByte
 	if st.IsDir() {
 		return "", 0, 0, 0, 0, fmt.Errorf("EISDIR: illegal operation on a directory, read '%s'", absPath)
 	}
-	if st.Size() > int64(maxFileBytes) {
+	// Large file streaming: when reading a portion (limit != nil), only the requested lines
+	// are read — the full file size check is skipped so large files can be read partially.
+	// When no limit is specified (reading the whole file), enforce maxFileBytes.
+	if st.Size() > int64(maxFileBytes) && maxLines == nil {
 		return "", 0, 0, 0, 0, fmt.Errorf("File content (%d bytes) exceeds maximum allowed size (%d bytes). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file", st.Size(), maxFileBytes)
 	}
 	raw, err := os.ReadFile(absPath)
@@ -195,6 +205,17 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 		}
 	}
 
+	// --- Permissions denylist (mirrors TS validateInput deny rule check) ---
+	if limits != nil && limits.ToolPermissionContext != nil {
+		denyRule := permissionrules.GetDenyRuleForTool(
+			*limits.ToolPermissionContext,
+			types.ToolSpec{Name: "Read"},
+		)
+		if denyRule != nil {
+			return "", true, fmt.Errorf("File reading has been denied by your permission settings")
+		}
+	}
+
 	// --- Dedup (mirrors FileReadTool.call file_unchanged) ---
 	if state != nil {
 		if prev := state.Get(abs); prev != nil && !prev.IsPartialView && prev.Offset != nil {
@@ -214,34 +235,27 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 		}
 	}
 
-	// --- Notebook ---
+	// --- Notebook (mirrors TS readNotebook + mapNotebookCellsToToolResult) ---
 	if ext == "ipynb" {
-		rawF, err := os.ReadFile(abs)
+		cells, err := readNotebookProcessed(abs, maxBytes)
 		if err != nil {
 			return "", true, err
 		}
-		if len(rawF) > maxBytes {
-			return "", true, fmt.Errorf("Notebook content exceeds maximum allowed size (%d bytes)", maxBytes)
-		}
-		var root map[string]json.RawMessage
-		if err := json.Unmarshal(rawF, &root); err != nil {
+		cellsJSON, err := json.Marshal(cells)
+		if err != nil {
 			return "", true, err
 		}
-		cells := root["cells"]
-		if cells == nil {
-			cells = json.RawMessage("[]")
+		if err := validateReadOutputTokens(string(cellsJSON), maxTok); err != nil {
+			return "", true, err
 		}
 		var out readNotebookOutput
 		out.Type = "notebook"
 		out.File.FilePath = in.FilePath
-		out.File.Cells = cells
-		if err := validateReadOutputTokens(string(rawF), maxTok); err != nil {
-			return "", true, err
-		}
+		out.File.Cells = cellsJSON
 		st, _ := os.Stat(abs)
 		if state != nil {
 			state.Set(abs, &ReadFileEntry{
-				Content:   string(rawF),
+				Content:   string(cellsJSON),
 				Timestamp: st.ModTime().UnixMilli(),
 				Offset:    ptrInt(1),
 				Limit:     nil,
@@ -251,22 +265,18 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 		return string(b), false, nil
 	}
 
-	// --- Image ---
+	// --- Image with token budget compression (mirrors TS readImageWithTokenBudget) ---
 	if _, ok := imageExtensions[ext]; ok {
-		buf, err := os.ReadFile(abs)
+		imgResult, err := readImageWithTokenBudget(abs, maxTok)
 		if err != nil {
 			return "", true, err
 		}
-		mt := "image/" + ext
-		if ext == "jpg" {
-			mt = "image/jpeg"
-		}
 		var out readImageOutput
 		out.Type = "image"
-		out.File.Base64 = base64.StdEncoding.EncodeToString(buf)
-		out.File.Type = mt
-		out.File.OriginalSize = len(buf)
-		// TS uses image token budget; skip rough ASCII token estimate on base64.
+		out.File.Base64 = imgResult.File.Base64
+		out.File.Type = imgResult.File.Type
+		out.File.OriginalSize = imgResult.File.OriginalSize
+		out.File.Dimensions = imgResult.File.Dimensions
 		st, _ := os.Stat(abs)
 		if state != nil {
 			state.Set(abs, &ReadFileEntry{
@@ -280,12 +290,54 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 		return string(b), false, nil
 	}
 
-	// --- PDF: reserved — see read_pdf_stub.go (poppler extract + document blocks + TS parity).
+	// --- PDF: poppler-backed page extraction + full document block ---
 	if ext == "pdf" {
-		if strings.TrimSpace(in.Pages) != "" {
-			return "", true, fmt.Errorf("%w", ErrReadPDFPagesNotImplementedInGo)
+		pages := strings.TrimSpace(in.Pages)
+		if pages != "" {
+			// Extract specific pages as images via pdftoppm
+			first, last, ok := parsePDFPageRange(pages)
+			if !ok {
+				return "", true, fmt.Errorf(`Invalid pages parameter: "%s". Use formats like "1-5", "3", or "10-20". Pages are 1-indexed.`, pages)
+			}
+			outputDir, pageCount, err := ExtractPDFPages(abs, first, last)
+			if err != nil {
+				return "", true, err
+			}
+			out := map[string]any{
+				"type": "parts",
+				"file": map[string]any{
+					"filePath":     in.FilePath,
+					"originalSize": 0,
+					"count":        pageCount,
+					"outputDir":    outputDir,
+				},
+			}
+			if st, serr := os.Stat(abs); serr == nil {
+				out["file"].(map[string]any)["originalSize"] = int(st.Size())
+			}
+			b, _ := json.Marshal(out)
+			return string(b), false, nil
 		}
-		return "", true, fmt.Errorf("%w", ErrReadPDFFullNotImplementedInGo)
+
+		// Full document block
+		pdfData, mediaType, _, err := ReadPDFFullDocument(abs)
+		if err != nil {
+			return "", true, err
+		}
+		out := map[string]any{
+			"type": "pdf",
+			"file": map[string]any{
+				"filePath":     in.FilePath,
+				"base64":       string(pdfData),
+				"type":         mediaType,
+				"originalSize": len(pdfData),
+			},
+		}
+		if st, serr := os.Stat(abs); serr == nil {
+			out["file"].(map[string]any)["originalSize"] = int(st.Size())
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
 	}
 
 	// --- Binary guard (subset of TS hasBinaryExtension) ---
@@ -361,9 +413,17 @@ func isLikelyBinaryExt(ext string) bool {
 
 func validateReadPath(filePath string, roots []string) error {
 	trimmed := strings.TrimSpace(filePath)
+	clean := filepath.Clean(trimmed)
+
+	// SECURITY: UNC path check (no I/O) — defer filesystem operations until after
+	// permission checks to prevent NTLM credential leaks (mirrors edit.go / write.go).
+	if isUNCPath(clean) {
+		return nil
+	}
+
 	// Catch obvious device paths before workspace-root resolution.
-	if strings.HasPrefix(filepath.Clean(trimmed), "/dev/") {
-		return fmt.Errorf("cannot read from device path: %s", filepath.Clean(trimmed))
+	if strings.HasPrefix(clean, "/dev/") {
+		return fmt.Errorf("cannot read from device path: %s", clean)
 	}
 	abs, err := ResolveUnderRoots(filePath, roots)
 	if err != nil {
@@ -498,7 +558,7 @@ func ReadToolResultMapOptsForToolInput(input []byte, roots []string, memCwd, mai
 	return opts
 }
 
-// MapReadToolResultToAssistantText mirrors FileReadTool.mapToolResultToToolResultBlockParam (text + file_unchanged).
+// MapReadToolResultToAssistantText mirrors FileReadTool.mapToolResultToToolResultBlockParam (text + notebook + image + file_unchanged).
 // Pass opts nil for defaults (mitigation on except opus-4-6 canonical; compact line prefix per TS killswitch env).
 func MapReadToolResultToAssistantText(dataJSON string, opts *ReadToolResultMapOpts) (string, error) {
 	var probe struct {
@@ -514,11 +574,132 @@ func MapReadToolResultToAssistantText(dataJSON string, opts *ReadToolResultMapOp
 			return "", err
 		}
 		return formatReadTextForModel(p, opts), nil
+	case "notebook":
+		return formatNotebookResultForModel(dataJSON)
+	case "image":
+		return formatImageResultForModel(dataJSON)
 	case "file_unchanged":
 		return fileUnchangedStub, nil
 	default:
 		return dataJSON, nil
 	}
+}
+
+// formatNotebookResultForModel mirrors TS mapNotebookCellsToToolResult.
+// Formats notebook cells as text blocks with <cell id="..."> tags and
+// merged adjacent text blocks, including output images as metadata.
+func formatNotebookResultForModel(dataJSON string) (string, error) {
+	var out struct {
+		File struct {
+			Cells []map[string]any `json:"cells"`
+		} `json:"file"`
+	}
+	if err := json.Unmarshal([]byte(dataJSON), &out); err != nil {
+		return dataJSON, nil
+	}
+
+	var blocks []string
+	for _, cell := range out.File.Cells {
+		cellType, _ := cell["cellType"].(string)
+		cellID, _ := cell["cell_id"].(string)
+		source, _ := cell["source"].(string)
+		language, _ := cell["language"].(string)
+
+		metadata := ""
+		if cellType != "code" {
+			metadata += fmt.Sprintf("<cell_type>%s</cell_type>", cellType)
+		}
+		if language != "" && language != "python" && cellType == "code" {
+			metadata += fmt.Sprintf("<language>%s</language>", language)
+		}
+
+		cellText := fmt.Sprintf(`<cell id="%s">%s%s</cell id="%s">`, cellID, metadata, source, cellID)
+
+		// Merge with previous text block if the last block is text
+		if len(blocks) > 0 {
+			blocks[len(blocks)-1] += "\n" + cellText
+		} else {
+			blocks = append(blocks, cellText)
+		}
+
+		// Process outputs
+		if outputs, ok := cell["outputs"].([]any); ok {
+			for _, o := range outputs {
+				if om, ok := o.(map[string]any); ok {
+					outputText, _ := om["text"].(string)
+					if outputText != "" {
+						if len(blocks) > 0 {
+							blocks[len(blocks)-1] += "\n" + outputText
+						} else {
+							blocks = append(blocks, outputText)
+						}
+					}
+					if img, ok := om["image"].(map[string]any); ok {
+						imgData, _ := img["image_data"].(string)
+						mediaType, _ := img["media_type"].(string)
+						if imgData != "" && mediaType != "" {
+							blocks = append(blocks, fmt.Sprintf("[Notebook image: %s, data: %s]", mediaType, truncateBase64(imgData, 80)))
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return strings.Join(blocks, "\n"), nil
+}
+
+// formatImageResultForModel mirrors TS mapToolResultToToolResultBlockParam for image type.
+// Returns image metadata text with dimension info for coordinate mapping.
+func formatImageResultForModel(dataJSON string) (string, error) {
+	var out struct {
+		File struct {
+			Base64       string            `json:"base64"`
+			Type         string            `json:"type"`
+			OriginalSize int               `json:"originalSize"`
+			Dimensions   *ImageDimensions  `json:"dimensions,omitempty"`
+		} `json:"file"`
+	}
+	if err := json.Unmarshal([]byte(dataJSON), &out); err != nil {
+		return dataJSON, nil
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Read image (%s, %s)", formatFileSizeStatic(out.File.OriginalSize), out.File.Type))
+
+	if out.File.Dimensions != nil {
+		d := out.File.Dimensions
+		if d.OriginalWidth > 0 && d.OriginalHeight > 0 && d.DisplayWidth > 0 && d.DisplayHeight > 0 {
+			wasResized := d.OriginalWidth != d.DisplayWidth || d.OriginalHeight != d.DisplayHeight
+			if wasResized {
+				scaleFactor := float64(d.OriginalWidth) / float64(d.DisplayWidth)
+				b.WriteString(fmt.Sprintf("\n[Image: original %dx%d, displayed at %dx%d. Multiply coordinates by %.2f to map to original image.]",
+					d.OriginalWidth, d.OriginalHeight, d.DisplayWidth, d.DisplayHeight, scaleFactor))
+			}
+		}
+	}
+
+	return b.String(), nil
+}
+
+func formatFileSizeStatic(bytes int) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func truncateBase64(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func optsNow(o *ReadToolResultMapOpts) time.Time {
