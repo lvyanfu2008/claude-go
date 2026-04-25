@@ -15,7 +15,7 @@ type ExtraUsageResult struct {
 // gou-demo provides static info only; the web dashboard handles activation.
 func HandleExtraUsageCommand() ([]byte, error) {
 	msg := ExtraUsageResult{
-		Type:  "text",
+		Type: "text",
 		Value: "Extra usage allows you to keep working when you hit rate or usage limits.\n\n" +
 			"To configure extra usage, visit:\n" +
 			"  https://claude.ai/settings/billing\n\n" +

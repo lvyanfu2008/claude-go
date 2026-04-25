@@ -110,7 +110,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			res, err := slashresolve.ResolveDiskSkill(*cmd, parsed.Args, sid)
 			if err != nil {
 				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (disk): %v", err))},
+					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (disk) for /%s: %v", cmd.Name, err))},
 					ShouldQuery: false,
 				}, nil
 			}
@@ -122,7 +122,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			res, err := slashresolve.ResolveBundledSkill(*cmd, parsed.Args, sid, &slashresolve.BundledResolveOptions{Cwd: cwd})
 			if err != nil {
 				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (bundled): %v", err))},
+					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (bundled) for /%s: %v", cmd.Name, err))},
 					ShouldQuery: false,
 				}, nil
 			}
@@ -131,8 +131,11 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		return &processuserinput.ProcessUserInputBaseResult{
 			Messages: []types.Message{SystemNotice(fmt.Sprintf(
-				"gou-demo: /%s could not be resolved (not a disk skill and not an embedded bundled prompt); add a project skill under .claude/skills with SKILL.md, or use a bundled command supported by Go.",
-				cmd.Name))},
+				"gou-demo: /%s could not be resolved (type=%q). "+
+					"Disk skills need SkillRoot pointing at a directory with SKILL.md. "+
+					"Bundled prompts need a Go-side resolver or embedded .md. "+
+					"Add a project skill under .claude/skills/SKILL.md or implement a resolver in slashresolve/.",
+				cmd.Name, cmd.Type))},
 			ShouldQuery: false,
 		}, nil
 	}
@@ -233,12 +236,12 @@ func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attach
 func suggestAvailableCommands(name string) string {
 	// Check if the name matches any known local command alias.
 	aliases := map[string]string{
-		"new":    "clear",
-		"reset":  "clear",
-		"fork":   "branch",
-		"quit":   "exit",
-		"remote": "session",
-		"ios":    "mobile",
+		"new":     "clear",
+		"reset":   "clear",
+		"fork":    "branch",
+		"quit":    "exit",
+		"remote":  "session",
+		"ios":     "mobile",
 		"android": "mobile",
 	}
 	if canonical, ok := aliases[name]; ok {
