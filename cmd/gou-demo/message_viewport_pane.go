@@ -25,7 +25,7 @@ func gouDemoBubblesViewport() bool {
 // msgViewportWanted is true when the bubbles/viewport message pane is available (new renderer drives both prompt and transcript).
 func (m *model) msgViewportWanted() bool {
 	result := m.useMsgViewport && !m.msgViewportFallback
-	diaglog.Line("[viewport] msgViewportWanted: useMsgViewport=%v, msgViewportFallback=%v, returning %v", m.useMsgViewport, m.msgViewportFallback, result)
+	//diaglog.Line("[viewport] msgViewportWanted: useMsgViewport=%v, msgViewportFallback=%v, returning %v", m.useMsgViewport, m.msgViewportFallback, result)
 	return result
 }
 
@@ -83,7 +83,7 @@ func (m *model) msgViewportSyncGeometry() {
 		h = 3
 	}
 	sig := fmt.Sprintf("%d,%d", w, h)
-	diaglog.Line("[viewport] msgViewportSyncGeometry: w=%d, h=%d, sig=%s, lastVpGeom=%s", w, h, sig, m.lastVpGeom)
+	//diaglog.Line("[viewport] msgViewportSyncGeometry: w=%d, h=%d, sig=%s, lastVpGeom=%s", w, h, sig, m.lastVpGeom)
 	if sig != m.lastVpGeom {
 		if m.msgViewport.Width() == 0 || m.msgViewport.Height() == 0 {
 			diaglog.Line("[viewport] msgViewportSyncGeometry: creating new viewport")
@@ -119,7 +119,7 @@ func (m *model) applyMsgViewportContentFromView() {
 		if m.sticky {
 			m.msgViewport.GotoBottom()
 		}
-		diaglog.Line("[viewport] applyMsgViewportContentFromView: content unchanged, sig=%s", sig)
+		//diaglog.Line("[viewport] applyMsgViewportContentFromView: content unchanged, sig=%s", sig)
 		return
 	}
 

@@ -11,12 +11,14 @@ import (
 	"sync"
 	"time"
 
+	"goc/ccb-engine/bashzog"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/hookexec"
 	"goc/sessiontranscript"
 	"goc/slashresolve"
+	"goc/tools/localtools"
 	"goc/tools/toolexecution"
 	"goc/tools/toolpool"
 	"goc/types"
@@ -305,9 +307,32 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		AgentID:      s.ID,
 	}
 	pretoolHook := hookexec.AgentPreToolUseHookFromSession(s.ID, s.WorkDir)
+	invokeReadFileState := localtools.NewReadFileState()
 	qdeps.ToolexecutionDeps = toolexecution.ExecutionDeps{
 		InvokeTool: func(ctx context.Context, name, _ string, input json.RawMessage) (string, bool, error) {
-			return Run(ctx, name, input, toolCfg)
+			s, isErr, perr := Run(ctx, name, input, toolCfg)
+			if perr == nil || !IsNotHandled(perr) {
+				return s, isErr, perr
+			}
+			// Fall through to local implementations for core file system/search tools
+			// (mirrors ParityToolRunner.dispatchTool in skilltools/parity_runner.go)
+			roots := toolCfg.Roots
+			wd := toolCfg.WorkDir
+			switch name {
+			case "Read":
+				return localtools.ReadFromJSON(input, roots, invokeReadFileState, nil)
+			case "Write":
+				return localtools.WriteFromJSONDeps(input, roots, invokeReadFileState, nil)
+			case "Edit":
+				return localtools.EditFromJSONDeps(input, roots, invokeReadFileState, false, nil)
+			case "Glob":
+				return localtools.GlobFromJSON(ctx, input, roots)
+			case "Grep":
+				return localtools.GrepFromJSON(ctx, input, roots)
+			case "Bash", bashzog.ZogToolName:
+				return localtools.BashFromJSON(ctx, input, wd, true)
+			}
+			return s, isErr, perr
 		},
 		MainLoopModel:  tc.Options.MainLoopModel,
 		PreToolUseHook: pretoolHook,

@@ -3,7 +3,6 @@ package main
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
@@ -86,7 +85,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			return true, tea.Println("\n📜 History browse: mouse wheel uses host buffer; press any key to return…")
 		}
 		if m.msgViewportWanted() {
-			diaglog.Line("[mouse] tryHandleMessageListMouse: using viewport, button=%v, viewport height=%d", msg.Button, m.msgViewport.Height())
+			//diaglog.Line("[mouse] tryHandleMessageListMouse: using viewport, button=%v, viewport height=%d", msg.Button, m.msgViewport.Height())
 			switch msg.Button {
 			case tea.MouseWheelUp:
 				m.handleMsgViewportMouseWheel(1)
@@ -103,7 +102,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			default:
 				return false, nil
 			}
-			diaglog.Line("[mouse] tryHandleMessageListMouse: viewport scrolled, yOffset=%d, totalLines=%d", m.msgViewport.YOffset(), m.msgViewport.TotalLineCount())
+			//diaglog.Line("[mouse] tryHandleMessageListMouse: viewport scrolled, yOffset=%d, totalLines=%d", m.msgViewport.YOffset(), m.msgViewport.TotalLineCount())
 			return true, nil
 		}
 		step := messageListMouseWheelStep(listViewportH(m))

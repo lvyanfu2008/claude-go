@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattn/go-isatty"
+
 	"goc/commands/featuregates"
 )
 
@@ -125,10 +127,18 @@ func coordinatorModeLikeTS() bool {
 
 // nonInteractiveSessionEnvShim approximates getIsNonInteractiveSession() when no session
 // struct is in scope (static tool schemas). Covers SDK/parity env used across Go.
+// TS checks: -p/--print, --init-only, --sdk-url, or !process.stdout.isTTY.
 func nonInteractiveSessionEnvShim() bool {
-	return envTruthyGo("CLAUDE_CODE_NONINTERACTIVE") ||
-		envTruthyGo("HEADLESS") ||
-		envTruthyGo("GOU_DEMO_NON_INTERACTIVE")
+	nonInt := envTruthyGo("CLAUDE_CODE_NONINTERACTIVE")
+	headless := envTruthyGo("HEADLESS")
+	gouNonInt := envTruthyGo("GOU_DEMO_NON_INTERACTIVE")
+	stdoutTTY := isatty.IsTerminal(os.Stdout.Fd())
+	result := nonInt || headless || gouNonInt || !stdoutTTY
+	//if envTruthyGo("CLAUDE_CODE_GO_DEBUG_AGENT_TOOL_SCHEMA") {
+	//	diaglog.Line("[agent-tool-schema] nonInteractiveSessionEnvShim: CLAUDE_CODE_NONINTERACTIVE=%v HEADLESS=%v GOU_DEMO_NON_INTERACTIVE=%v stdoutIsTTY=%v result=%v",
+	//		nonInt, headless, gouNonInt, stdoutTTY, result)
+	//}
+	return result
 }
 
 // ForkSubagentEnabled mirrors isForkSubagentEnabled in forkSubagent.ts.

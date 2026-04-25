@@ -5,7 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+
+	"github.com/mattn/go-isatty"
 
 	"goc/commands/featuregates"
 	"goc/types"
@@ -25,10 +28,13 @@ func coordinatorModeEnvShim() bool {
 
 // nonInteractiveSessionEnvShim approximates getIsNonInteractiveSession() from TS
 // bootstrap/state.js when no session struct is in scope.
+// TS checks: -p/--print, --init-only, --sdk-url, or !process.stdout.isTTY
+// Go mirrors via env vars + stdout terminal detection.
 func nonInteractiveSessionEnvShim() bool {
 	return envTruthy("CLAUDE_CODE_NONINTERACTIVE") ||
 		envTruthy("HEADLESS") ||
-		envTruthy("GOU_DEMO_NON_INTERACTIVE")
+		envTruthy("GOU_DEMO_NON_INTERACTIVE") ||
+		!isatty.IsTerminal(os.Stdout.Fd())
 }
 
 // Fork subagent constants — mirrors forkSubagent.ts.
