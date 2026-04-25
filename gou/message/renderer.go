@@ -57,6 +57,8 @@ func NewDispatcher() *Dispatcher {
 			&CollapsedGroupRenderer{},
 			&GroupedToolUseRenderer{},
 			&AttachmentMessageRenderer{},
+			// After Messages.tsx filter; no-op if a progress row still reaches the dispatcher.
+			&ProgressMessageRenderer{},
 		},
 	}
 }

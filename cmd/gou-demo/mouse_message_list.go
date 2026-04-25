@@ -2,8 +2,6 @@ package main
 
 import (
 	tea "charm.land/bubbletea/v2"
-
-	"goc/types"
 )
 
 func absInt(n int) int {
@@ -37,11 +35,7 @@ func (m *model) clampScrollTopForVirtualList() {
 		return
 	}
 	m.integrateMessageRenderer()
-	messages := m.store.Messages
-	var messagesPtr []*types.Message
-	for i := range messages {
-		messagesPtr = append(messagesPtr, &messages[i])
-	}
+	messagesPtr := m.messagePtrSliceForNewRenderer()
 	isTranscript := m.uiScreen == gouDemoScreenTranscript
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
 	width := m.messageBodyColsForLayout()

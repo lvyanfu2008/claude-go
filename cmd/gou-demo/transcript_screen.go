@@ -74,6 +74,22 @@ func (m *model) messagesForScroll() []types.Message {
 	})
 }
 
+// messagePtrSliceForNewRenderer returns the same UI-ordered messages as [messagesForScroll] (Messages.tsx
+// pipeline: progress dropped, null attachments dropped, reorder, grouping, etc.) as pointers for
+// [MessageRendererIntegration] and [message.VirtualList]. This matches TS: progress is not a top-level
+// message row; it is associated with tool use via progressMessagesForMessage / lookups.
+func (m *model) messagePtrSliceForNewRenderer() []*types.Message {
+	view := m.messagesForScroll()
+	if len(view) == 0 {
+		return nil
+	}
+	out := make([]*types.Message, len(view))
+	for i := range view {
+		out[i] = &view[i]
+	}
+	return out
+}
+
 // transcriptStreamToolScrollKey is a virtual-scroll key for in-transcript streaming tool rows (TS transcriptStreamingToolUses).
 func transcriptStreamToolScrollKey(convID string, idx int) string {
 	return fmt.Sprintf("gou-st-tool:%d:%s", idx, convID)

@@ -1406,11 +1406,7 @@ func (m *model) View() tea.View {
 			lines = append(lines, "")
 		}
 		m.integrateMessageRenderer()
-		messages := m.store.Messages
-		var messagesPtr []*types.Message
-		for i := range messages {
-			messagesPtr = append(messagesPtr, &messages[i])
-		}
+		messagesPtr := m.messagePtrSliceForNewRenderer()
 		isTranscript := m.uiScreen == gouDemoScreenTranscript
 		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
 		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(

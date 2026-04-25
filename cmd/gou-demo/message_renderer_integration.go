@@ -161,14 +161,8 @@ func (m *model) integrateMessageRenderer() {
 func (m *model) renderMessagesWithNewRenderer() string {
 	m.integrateMessageRenderer()
 
-	// Get messages from store
-	messages := m.store.Messages
-
-	// Convert []types.Message to []*types.Message
-	var messagesPtr []*types.Message
-	for i := range messages {
-		messagesPtr = append(messagesPtr, &messages[i])
-	}
+	// UI-ordered messages (same as Messages.tsx / messagesForScroll: drops progress, etc.)
+	messagesPtr := m.messagePtrSliceForNewRenderer()
 
 	// Determine rendering parameters
 	width := m.messageBodyColsForLayout()
@@ -215,16 +209,9 @@ func (m *model) invalidateMessageCache() {
 func (m *model) renderMessagePaneWithNewRenderer() string {
 	m.integrateMessageRenderer()
 
-	// Get messages from store
-	messages := m.store.Messages
+	messagesPtr := m.messagePtrSliceForNewRenderer()
 	//diaglog.Line("[new-renderer] renderMessagePaneWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s'",
-	//	len(messages), len(m.store.StreamingToolUses), m.store.StreamingText)
-
-	// Convert []types.Message to []*types.Message
-	var messagesPtr []*types.Message
-	for i := range messages {
-		messagesPtr = append(messagesPtr, &messages[i])
-	}
+	//	len(messagesPtr), len(m.store.StreamingToolUses), m.store.StreamingText)
 
 	// Determine rendering parameters
 	width := m.messageBodyColsForLayout()
@@ -384,16 +371,9 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 	m.integrateMessageRenderer()
 
-	// Get messages from store
-	messages := m.store.Messages
+	messagesPtr := m.messagePtrSliceForNewRenderer()
 	//diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s', uiScreen=%v, msgViewportWanted=%v",
-	//	len(messages), len(m.store.StreamingToolUses), m.store.StreamingText, m.uiScreen, m.msgViewportWanted())
-
-	// Convert []types.Message to []*types.Message
-	var messagesPtr []*types.Message
-	for i := range messages {
-		messagesPtr = append(messagesPtr, &messages[i])
-	}
+	//	len(messagesPtr), len(m.store.StreamingToolUses), m.store.StreamingText, m.uiScreen, m.msgViewportWanted())
 
 	// Determine rendering parameters
 	width := m.messageBodyColsForLayout()
