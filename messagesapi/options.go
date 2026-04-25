@@ -43,6 +43,12 @@ type Options struct {
 	// Default false matches TS normalizeMessagesForAPI: joinTextAtSeam keeps sibling text blocks (newline on the text-text seam only);
 	// mergeUserContentBlocks appends attachment blocks without folding all text into one block.
 	CompactAllTextUserContent bool
+
+	// SkipStripTrailingThinking when true, skips filterTrailingThinkingFromLastAssistant.
+	// OpenAI-compatible thinking models require prior-turn reasoning in history (reasoning_content);
+	// stripping the last assistant's trailing thinking would drop that on replay. Mirrors
+	// getAPIProvider() === 'openai' in TS normalize (set via OptionsFromEnv + CLAUDE_CODE_USE_OPENAI).
+	SkipStripTrailingThinking bool
 }
 
 // DefaultOptions matches typical CLI defaults (most gates off).

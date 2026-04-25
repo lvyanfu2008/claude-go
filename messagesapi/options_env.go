@@ -71,5 +71,7 @@ func OptionsFromEnv() Options {
 	// (see messages.ts normalizeMessagesForAPI tail). Default on when unset so multi-round tool loops
 	// and orphan-thinking drops do not leave split user rows vs TS; opt out with CLAUDE_CODE_GO_CHAIR_SERMON=0|false|no|off.
 	o.ChairSermon = !envDefinedFalsy("CLAUDE_CODE_GO_CHAIR_SERMON")
+	// OpenAPI path: keep trailing thinking so wire can emit reasoning_content (see filterTrailingThinkingFromLastAssistant).
+	o.SkipStripTrailingThinking = envTruthyMsg("CLAUDE_CODE_USE_OPENAI")
 	return o
 }

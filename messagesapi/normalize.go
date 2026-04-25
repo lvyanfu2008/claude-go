@@ -283,7 +283,7 @@ func NormalizeMessagesForAPI(messages []types.Message, tools []ToolSpec, opts Op
 	if err != nil {
 		return nil, err
 	}
-	withFilteredThinking, err := filterTrailingThinkingFromLastAssistant(withFilteredOrphans)
+	withFilteredThinking, err := filterTrailingThinkingFromLastAssistant(withFilteredOrphans, opts)
 	if err != nil {
 		return nil, err
 	}

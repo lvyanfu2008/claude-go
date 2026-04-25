@@ -384,7 +384,10 @@ func isThinkingBlock(block map[string]any) bool {
 	return t == "thinking" || t == "redacted_thinking"
 }
 
-func filterTrailingThinkingFromLastAssistant(messages []types.Message) ([]types.Message, error) {
+func filterTrailingThinkingFromLastAssistant(messages []types.Message, opts Options) ([]types.Message, error) {
+	if opts.SkipStripTrailingThinking {
+		return messages, nil
+	}
 	if len(messages) == 0 {
 		return messages, nil
 	}
@@ -621,7 +624,11 @@ func filterOrphanedThinkingOnlyMessages(messages []types.Message) ([]types.Messa
 			messages[i+1] = merged
 			continue
 		}
-		// drop truly orphaned (no following assistant to absorb)
+		// No following assistant to merge into: keep the row. Dropping it strips
+		// chain-of-thought from history; OpenAI-style thinking providers then 400
+		// (reasoning_content must be passed back) when the prior turn had no id/split
+		// to match idsWithNonThinking and the next message is user.
+		filtered = append(filtered, msg)
 	}
 	return filtered, nil
 }
