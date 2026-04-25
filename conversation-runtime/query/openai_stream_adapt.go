@@ -148,7 +148,10 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	var chunk struct {
 		Choices []struct {
 			Delta        json.RawMessage `json:"delta"`
-			FinishReason string          `json:"finish_reason"`
+			Message      *struct {
+				ReasoningContent *string `json:"reasoning_content"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 		Usage json.RawMessage `json:"usage"`
 	}
@@ -193,6 +196,14 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	ch0 := chunk.Choices[0]
 	if len(ch0.Delta) > 0 && string(ch0.Delta) != "null" {
 		_ = json.Unmarshal(ch0.Delta, &delta)
+	}
+	// Some gateways only attach chain-of-thought to choices[0].message (same as non-stream),
+	// with an empty or omitted delta. Mirror src/services/api/openai/streamAdapter.ts.
+	if (delta.ReasoningContent == nil || *delta.ReasoningContent == "") && ch0.Message != nil && ch0.Message.ReasoningContent != nil {
+		if s := strings.TrimSpace(*ch0.Message.ReasoningContent); s != "" {
+			c := s
+			delta.ReasoningContent = &c
+		}
 	}
 
 	// reasoning_content → thinking
