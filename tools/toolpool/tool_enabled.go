@@ -28,13 +28,8 @@ func GoAllowedChannelsConfigured() bool {
 // AskUserQuestionToolEnabled mirrors AskUserQuestionTool.isEnabled in
 // src/tools/AskUserQuestionTool/AskUserQuestionTool.tsx.
 func AskUserQuestionToolEnabled() bool {
-	if !featuregates.Feature("KAIROS") && !featuregates.Feature("KAIROS_CHANNELS") {
-		return true
-	}
-	if !GoAllowedChannelsConfigured() {
-		return true
-	}
-	return false
+	// KAIROS is always on in Go; parity matches TS when KAIROS is set (channel relay gates these tools).
+	return !GoAllowedChannelsConfigured()
 }
 
 func kairosCronEnabled() bool {
@@ -42,13 +37,7 @@ func kairosCronEnabled() bool {
 }
 
 func planModeToolsEnabled() bool {
-	if !(featuregates.Feature("KAIROS") || featuregates.Feature("KAIROS_CHANNELS")) {
-		return true
-	}
-	if !GoAllowedChannelsConfigured() {
-		return true
-	}
-	return false
+	return !GoAllowedChannelsConfigured()
 }
 
 func toolSpecPerToolEnabled(t types.ToolSpec) bool {

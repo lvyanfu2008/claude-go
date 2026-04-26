@@ -80,67 +80,39 @@ func TestGoToolWireAgentToolHasFullDescription(t *testing.T) {
 }
 
 func TestNativeAgentToolSpecSchemaAndDescription(t *testing.T) {
-	t.Setenv("FEATURE_KAIROS", "")
 	spec := nativeAgentToolSpec()
-	
+
 	// Verify basic fields
 	if spec.Name != "Agent" {
 		t.Fatalf("expected name 'Agent', got %q", spec.Name)
 	}
-	
+
 	// Verify description is the full description from AgentToolDescription function
 	if spec.Description != AgentToolDescription() {
 		t.Fatal("Agent spec description doesn't match AgentToolDescription() function result")
 	}
-	
+
 	// Verify schema has required fields
 	var schema map[string]any
 	if err := json.Unmarshal(spec.InputJSONSchema, &schema); err != nil {
 		t.Fatalf("invalid schema: %v", err)
 	}
-	
+
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("schema missing properties")
 	}
-	
+
 	requiredFields := []string{"description", "prompt"}
 	for _, field := range requiredFields {
 		if _, exists := properties[field]; !exists {
 			t.Fatalf("schema missing required field: %s", field)
 		}
 	}
-	for _, field := range []string{"name", "team_name", "mode", "subagent_type", "model", "isolation"} {
+	for _, field := range []string{"name", "team_name", "mode", "subagent_type", "model", "isolation", "cwd"} {
 		if _, exists := properties[field]; !exists {
 			t.Fatalf("schema missing field: %s", field)
 		}
-	}
-	if _, exists := properties["cwd"]; exists {
-		t.Fatal("expected cwd omitted from schema when FEATURE_KAIROS is off (mirrors TS .omit({ cwd: true }))")
-	}
-	t.Setenv("FEATURE_KAIROS", "1")
-	specKairos := nativeAgentToolSpec()
-	if err := json.Unmarshal(specKairos.InputJSONSchema, &schema); err != nil {
-		t.Fatalf("invalid schema: %v", err)
-	}
-	properties, ok = schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatal("schema missing properties")
-	}
-	if _, exists := properties["cwd"]; !exists {
-		t.Fatal("expected cwd in schema when FEATURE_KAIROS=1 (mirrors TS fullInputSchema)")
-	}
-	t.Setenv("FEATURE_KAIROS", "")
-	specNoKairos := nativeAgentToolSpec()
-	if err := json.Unmarshal(specNoKairos.InputJSONSchema, &schema); err != nil {
-		t.Fatalf("invalid schema: %v", err)
-	}
-	properties, ok = schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatal("schema missing properties")
-	}
-	if _, exists := properties["cwd"]; exists {
-		t.Fatal("expected cwd omitted from schema when FEATURE_KAIROS is off (mirrors TS .omit({ cwd: true }))")
 	}
 }
 

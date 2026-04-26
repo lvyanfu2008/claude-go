@@ -17,15 +17,8 @@ func optionalBuiltinAfterVim() []types.Command {
 	if featuregates.Feature("BUDDY") {
 		out = append(out, cmdBuddy())
 	}
-	if featuregates.Feature("PROACTIVE") || featuregates.Feature("KAIROS") {
-		out = append(out, cmdProactive())
-	}
-	if featuregates.Feature("KAIROS") || featuregates.Feature("KAIROS_BRIEF") {
-		out = append(out, cmdBrief())
-	}
-	if featuregates.Feature("KAIROS") {
-		out = append(out, cmdAssistant())
-	}
+	// KAIROS is always enabled in Go (featuregates.Feature); proactive / brief / assistant builtins always listed.
+	out = append(out, cmdProactive(), cmdBrief(), cmdAssistant())
 	if featuregates.Feature("BRIDGE_MODE") {
 		out = append(out, cmdBridge())
 	}

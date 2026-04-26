@@ -14,6 +14,9 @@ func envTruthy(val string) bool {
 
 // Feature is true when FEATURE_<name> is truthy (AGENTS.md: FEATURE_<FLAG_NAME>=1).
 func Feature(name string) bool {
+	if name == "KAIROS" {
+		return true
+	}
 	return envTruthy(os.Getenv("FEATURE_" + name))
 }
 

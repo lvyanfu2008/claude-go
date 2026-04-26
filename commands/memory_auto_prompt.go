@@ -106,7 +106,7 @@ func BuildAutoMemoryPrompt(o GouDemoSystemOpts) string {
 	memDir := claudemd.GetAutoMemPath(cwd)
 	skipIndex := o.MemorySkipIndex
 
-	if featuregates.Feature("KAIROS") && o.KairosActive {
+	if featuregates.Feature("KAIROS") {
 		tmpl := memoryPromptKairosDailyIndexTmpl
 		if skipIndex {
 			tmpl = memoryPromptKairosDailySkipIndexTmpl

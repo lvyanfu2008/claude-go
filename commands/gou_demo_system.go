@@ -42,8 +42,6 @@ type GouDemoSystemOpts struct {
 	MemorySkipIndex bool
 	// MemorySearchPastContext mirrors tengu_coral_fern buildSearchingPastContextSection.
 	MemorySearchPastContext bool
-	// KairosActive mirrors STATE.kairosActive / getKairosActive — set CLAUDE_CODE_GO_KAIROS_ACTIVE=1 when FEATURE_KAIROS.
-	KairosActive bool
 	// UserMsgOptIn mirrors getUserMsgOptIn — Brief / SendUserMessage opt-in (CLAUDE_CODE_GO_USER_MSG_OPT_IN=1).
 	UserMsgOptIn bool
 	// CoordinatorMode mirrors isCoordinatorMode() — disables fork subagent when true.
@@ -117,7 +115,7 @@ func GouDemoExplorePlanAgentsFromEnv() bool {
 	return true
 }
 
-// ApplyGouDemoRuntimeEnv mutates o with TS-parity shims from environment (embedded search, ant, REPL, explore plan, verification guidance, memory flags, kairos active).
+// ApplyGouDemoRuntimeEnv mutates o with TS-parity shims from environment (embedded search, ant, REPL, explore plan, verification guidance, memory flags).
 func ApplyGouDemoRuntimeEnv(o *GouDemoSystemOpts) {
 	if o == nil {
 		return
@@ -132,7 +130,6 @@ func ApplyGouDemoRuntimeEnv(o *GouDemoSystemOpts) {
 	// prefetched via attachments instead
 	o.MemorySkipIndex = featuregates.Feature("MOTH_COPSE") || !envTruthyGo("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX")
 	o.MemorySearchPastContext = growthbook.IsTenguCoralFern() || featuregates.Feature("CORAL_FERN") || envTruthyGo("CLAUDE_CODE_GO_MEMORY_SEARCH_PAST_CONTEXT")
-	o.KairosActive = envTruthyGo("CLAUDE_CODE_GO_KAIROS_ACTIVE")
 	o.UserMsgOptIn = envTruthyGo("CLAUDE_CODE_GO_USER_MSG_OPT_IN")
 	o.CoordinatorMode = envTruthyGo("CLAUDE_CODE_GO_COORDINATOR_MODE")
 	o.Undercover = envTruthyGo("CLAUDE_CODE_GO_UNDERCOVER")

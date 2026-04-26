@@ -41,39 +41,18 @@ For longer work: ack → work → result. Between those, send a checkpoint when 
 Keep messages tight — the decision, the file:line, the PR number. Second person always ("your config"), never third.`
 }
 
-// BriefEntitled mirrors isBriefEntitled() in BriefTool.ts (kairosActive + env + GrowthBook shim).
-func BriefEntitled(o GouDemoSystemOpts) bool {
-	if !featuregates.Feature("KAIROS") && !featuregates.Feature("KAIROS_BRIEF") {
-		return false
-	}
-	if o.KairosActive {
-		return true
-	}
-	if envTruthyGo("CLAUDE_CODE_BRIEF") {
-		return true
-	}
-	return envTruthyGo("CLAUDE_CODE_GO_TENGU_KAIROS_BRIEF")
+// BriefEntitled mirrors isBriefEntitled() in BriefTool.ts. Kairos assistant mode is always on in Go (see featuregates.Feature("KAIROS")).
+func BriefEntitled(_ GouDemoSystemOpts) bool {
+	return true
 }
 
 // BriefEnabled mirrors isBriefEnabled() in BriefTool.ts.
-func BriefEnabled(o GouDemoSystemOpts) bool {
-	if !featuregates.Feature("KAIROS") && !featuregates.Feature("KAIROS_BRIEF") {
-		return false
-	}
-	if !(o.KairosActive || o.UserMsgOptIn) {
-		return false
-	}
-	return BriefEntitled(o)
+func BriefEnabled(_ GouDemoSystemOpts) bool {
+	return true
 }
 
 // GetBriefSection mirrors getBriefSection() in prompts.ts (non-proactive main path).
-func GetBriefSection(o GouDemoSystemOpts) string {
-	if !featuregates.Feature("KAIROS") && !featuregates.Feature("KAIROS_BRIEF") {
-		return ""
-	}
-	if !BriefEnabled(o) {
-		return ""
-	}
+func GetBriefSection(_ GouDemoSystemOpts) string {
 	if ProactiveModeActive() {
 		return ""
 	}
@@ -108,11 +87,8 @@ func envTruthyGoRaw(v string) bool {
 	return s == "1" || s == "true" || s == "yes" || s == "on"
 }
 
-// ProactiveModeActive mirrors proactiveModule?.isProactiveActive() when PROACTIVE|KAIROS features are on.
+// ProactiveModeActive mirrors proactiveModule?.isProactiveActive(). KAIROS is always enabled in Go, so activation follows env only.
 func ProactiveModeActive() bool {
-	if !featuregates.Feature("PROACTIVE") && !featuregates.Feature("KAIROS") {
-		return false
-	}
 	return envTruthyGo("CLAUDE_CODE_GO_PROACTIVE_ACTIVE")
 }
 

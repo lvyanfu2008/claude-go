@@ -900,12 +900,10 @@ func nativeAgentToolSpec() types.ToolSpec {
 			"enum":        []string{"worktree"},
 		},
 	}
-	// TS AgentTool: fullInputSchema().omit({ cwd: true }) unless feature('KAIROS').
-	if featuregates.Feature("KAIROS") {
-		properties["cwd"] = map[string]any{
-			"type":        "string",
-			"description": "Absolute path to run the agent in. Overrides the working directory for all filesystem and shell operations within this agent. Mutually exclusive with isolation: \"worktree\".",
-		}
+	// TS AgentTool: fullInputSchema includes cwd when KAIROS is on (KAIROS is always enabled in Go).
+	properties["cwd"] = map[string]any{
+		"type":        "string",
+		"description": "Absolute path to run the agent in. Overrides the working directory for all filesystem and shell operations within this agent. Mutually exclusive with isolation: \"worktree\".",
 	}
 
 	// Conditionally add run_in_background parameter based on environment and feature flags.
