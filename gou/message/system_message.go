@@ -54,6 +54,8 @@ func (r *SystemMessageRenderer) Render(msg *types.Message, ctx *RenderContext) (
 		return r.renderApiError(msg, ctx)
 	case "stop_hook_summary":
 		return r.renderStopHookSummary(msg, ctx)
+	case "memory_saved":
+		return r.renderMemorySaved(msg, ctx)
 	default:
 		return r.renderGenericSystemMessage(msg, ctx)
 	}
@@ -82,6 +84,8 @@ func (r *SystemMessageRenderer) Measure(msg *types.Message, ctx *RenderContext) 
 		return r.measureApiError(msg, ctx)
 	case "stop_hook_summary":
 		return r.measureStopHookSummary(msg, ctx)
+	case "memory_saved":
+		return r.measureMemorySaved(msg, ctx)
 	default:
 		return r.measureGenericSystemMessage(msg, ctx)
 	}
@@ -196,6 +200,27 @@ func (r *SystemMessageRenderer) renderStopHookSummary(msg *types.Message, ctx *R
 func (r *SystemMessageRenderer) measureStopHookSummary(msg *types.Message, ctx *RenderContext) (int, error) {
 	// Stop hook summary is always 1 line
 	return 1, nil
+}
+
+// renderMemorySaved renders extract-memories "memory_saved" system rows (TS SystemMemorySavedMessage).
+func (r *SystemMessageRenderer) renderMemorySaved(msg *types.Message, ctx *RenderContext) ([]string, error) {
+	lines := []string{"Saved a memory"}
+	for _, p := range msg.WrittenPaths {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		lines = append(lines, "  · "+p)
+	}
+	return lines, nil
+}
+
+func (r *SystemMessageRenderer) measureMemorySaved(msg *types.Message, ctx *RenderContext) (int, error) {
+	lines, err := r.renderMemorySaved(msg, ctx)
+	if err != nil {
+		return 0, err
+	}
+	return max(1, len(lines)), nil
 }
 
 // renderGenericSystemMessage renders a generic system message.

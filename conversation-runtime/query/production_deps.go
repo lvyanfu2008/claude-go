@@ -20,6 +20,12 @@ func ProductionDeps() QueryDeps {
 	}
 }
 
+// RandomUUID generates a random UUID v4 string (exported reference for packages that
+// need a [QueryDeps.NewUUID]-compatible fallback).
+func RandomUUID() string {
+	return randomUUID()
+}
+
 func randomUUID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {

@@ -75,9 +75,12 @@ import (
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/mcpcommands"
+	"goc/growthbook"
 	"goc/messagesapi"
 	"goc/modelenv"
 	"goc/querycontext"
+	"goc/services/autodream"
+	"goc/services/extractmemories"
 	"goc/sessiontranscript"
 	"goc/tools"
 	"goc/tools/localtools"
@@ -372,6 +375,11 @@ type gouQueryDoneMsg struct {
 	Err error
 }
 
+// gouMemoryAppendMsg appends a system message on the main thread (e.g. subtype memory_saved from extract-memories).
+type gouMemoryAppendMsg struct {
+	Msg types.Message
+}
+
 func gouDemoAnthropicAPIKey() string {
 	k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
 	if k != "" {
@@ -635,6 +643,12 @@ type model struct {
 	// New message rendering system integration
 	msgRenderer *MessageRendererIntegration
 
+	// autoDreamState tracks auto-dream scan throttle across turns.
+	autoDreamState *autodream.State
+
+	// extractMemState tracks post-turn extract-memories throttling and cursor (TS extractMemories).
+	extractMemState *extractmemories.State
+
 	// Task list (mirrors TS TaskListV2)
 	taskList *taskListModel
 }
@@ -667,6 +681,11 @@ func main() {
 
 	apilog.PrepareIfEnabled()
 	apilog.MaybePrintDiag()
+	// Post-turn extract-memories: enable when GrowthBook passport_quail is off
+	// (gou-demo default on via GOC_EXTRACT_MEMORIES=1; set to 0 to disable).
+	if os.Getenv("GOC_EXTRACT_MEMORIES") == "" {
+		_ = os.Setenv("GOC_EXTRACT_MEMORIES", "1")
+	}
 	traceCleanup := setupGouDemoTrace()
 	defer traceCleanup()
 
@@ -775,6 +794,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		readFileState:       localtools.NewReadFileState(),
 		permissionMode:      gouDemoPermissionModeFromEnv(),
 		useMsgViewport:      gouDemoBubblesViewport(),
+		autoDreamState:      autodream.NewState(),
+		extractMemState:     extractmemories.NewState(),
 		taskList:            newTaskListModel(st.ConversationID),
 	}
 }
@@ -1020,7 +1041,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.manualRenderMode {
 		switch msg.(type) {
-		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg:
+		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg:
 			m.pendingEvents = append(m.pendingEvents, msg)
 			return m, nil
 		}
@@ -1069,6 +1090,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gouQueryDoneMsg:
 		return m.handleUpdateGouQueryDone(msg)
+
+	case gouMemoryAppendMsg:
+		return m.handleUpdateGouMemoryAppend(msg)
 
 	case gouToolSummaryDelayTickMsg:
 		return m.handleUpdateToolSummaryDelayTick(msg)
@@ -2505,6 +2529,38 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 								turnPrefix = append(turnPrefix, *y.Message)
 								_, err := tr.RecordTranscript(ctx, turnPrefix, sessiontranscript.RecordOpts{AllMessages: turnPrefix})
 								return err
+							}
+						}
+						qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
+							_, exErr := extractmemories.Execute(ctx, m.extractMemState, extractmemories.ExtractionParams{
+								Messages:       qcp.Messages,
+								ToolUseContext: qcp.ToolUseContext,
+								SystemPrompt:   qcp.SystemPrompt,
+								UserContext:    qcp.UserContext,
+								SystemContext:  qcp.SystemContext,
+								Cwd:            qcp.Cwd,
+								QuerySource:    qcp.QuerySource,
+								NewUUID:        query.RandomUUID,
+								SkipIndex:      growthbook.IsTenguMothCopse(),
+								AppendSystemMessage: func(msg types.Message) {
+									if send := m.ccbSend; send != nil {
+										send(gouMemoryAppendMsg{Msg: msg})
+									}
+								},
+							})
+							if exErr != nil {
+								gouDemoTracef("extractmemories: %v", exErr)
+							}
+							_, dreamErr := autodream.Execute(ctx, m.autoDreamState,
+								qcp.ToolUseContext, qcp.SystemPrompt,
+								qcp.UserContext, qcp.SystemContext,
+								qcp.QuerySource, query.RandomUUID,
+								commands.ClaudeConfigHome(), qcp.Cwd,
+								"", /* memoryDir — let Execute resolve */
+								m.store.ConversationID,
+							)
+							if dreamErr != nil {
+								gouDemoTracef("autodream: %v", dreamErr)
 							}
 						}
 						qp := query.QueryParams{

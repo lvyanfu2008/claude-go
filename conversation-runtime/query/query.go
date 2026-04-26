@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/diaglog"
+	"goc/types"
 )
 
 // CommandLifecycleNotifier mirrors notifyCommandLifecycle('completed', uuid) after queryLoop (query.ts tail).
@@ -45,6 +46,10 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 
 	state := NewStateFromParams(params)
 	_ = state
+
+	// postLoopMessages captures assistant messages yielded during the model loop
+	// for post-turn hooks (e.g. extractMemories).
+	var postLoopMessages []types.Message
 
 	cfg := BuildQueryConfig()
 	// When params.StreamingParity is true, prefer HTTP SSE + streamingtool over CallModel.
@@ -153,19 +158,38 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 				streamPath = "anthropic messages SSE"
 			}
 			diaglog.Line("[query] streaming parity: %s (model=%s)", streamPath, strings.TrimSpace(in.ModelID))
+			capYield := func(qy QueryYield, err error) bool {
+				if qy.Message != nil && qy.Message.Type == types.MessageTypeAssistant {
+					postLoopMessages = append(postLoopMessages, *qy.Message)
+				}
+				return yield(qy, err)
+			}
 			var streamErr error
 			switch {
 			case gemma:
-				streamErr = runGemmaStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				streamErr = runGemmaStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			case openAINoStream:
-				streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			case openAI:
-				streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			default:
-				streamErr = runStreamingParityModelLoop(ctx, params, msgs, in, deps, yield)
+				streamErr = runStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			}
 			if streamErr != nil {
 				return Terminal{Reason: TerminalReasonModelError, Error: streamErr}, nil
+			}
+			if deps.OnQueryComplete != nil {
+				cwd, _ := os.Getwd()
+				allMsgs := append(append([]types.Message{}, state.Messages...), postLoopMessages...)
+				deps.OnQueryComplete(ctx, QueryCompleteParams{
+					Messages:       allMsgs,
+					SystemPrompt:   params.SystemPrompt,
+					UserContext:    params.UserContext,
+					SystemContext:  params.SystemContext,
+					ToolUseContext: state.ToolUseContext,
+					QuerySource:    params.QuerySource,
+					Cwd:            cwd,
+				})
 			}
 			return Terminal{Reason: TerminalReasonCompleted}, nil
 		}
@@ -174,9 +198,25 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 				if y.Terminal != nil {
 					return false
 				}
+				if y.Message != nil && y.Message.Type == types.MessageTypeAssistant {
+					postLoopMessages = append(postLoopMessages, *y.Message)
+				}
 				return yield(y, nil)
 			}); err != nil {
 				return Terminal{Reason: TerminalReasonModelError, Error: err}, nil
+			}
+			if deps.OnQueryComplete != nil {
+				cwd, _ := os.Getwd()
+				allMsgs := append(append([]types.Message{}, state.Messages...), postLoopMessages...)
+				deps.OnQueryComplete(ctx, QueryCompleteParams{
+					Messages:       allMsgs,
+					SystemPrompt:   params.SystemPrompt,
+					UserContext:    params.UserContext,
+					SystemContext:  params.SystemContext,
+					ToolUseContext: state.ToolUseContext,
+					QuerySource:    params.QuerySource,
+					Cwd:            cwd,
+				})
 			}
 			return Terminal{Reason: TerminalReasonCompleted}, nil
 		}

@@ -82,6 +82,21 @@ type QueryDeps struct {
 	// current in-flight tool_use snapshot after each content_block_start|delta|stop. uses==nil
 	// means message_stop (TS clears streamingToolUses). Non-nil slice replaces the live list (may be empty).
 	OnStreamingToolUses func(ctx context.Context, uses []StreamingToolUseLive) error
+	// OnQueryComplete optional; invoked after queryLoop completes successfully
+	// (before returning Terminal). Hosts may use this to run post-turn hooks
+	// like extractMemories.
+	OnQueryComplete func(ctx context.Context, params QueryCompleteParams)
+}
+
+// QueryCompleteParams carries context for post-turn hooks (e.g. extractMemories).
+type QueryCompleteParams struct {
+	Messages       []types.Message
+	SystemPrompt   SystemPrompt
+	UserContext    map[string]string
+	SystemContext  map[string]string
+	ToolUseContext types.ToolUseContext
+	QuerySource    types.QuerySource
+	Cwd            string
 }
 
 // ToolResultBudgetInput is passed to [QueryDeps.ApplyToolResultBudget] (query.ts applyToolResultBudget).

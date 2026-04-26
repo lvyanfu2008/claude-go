@@ -20,6 +20,11 @@ const (
 	MessageTypeCollapsedReadSearch MessageType = "collapsed_read_search"
 )
 
+// System message subtypes (used in Message.Subtype).
+const (
+	SubtypeMemorySaved = "memory_saved"
+)
+
 // Message mirrors src/types/message.ts Message (base; TS allows extra keys via index signature).
 // UserMessage, AssistantMessage, AttachmentMessage, SystemMessage in TS are this shape with a narrowed type literal.
 type Message struct {
@@ -52,6 +57,8 @@ type Message struct {
 	Subtype   *string `json:"subtype,omitempty"`
 	Level     *string `json:"level,omitempty"`
 	Timestamp *string `json:"timestamp,omitempty"`
+	// WrittenPaths is set on system messages with subtype "memory_saved" (SystemMemorySavedMessage).
+	WrittenPaths []string `json:"writtenPaths,omitempty"`
 	// SystemStopHookSummaryMessage (TS): subtype stop_hook_summary, hookLabel, hookCount, hookInfos, totalDurationMs.
 	HookLabel       *string `json:"hookLabel,omitempty"`
 	TotalDurationMs *int64  `json:"totalDurationMs,omitempty"`

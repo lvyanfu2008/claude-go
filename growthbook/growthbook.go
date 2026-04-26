@@ -375,6 +375,44 @@ func IsTenguGlacier2xr() bool {
 	return m.IsOn("glacier_2xr")
 }
 
+// IsTenguPassportQuail returns true if the "tengu_passport_quail" gate is enabled.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_passport_quail', false) in extractMemories.ts.
+func IsTenguPassportQuail() bool {
+	return DefaultManager().IsOn("passport_quail")
+}
+
+// IsTenguMothCopse returns true if the "tengu_moth_copse" flag is enabled.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_moth_copse', false) in extractMemories.ts.
+// When true, MEMORY.md index is excluded from the extraction sub-agent prompt.
+func IsTenguMothCopse() bool {
+	return DefaultManager().IsOn("moth_copse")
+}
+
+// GetTenguBrambleLintel returns the throttle interval for extractMemories.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_bramble_lintel', null) ?? 1 in extractMemories.ts.
+// Defaults to 1 (every eligible turn).
+func GetTenguBrambleLintel() int {
+	v := DefaultManager().Get("bramble_lintel")
+	if v == nil {
+		return 1
+	}
+	switch n := v.(type) {
+	case int:
+		if n > 0 {
+			return n
+		}
+	case float64:
+		if n > 0 {
+			return int(n)
+		}
+	case bool:
+		if n {
+			return 1
+		}
+	}
+	return 1
+}
+
 // Init initializes the GrowthBook manager
 func Init(config ...Config) {
 	manager := DefaultManager()

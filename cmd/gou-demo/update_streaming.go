@@ -55,6 +55,16 @@ func (m *model) handleUpdateGouSpinnerTick(_ gouSpinnerTickMsg) (tea.Model, tea.
 	return m, spinnerTickCmd()
 }
 
+func (m *model) handleUpdateGouMemoryAppend(msg gouMemoryAppendMsg) (tea.Model, tea.Cmd) {
+	m.store.AppendMessage(msg.Msg)
+	m.rebuildHeightCache()
+	if m.uiScreen != gouDemoScreenTranscript {
+		m.sticky = true
+		m.scrollTop = 1 << 30
+	}
+	return m, nil
+}
+
 func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cmd) {
 	m.queryBusy = false
 	m.endQuerySpinner()

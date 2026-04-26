@@ -211,11 +211,37 @@ func rootSlashPathExists(commandName string) bool {
 	return err == nil
 }
 
+// todoV2ToolName returns the canonical model tool name if commandName refers to
+// a Todo v2 tool (TaskCreate, TaskGet, TaskList, TaskUpdate) — not a slash skill.
+func todoV2ToolName(commandName string) (canonical string, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(commandName)) {
+	case "taskcreate":
+		return "TaskCreate", true
+	case "taskget":
+		return "TaskGet", true
+	case "tasklist":
+		return "TaskList", true
+	case "taskupdate":
+		return "TaskUpdate", true
+	default:
+		return "", false
+	}
+}
+
 func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attachmentMessages []types.Message, suggestion string) *processuserinput.ProcessUserInputBaseResult {
 	msgs := append([]types.Message(nil), attachmentMessages...)
-	msg := fmt.Sprintf("Unknown skill: %s", parsed.CommandName)
-	if suggestion != "" {
-		msg += ". " + suggestion
+	var msg string
+	if cn, y := todoV2ToolName(parsed.CommandName); y {
+		msg = fmt.Sprintf("gou-demo: %s is a Todo v2 model tool, not a slash skill. There is no /%s command. Send a normal message so the model can use the %s tool when Todo v2 tools are enabled.",
+			cn, cn, cn)
+		if suggestion != "" {
+			msg += " " + suggestion
+		}
+	} else {
+		msg = fmt.Sprintf("Unknown skill: %s", parsed.CommandName)
+		if suggestion != "" {
+			msg += ". " + suggestion
+		}
 	}
 	msgs = append(msgs, SystemNotice(msg))
 	if a := strings.TrimSpace(parsed.Args); a != "" {
