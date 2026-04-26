@@ -44,6 +44,9 @@ type GouDemoSystemOpts struct {
 	MemorySearchPastContext bool
 	// UserMsgOptIn mirrors getUserMsgOptIn — Brief / SendUserMessage opt-in (CLAUDE_CODE_GO_USER_MSG_OPT_IN=1).
 	UserMsgOptIn bool
+	// KairosActive mirrors getKairosActive() / STATE.kairosActive — gates KAIROS daily memory in [BuildAutoMemoryPrompt] (TS memdir loadMemoryPrompt).
+	// [ApplyGouDemoRuntimeEnv] sets this from CLAUDE_CODE_GO_KAIROS_ACTIVE (default true when the env var is unset).
+	KairosActive bool
 	// CoordinatorMode mirrors isCoordinatorMode() — disables fork subagent when true.
 	CoordinatorMode bool
 	// ParityGOOS and ParityGOARCH when both non-empty override runtime.GOOS/GOARCH in # Environment
@@ -131,6 +134,11 @@ func ApplyGouDemoRuntimeEnv(o *GouDemoSystemOpts) {
 	o.MemorySkipIndex = featuregates.Feature("MOTH_COPSE") || !envTruthyGo("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX")
 	o.MemorySearchPastContext = growthbook.IsTenguCoralFern() || featuregates.Feature("CORAL_FERN") || envTruthyGo("CLAUDE_CODE_GO_MEMORY_SEARCH_PAST_CONTEXT")
 	o.UserMsgOptIn = envTruthyGo("CLAUDE_CODE_GO_USER_MSG_OPT_IN")
+	if _, ok := os.LookupEnv("CLAUDE_CODE_GO_KAIROS_ACTIVE"); ok {
+		o.KairosActive = envTruthyGo("CLAUDE_CODE_GO_KAIROS_ACTIVE")
+	} else {
+		o.KairosActive = true
+	}
 	o.CoordinatorMode = envTruthyGo("CLAUDE_CODE_GO_COORDINATOR_MODE")
 	o.Undercover = envTruthyGo("CLAUDE_CODE_GO_UNDERCOVER")
 	o.KeepCodingInstructions = true

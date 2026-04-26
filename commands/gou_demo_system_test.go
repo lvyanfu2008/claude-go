@@ -9,10 +9,14 @@ func TestMemorySkipIndexDefaultBehavior(t *testing.T) {
 	// Clear any existing environment variables that might interfere
 	os.Unsetenv("FEATURE_MOTH_COPSE")
 	os.Unsetenv("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX")
+	os.Unsetenv("CLAUDE_CODE_GO_KAIROS_ACTIVE")
 	
 	// Test default behavior (should be true to match TS)
 	var opts GouDemoSystemOpts
 	ApplyGouDemoRuntimeEnv(&opts)
+	if !opts.KairosActive {
+		t.Error("KairosActive should default to true when CLAUDE_CODE_GO_KAIROS_ACTIVE is unset")
+	}
 	if !opts.MemorySkipIndex {
 		t.Error("MemorySkipIndex should default to true to match TypeScript behavior")
 	}

@@ -6,16 +6,17 @@ Additional prompt/skill rows can live under **`../builtin_*/`** (see [`../builti
 
 ## Embedded
 
-- **`tools_api.json`** — embedded via [`../tools_api_embed.go`](../tools_api_embed.go) (`//go:embed`). Source of truth is **`claude-code`** (`toolToAPISchema` / Zod). Workflow:
-  1. In **`claude-code`**: `bun run export:tools-registry` → writes `claude-code/data/exports/commands/data/tools_api.json`.
-  2. **Copy** that file over this path:  
-     `cp /path/to/claude-code/data/exports/commands/data/tools_api.json /path/to/claude-go/commands/data/tools_api.json`  
-     (Monorepo sibling example: from `claude-code` repo root,  
-     `cp data/exports/commands/data/tools_api.json ../claude-go/commands/data/tools_api.json`.)
-  3. In **`claude-go`**: `go test ./...`  
-  See also the top-level [`../../README.md`](../../README.md) in this module.
+- **Channel / AskUserQuestion parity**: For TS parity when channel relay is active, set **`CLAUDE_CODE_GO_ALLOWED_CHANNELS`** (non-empty, comma-separated). In TS, channel tools also depend on `KAIROS` / `KAIROS_CHANNELS`; in **Go**, `featuregates.Feature("KAIROS")` is always true, so **`FEATURE_KAIROS_CHANNELS`** (or the env above) is what remains to mirror TS for AskUserQuestion omission.
 
-- **Channel / AskUserQuestion parity**: For TS parity when channel relay is active, set **`CLAUDE_CODE_GO_ALLOWED_CHANNELS`** (non-empty, comma-separated) together with **`FEATURE_KAIROS`** or **`FEATURE_KAIROS_CHANNELS`** so `toolpool.GetTools` omits **AskUserQuestion**, matching `AskUserQuestionTool.isEnabled()` in TS.
+## KAIROS (Go standalone vs `claude-code-best`)
+
+| Topic | TypeScript | Go (`claude-go`) |
+|-------|------------|------------------|
+| Feature gate | Build-time `feature('KAIROS')` | `Feature("KAIROS")` is **always true** (see `commands/featuregates/gates.go`). Sub-flags (`KAIROS_CHANNELS`, `KAIROS_GITHUB_WEBHOOKS`, …) still use `FEATURE_<name>` env when mirrored. |
+| `kairosActive` / daily memory | `getKairosActive()` in memdir | `GouDemoSystemOpts.KairosActive`; **`ApplyGouDemoRuntimeEnv`** sets it from **`CLAUDE_CODE_GO_KAIROS_ACTIVE`** (default **on** when the variable is unset). |
+| Cron tools (`CronCreate` / `CronDelete` / `CronList`) | Extra GrowthBook gates (`tengu_kairos_cron`, durable flags, …) | **`toolpool`**: enabled when **`CLAUDE_CODE_DISABLE_CRON`** is not truthy (`tool_enabled.go`). No GrowthBook in standalone CLI. |
+| Transport tools (`SendUserFile`, `PushNotification`, `SubscribePR`, `SuggestBackgroundPR`) | Need assistant / webhook runtime | **Error-shaped responses only** in `tools/optional_tools.go` (wire parity); no real send/push/webhook without a bridge. |
+| Permission legacy alias `Brief` | Maps to `SendUserMessage` | Same via `permissionrules.NormalizeLegacyToolName`. |
 
 ## MCP JSON (optional, any path)
 

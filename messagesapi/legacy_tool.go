@@ -1,17 +1,10 @@
 package messagesapi
 
-// Mirrors src/utils/permissions/permissionRuleParser.ts LEGACY_TOOL_NAME_ALIASES (KAIROS/Brief omitted).
+import "goc/permissionrules"
+
+// Delegates to [permissionrules.NormalizeLegacyToolName] (same map as permissionRuleParser.ts LEGACY_TOOL_NAME_ALIASES).
 func normalizeLegacyToolName(name string) string {
-	switch name {
-	case "Task":
-		return "Agent"
-	case "KillShell":
-		return "TaskStop"
-	case "AgentOutputTool", "BashOutputTool":
-		return "TaskOutput"
-	default:
-		return name
-	}
+	return permissionrules.NormalizeLegacyToolName(name)
 }
 
 func toolMatchesName(tool ToolSpec, name string) bool {

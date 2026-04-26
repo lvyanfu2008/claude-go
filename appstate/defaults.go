@@ -56,7 +56,8 @@ func DefaultAppState() AppState {
 		ToolPermissionContext:      tpc,
 		SpinnerTip:                 nil,
 		Agent:                      nil,
-		KairosEnabled:              false,
+		// KairosEnabled: Go standalone baseline treats assistant capability as on (see commands/data/README.md KAIROS table). TS still flips this via GrowthBook / bridge.
+		KairosEnabled:              true,
 		RemoteSessionURL:           nil,
 		RemoteConnectionStatus:     RemoteConnecting,
 		RemoteBackgroundTaskCount:  0,

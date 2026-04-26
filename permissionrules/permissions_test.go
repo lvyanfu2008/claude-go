@@ -51,6 +51,15 @@ func TestGetDenyRuleForAgent(t *testing.T) {
 	}
 }
 
+func TestGetDenyRuleForToolBriefAlias(t *testing.T) {
+	t.Parallel()
+	ctx := testDenyContext("Brief")
+	tool := types.ToolSpec{Name: "SendUserMessage"}
+	if GetDenyRuleForTool(ctx, tool) == nil {
+		t.Fatal("expected deny from Brief rule to match SendUserMessage tool (TS legacy alias)")
+	}
+}
+
 func TestFilterDeniedAgents(t *testing.T) {
 	t.Parallel()
 	type row struct{ agentType string }

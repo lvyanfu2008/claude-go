@@ -120,6 +120,7 @@ func GouDemo(in SnapshotInput) (SnapshotOutput, error) {
 		OutputStylePrompt:      outPrompt,
 		DiscoverSkillsToolName: discover,
 		NonInteractiveSession:  envTruthy("GOU_DEMO_NON_INTERACTIVE"),
+		KairosActive:           true,
 		ParityGOOS:             in.ParityGOOS,
 		ParityGOARCH:           in.ParityGOARCH,
 		AdditionalWorkingDirs:  slices.Clone(in.ExtraClaudeMdRoots),

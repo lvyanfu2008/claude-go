@@ -10,12 +10,13 @@ type PermissionRuleValue struct {
 }
 
 // Legacy tool name aliases (src/utils/permissions/permissionRuleParser.ts LEGACY_TOOL_NAME_ALIASES).
-// KAIROS Brief entry is omitted unless we add a build tag later.
+// Brief → SendUserMessage when KAIROS || KAIROS_BRIEF; Go treats KAIROS as on (featuregates.Feature("KAIROS")).
 var legacyToolNameAliases = map[string]string{
 	"Task":            "Agent",
 	"KillShell":       "TaskStop",
 	"AgentOutputTool": "TaskOutput",
 	"BashOutputTool":  "TaskOutput",
+	"Brief":           "SendUserMessage", // keep in sync with commands.BriefToolName / TS BRIEF_TOOL_NAME
 }
 
 // NormalizeLegacyToolName mirrors normalizeLegacyToolName in permissionRuleParser.ts.
