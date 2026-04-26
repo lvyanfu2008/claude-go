@@ -1090,6 +1090,33 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// taskListViewMaxDisplay matches the line budget for [model.View] (task list after stream rows); keep in sync with that block.
+func (m *model) taskListViewMaxDisplay() int {
+	if m.height <= 10 {
+		return 0
+	}
+	return min(10, max(3, m.height-14))
+}
+
+// taskListViewReservedRows is the vertical space between the message pane and the status line
+// that the task list can occupy. [listViewportH] must subtract this so the full frame
+// (title + messages + stream strip + task block + status + input) does not exceed [model.height]
+// and the input area stays visible.
+func (m *model) taskListViewReservedRows() int {
+	if m.uiScreen == gouDemoScreenTranscript {
+		return 0
+	}
+	if m.taskList == nil || !m.taskList.isVisible() {
+		return 0
+	}
+	// Upper bound: standalone header (1) + at most N task lines + at most one hidden-summary line.
+	md := m.taskListViewMaxDisplay()
+	if md == 0 {
+		return 2 // header + " … +…" (task_list.view maxDisplay=0)
+	}
+	return 2 + md
+}
+
 func listViewportH(m *model) int {
 	streamReserve := m.streamH
 	if m.uiScreen == gouDemoScreenTranscript {
@@ -1098,6 +1125,9 @@ func listViewportH(m *model) int {
 	h := m.height - m.titleH - streamReserve - m.bottomChromeHeight() - 1
 	if gouDemoStatusLineEnabled() && m.statusLineString() != "" {
 		h--
+	}
+	if m.uiScreen != gouDemoScreenTranscript {
+		h -= m.taskListViewReservedRows()
 	}
 	if h < 3 {
 		h = 3
@@ -1439,12 +1469,7 @@ func (m *model) View() tea.View {
 		}
 		// Task list (inline, after stream rows)
 		if m.taskList != nil && m.taskList.isVisible() {
-			maxDisplay := 5
-			if m.height <= 10 {
-				maxDisplay = 0
-			} else {
-				maxDisplay = min(10, max(3, m.height-14))
-			}
+			maxDisplay := m.taskListViewMaxDisplay()
 			if tl := m.taskList.view(maxDisplay, m.cols); tl != "" {
 				indented := applyMessagePaneGutter(tl, m.width)
 				b.WriteString(indented)
