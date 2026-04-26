@@ -11,35 +11,22 @@ var logger = mygoword.Default()
 func main() {
 	// Set log level to DEBUG for more verbose output
 	logger.SetLevel(mygoword.DEBUG)
-	
-	// Example function calls with logging
-	logger.Info("Performing addition operation")
+
 	result := add(10, 20)
-	logger.Debug("add(10, 20) = %d", result)
 	fmt.Printf("10 + 20 = %d\n", result)
 
-	logger.Info("Generating greeting")
 	greeting := greet("Claude")
-	logger.Debug("greet(\"Claude\") = %s", greeting)
 	fmt.Println(greeting)
-
-	// Demonstrate different log levels
-	logger.Warn("This is a warning message")
-	logger.Error("This is an error message (simulated)")
 
 	// Example of logging to a file
 	logToFileExample()
-
-	logger.Info("Application completed successfully")
 }
 
 func add(a, b int) int {
-	logger.Debug("Adding %d and %d", a, b)
 	return a + b
 }
 
 func greet(name string) string {
-	logger.Debug("Greeting %s", name)
 	return fmt.Sprintf("Hello, %s!", name)
 }
 
@@ -54,11 +41,8 @@ func logToFileExample() {
 
 	// Create a new logger that writes to the file
 	fileLogger := mygoword.New(mygoword.INFO, file)
-	fileLogger.Info("This log message goes to the file")
-	fileLogger.Info("Application log entry")
-	fileLogger.Info("hello")
-	fileLogger.Info("lvyanfu")
 	fileLogger.Info("爱中国")
+	fileLogger.Info("hello, china")
 
 	logger.Info("Log file created: app.log")
 }
