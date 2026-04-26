@@ -8,7 +8,7 @@ import (
 	"goc/types"
 )
 
-// ReplaceBashToolSpecIfZogMode replaces the tools_api "Bash" row with [bashzog.ZogToolName] when
+// ReplaceBashToolSpecIfZogMode replaces the built-in "Bash" tool row with [bashzog.ZogToolName] when
 // GO_TOOL_INPUT_VALIDATOR=zog (same slot / merged limits). Drops any duplicate BashZog rows.
 // If the list already has BashZog and no Bash, returns specs unchanged (idempotent).
 func ReplaceBashToolSpecIfZogMode(specs []types.ToolSpec) ([]types.ToolSpec, error) {

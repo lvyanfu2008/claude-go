@@ -6,7 +6,7 @@ import (
 )
 
 // EnvToolInputValidator is the env name for switching input validation implementation.
-// Values: empty or "jsonschema" (default) — embedded tools_api.json + jsonschema + toolrefine.
+// Values: empty or "jsonschema" (default) — jsonschema + toolrefine for export-registered tools.
 // "zog" — use Zog for tools registered in zoglayer; others fall back to the jsonschema path.
 const EnvToolInputValidator = "GO_TOOL_INPUT_VALIDATOR"
 

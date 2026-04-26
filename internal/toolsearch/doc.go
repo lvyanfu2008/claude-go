@@ -5,7 +5,7 @@
 // token-counting APIs, or attachment pipelines not present in this Go host:
 //   - tst-auto uses a char fallback (no token-count API). Measured size is scaled by
 //     tstAutoDeferredCharScale (default 1.65, override CLAUDE_CODE_GO_TST_AUTO_CHAR_SCALE)
-//     so static tools_api.json aligns better with TS tool.prompt() description sizes.
+//     so static embedded export aligns better with TS tool.prompt() description sizes.
 //   - Unsupported-model patterns beyond "haiku" are not read from Statsig.
 //   - deferred_tools_delta / getDeferredToolsDelta attachments are not synthesized here;
 //     use CLAUDE_CODE_GO_DEFERRED_TOOLS_DELTA=1, USER_TYPE=ant, or GrowthBook tengu_glacier_2xr (e.g. CLAUDE_CODE_TENGU_GLACIER_2XR=1)

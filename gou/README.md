@@ -110,4 +110,4 @@ gou-demo 入口**默认**调用 [`goc/claudeinit`](../claudeinit) 的 **`Init`**
 
 **Bundled / 磁盘 skill 的 `/` 命令**：gou-demo 在 [`pui/slash_resolve_demo.go`](pui/slash_resolve_demo.go) 中 **进程内** 解析——**磁盘** skill 走 [`goc/slashresolve`](../slashresolve) **`ResolveDiskSkill`**（`SkillRoot` + `SKILL.md`），**bundled** prompt 走 **`ResolveBundledSkill`**（嵌入 markdown）；与 [`goc/commands`](../commands) 加载的 `Command` 列表一致，**不**起 Bun/Node。
 
-**未知斜杠（TS 对齐可选）**：默认将未识别的 `/name` 整行当作普通用户 prompt（`ShouldQuery` 走 `ProcessTextPrompt`）。设置 **`GOU_DEMO_SLASH_STRICT_UNKNOWN=1`** 时，对「看起来像合法命令名」且根路径 **`/name`** 不是已存在文件系统节点的情况，返回 **`Unknown skill: name`** 且不调模型（对齐 `processSlashCommand.tsx` 的 `looksLikeCommand` 分支）。
+**未知斜杠**：未在命令表中解析到的 `/name`，若「看起来像合法命令名」且根路径 **`/name`** 不是已存在的文件系统节点（非 Windows），则返回 **`Unknown skill: name`** 且不调模型（对齐 `processSlashCommand.tsx` 的 `looksLikeCommand` 分支）；否则整行当作普通用户 prompt（`ShouldQuery` 走 `ProcessTextPrompt`）。

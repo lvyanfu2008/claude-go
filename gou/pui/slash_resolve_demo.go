@@ -81,9 +81,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 		cmd := processuserinput.FindCommand(parsed.CommandName, p.Commands)
 		if cmd == nil {
 			// TS processSlashCommand: if looksLikeCommand && !isFilePath → Unknown skill, shouldQuery false.
-			// Default gou-demo: fall through to a normal prompt (strict mode: GOU_DEMO_SLASH_STRICT_UNKNOWN=1).
-			if strictSlashUnknown() &&
-				processuserinput.LooksLikeSlashCommandName(parsed.CommandName) &&
+			if processuserinput.LooksLikeSlashCommandName(parsed.CommandName) &&
 				!rootSlashPathExists(parsed.CommandName) {
 				return unknownSkillSlashResult(parsed, attachmentMessages, suggestAvailableCommands(parsed.CommandName)), nil
 			}
@@ -195,11 +193,6 @@ func handleClearCommand(store *conversation.Store) (*processuserinput.ProcessUse
 		Messages:    []types.Message{SystemNotice("Cleared conversation history.")},
 		ShouldQuery: false,
 	}, nil
-}
-
-func strictSlashUnknown() bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_SLASH_STRICT_UNKNOWN")))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
 // rootSlashPathExists mirrors TS getFsImplementation().stat(`/${commandName}`) for unknown-command handling.

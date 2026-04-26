@@ -38,7 +38,7 @@ func loadWire() {
 	}
 }
 
-// APIData is the Messages API Bash row when GO_TOOL_INPUT_VALIDATOR=zog (no runtime tools_api read).
+// APIData is the Messages API Bash row when GO_TOOL_INPUT_VALIDATOR=zog (schema defined in Go).
 type APIData struct {
 	Name           string
 	Description    string

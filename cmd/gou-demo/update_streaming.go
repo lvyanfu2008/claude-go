@@ -75,7 +75,6 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 	} else if gouDemoEnvTruthy("GOU_DEMO_BELL") {
 		fmt.Print("\a")
 	}
-	gouDemoLogStoreMessages("after_query_stream", m.store)
 	if m.transcript != nil {
 		m.maybeRecordTranscript()
 	}
@@ -100,9 +99,6 @@ func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	ccbstream.Apply(m.store, ev)
-	if ev.Type == "turn_complete" || ev.Type == "response_end" {
-		gouDemoLogStoreMessages("after_stream_"+ev.Type, m.store)
-	}
 	if ccbStreamEventNeedsFullHeightRebuild(ev) {
 		m.rebuildHeightCache()
 	}

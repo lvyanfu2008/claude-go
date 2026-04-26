@@ -133,7 +133,7 @@ type ToolRunResult struct {
 type ToolSpec struct {
 	Name    string   `json:"name"`
 	Aliases []string `json:"aliases,omitempty"`
-	// Description: model-facing tool description (Anthropic API / tools_api.json export).
+	// Description: model-facing tool description (Anthropic API wire shape).
 	Description string `json:"description,omitempty"`
 	// SearchHint: 3–10 words for ToolSearch keyword routing (src/Tool.ts).
 	SearchHint string `json:"searchHint,omitempty"`

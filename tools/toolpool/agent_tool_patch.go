@@ -17,8 +17,8 @@ func PatchAgentToolDescriptionWithBuiltins(specs []types.ToolSpec, agents []buil
 	return PatchAgentToolDescriptionWithPermission(specs, agents, types.EmptyToolPermissionContextData())
 }
 
-// PatchAgentToolDescriptionWithPermission fills the empty agent list in the embedded tools_api.json
-// Agent.description. Built-in rows are filtered with [permissionrules.FilterDeniedAgents] (TS filterDeniedAgents)
+// PatchAgentToolDescriptionWithPermission fills the empty agent list placeholder in the Agent tool
+// description. Built-in rows are filtered with [permissionrules.FilterDeniedAgents] (TS filterDeniedAgents)
 // before [builtin.FormatAgentLine] injection.
 func PatchAgentToolDescriptionWithPermission(
 	specs []types.ToolSpec,

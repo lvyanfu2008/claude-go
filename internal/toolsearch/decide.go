@@ -70,7 +70,7 @@ func autoCharThreshold(modelID string) int {
 
 // tstAutoDeferredCharScale scales measured deferred description size before comparing to
 // the tst-auto char threshold. TS calculateDeferredToolDescriptionChars uses live
-// tool.prompt() text, which is usually larger than static tools_api.json descriptions;
+// tool.prompt() text, which is usually larger than static embedded tool descriptions;
 // without scaling, ENABLE_TOOL_SEARCH=auto often stays below threshold in Go while TS enables defer.
 func tstAutoDeferredCharScale() float64 {
 	if s := envTrim("CLAUDE_CODE_GO_TST_AUTO_CHAR_SCALE"); s != "" {
@@ -151,7 +151,7 @@ func (cfg *WireConfig) applyDynamicDecision(enabled bool, tools []anthropic.Tool
 	_ = modelID // reserved for future token-API parity
 }
 
-// effectiveToolSearchModeForWire maps tst-auto → tst when using embedded tools_api (gou-demo): char-only tst-auto
+// effectiveToolSearchModeForWire maps tst-auto → tst when using GOU_DEMO_USE_EMBEDDED_TOOLS_API (gou-demo): char-only tst-auto
 // can stay "below threshold" while TS product path still defers (token path / defaults). Matches parity reports for tools[].
 func effectiveToolSearchModeForWire() string {
 	m := tstenv.GetToolSearchMode()
