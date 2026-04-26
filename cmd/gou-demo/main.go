@@ -775,7 +775,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		readFileState:       localtools.NewReadFileState(),
 		permissionMode:      gouDemoPermissionModeFromEnv(),
 		useMsgViewport:      gouDemoBubblesViewport(),
-		taskList:            newTaskListModel(),
+		taskList:            newTaskListModel(st.ConversationID),
 	}
 }
 

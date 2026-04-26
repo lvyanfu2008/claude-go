@@ -32,8 +32,8 @@ func sanitizePathComponentV2(s string) string {
 	return v2PathSanitize.ReplaceAllString(s, "-")
 }
 
-// taskListID resolves the task list directory name (getTaskListId in TS).
-func taskListID(cfg Config) string {
+// TaskListID resolves the task list directory name (getTaskListId in TS). Used by v2 task tools and gou-demo TUI.
+func TaskListID(cfg Config) string {
 	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TASK_LIST_ID")); v != "" {
 		return v
 	}
@@ -52,22 +52,22 @@ func taskListID(cfg Config) string {
 	return "default"
 }
 
-func v2TasksDir(taskListID string) string {
+func V2TasksDir(taskListID string) string {
 	base := commands.ClaudeConfigHome()
 	id := sanitizePathComponentV2(taskListID)
 	return filepath.Join(base, "tasks", id)
 }
 
 func v2TaskPath(taskListID, taskID string) string {
-	return filepath.Join(v2TasksDir(taskListID), sanitizePathComponentV2(taskID)+".json")
+	return filepath.Join(V2TasksDir(taskListID), sanitizePathComponentV2(taskID)+".json")
 }
 
 func v2ListLockPath(taskListID string) string {
-	return filepath.Join(v2TasksDir(taskListID), ".lock")
+	return filepath.Join(V2TasksDir(taskListID), ".lock")
 }
 
 func v2HighWaterMarkPath(taskListID string) string {
-	return filepath.Join(v2TasksDir(taskListID), v2HighWaterMarkFile)
+	return filepath.Join(V2TasksDir(taskListID), v2HighWaterMarkFile)
 }
 
 func ensureEmptyLockFile(path string) error {
@@ -162,7 +162,7 @@ func writeHighWaterMarkV2(taskListID string, value int) error {
 }
 
 func findHighestTaskIDFromFilesV2(taskListID string) int {
-	dir := v2TasksDir(taskListID)
+	dir := V2TasksDir(taskListID)
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
@@ -292,7 +292,7 @@ func v2CreateTask(taskListID string, subject, description, activeForm string, me
 }
 
 func v2ListTasks(taskListID string) ([]*v2Task, error) {
-	dir := v2TasksDir(taskListID)
+	dir := V2TasksDir(taskListID)
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -539,7 +539,7 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 	if strings.TrimSpace(in.Subject) == "" {
 		return "", true, fmt.Errorf("subject is required")
 	}
-	tid := taskListID(cfg)
+	tid := TaskListID(cfg)
 	id, err := v2CreateTask(tid, in.Subject, in.Description, in.ActiveForm, in.Metadata)
 	if err != nil {
 		return "", true, err
@@ -569,7 +569,7 @@ func TaskGetFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 	if strings.TrimSpace(in.TaskID) == "" {
 		return "", true, fmt.Errorf("taskId is required")
 	}
-	t, err := v2GetTask(taskListID(cfg), in.TaskID)
+	t, err := v2GetTask(TaskListID(cfg), in.TaskID)
 	if err != nil {
 		return "", true, err
 	}
@@ -598,7 +598,7 @@ func TaskListFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool
 	if !commands.TodoV2Enabled() {
 		return "", true, errTodoV2Disabled("TaskList")
 	}
-	all, err := v2ListTasks(taskListID(cfg))
+	all, err := v2ListTasks(TaskListID(cfg))
 	if err != nil {
 		return "", true, err
 	}
@@ -667,7 +667,7 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 	if strings.TrimSpace(in.TaskID) == "" {
 		return "", true, fmt.Errorf("taskId is required")
 	}
-	tid := taskListID(cfg)
+	tid := TaskListID(cfg)
 	existing, err := v2GetTask(tid, in.TaskID)
 	if err != nil {
 		return "", true, err

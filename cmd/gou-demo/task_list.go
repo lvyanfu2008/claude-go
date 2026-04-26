@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,20 +15,22 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
-	"goc/commands"
+	"goc/tools"
 )
 
-// taskListEntry mirrors tools.v2Task for display (decoupled from tools package).
+// taskListEntry mirrors tools.v2Task for display (decoupled from full validation).
 type taskListEntry struct {
-	ID        string `json:"id"`
-	Subject   string `json:"subject"`
-	Status    string `json:"status"`
-	BlockedBy []string `json:"blockedBy"`
+	ID        string         `json:"id"`
+	Subject   string         `json:"subject"`
+	Status    string         `json:"status"`
+	BlockedBy []string       `json:"blockedBy"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // taskListModel manages reading and rendering a task list from disk.
 type taskListModel struct {
 	mu           sync.Mutex
+	toolCfg      tools.Config // SessionID (and future fields) for [tools.TaskListID] / tool parity
 	tasks        []taskListEntry
 	completedAt  map[string]time.Time // task ID → when it transitioned to completed
 	lastSnapshot map[string]string    // task ID → last known status
@@ -47,79 +50,37 @@ const (
 	defaultPollInterval   = 2 * time.Second
 )
 
-func newTaskListModel() *taskListModel {
+func newTaskListModel(sessionID string) *taskListModel {
 	return &taskListModel{
+		toolCfg:      tools.Config{SessionID: strings.TrimSpace(sessionID)},
 		completedAt:  make(map[string]time.Time),
 		lastSnapshot: make(map[string]string),
 		pollTick:     defaultPollInterval,
 	}
 }
 
-// taskListID returns the task list directory name, matching TS getTaskListId logic.
-func taskListID() string {
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TASK_LIST_ID")); v != "" {
-		return v
+// taskMetadataInternal matches TS listTasks filter: exclude tasks with metadata._internal.
+func taskMetadataInternal(meta map[string]any) bool {
+	if meta == nil {
+		return false
 	}
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TEAM_NAME")); v != "" {
-		return v
+	v, ok := meta["_internal"]
+	if !ok {
+		return false
 	}
-	// Fall back to session-based or default
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME")); v != "" {
-		return v
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		s := strings.TrimSpace(strings.ToLower(t))
+		return s != "" && s != "false" && s != "0"
+	case float64:
+		return t != 0
+	case int:
+		return t != 0
+	default:
+		return v != nil
 	}
-	return "default"
-}
-
-func tasksDir() string {
-	base := commands.ClaudeConfigHome()
-	id := taskListID()
-	// Sanitize: keep alphanumeric, underscore, hyphen
-	sanitized := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
-			return r
-		}
-		return '-'
-	}, id)
-	return filepath.Join(base, "tasks", sanitized)
-}
-
-// readTasksFromDisk reads all task JSON files from the task directory.
-// Returns nil if the directory doesn't exist or can't be read.
-func readTasksFromDisk() []taskListEntry {
-	dir := tasksDir()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-
-	var tasks []taskListEntry
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		// Skip lock and high water mark files
-		if e.Name() == ".lock" || e.Name() == ".highwatermark" {
-			continue
-		}
-		p := filepath.Join(dir, e.Name())
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		var t taskListEntry
-		if err := json.Unmarshal(data, &t); err != nil {
-			continue
-		}
-		if t.ID == "" || t.Subject == "" {
-			continue
-		}
-		tasks = append(tasks, t)
-	}
-
-	sort.Slice(tasks, func(i, j int) bool {
-		return tasks[i].ID < tasks[j].ID
-	})
-	return tasks
 }
 
 // poll fetches tasks from disk and updates internal state.
@@ -129,10 +90,9 @@ func (tl *taskListModel) poll() bool {
 	defer tl.mu.Unlock()
 
 	now := time.Now()
-	tasks := readTasksFromDisk()
+	tasks := tl.readTasksFromDiskUnlocked()
 
 	if len(tasks) == 0 {
-		// No tasks: keep invisible
 		tl.visible = false
 		tl.tasks = nil
 		return true
@@ -156,7 +116,6 @@ func (tl *taskListModel) poll() bool {
 		if now.Sub(ts) > recentCompletedTTL {
 			delete(tl.completedAt, id)
 		}
-		// Also remove if task is no longer in the list
 		found := false
 		for _, t := range tasks {
 			if t.ID == id {
@@ -169,7 +128,6 @@ func (tl *taskListModel) poll() bool {
 		}
 	}
 
-	// Auto-hide when all tasks completed for >= hideAfterComplete
 	allDone := len(tasks) > 0
 	for _, t := range tasks {
 		if t.Status != "completed" {
@@ -195,6 +153,47 @@ func (tl *taskListModel) poll() bool {
 	return true
 }
 
+// readTasksFromDiskUnlocked is like readTasksFromDisk but assumes tl.mu is held.
+func (tl *taskListModel) readTasksFromDiskUnlocked() []taskListEntry {
+	id := tools.TaskListID(tl.toolCfg)
+	dir := tools.V2TasksDir(id)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var tasks []taskListEntry
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if e.Name() == ".lock" || e.Name() == ".highwatermark" {
+			continue
+		}
+		p := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var t taskListEntry
+		if err := json.Unmarshal(data, &t); err != nil {
+			continue
+		}
+		if t.ID == "" || t.Subject == "" {
+			continue
+		}
+		if taskMetadataInternal(t.Metadata) {
+			continue
+		}
+		tasks = append(tasks, t)
+	}
+
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].ID < tasks[j].ID
+	})
+	return tasks
+}
+
 // isVisible reports whether the task list should be rendered.
 func (tl *taskListModel) isVisible() bool {
 	tl.mu.Lock()
@@ -202,7 +201,88 @@ func (tl *taskListModel) isVisible() bool {
 	return tl.visible
 }
 
-// view renders the task list into a string.
+// prioritizeTasks returns tasks ordered for display when space is limited (caller must hold tl.mu for completedAt).
+func (tl *taskListModel) prioritizeTasks(tasks []taskListEntry, now time.Time, unresolvedIDs map[string]bool) []taskListEntry {
+	var recentCompleted, olderCompleted, inProgress, pending []taskListEntry
+	for _, t := range tasks {
+		switch t.Status {
+		case "completed":
+			ct, isRecent := tl.completedAt[t.ID]
+			if isRecent && now.Sub(ct) < recentCompletedTTL {
+				recentCompleted = append(recentCompleted, t)
+			} else {
+				olderCompleted = append(olderCompleted, t)
+			}
+		case "in_progress":
+			inProgress = append(inProgress, t)
+		default:
+			pending = append(pending, t)
+		}
+	}
+
+	sort.Slice(recentCompleted, func(i, j int) bool { return recentCompleted[i].ID < recentCompleted[j].ID })
+	sort.Slice(inProgress, func(i, j int) bool { return inProgress[i].ID < inProgress[j].ID })
+	sort.Slice(pending, func(i, j int) bool {
+		aBlocked := false
+		bBlocked := false
+		for _, bid := range pending[i].BlockedBy {
+			if unresolvedIDs[bid] {
+				aBlocked = true
+				break
+			}
+		}
+		for _, bid := range pending[j].BlockedBy {
+			if unresolvedIDs[bid] {
+				bBlocked = true
+				break
+			}
+		}
+		if aBlocked != bBlocked {
+			return bBlocked
+		}
+		return pending[i].ID < pending[j].ID
+	})
+	sort.Slice(olderCompleted, func(i, j int) bool { return olderCompleted[i].ID < olderCompleted[j].ID })
+
+	return append(append(append(recentCompleted, inProgress...), pending...), olderCompleted...)
+}
+
+// taskListStandaloneHeader matches TS TaskListV2 isStandalone summary line: "N tasks (X done, [Y in progress, ]Z open)".
+func taskListStandaloneHeader(tasks []taskListEntry) string {
+	if len(tasks) == 0 {
+		return ""
+	}
+	total := len(tasks)
+	completed := 0
+	inProgress := 0
+	pending := 0
+	for _, t := range tasks {
+		switch t.Status {
+		case "completed":
+			completed++
+		case "in_progress":
+			inProgress++
+		default:
+			pending++
+		}
+	}
+	faint := lipgloss.NewStyle().Faint(true)
+	num := lipgloss.NewStyle().Faint(true).Bold(true)
+	var b strings.Builder
+	b.WriteString(num.Render(strconv.Itoa(total)))
+	b.WriteString(faint.Render(" tasks ("))
+	b.WriteString(num.Render(strconv.Itoa(completed)))
+	b.WriteString(faint.Render(" done, "))
+	if inProgress > 0 {
+		b.WriteString(num.Render(strconv.Itoa(inProgress)))
+		b.WriteString(faint.Render(" in progress, "))
+	}
+	b.WriteString(num.Render(strconv.Itoa(pending)))
+	b.WriteString(faint.Render(" open)"))
+	return b.String()
+}
+
+// view renders the task list into a string (isStandalone-style: summary line + rows).
 // Returns empty string if not visible.
 func (tl *taskListModel) view(maxDisplay int, columns int) string {
 	tl.mu.Lock()
@@ -215,7 +295,6 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 	tasks := tl.tasks
 	now := time.Now()
 
-	// Build unresolved IDs set (non-completed)
 	unresolvedIDs := make(map[string]bool)
 	for _, t := range tasks {
 		if t.Status != "completed" {
@@ -223,86 +302,39 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		}
 	}
 
-	// Priority ordering: recent completed → in_progress → pending → older completed
-	needsTruncation := len(tasks) > maxDisplay
+	needsTruncation := maxDisplay >= 0 && len(tasks) > maxDisplay
+	if maxDisplay < 0 {
+		maxDisplay = 0
+	}
 
 	var visible, hidden []taskListEntry
 
 	if needsTruncation {
-		var recentCompleted, olderCompleted, inProgress, pending []taskListEntry
-		for _, t := range tasks {
-			switch t.Status {
-			case "completed":
-				ct, isRecent := tl.completedAt[t.ID]
-				if isRecent && now.Sub(ct) < recentCompletedTTL {
-					recentCompleted = append(recentCompleted, t)
-				} else {
-					olderCompleted = append(olderCompleted, t)
-				}
-			case "in_progress":
-				inProgress = append(inProgress, t)
-			default: // pending
-				pending = append(pending, t)
-			}
-		}
-
-		// Sort each group by ID
-		sort.Slice(recentCompleted, func(i, j int) bool { return recentCompleted[i].ID < recentCompleted[j].ID })
-		sort.Slice(inProgress, func(i, j int) bool { return inProgress[i].ID < inProgress[j].ID })
-		sort.Slice(pending, func(i, j int) bool {
-			aBlocked := false
-			bBlocked := false
-			for _, bid := range pending[i].BlockedBy {
-				if unresolvedIDs[bid] {
-					aBlocked = true
-					break
-				}
-			}
-			for _, bid := range pending[j].BlockedBy {
-				if unresolvedIDs[bid] {
-					bBlocked = true
-					break
-				}
-			}
-			if aBlocked != bBlocked {
-				return bBlocked // unblocked first
-			}
-			return pending[i].ID < pending[j].ID
-		})
-		sort.Slice(olderCompleted, func(i, j int) bool { return olderCompleted[i].ID < olderCompleted[j].ID })
-
-		prioritized := append(append(append(recentCompleted, inProgress...), pending...), olderCompleted...)
-		if maxDisplay > 0 && maxDisplay < len(prioritized) {
-			visible = prioritized[:maxDisplay]
-			hidden = prioritized[maxDisplay:]
+		pri := tl.prioritizeTasks(tasks, now, unresolvedIDs)
+		if maxDisplay == 0 {
+			visible = nil
+			hidden = pri
 		} else {
-			visible = prioritized
+			if maxDisplay < len(pri) {
+				visible = pri[:maxDisplay]
+				hidden = pri[maxDisplay:]
+			} else {
+				visible = pri
+			}
 		}
 	} else {
 		visible = tasks
 	}
 
-	// Count stats
-	completedCount := 0
-	inProgressCount := 0
-	pendingCount := 0
-	for _, t := range tasks {
-		switch t.Status {
-		case "completed":
-			completedCount++
-		case "in_progress":
-			inProgressCount++
-		default:
-			pendingCount++
-		}
+	var b strings.Builder
+	if header := taskListStandaloneHeader(tasks); header != "" {
+		b.WriteString(header)
+		b.WriteByte('\n')
 	}
 
-	var b strings.Builder
-
-	// Render each visible task
 	for _, t := range visible {
 		var icon string
-		var color color.Color
+		var c color.Color
 		isBold := false
 		isStrike := false
 		isDim := false
@@ -310,19 +342,18 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		switch t.Status {
 		case "completed":
 			icon = taskIconCompleted
-			color = lipgloss.Color("42") // green
+			c = lipgloss.Color("42")
 			isStrike = true
 			isDim = true
 		case "in_progress":
 			icon = taskIconInProgress
-			color = lipgloss.Color("141") // claude purple
+			c = lipgloss.Color("141")
 			isBold = true
-		default: // pending
+		default:
 			icon = taskIconPending
 			isDim = true
 		}
 
-		// Check if blocked
 		var openBlockers []string
 		for _, bid := range t.BlockedBy {
 			if unresolvedIDs[bid] {
@@ -331,8 +362,7 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		}
 		isBlocked := len(openBlockers) > 0 && t.Status != "completed"
 
-		// Truncate subject to fit terminal width
-		avail := columns - 20 // space for icon, gutter, blocking info
+		avail := columns - 20
 		if avail < 15 {
 			avail = 15
 		}
@@ -341,11 +371,9 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 			subject = subject[:avail-1] + "…"
 		}
 
-		// Build icon
-		iconStyle := lipgloss.NewStyle().Foreground(color)
+		iconStyle := lipgloss.NewStyle().Foreground(c)
 		b.WriteString(iconStyle.Render(icon + " "))
 
-		// Build subject
 		subjStyle := lipgloss.NewStyle()
 		if isBold {
 			subjStyle = subjStyle.Bold(true)
@@ -358,7 +386,6 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		}
 		b.WriteString(subjStyle.Render(subject))
 
-		// Blocked indicator
 		if isBlocked {
 			sort.Strings(openBlockers)
 			blockedIDs := make([]string, len(openBlockers))
@@ -372,7 +399,6 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		b.WriteByte('\n')
 	}
 
-	// Hidden tasks summary
 	if len(hidden) > 0 {
 		hiddenPending := 0
 		hiddenInProg := 0
@@ -404,40 +430,6 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 	}
 
 	return b.String()
-}
-
-// taskListSummary returns a one-line task count for the header.
-func (tl *taskListModel) taskCountSummary() string {
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	if len(tl.tasks) == 0 {
-		return ""
-	}
-
-	total := len(tl.tasks)
-	completed := 0
-	inProg := 0
-	pending := 0
-	for _, t := range tl.tasks {
-		switch t.Status {
-		case "completed":
-			completed++
-		case "in_progress":
-			inProg++
-		default:
-			pending++
-		}
-	}
-
-	var parts []string
-	parts = append(parts, fmt.Sprintf("%d done", completed))
-	if inProg > 0 {
-		parts = append(parts, fmt.Sprintf("%d in progress", inProg))
-	}
-	parts = append(parts, fmt.Sprintf("%d open", pending))
-
-	return fmt.Sprintf("%d tasks (%s)", total, strings.Join(parts, ", "))
 }
 
 // taskListTickMsg is sent by the polling tick timer.
