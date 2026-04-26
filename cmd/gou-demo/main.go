@@ -634,6 +634,9 @@ type model struct {
 
 	// New message rendering system integration
 	msgRenderer *MessageRendererIntegration
+
+	// Task list (mirrors TS TaskListV2)
+	taskList *taskListModel
 }
 
 func main() {
@@ -772,6 +775,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		readFileState:       localtools.NewReadFileState(),
 		permissionMode:      gouDemoPermissionModeFromEnv(),
 		useMsgViewport:      gouDemoBubblesViewport(),
+		taskList:            newTaskListModel(),
 	}
 }
 
@@ -803,6 +807,8 @@ func (m *model) Init() tea.Cmd {
 	if gouDemoToolUseSummaryDelay() > 0 {
 		cmds = append(cmds, tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} }))
 	}
+	cmds = append(cmds, taskListTickCmd(m.taskList))
+
 	if len(cmds) == 0 {
 		return nil
 	}
@@ -1069,6 +1075,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ccbstream.Msg:
 		return m.handleUpdateCCBStream(msg)
+
+	case taskListTickMsg:
+		m.taskList.poll()
+		return m, taskListTickCmd(m.taskList)
 	}
 
 	if syn, ok := prompt.SyntheticTTYKeyFromUnknownMsg(msg); ok {
@@ -1426,6 +1436,20 @@ func (m *model) View() tea.View {
 		if len(streamRows) > 0 {
 			b.WriteString(strings.Join(streamRows, "\n"))
 			b.WriteByte('\n')
+		}
+		// Task list (inline, after stream rows)
+		if m.taskList != nil && m.taskList.isVisible() {
+			maxDisplay := 5
+			if m.height <= 10 {
+				maxDisplay = 0
+			} else {
+				maxDisplay = min(10, max(3, m.height-14))
+			}
+			if tl := m.taskList.view(maxDisplay, m.cols); tl != "" {
+				indented := applyMessagePaneGutter(tl, m.width)
+				b.WriteString(indented)
+				b.WriteByte('\n')
+			}
 		}
 	}
 	if s := m.statusLineString(); s != "" {
