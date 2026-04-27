@@ -34,25 +34,37 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 			continue
 		}
 		asstUUID := m.UUID
-		if i+1 < len(messages) {
-			next := messagerow.NormalizeMessageJSON(messages[i+1])
-			if next.Type == types.MessageTypeUser {
-				patched, nAdded, err := patchUserWithMissingToolResults(next, required, asstUUID)
-				if err != nil {
-					return nil, err
-				}
-				if nAdded > 0 {
-					diaglog.LineOrStderr("[tool-pairing] patched user message: added %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
-						nAdded, asstUUID, missingToolResultIDs(next, required))
-				}
-				out = append(out, patched)
-				i++
-				continue
+		j := i + 1
+		var userRun []types.Message
+		for j < len(messages) {
+			u := messagerow.NormalizeMessageJSON(messages[j])
+			if u.Type != types.MessageTypeUser {
+				break
 			}
+			userRun = append(userRun, u)
+			j++
 		}
-		diaglog.LineOrStderr("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
-			len(required), asstUUID, required)
-		out = append(out, syntheticUserWithToolResults(required, asstUUID))
+		if len(userRun) == 0 {
+			diaglog.LineOrStderr("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
+				len(required), asstUUID, required)
+			out = append(out, syntheticUserWithToolResults(required, asstUUID))
+			continue
+		}
+		if UserMessagesCoverAssistantToolUses(m, userRun) {
+			out = append(out, userRun...)
+			i = j - 1
+			continue
+		}
+		patchedRun, nAdded, missLog, err := patchConsecutiveUserRunForMissingToolResults(userRun, required, asstUUID)
+		if err != nil {
+			return nil, err
+		}
+		if nAdded > 0 {
+			diaglog.LineOrStderr("[tool-pairing] patched user message: added %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
+				nAdded, asstUUID, missLog)
+		}
+		out = append(out, patchedRun...)
+		i = j - 1
 	}
 	return out, nil
 }
@@ -80,49 +92,44 @@ func toolUseIDsInAssistant(m *types.Message) []string {
 	return ids
 }
 
-// missingToolResultIDs returns required ids that are absent from the user message
-// (best-effort for logging; ignores parse errors).
-func missingToolResultIDs(u types.Message, required []string) []string {
-	m, err := cloneMessage(u)
-	if err != nil {
-		return required
-	}
-	_ = ensureInnerFromContent(&m)
-	inner, err := getInner(&m)
-	if err != nil {
-		return required
-	}
-	blocks, err := parseContentArrayOrString(inner.Content)
-	if err != nil {
-		return required
-	}
+// patchConsecutiveUserRunForMissingToolResults treats all consecutive user messages after
+// an assistant as one run. If tool_result ids are split across those rows, we do not add
+// synthetics (the run is complete). If something is still missing, we append synthetic
+// tool_result blocks to the last user in the run only.
+func patchConsecutiveUserRunForMissingToolResults(userRun []types.Message, required []string, asstUUID string) ([]types.Message, int, []string, error) {
 	have := make(map[string]struct{})
-	for _, b := range blocks {
-		if t, _ := b["type"].(string); t != "tool_result" {
-			continue
-		}
-		if tid, _ := b["tool_use_id"].(string); tid != "" {
-			have[tid] = struct{}{}
+	for i := range userRun {
+		for _, id := range toolResultIDsInUserMessage(&userRun[i]) {
+			have[id] = struct{}{}
 		}
 	}
-	var out []string
+	var missing []string
 	for _, id := range required {
 		if _, ok := have[id]; !ok {
-			out = append(out, id)
+			missing = append(missing, id)
 		}
 	}
-	return out
+	if len(missing) == 0 {
+		return userRun, 0, nil, nil
+	}
+	last := userRun[len(userRun)-1]
+	patched, nAdded, err := patchUserAppendingMissingToolResultBlocks(last, missing, asstUUID)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	out := append(append([]types.Message{}, userRun[:len(userRun)-1]...), patched)
+	return out, nAdded, missing, nil
 }
 
-func patchUserWithMissingToolResults(u types.Message, required []string, sourceAsstUUID string) (types.Message, int, error) {
-	m, err := cloneMessage(u)
+func patchUserAppendingMissingToolResultBlocks(m types.Message, missing []string, sourceAsstUUID string) (types.Message, int, error) {
+	m2, err := cloneMessage(m)
 	if err != nil {
 		return types.Message{}, 0, err
 	}
-	if err := ensureInnerFromContent(&m); err != nil {
+	if err := ensureInnerFromContent(&m2); err != nil {
 		return types.Message{}, 0, err
 	}
-	inner, err := getInner(&m)
+	inner, err := getInner(&m2)
 	if err != nil {
 		return types.Message{}, 0, err
 	}
@@ -130,22 +137,8 @@ func patchUserWithMissingToolResults(u types.Message, required []string, sourceA
 	if err != nil {
 		return types.Message{}, 0, err
 	}
-	have := make(map[string]struct{})
-	for _, b := range blocks {
-		if t, _ := b["type"].(string); t != "tool_result" {
-			continue
-		}
-		tid, _ := b["tool_use_id"].(string)
-		if tid != "" {
-			have[tid] = struct{}{}
-		}
-	}
-	var nAdded int
-	for _, id := range required {
-		if _, ok := have[id]; ok {
-			continue
-		}
-		nAdded++
+	nAdded := len(missing)
+	for _, id := range missing {
 		blocks = append(blocks, map[string]any{
 			"type":        "tool_result",
 			"tool_use_id": id,
@@ -159,14 +152,14 @@ func patchUserWithMissingToolResults(u types.Message, required []string, sourceA
 		return types.Message{}, 0, err
 	}
 	inner.Content = raw
-	if err := setInner(&m, inner); err != nil {
+	if err := setInner(&m2, inner); err != nil {
 		return types.Message{}, 0, err
 	}
-	syncTopLevelContent(&m)
+	syncTopLevelContent(&m2)
 	if sourceAsstUUID != "" {
-		m.SourceToolAssistantUUID = &sourceAsstUUID
+		m2.SourceToolAssistantUUID = &sourceAsstUUID
 	}
-	return m, nAdded, nil
+	return m2, nAdded, nil
 }
 
 func syntheticUserWithToolResults(ids []string, sourceAsstUUID string) types.Message {

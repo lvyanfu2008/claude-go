@@ -64,14 +64,24 @@ func toolResultIDsInUserMessage(m *types.Message) []string {
 	}
 	var ids []string
 	for _, b := range blocks {
-		if t, _ := b["type"].(string); t != "tool_result" {
-			continue
+		if id := toolResultBlockID(b); id != "" {
+			ids = append(ids, id)
 		}
-		id, _ := b["tool_use_id"].(string)
-		if id == "" {
-			continue
-		}
-		ids = append(ids, id)
 	}
 	return ids
+}
+
+// toolResultBlockID returns the tool use/call id for a tool_result content block
+// (Anthropic tool_use_id or OpenAI-style tool_call_id on replay).
+func toolResultBlockID(b map[string]any) string {
+	if t, _ := b["type"].(string); t != "tool_result" {
+		return ""
+	}
+	if id, _ := b["tool_use_id"].(string); id != "" {
+		return id
+	}
+	if id, _ := b["tool_call_id"].(string); id != "" {
+		return id
+	}
+	return ""
 }

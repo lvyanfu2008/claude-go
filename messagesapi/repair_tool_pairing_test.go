@@ -96,6 +96,60 @@ func TestRepairToolUseToolResultPairing_patchesUserWhenPartial(t *testing.T) {
 	}
 }
 
+func TestRepairToolUseToolResultPairing_noopWhenToolResultsSplitAcrossUsers(t *testing.T) {
+	asst := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "a1",
+		Message: mustJSON(t, map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{"type": "tool_use", "id": "call_01", "name": "x", "input": map[string]any{}},
+				map[string]any{"type": "tool_use", "id": "call_02", "name": "y", "input": map[string]any{}},
+			},
+		}),
+		Content: mustJSON(t, []any{
+			map[string]any{"type": "tool_use", "id": "call_01", "name": "x", "input": map[string]any{}},
+			map[string]any{"type": "tool_use", "id": "call_02", "name": "y", "input": map[string]any{}},
+		}),
+	}
+	u1 := types.Message{
+		Type: types.MessageTypeUser,
+		UUID: "u1",
+		Message: mustJSON(t, map[string]any{
+			"role":    "user",
+			"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_01", "content": "a"}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_result", "tool_use_id": "call_01", "content": "a"}}),
+	}
+	u2 := types.Message{
+		Type: types.MessageTypeUser,
+		UUID: "u2",
+		Message: mustJSON(t, map[string]any{
+			"role":    "user",
+			"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_02", "content": "b"}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_result", "tool_use_id": "call_02", "content": "b"}}),
+	}
+	out, err := RepairToolUseToolResultPairing([]types.Message{asst, u1, u2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 3 {
+		t.Fatalf("len=%d want 3 (no synthetic rows)", len(out))
+	}
+	inner, err := getInner(&out[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("u1 should stay single block, got %d", len(blocks))
+	}
+}
+
 func TestUserMessagesCoverAssistantToolUses(t *testing.T) {
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
