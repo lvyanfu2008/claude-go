@@ -1,13 +1,10 @@
 // Command gen-tool-parity reads tools/toolparity/catalog.json and writes tools/toolparity/TS_GO_TOOL_PARITY.md.
 //
-// Usage (from the claude-go / goc module root):
+// Usage:
 //
 //	go run ./cmd/gen-tool-parity
 //
-// Resolves the generator root by walking up from the current working directory until
-// tools/toolparity/catalog.json exists, so a cwd inside a nested go.mod (e.g. go-test/)
-// still finds the main module. A nested module cannot `go run ../cmd/...` — use a
-// built binary from the parent module, or run [go run] from the goc root.
+// Finds the module root by walking up until go.mod is found (cwd may be any subdirectory).
 package main
 
 import (
@@ -39,15 +36,10 @@ type entry struct {
 	GoLocation string   `json:"go_location"`
 }
 
-// findToolParityRoot walks up from start until a directory contains
-// tools/toolparity/catalog.json. This is the claude-go module root even when
-// cwd is a nested module (e.g. go-test/ with its own go.mod) — the first go.mod
-// would be the wrong root for this generator.
-func findToolParityRoot(start string) (string, error) {
+func findModuleRoot(start string) (string, error) {
 	dir := start
-	for i := 0; i < 64; i++ {
-		cat := filepath.Join(dir, "tools", "toolparity", "catalog.json")
-		if _, err := os.Stat(cat); err == nil {
+	for i := 0; i < 32; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
@@ -56,7 +48,7 @@ func findToolParityRoot(start string) (string, error) {
 		}
 		dir = parent
 	}
-	return "", fmt.Errorf("tools/toolparity/catalog.json not found above %s", start)
+	return "", fmt.Errorf("go.mod not found from %s", start)
 }
 
 func main() {
@@ -65,7 +57,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	modRoot, err := findToolParityRoot(wd)
+	modRoot, err := findModuleRoot(wd)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "gen-tool-parity:", err)
 		os.Exit(1)
