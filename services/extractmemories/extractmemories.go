@@ -115,24 +115,38 @@ func extractMemoriesPassportOrHost() bool {
 //
 // Mirrors TS executeExtractMemories.
 func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, error) {
+	cwdForLog := strings.TrimSpace(p.Cwd)
+	if cwdForLog == "" {
+		cwdForLog = "."
+	}
+	fileExtractMemoriesLogf("enter cwd=%q total_messages=%d last_cursor=%q", cwdForLog, len(p.Messages), state.LastMemoryMessageUUID)
+
 	// Guard: auto memory must be enabled.
 	if !claudemd.IsAutoMemoryEnabled() {
+		fileExtractMemoriesLogf("skip reason=auto_memory_disabled")
 		return nil, nil
 	}
 
 	// Guard: skip if running inside a sub-agent (only the top-level conversation extracts).
 	if p.ToolUseContext.AgentID != nil && strings.TrimSpace(*p.ToolUseContext.AgentID) != "" {
+		aid := strings.TrimSpace(*p.ToolUseContext.AgentID)
+		if len(aid) > 64 {
+			aid = aid[:64] + "…"
+		}
+		fileExtractMemoriesLogf("skip reason=subagent agent_id=%q", aid)
 		return nil, nil
 	}
 
 	// Guard: feature flag gate (TS tengu_passport_quail, default false) or host
 	// opt-in (GOC_EXTRACT_MEMORIES=1) for environments without GrowthBook.
 	if !extractMemoriesPassportOrHost() {
+		fileExtractMemoriesLogf("skip reason=passport_or_host extract_memories_flag=false")
 		return nil, nil
 	}
 
 	// Guard: skip if --simple mode.
 	if strings.TrimSpace(os.Getenv("CLAUDE_CODE_SIMPLE")) != "" {
+		fileExtractMemoriesLogf("skip reason=simple_mode CLAUDE_CODE_SIMPLE_set")
 		return nil, nil
 	}
 
@@ -142,8 +156,10 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	}
 	memoryDir := claudemd.GetAutoMemPath(cwd)
 	if memoryDir == "" {
+		fileExtractMemoriesLogf("skip reason=empty_memory_dir cwd=%q", cwd)
 		return nil, nil
 	}
+	fileExtractMemoriesLogf("memory_dir=%q", memoryDir)
 
 	_ = claudemd.EnsureMemoryDirExists(memoryDir)
 
@@ -155,17 +171,21 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	turnCount := state.TurnsSinceLastExtraction
 	state.mu.Unlock()
 	if turnCount < throttle {
+		fileExtractMemoriesLogf("skip reason=throttle turn_since_extraction=%d throttle=%d", turnCount, throttle)
 		return nil, nil
 	}
 
 	// Determine which messages are "new" since the last extraction.
 	newMessages := newMessagesSinceCursor(p.Messages, state.LastMemoryMessageUUID)
 	if len(newMessages) == 0 {
+		fileExtractMemoriesLogf("skip reason=no_new_messages")
 		return nil, nil
 	}
+	fileExtractMemoriesLogf("new_messages=%d", len(newMessages))
 
 	// Check if the main agent already wrote memory files in this turn.
 	if hasMemoryWritesSince(p.Messages, state.LastMemoryMessageUUID) {
+		fileExtractMemoriesLogf("skip reason=main_agent_already_wrote_memory")
 		// Advance cursor to avoid re-processing these messages (TS line 348-359).
 		if len(p.Messages) > 0 {
 			last := p.Messages[len(p.Messages)-1]
@@ -179,11 +199,14 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	// Build the extraction prompt and run the sub-agent.
 	writtenPaths, err := runExtractionSubagent(ctx, p, memoryDir, newMessages)
 	if err != nil {
+		fileExtractMemoriesLogf("error subagent: %v", err)
 		return nil, fmt.Errorf("extractmemories: %w", err)
 	}
+	fileExtractMemoriesLogf("subagent raw_written_paths=%d paths=%q", len(writtenPaths), writtenPaths)
 
 	// Filter out MEMORY.md itself.
 	memoryPaths := filterMemoryPaths(writtenPaths, memoryDir)
+	fileExtractMemoriesLogf("after_filter memory_paths=%d paths=%q", len(memoryPaths), memoryPaths)
 
 	// Update cursor: use the UUID of the last message in the full list.
 	if len(p.Messages) > 0 {
@@ -195,6 +218,7 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	}
 
 	if len(memoryPaths) == 0 {
+		fileExtractMemoriesLogf("done reason=no_files_after_filter (no memory_saved message)")
 		return nil, nil
 	}
 
@@ -206,6 +230,9 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 		}
 		msg := createMemorySavedMessage(memoryPaths, newUUID)
 		p.AppendSystemMessage(msg)
+		fileExtractMemoriesLogf("done memory_saved paths=%q append_callback=true", memoryPaths)
+	} else {
+		fileExtractMemoriesLogf("done memory_paths=%d append_callback=nil (no memory_saved message)", len(memoryPaths))
 	}
 
 	return memoryPaths, nil
@@ -364,6 +391,12 @@ func extractWrittenPaths(messages []types.Message) []string {
 // restricted tool access.  It builds the extraction prompt from newMessages
 // and returns the assistant messages produced by the sub-agent.
 func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir string, newMessages []types.Message) ([]string, error) {
+	subStart := time.Now()
+	fileExtractMemoriesLogf("subagent query start new_messages=%d max_turns=%d", len(newMessages), maxExtractionTurns)
+	defer func() {
+		fileExtractMemoriesLogf("subagent query end duration_ms=%d", time.Since(subStart).Milliseconds())
+	}()
+
 	// Build the extraction prompt.
 	prompt := buildExtractionPrompt(p, newMessages, memoryDir)
 
