@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -426,12 +427,23 @@ func assistantToolUseSummary(messages []types.Message) string {
 	return "tool_uses=" + strings.Join(parts, " ")
 }
 
+// extractionInitialMessages returns forkContextMessages + extraction user message.
+// Mirrors TS runForkedAgent initialMessages = [...forkContextMessages, ...promptMessages].
+func extractionInitialMessages(parent []types.Message, extractionUser types.Message) []types.Message {
+	return append(slices.Clone(parent), extractionUser)
+}
+
 // runExtractionSubagent runs a lightweight sub-agent via query.Query() with
 // restricted tool access.  It builds the extraction prompt from newMessages
 // and returns the assistant messages produced by the sub-agent.
+//
+// Message order matches TS [runForkedAgent]: initialMessages = forkContextMessages + promptMessages
+// (claude-code-best src/utils/forkedAgent.ts), so the model sees the parent conversation
+// before the extraction user turn — "messages above" in the extract prompt.
 func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir string, newMessages []types.Message) ([]string, error) {
 	subStart := time.Now()
-	fileExtractMemoriesLogf("subagent query start new_messages=%d max_turns=%d", len(newMessages), maxExtractionTurns)
+	fileExtractMemoriesLogf("subagent query start fork_messages=%d new_messages_in_prompt=%d max_turns=%d",
+		len(p.Messages), len(newMessages), maxExtractionTurns)
 	defer func() {
 		fileExtractMemoriesLogf("subagent query end duration_ms=%d", time.Since(subStart).Milliseconds())
 	}()
@@ -439,13 +451,12 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 	// Build the extraction prompt.
 	prompt := buildExtractionPrompt(p, newMessages, memoryDir)
 
-	// Build sub-agent messages: just the extraction prompt as a user message.
 	newUUID := p.NewUUID
 	if newUUID == nil {
 		newUUID = query.RandomUUID
 	}
 	userMsg := buildExtractionUserMessage(prompt, newUUID)
-	msgs := []types.Message{userMsg}
+	msgs := extractionInitialMessages(p.Messages, userMsg)
 
 	// Clone the tool context for the sub-agent.
 	tc := p.ToolUseContext
@@ -466,6 +477,8 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 	qp := query.QueryParams{
 		Messages:        msgs,
 		SystemPrompt:    p.SystemPrompt,
+		UserContext:     p.UserContext,
+		SystemContext:   p.SystemContext,
 		ToolUseContext:  tc,
 		QuerySource:     types.QuerySource("extract_memories"),
 		StreamingParity: true,

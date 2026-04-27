@@ -535,6 +535,28 @@ func TestBuildExtractionPromptRelaxThreshold(t *testing.T) {
 	})
 }
 
+func TestExtractionInitialMessagesForkOrder(t *testing.T) {
+	parent := []types.Message{
+		makeMsg("m1", types.MessageTypeUser),
+		makeMsg("m2", types.MessageTypeAssistant),
+	}
+	extra := buildExtractionUserMessage("extract prompt", func() string { return "u-final" })
+	got := extractionInitialMessages(parent, extra)
+	if len(got) != 3 {
+		t.Fatalf("len=%d; want 3 (parent + extraction user)", len(got))
+	}
+	if got[0].UUID != "m1" || got[1].UUID != "m2" {
+		t.Fatalf("parent prefix mutated or wrong: %#v", got)
+	}
+	if got[2].UUID != "u-final" {
+		t.Fatalf("last message should be extraction user, got UUID %q", got[2].UUID)
+	}
+	// Parent slice must not gain a third element.
+	if len(parent) != 2 {
+		t.Fatalf("parent len=%d; clone must not append in place", len(parent))
+	}
+}
+
 func TestAssistantToolUseSummary(t *testing.T) {
 	tb, _ := json.Marshal(map[string]any{
 		"content": []map[string]any{
