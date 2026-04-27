@@ -11,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"goc/ccb-engine/apilog"
 	"goc/ccb-engine/bashzog"
+	"goc/ccb-engine/diaglog"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
@@ -451,10 +453,21 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		if len(sidechainPending) == 0 {
 			return
 		}
+		first := sidechainPending[0]
+		rest := sidechainPending[1:]
+		needRepair := messagesapi.AssistantHasToolUse(first) &&
+			!messagesapi.UserMessagesCoverAssistantToolUses(first, rest)
+		if !needRepair {
+			recordSidechainBatch(sidechainPending)
+			sidechainPending = nil
+			return
+		}
 		fixed, err := messagesapi.RepairToolUseToolResultPairing(sidechainPending)
 		if err != nil {
 			fixed = sidechainPending
 		}
+		diaglog.LineOrStderr("[sidechain] incomplete tool round before flush; applied repair (assistant=%s pending_msgs=%d)",
+			first.UUID, len(sidechainPending))
 		recordSidechainBatch(fixed)
 		sidechainPending = nil
 	}
@@ -491,6 +504,10 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 					first := sidechainPending[0]
 					rest := sidechainPending[1:]
 					if messagesapi.UserMessagesCoverAssistantToolUses(first, rest) {
+						if apilog.DebugModeEnabled() {
+							diaglog.LineOrStderr("[sidechain] wrote complete tool round (msgs=%d assistant=%s)",
+								len(sidechainPending), first.UUID)
+						}
 						recordSidechainBatch(sidechainPending)
 						sidechainPending = nil
 					}
