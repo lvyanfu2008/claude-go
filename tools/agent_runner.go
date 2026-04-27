@@ -16,6 +16,7 @@ import (
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/hookexec"
+	"goc/messagesapi"
 	"goc/sessiontranscript"
 	"goc/slashresolve"
 	"goc/tools/localtools"
@@ -231,9 +232,10 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		msgs = combined
 	}
 
-	// --- Incremental sidechain persistence ---
-	// Create a Store once and persist each chain-participant message as it is yielded,
-	// matching TS recordSidechainTranscript call-per-turn behavior.
+	// --- Sidechain persistence ---
+	// Store assistant+tool_result rounds atomically: do not write an assistant with tool_use
+	// to JSONL until all matching tool result user messages for that turn are available,
+	// so resume/load never sees a dangling tool_use. (TS may still be per-yield; Go prefers correctness.)
 	var sidechainStore *sessiontranscript.Store
 	var sidechainParentUUID string
 	if strings.TrimSpace(cfg.SessionID) != "" && sessiontranscript.IsValidUUID(cfg.SessionID) {
@@ -427,6 +429,37 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 
 	var assistantChunks []string
 	var progressMsgs []json.RawMessage
+
+	var sidechainPending []types.Message
+	recordSidechainBatch := func(batch []types.Message) {
+		if sidechainStore == nil || len(batch) == 0 {
+			return
+		}
+		_ = sidechainStore.RecordSidechainTranscript(nil, s.ID, batch, sidechainParentUUID)
+		rOpts := sessiontranscript.RecordOpts{StartingParentUUID: sidechainParentUUID, IsSidechain: true}
+		if s.TeamName != "" || s.Name != "" {
+			rOpts.Team = &sessiontranscript.TeamInfo{TeamName: s.TeamName, AgentName: s.Name}
+		}
+		_, _ = sidechainStore.RecordTranscript(nil, batch, rOpts)
+		for _, m := range batch {
+			if sessiontranscript.IsChainParticipant(m) {
+				sidechainParentUUID = m.UUID
+			}
+		}
+	}
+	flushSidechainPendingWithRepair := func() {
+		if len(sidechainPending) == 0 {
+			return
+		}
+		fixed, err := messagesapi.RepairToolUseToolResultPairing(sidechainPending)
+		if err != nil {
+			fixed = sidechainPending
+		}
+		recordSidechainBatch(fixed)
+		sidechainPending = nil
+	}
+	defer flushSidechainPendingWithRepair()
+
 	for y, qerr := range query.Query(ctx, qp) {
 		if qerr != nil {
 			if stopSummary != nil {
@@ -440,18 +473,33 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		// Feed yield messages into the shared buffer for summarization.
 		msgBuf.Append(*y.Message)
 
-		// Incremental sidechain persistence: persist every chain-participant message
-		// as it is yielded from the query loop, matching TS recordSidechainTranscript.
+		// Sidechain: buffer assistant+tool until pairing is complete, then write in one round.
 		if sidechainStore != nil && y.Message.Type != types.MessageTypeProgress {
-			_ = sidechainStore.RecordSidechainTranscript(nil, s.ID, []types.Message{*y.Message}, sidechainParentUUID)
-			// TS parity: also write sidechain messages to main session JSONL.
-			rOpts := sessiontranscript.RecordOpts{StartingParentUUID: sidechainParentUUID, IsSidechain: true}
-			if s.TeamName != "" || s.Name != "" {
-				rOpts.Team = &sessiontranscript.TeamInfo{TeamName: s.TeamName, AgentName: s.Name}
-			}
-			_, _ = sidechainStore.RecordTranscript(nil, []types.Message{*y.Message}, rOpts)
-			if sessiontranscript.IsChainParticipant(*y.Message) {
-				sidechainParentUUID = y.Message.UUID
+			m := *y.Message
+			switch m.Type {
+			case types.MessageTypeAssistant:
+				if messagesapi.AssistantHasToolUse(m) {
+					flushSidechainPendingWithRepair()
+					sidechainPending = []types.Message{m}
+				} else {
+					flushSidechainPendingWithRepair()
+					recordSidechainBatch([]types.Message{m})
+				}
+			case types.MessageTypeUser:
+				if len(sidechainPending) > 0 {
+					sidechainPending = append(sidechainPending, m)
+					first := sidechainPending[0]
+					rest := sidechainPending[1:]
+					if messagesapi.UserMessagesCoverAssistantToolUses(first, rest) {
+						recordSidechainBatch(sidechainPending)
+						sidechainPending = nil
+					}
+				} else {
+					recordSidechainBatch([]types.Message{m})
+				}
+			default:
+				flushSidechainPendingWithRepair()
+				recordSidechainBatch([]types.Message{m})
 			}
 		}
 
@@ -702,5 +750,9 @@ func loadSidechainMessages(cfg AgentRuntimeConfig, agentID string) []types.Messa
 			out = append(out, m)
 		}
 	}
-	return out
+	fixed, err := messagesapi.RepairToolUseToolResultPairing(out)
+	if err != nil {
+		return out
+	}
+	return fixed
 }

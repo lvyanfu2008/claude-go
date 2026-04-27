@@ -96,6 +96,65 @@ func TestRepairToolUseToolResultPairing_patchesUserWhenPartial(t *testing.T) {
 	}
 }
 
+func TestUserMessagesCoverAssistantToolUses(t *testing.T) {
+	asst := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "a1",
+		Message: mustJSON(t, map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{"type": "tool_use", "id": "t1", "name": "x", "input": map[string]any{}},
+				map[string]any{"type": "tool_use", "id": "t2", "name": "y", "input": map[string]any{}},
+			},
+		}),
+		Content: mustJSON(t, []any{
+			map[string]any{"type": "tool_use", "id": "t1", "name": "x", "input": map[string]any{}},
+			map[string]any{"type": "tool_use", "id": "t2", "name": "y", "input": map[string]any{}},
+		}),
+	}
+	u1 := types.Message{
+		Type: types.MessageTypeUser,
+		UUID: "u1",
+		Message: mustJSON(t, map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{"type": "tool_result", "tool_use_id": "t1", "content": "ok"},
+			},
+		}),
+	}
+	if UserMessagesCoverAssistantToolUses(asst, []types.Message{u1}) {
+		t.Fatal("expected false with one of two ids")
+	}
+	u2 := types.Message{
+		Type: types.MessageTypeUser,
+		UUID: "u2",
+		Message: mustJSON(t, map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{"type": "tool_result", "tool_use_id": "t2", "content": "ok"},
+			},
+		}),
+	}
+	if !UserMessagesCoverAssistantToolUses(asst, []types.Message{u1, u2}) {
+		t.Fatal("expected true with both user messages")
+	}
+	// Both in one user message
+	combined := types.Message{
+		Type: types.MessageTypeUser,
+		UUID: "uc",
+		Message: mustJSON(t, map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{"type": "tool_result", "tool_use_id": "t1", "content": "a"},
+				map[string]any{"type": "tool_result", "tool_use_id": "t2", "content": "b"},
+			},
+		}),
+	}
+	if !UserMessagesCoverAssistantToolUses(asst, []types.Message{combined}) {
+		t.Fatal("expected true with combined user")
+	}
+}
+
 func mustJSON(t *testing.T, v any) json.RawMessage {
 	t.Helper()
 	b, err := json.Marshal(v)
