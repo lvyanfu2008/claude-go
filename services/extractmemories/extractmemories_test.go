@@ -505,6 +505,36 @@ func TestBuildExtractionPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildExtractionPromptRelaxThreshold(t *testing.T) {
+	dir := t.TempDir()
+	p := ExtractionParams{Messages: []types.Message{makeMsg("1", types.MessageTypeUser)}}
+	newMsgs := []types.Message{makeMsg("2", types.MessageTypeUser)}
+
+	t.Run("default strict closing", func(t *testing.T) {
+		t.Setenv("GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD", "")
+		t.Setenv("CLAUDE_CODE_EXTRACT_MEMORIES_RELAX_THRESHOLD", "")
+		out := buildExtractionPrompt(p, newMsgs, dir)
+		if !strings.Contains(out, "do nothing") || strings.Contains(out, "Only skip when there is no user-specific") {
+			tail := out
+			if len(tail) > 200 {
+				tail = tail[len(tail)-200:]
+			}
+			t.Fatalf("expected default threshold line, got tail: %q", tail)
+		}
+	})
+	t.Run("relaxed closing", func(t *testing.T) {
+		t.Setenv("GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD", "1")
+		out := buildExtractionPrompt(p, newMsgs, dir)
+		if !strings.Contains(out, "Only skip when there is no user-specific") {
+			tail := out
+			if len(tail) > 220 {
+				tail = tail[len(tail)-220:]
+			}
+			t.Fatalf("expected relax closing, got tail: %q", tail)
+		}
+	})
+}
+
 func TestAssistantToolUseSummary(t *testing.T) {
 	tb, _ := json.Marshal(map[string]any{
 		"content": []map[string]any{

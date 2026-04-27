@@ -121,7 +121,8 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	if cwdForLog == "" {
 		cwdForLog = "."
 	}
-	fileExtractMemoriesLogf("enter cwd=%q total_messages=%d last_cursor=%q", cwdForLog, len(p.Messages), state.LastMemoryMessageUUID)
+	fileExtractMemoriesLogf("enter cwd=%q total_messages=%d last_cursor=%q relax_threshold=%v",
+		cwdForLog, len(p.Messages), state.LastMemoryMessageUUID, ExtractMemoriesRelaxThreshold())
 
 	// Guard: auto memory must be enabled.
 	if !claudemd.IsAutoMemoryEnabled() {

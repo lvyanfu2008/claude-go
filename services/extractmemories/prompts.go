@@ -10,6 +10,22 @@ import (
 	"goc/types"
 )
 
+// ExtractMemoriesRelaxThreshold is true when GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD or
+// CLAUDE_CODE_EXTRACT_MEMORIES_RELAX_THRESHOLD is 1|true|yes|on — use a less strict
+// closing line so the sub-agent is more likely to Write when the user states preferences.
+func ExtractMemoriesRelaxThreshold() bool {
+	for _, k := range []string{
+		"GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD",
+		"CLAUDE_CODE_EXTRACT_MEMORIES_RELAX_THRESHOLD",
+	} {
+		v := strings.TrimSpace(strings.ToLower(os.Getenv(k)))
+		if v == "1" || v == "true" || v == "yes" || v == "on" {
+			return true
+		}
+	}
+	return false
+}
+
 // buildExtractionPrompt constructs the prompt for the extraction sub-agent.
 // It frames the task as: review the recent conversation messages and extract
 // new information into durable memory files.
@@ -56,7 +72,11 @@ func buildExtractionPrompt(p ExtractionParams, newMessages []types.Message, memo
 	b.WriteString(howToSaveSection())
 	b.WriteString(whenToAccessSection())
 
-	b.WriteString(fmt.Sprintf("\nThreshold: if nothing new or notable was learned from these %d messages, do nothing. It's better to skip than to create trivial memories.\n", newCount))
+	if ExtractMemoriesRelaxThreshold() {
+		b.WriteString(fmt.Sprintf("\nPreference: if the user stated any preference, correction, or stable fact in these %d messages, save it in a new or updated .md under the memory directory (and the MEMORY.md index as needed). Only skip when there is no user-specific, repeatable information to persist.\n", newCount))
+	} else {
+		b.WriteString(fmt.Sprintf("\nThreshold: if nothing new or notable was learned from these %d messages, do nothing. It's better to skip than to create trivial memories.\n", newCount))
+	}
 
 	return strings.TrimSpace(b.String())
 }
