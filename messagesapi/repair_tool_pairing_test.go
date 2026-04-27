@@ -96,6 +96,32 @@ func TestRepairToolUseToolResultPairing_patchesUserWhenPartial(t *testing.T) {
 	}
 }
 
+func TestRepairToolUseToolResultPairing_recognizesUserWhenOnlyContentToolResult(t *testing.T) {
+	// Omitted: type, message — only `content` array (common bad export from tooling).
+	asst := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "a1",
+		Message: mustJSON(t, map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "tool_use", "id": "t_only", "name": "x", "input": map[string]any{}}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_use", "id": "t_only", "name": "x", "input": map[string]any{}}}),
+	}
+	u := types.Message{
+		UUID: "u1",
+		Content: mustJSON(t, []any{
+			map[string]any{"type": "tool_result", "tool_use_id": "t_only", "content": "ok"},
+		}),
+	}
+	out, err := RepairToolUseToolResultPairing([]types.Message{asst, u})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("len=%d want 2, types=%v", len(out), messageTypesForTest(out))
+	}
+}
+
 func TestRepairToolUseToolResultPairing_recognizesUserWhenTopLevelTypeEmpty(t *testing.T) {
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,

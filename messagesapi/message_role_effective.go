@@ -22,18 +22,50 @@ func nestedRoleFromMessageField(m *types.Message) string {
 	return strings.TrimSpace(inner.Role)
 }
 
-// IsEffectiveUserMessage returns true for a user turn: explicit Type, or when Type is
-// empty/unknown and nested message.role is "user" (API-shaped or legacy JSONL).
+// IsEffectiveUserMessage returns true for a user turn. Transcript / hydrate can omit
+// `type` and `message` while still storing tool_result only in `content` (the next row
+// after an assistant is still a user turn for the API).
 func IsEffectiveUserMessage(m types.Message) bool {
-	switch m.Type {
-	case types.MessageTypeUser:
+	ts := strings.TrimSpace(string(m.Type))
+	if strings.EqualFold(ts, "user") {
 		return true
-	case types.MessageTypeAssistant, types.MessageTypeSystem, types.MessageTypeProgress,
-		types.MessageTypeAttachment, types.MessageTypeGroupedToolUse, types.MessageTypeCollapsedReadSearch:
-		return false
-	default:
-		return nestedRoleFromMessageField(&m) == "user"
 	}
+	if strings.EqualFold(ts, "assistant") {
+		return false
+	}
+	switch m.Type {
+	case types.MessageTypeSystem, types.MessageTypeProgress, types.MessageTypeAttachment,
+		types.MessageTypeGroupedToolUse, types.MessageTypeCollapsedReadSearch:
+		return false
+	}
+	r := strings.ToLower(nestedRoleFromMessageField(&m))
+	if r == "user" {
+		return true
+	}
+	if r == "assistant" {
+		return false
+	}
+	// `type` empty and no embedded role: some JSONL has only `content: [{type:tool_result,...}]`
+	if ts == "" && contentArrayHasToolResult(&m) {
+		return true
+	}
+	return false
+}
+
+func contentArrayHasToolResult(m *types.Message) bool {
+	if m == nil || len(m.Content) == 0 {
+		return false
+	}
+	blocks, err := parseContentArrayOrString(m.Content)
+	if err != nil {
+		return false
+	}
+	for _, b := range blocks {
+		if t, _ := b["type"].(string); t == "tool_result" {
+			return true
+		}
+	}
+	return false
 }
 
 // isInterstitialBeforeToolUserRow returns true for non-user rows that may appear
