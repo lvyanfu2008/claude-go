@@ -1,7 +1,6 @@
 package commands
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,20 +10,7 @@ import (
 	"goc/commands/featuregates"
 )
 
-// Auto-only (non-KAIROS, non-TEAM) memory prompt is built in claudemd.BuildAgentMemoryLines
-// to mirror memdir.ts buildMemoryLines('auto memory', ...).
-// TEAM: embedded snapshots; regenerate via scripts/dump-memory-prompts-for-go.ts
-
-//go:embed data/memory_prompt_team_combined_index.txt
-var memoryPromptTeamCombinedIndexTmpl string
-
-//go:embed data/memory_prompt_team_combined_skip_index.txt
-var memoryPromptTeamCombinedSkipIndexTmpl string
-
-const (
-	memoryPromptTeamAutoDirPlaceholder = "/__AUTO_DIR__/"
-	memoryPromptTeamTeamDirPlaceholder = "/__TEAM_DIR__/"
-)
+// Memory system prompts for Go mirror src/memdir (memdir.ts, teamMemPrompts.ts, etc.); no embedded dumps.
 
 func memoryDirDisplayPath(memDir string) string {
 	p := strings.TrimSpace(memDir)
@@ -97,15 +83,16 @@ func BuildAutoMemoryPrompt(o GouDemoSystemOpts) string {
 	if featuregates.Feature("TEAMMEM") && claudemd.IsTeamMemoryPromptActive() {
 		teamDir := claudemd.GetTeamMemPath(cwd)
 		_ = claudemd.EnsureMemoryDirExists(teamDir)
-		tmpl := memoryPromptTeamCombinedIndexTmpl
-		if skipIndex {
-			tmpl = memoryPromptTeamCombinedSkipIndexTmpl
-		}
-		s := strings.ReplaceAll(tmpl, memoryPromptTeamAutoDirPlaceholder, memoryDirDisplayPath(memDir))
-		s = strings.ReplaceAll(s, memoryPromptTeamTeamDirPlaceholder, memoryDirDisplayPath(teamDir))
+		var extra []string
 		if x := strings.TrimSpace(os.Getenv("CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES")); x != "" {
-			s += "\n\n" + x + "\n"
+			extra = []string{x}
 		}
+		s := claudemd.BuildTeamCombinedMemoryPrompt(
+			memoryDirDisplayPath(memDir),
+			memoryDirDisplayPath(teamDir),
+			skipIndex,
+			extra,
+		)
 		s = appendMemorySearchPastContext(s, memDir, cwd, o)
 		return strings.TrimSpace(s)
 	}
