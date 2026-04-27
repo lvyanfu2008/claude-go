@@ -1,5 +1,6 @@
 // Package settingsfile loads Claude Code-style settings `env` blocks for Go binaries:
-// user ~/.claude/settings.json, project settings.go.json, project settings.local.json.
+// [GoProjectSettingsEnvDefaults] (lowest; embedded), user ~/.claude/settings.json, project
+// settings.go.json, project settings.local.json (highest for duplicate keys in the merged map).
 // Project .claude/settings.json is consumed by the TypeScript CLI only — not merged here.
 package settingsfile
 
@@ -115,10 +116,11 @@ func mergeEnvMany(maps ...map[string]string) map[string]string {
 	return out
 }
 
-// ApplyMergedClaudeSettingsEnv merges env from (later files override earlier for duplicate keys):
-// 1) UserClaudeSettingsPath() — CLAUDE_CONFIG_DIR/settings.json or ~/.claude/settings.json
-// 2) projectRoot/.claude/settings.go.json (Go / ccb-engine / gou-demo; optional)
-// 3) projectRoot/.claude/settings.local.json (optional)
+// ApplyMergedClaudeSettingsEnv merges env from (later entries override earlier for duplicate keys):
+// 1) [GoProjectSettingsEnvDefaults] — embedded Go baseline
+// 2) UserClaudeSettingsPath() — CLAUDE_CONFIG_DIR/settings.json or ~/.claude/settings.json
+// 3) projectRoot/.claude/settings.go.json (Go / ccb-engine / gou-demo; optional)
+// 4) projectRoot/.claude/settings.local.json (optional)
 //
 // Project .claude/settings.json is not read — it is for the TypeScript CLI only.
 //
@@ -140,7 +142,7 @@ func ApplyMergedClaudeSettingsEnv(projectRoot string) error {
 	if err != nil {
 		return err
 	}
-	return applyEnvMapSkipExisting(mergeEnvMany(userMap, goMap, localMap))
+	return applyEnvMapSkipExisting(mergeEnvMany(GoProjectSettingsEnvDefaults(), userMap, goMap, localMap))
 }
 
 // ApplyUserAndProjectClaudeEnv is a deprecated alias for ApplyMergedClaudeSettingsEnv (home is ignored).

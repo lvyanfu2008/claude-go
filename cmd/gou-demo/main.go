@@ -642,9 +642,9 @@ func main() {
 	} else {
 		log.Printf("gou-demo: markdown highlighter initialized with style=%s, formatter=%s", config.StyleName, config.FormatterName)
 	}
-	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: user ~/.claude/settings.json,
-	// project .claude/settings.go.json, settings.local.json. Project .claude/settings.json is TS-only
-	// (see settingsfile package doc); put GOU_DEMO_* / CCB_ENGINE_* in settings.go.json or export in shell.
+	// Env merge matches [settingsfile.ApplyMergedClaudeSettingsEnv]: embedded [settingsfile.GoProjectSettingsEnvDefaults],
+	// then user ~/.claude/settings.json, project .claude/settings.go.json, settings.local.json. Project
+	// .claude/settings.json is TS-only (see settingsfile package doc); GOU_DEMO_* / CCB_ENGINE_* in JSON or export.
 
 	// Ensure Grep and Glob tools are available in gou-demo by disabling EMBEDDED_SEARCH_TOOLS
 	// This overrides any environment setting that might filter out these tools
