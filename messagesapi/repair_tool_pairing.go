@@ -2,6 +2,7 @@ package messagesapi
 
 import (
 	"encoding/json"
+	"log"
 
 	"goc/gou/messagerow"
 	"goc/types"
@@ -36,15 +37,21 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 		if i+1 < len(messages) {
 			next := messagerow.NormalizeMessageJSON(messages[i+1])
 			if next.Type == types.MessageTypeUser {
-				patched, err := patchUserWithMissingToolResults(next, required, asstUUID)
+				patched, nAdded, err := patchUserWithMissingToolResults(next, required, asstUUID)
 				if err != nil {
 					return nil, err
+				}
+				if nAdded > 0 {
+					log.Printf("[tool-pairing] patched user message: added %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
+						nAdded, asstUUID, missingToolResultIDs(next, required))
 				}
 				out = append(out, patched)
 				i++
 				continue
 			}
 		}
+		log.Printf("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
+			len(required), asstUUID, required)
 		out = append(out, syntheticUserWithToolResults(required, asstUUID))
 	}
 	return out, nil
@@ -73,21 +80,55 @@ func toolUseIDsInAssistant(m *types.Message) []string {
 	return ids
 }
 
-func patchUserWithMissingToolResults(u types.Message, required []string, sourceAsstUUID string) (types.Message, error) {
+// missingToolResultIDs returns required ids that are absent from the user message
+// (best-effort for logging; ignores parse errors).
+func missingToolResultIDs(u types.Message, required []string) []string {
 	m, err := cloneMessage(u)
 	if err != nil {
-		return types.Message{}, err
+		return required
 	}
-	if err := ensureInnerFromContent(&m); err != nil {
-		return types.Message{}, err
-	}
+	_ = ensureInnerFromContent(&m)
 	inner, err := getInner(&m)
 	if err != nil {
-		return types.Message{}, err
+		return required
 	}
 	blocks, err := parseContentArrayOrString(inner.Content)
 	if err != nil {
-		return types.Message{}, err
+		return required
+	}
+	have := make(map[string]struct{})
+	for _, b := range blocks {
+		if t, _ := b["type"].(string); t != "tool_result" {
+			continue
+		}
+		if tid, _ := b["tool_use_id"].(string); tid != "" {
+			have[tid] = struct{}{}
+		}
+	}
+	var out []string
+	for _, id := range required {
+		if _, ok := have[id]; !ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func patchUserWithMissingToolResults(u types.Message, required []string, sourceAsstUUID string) (types.Message, int, error) {
+	m, err := cloneMessage(u)
+	if err != nil {
+		return types.Message{}, 0, err
+	}
+	if err := ensureInnerFromContent(&m); err != nil {
+		return types.Message{}, 0, err
+	}
+	inner, err := getInner(&m)
+	if err != nil {
+		return types.Message{}, 0, err
+	}
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil {
+		return types.Message{}, 0, err
 	}
 	have := make(map[string]struct{})
 	for _, b := range blocks {
@@ -99,10 +140,12 @@ func patchUserWithMissingToolResults(u types.Message, required []string, sourceA
 			have[tid] = struct{}{}
 		}
 	}
+	var nAdded int
 	for _, id := range required {
 		if _, ok := have[id]; ok {
 			continue
 		}
+		nAdded++
 		blocks = append(blocks, map[string]any{
 			"type":        "tool_result",
 			"tool_use_id": id,
@@ -113,17 +156,17 @@ func patchUserWithMissingToolResults(u types.Message, required []string, sourceA
 	blocks = hoistToolResults(blocks)
 	raw, err := marshalContentBlocks(blocks)
 	if err != nil {
-		return types.Message{}, err
+		return types.Message{}, 0, err
 	}
 	inner.Content = raw
 	if err := setInner(&m, inner); err != nil {
-		return types.Message{}, err
+		return types.Message{}, 0, err
 	}
 	syncTopLevelContent(&m)
 	if sourceAsstUUID != "" {
 		m.SourceToolAssistantUUID = &sourceAsstUUID
 	}
-	return m, nil
+	return m, nAdded, nil
 }
 
 func syntheticUserWithToolResults(ids []string, sourceAsstUUID string) types.Message {
