@@ -29,12 +29,18 @@ func UserMessagesCoverAssistantToolUses(asst types.Message, userMsgs []types.Mes
 	if len(need) == 0 {
 		return true
 	}
+	// Do not use IsEffectiveUserMessage alone: lenient / deep-only rows in userRun
+	// must still contribute tool_result ids.
 	have := make(map[string]struct{})
 	for i := range userMsgs {
-		if !IsEffectiveUserMessage(userMsgs[i]) {
+		u := &userMsgs[i]
+		if IsExplicitAssistantMessage(*u) {
 			continue
 		}
-		for _, id := range toolResultIDsInUserMessage(&userMsgs[i]) {
+		for _, id := range toolResultIDsInUserMessage(u) {
+			have[id] = struct{}{}
+		}
+		for _, id := range toolResultUseIDsFromMessageDeep(u) {
 			have[id] = struct{}{}
 		}
 	}

@@ -7,6 +7,21 @@ import (
 	"goc/types"
 )
 
+// IsExplicitAssistantMessage returns true for an assistant turn from top-level or explicit type.
+func IsExplicitAssistantMessage(m types.Message) bool {
+	ts := strings.TrimSpace(string(m.Type))
+	if strings.EqualFold(ts, "assistant") {
+		return true
+	}
+	if m.Type == types.MessageTypeAssistant {
+		return true
+	}
+	if strings.ToLower(nestedRoleFromMessageField(&m)) == "assistant" {
+		return true
+	}
+	return false
+}
+
 // nestedRoleFromMessageField returns message.role from the nested JSON when present
 // (transcript lines sometimes have empty top-level type).
 func nestedRoleFromMessageField(m *types.Message) string {

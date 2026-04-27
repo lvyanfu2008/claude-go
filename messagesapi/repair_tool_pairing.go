@@ -59,8 +59,23 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 			userRun = append(userRun, u)
 			j++
 		}
+		// Whole-message JSON (deep scan): tool_result can live in odd nesting not visible to getInner/Content.
+		if len(userRun) == 0 && j < len(messages) {
+			nxt := messagerow.NormalizeMessageJSON(messages[j])
+			if !IsExplicitAssistantMessage(nxt) && !isInterstitialBeforeToolUserRow(nxt) && messageDeepCoversToolUseIDs(nxt, required) {
+				userRun = []types.Message{nxt}
+				j++
+			}
+		}
 		out = append(out, interstitial...)
 		if len(userRun) == 0 {
+			if j < len(messages) {
+				cand := messagerow.NormalizeMessageJSON(messages[j])
+				_ = ensureInnerFromContent(&cand)
+				if IsExplicitAssistantMessage(cand) && len(toolUseIDsInAssistant(&cand)) > 0 {
+					diaglog.LineOrStderr("[tool-pairing] next row is assistant+tool_use with no preceding user tool_result (likely transcript/append order); synthetic for assistant=%s", asstUUID)
+				}
+			}
 			diaglog.LineOrStderr("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
 				len(required), asstUUID, required)
 			out = append(out, syntheticUserWithToolResults(required, asstUUID))
@@ -121,6 +136,9 @@ func patchConsecutiveUserRunForMissingToolResults(userRun []types.Message, requi
 	have := make(map[string]struct{})
 	for i := range userRun {
 		for _, id := range toolResultIDsInUserMessage(&userRun[i]) {
+			have[id] = struct{}{}
+		}
+		for _, id := range toolResultUseIDsFromMessageDeep(&userRun[i]) {
 			have[id] = struct{}{}
 		}
 	}

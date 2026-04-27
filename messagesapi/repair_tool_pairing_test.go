@@ -152,6 +152,33 @@ func TestRepairToolUseToolResultPairing_recognizesUserWhenTopLevelTypeEmpty(t *t
 	}
 }
 
+func TestRepairToolUseToolResultPairing_lenientWeirdTypeWithDeepToolResult(t *testing.T) {
+	asst := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "a1",
+		Message: mustJSON(t, map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "tool_use", "id": "tid", "name": "n", "input": map[string]any{}}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_use", "id": "tid", "name": "n", "input": map[string]any{}}}),
+	}
+	// Unusual top-level "type" that is not in our heuristics; tool_result only discoverable by deep JSON walk.
+	weird := types.Message{
+		Type:  types.MessageType("custom_row"),
+		UUID:  "w1",
+		Content: mustJSON(t, []any{
+			map[string]any{"type": "tool_result", "tool_use_id": "tid", "content": "x"},
+		}),
+	}
+	out, err := RepairToolUseToolResultPairing([]types.Message{asst, weird})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("len=%d want 2, got %v", len(out), messageTypesForTest(out))
+	}
+}
+
 func messageTypesForTest(msgs []types.Message) []string {
 	s := make([]string, 0, len(msgs))
 	for i := range msgs {
