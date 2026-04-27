@@ -31,7 +31,7 @@ func UserMessagesCoverAssistantToolUses(asst types.Message, userMsgs []types.Mes
 	}
 	have := make(map[string]struct{})
 	for i := range userMsgs {
-		if userMsgs[i].Type != types.MessageTypeUser {
+		if !IsEffectiveUserMessage(userMsgs[i]) {
 			continue
 		}
 		for _, id := range toolResultIDsInUserMessage(&userMsgs[i]) {
@@ -48,7 +48,7 @@ func UserMessagesCoverAssistantToolUses(asst types.Message, userMsgs []types.Mes
 
 func toolResultIDsInUserMessage(m *types.Message) []string {
 	m2 := messagerow.NormalizeMessageJSON(*m)
-	if m2.Type != types.MessageTypeUser {
+	if !IsEffectiveUserMessage(m2) {
 		return nil
 	}
 	if err := ensureInnerFromContent(&m2); err != nil {

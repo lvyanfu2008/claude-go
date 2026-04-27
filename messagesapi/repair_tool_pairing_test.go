@@ -96,6 +96,44 @@ func TestRepairToolUseToolResultPairing_patchesUserWhenPartial(t *testing.T) {
 	}
 }
 
+func TestRepairToolUseToolResultPairing_recognizesUserWhenTopLevelTypeEmpty(t *testing.T) {
+	asst := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "a1",
+		Message: mustJSON(t, map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "tool_use", "id": "call_00", "name": "x", "input": map[string]any{}}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_use", "id": "call_00", "name": "x", "input": map[string]any{}}}),
+	}
+	// Some JSONL / hydrate paths omit `type` and only set nested message.role.
+	inner := map[string]any{
+		"role":    "user",
+		"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_00", "content": "ok"}},
+	}
+	uWire := mustJSON(t, inner)
+	u := types.Message{
+		UUID:    "u1",
+		Message: uWire,
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_result", "tool_use_id": "call_00", "content": "ok"}}),
+	}
+	out, err := RepairToolUseToolResultPairing([]types.Message{asst, u})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("len=%d want 2 (no synthetic), got types %v", len(out), messageTypesForTest(out))
+	}
+}
+
+func messageTypesForTest(msgs []types.Message) []string {
+	s := make([]string, 0, len(msgs))
+	for i := range msgs {
+		s = append(s, string(msgs[i].Type))
+	}
+	return s
+}
+
 func TestRepairToolUseToolResultPairing_skipsProgressBeforeUser(t *testing.T) {
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
