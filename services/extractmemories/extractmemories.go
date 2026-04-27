@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -389,6 +390,41 @@ func extractWrittenPaths(messages []types.Message) []string {
 	return paths
 }
 
+// assistantToolUseSummary counts tool_use `name` values in assistant messages (for
+// file logging when no Write/Edit paths were collected).
+func assistantToolUseSummary(messages []types.Message) string {
+	counts := map[string]int{}
+	for _, m := range messages {
+		if m.Type != types.MessageTypeAssistant || len(m.Message) == 0 {
+			continue
+		}
+		var payload struct {
+			Content []struct {
+				Type string `json:"type"`
+				Name string `json:"name,omitempty"`
+			} `json:"content"`
+		}
+		if err := json.Unmarshal(m.Message, &payload); err != nil {
+			continue
+		}
+		for _, block := range payload.Content {
+			if block.Type != "tool_use" || block.Name == "" {
+				continue
+			}
+			counts[block.Name]++
+		}
+	}
+	if len(counts) == 0 {
+		return "tool_uses=none"
+	}
+	var parts []string
+	for name, n := range counts {
+		parts = append(parts, fmt.Sprintf("%s×%d", name, n))
+	}
+	sort.Strings(parts)
+	return "tool_uses=" + strings.Join(parts, " ")
+}
+
 // runExtractionSubagent runs a lightweight sub-agent via query.Query() with
 // restricted tool access.  It builds the extraction prompt from newMessages
 // and returns the assistant messages produced by the sub-agent.
@@ -447,7 +483,12 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 		}
 	}
 
-	return extractWrittenPaths(assistantMessages), nil
+	written := extractWrittenPaths(assistantMessages)
+	if len(written) == 0 {
+		fileExtractMemoriesLogf("subagent no_write_or_edit_paths assistant_messages=%d %s",
+			len(assistantMessages), assistantToolUseSummary(assistantMessages))
+	}
+	return written, nil
 }
 
 // DrainPendingExtraction waits for any in-flight extraction to complete.

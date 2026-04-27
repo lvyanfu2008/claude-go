@@ -505,6 +505,21 @@ func TestBuildExtractionPrompt(t *testing.T) {
 	}
 }
 
+func TestAssistantToolUseSummary(t *testing.T) {
+	tb, _ := json.Marshal(map[string]any{
+		"content": []map[string]any{
+			{"type": "tool_use", "name": "Grep", "id": "1", "input": map[string]any{}},
+			{"type": "tool_use", "name": "Read", "id": "2", "input": map[string]any{}},
+			{"type": "tool_use", "name": "Grep", "id": "3", "input": map[string]any{}},
+		},
+	})
+	msg := types.Message{Type: types.MessageTypeAssistant, Message: tb}
+	s := assistantToolUseSummary([]types.Message{msg})
+	if !strings.Contains(s, "Grep×2") || !strings.Contains(s, "Read×1") {
+		t.Fatalf("expected Grep×2 Read×1, got %q", s)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Execute guard conditions (no real sub-agent call)
 // ---------------------------------------------------------------------------
