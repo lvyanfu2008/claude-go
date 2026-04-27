@@ -71,7 +71,7 @@ func runOpenAINonStreamingParityModelLoop(
 		maxTok := openAIMaxTokensForChatCompletion(params, in.ModelID)
 		enableThinking := openAIEnableThinkingForRequest(model, cur)
 		enforceReasoning := OpenAIEnforcesReasoningInThinkingMode(model, enableThinking)
-		maxA := 1
+		maxA := 2
 		if enforceReasoning {
 			maxA = GetDeepSeekStrictThinkingMaxAttempts()
 		}

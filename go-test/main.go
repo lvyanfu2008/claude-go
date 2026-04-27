@@ -42,7 +42,11 @@ func logToFileExample() {
 	// Create a new logger that writes to the file
 	fileLogger := mygoword.New(mygoword.INFO, file)
 	fileLogger.Info("爱中国")
+	fileLogger.Info("踏青")
 	fileLogger.Info("hello, china")
+	fileLogger.Info("hello, lyf")
+	fileLogger.Info("hello")
+	fileLogger.Info("ht")
 
 	logger.Info("Log file created: app.log")
 }
