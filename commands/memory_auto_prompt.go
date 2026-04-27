@@ -11,19 +11,9 @@ import (
 	"goc/commands/featuregates"
 )
 
-// Embedded auto-only bodies: TS src/memdir/memdir.ts buildMemoryLines('auto memory', '/__MEMORY_DIR__/', …).
-// Regenerate (from claude-code):
-//
-//	bun -e "const {buildMemoryLines}=require('./src/memdir/memdir.ts');require('fs').writeFileSync('../claude-go/commands/data/memory_prompt_auto_individual.txt', buildMemoryLines('auto memory','/__MEMORY_DIR__/',undefined,false).join('\n'))"
-//	bun -e "const {buildMemoryLines}=require('./src/memdir/memdir.ts');require('fs').writeFileSync('../claude-go/commands/data/memory_prompt_auto_skip_index.txt', buildMemoryLines('auto memory','/__MEMORY_DIR__/',undefined,true).join('\n'))"
-//
-// KAIROS + TEAM combined: scripts/dump-memory-prompts-for-go.ts
-
-//go:embed data/memory_prompt_auto_individual.txt
-var memoryPromptAutoIndividualTmpl string
-
-//go:embed data/memory_prompt_auto_skip_index.txt
-var memoryPromptAutoSkipIndexTmpl string
+// Auto-only (non-KAIROS, non-TEAM) memory prompt is built in claudemd.BuildAgentMemoryLines
+// to mirror memdir.ts buildMemoryLines('auto memory', ...).
+// KAIROS + TEAM: embedded snapshots; regenerate via scripts/dump-memory-prompts-for-go.ts
 
 //go:embed data/memory_prompt_kairos_daily_index.txt
 var memoryPromptKairosDailyIndexTmpl string
@@ -38,7 +28,6 @@ var memoryPromptTeamCombinedIndexTmpl string
 var memoryPromptTeamCombinedSkipIndexTmpl string
 
 const (
-	memoryPromptDirPlaceholder         = "/__MEMORY_DIR__/"
 	memoryPromptKairosPathPlaceholder  = "/__AUTO_MEM_PATH__/"
 	memoryPromptTeamAutoDirPlaceholder = "/__AUTO_DIR__/"
 	memoryPromptTeamTeamDirPlaceholder = "/__TEAM_DIR__/"
@@ -133,14 +122,12 @@ func BuildAutoMemoryPrompt(o GouDemoSystemOpts) string {
 	}
 
 	_ = claudemd.EnsureMemoryDirExists(memDir)
-	tmpl := memoryPromptAutoIndividualTmpl
-	if skipIndex {
-		tmpl = memoryPromptAutoSkipIndexTmpl
-	}
-	s := strings.ReplaceAll(tmpl, memoryPromptDirPlaceholder, memoryDirDisplayPath(memDir))
+	var extra []string
 	if x := strings.TrimSpace(os.Getenv("CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES")); x != "" {
-		s += "\n\n" + x + "\n"
+		extra = []string{x}
 	}
+	lines := claudemd.BuildAgentMemoryLines("auto memory", memoryDirDisplayPath(memDir), extra, skipIndex, false)
+	s := strings.Join(lines, "\n")
 	s = appendMemorySearchPastContext(s, memDir, cwd, o)
 	return strings.TrimSpace(s)
 }
