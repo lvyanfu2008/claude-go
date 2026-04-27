@@ -6,10 +6,11 @@ import (
 	"goc/growthbook"
 )
 
-func TestIsAutoDreamEnabled_disabledByDefault(t *testing.T) {
-	// Ensure flag is not set — should return false.
-	if IsAutoDreamEnabled() {
-		t.Fatal("expected auto-dream disabled when no flag is set")
+func TestIsAutoDreamEnabled_enabledByLocalGateDefault(t *testing.T) {
+	// When no flag is set and local gate defaults are active,
+	// onyx_plover.enabled defaults to true (mirrors TS LOCAL_GATE_DEFAULTS).
+	if !IsAutoDreamEnabled() {
+		t.Fatal("expected auto-dream enabled via local gate default (onyx_plover.enabled=true)")
 	}
 }
 

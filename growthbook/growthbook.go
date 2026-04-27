@@ -14,6 +14,80 @@ import (
 	"goc/commands/featuregates"
 )
 
+// localGateDefaults mirrors TS LOCAL_GATE_DEFAULTS in
+// src/services/analytics/growthbook.ts. These defaults are used as a
+// terminal fallback when GrowthBook is not connected and no env var or
+// config file override is present.  Categorised:
+//
+//	P0 — Pure local features (no external dependencies)
+//	P1 — Requires Claude API (works with any valid API key)
+//	KS — Kill switches (default true, keep them true)
+var localGateDefaults = map[string]any{
+	// ── P0: Pure local features ──────────────────────────────────────
+	"keybinding_customization_release": true,
+	"streaming_tool_execution2":        true,
+	"kairos_cron":                      true,
+	"amber_json_tools":                 true,
+	"immediate_model_command":          true,
+	"basalt_3kr":                       true,
+	"pebble_leaf_prune":                true,
+	"chair_sermon":                     true,
+	"lodestone_enabled":                true,
+	"auto_background_agents":           true,
+	"fgts":                             true,
+
+	// ── P1: API-dependent features ───────────────────────────────────
+	"session_memory":     true,
+	"passport_quail":     true, // Auto memory extraction
+	"moth_copse":         true, // Skip memory index, use prefetched memories
+	"coral_fern":         true, // "Searching past context" section
+	"chomp_inflection":   true, // Prompt suggestions
+	"hive_evidence":      true, // Verification agent
+	"kairos_brief":       true, // Brief mode
+	"kairos_brief_config": map[string]any{"enable_slash_command": true},
+	"sedge_lantern":      true, // Away summary
+	"onyx_plover":        map[string]any{"enabled": true}, // Auto dream
+	"willow_mode":        "dialog",                         // Idle return prompt
+
+	// ── Kill switches (keep true to prevent remote disable) ──────────
+	"turtle_carbon":          true,
+	"amber_stoat":            true, // Built-in Explore/Plan agents
+	"amber_flint":            true, // Agent teams/swarms
+	"slim_subagent_claudemd": true,
+	"birch_trellis":          true,
+	"collage_kaleidoscope":   true,
+	"compact_cache_prefix":   true,
+	"kairos_cron_durable":    true,
+	"attribution_header":     true,
+	"slate_prism":            true,
+}
+
+// isLocalGatesDisabled mirrors TS CLAUDE_CODE_DISABLE_LOCAL_GATES check.
+func isLocalGatesDisabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("CLAUDE_CODE_DISABLE_LOCAL_GATES")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+// getLocalGateDefault returns the local default for a feature gate, or
+// nil if not configured or local gates are disabled.
+func getLocalGateDefault(key string) any {
+	if isLocalGatesDisabled() {
+		return nil
+	}
+	// Match with and without "tengu_" prefix (env vars strip the prefix,
+	// so both "passport_quail" and "tengu_passport_quail" should work).
+	if v, ok := localGateDefaults[key]; ok {
+		return v
+	}
+	// Also try stripping "tengu_" prefix (some callers use the full tengu_ name).
+	if strings.HasPrefix(key, "tengu_") {
+		if v, ok := localGateDefaults[key[6:]]; ok {
+			return v
+		}
+	}
+	return nil
+}
+
 // FeatureFlag represents a GrowthBook-style feature flag
 type FeatureFlag struct {
 	Key         string                 `json:"key"`
@@ -185,13 +259,15 @@ func (m *Manager) loadFromConfigFile() {
 	}
 }
 
-// IsOn returns true if a feature flag is enabled (truthy)
-// This mirrors TS GrowthBook feature() function
+// IsOn returns true if a feature flag is enabled (truthy).
+// This mirrors TS getFeatureValue_CACHED_MAY_BE_STALE.
+//
+// Fallback chain: loaded flags → featuregates → local gate defaults → false.
 func (m *Manager) IsOn(key string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// First check GrowthBook flags
+	// First check GrowthBook flags (env vars + config file)
 	if flag, ok := m.flags[key]; ok {
 		switch v := flag.Value.(type) {
 		case bool:
@@ -208,10 +284,22 @@ func (m *Manager) IsOn(key string) bool {
 	}
 
 	// Fall back to legacy featuregates for compatibility
-	return featuregates.Feature(key)
+	if featuregates.Feature(key) {
+		return true
+	}
+
+	// Terminal fallback: local gate defaults (mirrors TS getLocalGateDefault)
+	if ld := getLocalGateDefault(key); ld != nil {
+		if b, ok := ld.(bool); ok {
+			return b
+		}
+	}
+
+	return false
 }
 
-// Get returns the value of a feature flag
+// Get returns the value of a feature flag.
+// Fallback chain: loaded flags → featuregates → local gate defaults → nil.
 func (m *Manager) Get(key string) any {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -223,6 +311,11 @@ func (m *Manager) Get(key string) any {
 	// Fall back to environment variable check
 	if featuregates.Feature(key) {
 		return true
+	}
+
+	// Terminal fallback: local gate defaults (mirrors TS getLocalGateDefault)
+	if ld := getLocalGateDefault(key); ld != nil {
+		return ld
 	}
 
 	return nil
