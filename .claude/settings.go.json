@@ -1,7 +1,7 @@
 {
   "env": {
-    "CCB_ENGINE_MODEL": "deepseek-chat",
-    "OPENAI_ENABLE_THINKING": "0"
+    "CCB_ENGINE_MODEL": "deepseek-v4-pro",
+    "OPENAI_ENABLE_THINKING": "1"
   },
   "hooks": {
     "UserPromptSubmit": [
