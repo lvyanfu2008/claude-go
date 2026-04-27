@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"iter"
-	"log"
 	"sync"
 
+	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
@@ -384,7 +384,7 @@ func (e *StreamingToolExecutor) collectResults(tool *trackedTool) {
 		}
 	}
 	if len(messages) == 0 {
-		log.Printf("[streamingtool] no tool output from runner; synthetic tool_result tool_use_id=%s assistant_uuid=%s",
+		diaglog.LineOrStderr("[streamingtool] no tool output from runner; synthetic tool_result tool_use_id=%s assistant_uuid=%s",
 			tool.id, tool.assistantMessage.UUID)
 		messages = []types.Message{
 			e.createSyntheticErrorMessage(tool.id, "no_tool_output", tool.assistantMessage, ""),

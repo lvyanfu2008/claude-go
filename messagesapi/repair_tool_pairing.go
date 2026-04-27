@@ -2,8 +2,8 @@ package messagesapi
 
 import (
 	"encoding/json"
-	"log"
 
+	"goc/ccb-engine/diaglog"
 	"goc/gou/messagerow"
 	"goc/types"
 )
@@ -42,7 +42,7 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 					return nil, err
 				}
 				if nAdded > 0 {
-					log.Printf("[tool-pairing] patched user message: added %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
+					diaglog.LineOrStderr("[tool-pairing] patched user message: added %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
 						nAdded, asstUUID, missingToolResultIDs(next, required))
 				}
 				out = append(out, patched)
@@ -50,7 +50,7 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 				continue
 			}
 		}
-		log.Printf("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
+		diaglog.LineOrStderr("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
 			len(required), asstUUID, required)
 		out = append(out, syntheticUserWithToolResults(required, asstUUID))
 	}
