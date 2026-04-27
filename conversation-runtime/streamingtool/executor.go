@@ -185,6 +185,14 @@ func (e *StreamingToolExecutor) createSyntheticErrorMessage(
 			"tool_use_id": toolUseID,
 		}}, "Streaming fallback - tool execution discarded", assistantMessage.UUID)
 	}
+	if reason == "no_tool_output" {
+		return createUserMessage([]map[string]any{{
+			"type":        "tool_result",
+			"content":     "<tool_use_error>Error: Tool runner produced no result message (client synthetic)</tool_use_error>",
+			"is_error":    true,
+			"tool_use_id": toolUseID,
+		}}, "Tool runner produced no result", assistantMessage.UUID)
+	}
 	msg := "Cancelled: parallel tool call errored"
 	if siblingErroredToolDescription != "" {
 		msg = "Cancelled: parallel tool call " + siblingErroredToolDescription + " errored"
@@ -372,6 +380,11 @@ func (e *StreamingToolExecutor) collectResults(tool *trackedTool) {
 		}
 		if upd.ContextModifier != nil {
 			contextModifiers = append(contextModifiers, upd.ContextModifier)
+		}
+	}
+	if len(messages) == 0 {
+		messages = []types.Message{
+			e.createSyntheticErrorMessage(tool.id, "no_tool_output", tool.assistantMessage, ""),
 		}
 	}
 
