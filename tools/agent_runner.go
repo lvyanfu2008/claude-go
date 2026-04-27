@@ -449,29 +449,14 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			}
 		}
 	}
-	flushSidechainPendingWithRepair := func() {
+	flushSidechainPending := func() {
 		if len(sidechainPending) == 0 {
 			return
 		}
-		first := sidechainPending[0]
-		rest := sidechainPending[1:]
-		needRepair := messagesapi.AssistantHasToolUse(first) &&
-			!messagesapi.UserMessagesCoverAssistantToolUses(first, rest)
-		if !needRepair {
-			recordSidechainBatch(sidechainPending)
-			sidechainPending = nil
-			return
-		}
-		fixed, err := messagesapi.RepairToolUseToolResultPairing(sidechainPending)
-		if err != nil {
-			fixed = sidechainPending
-		}
-		diaglog.LineOrStderr("[sidechain] incomplete tool round before flush; applied repair (assistant=%s pending_msgs=%d)",
-			first.UUID, len(sidechainPending))
-		recordSidechainBatch(fixed)
+		recordSidechainBatch(sidechainPending)
 		sidechainPending = nil
 	}
-	defer flushSidechainPendingWithRepair()
+	defer flushSidechainPending()
 
 	for y, qerr := range query.Query(ctx, qp) {
 		if qerr != nil {
@@ -492,10 +477,10 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			switch m.Type {
 			case types.MessageTypeAssistant:
 				if messagesapi.AssistantHasToolUse(m) {
-					flushSidechainPendingWithRepair()
+					flushSidechainPending()
 					sidechainPending = []types.Message{m}
 				} else {
-					flushSidechainPendingWithRepair()
+					flushSidechainPending()
 					recordSidechainBatch([]types.Message{m})
 				}
 			case types.MessageTypeUser:
@@ -515,7 +500,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 					recordSidechainBatch([]types.Message{m})
 				}
 			default:
-				flushSidechainPendingWithRepair()
+				flushSidechainPending()
 				recordSidechainBatch([]types.Message{m})
 			}
 		}
@@ -767,9 +752,5 @@ func loadSidechainMessages(cfg AgentRuntimeConfig, agentID string) []types.Messa
 			out = append(out, m)
 		}
 	}
-	fixed, err := messagesapi.RepairToolUseToolResultPairing(out)
-	if err != nil {
-		return out
-	}
-	return fixed
+	return out
 }

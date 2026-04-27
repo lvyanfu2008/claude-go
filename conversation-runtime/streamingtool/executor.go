@@ -6,7 +6,6 @@ import (
 	"iter"
 	"sync"
 
-	"goc/ccb-engine/diaglog"
 	"goc/types"
 )
 
@@ -185,14 +184,6 @@ func (e *StreamingToolExecutor) createSyntheticErrorMessage(
 			"is_error":    true,
 			"tool_use_id": toolUseID,
 		}}, "Streaming fallback - tool execution discarded", assistantMessage.UUID)
-	}
-	if reason == "no_tool_output" {
-		return createUserMessage([]map[string]any{{
-			"type":        "tool_result",
-			"content":     "<tool_use_error>Error: Tool runner produced no result message (client synthetic)</tool_use_error>",
-			"is_error":    true,
-			"tool_use_id": toolUseID,
-		}}, "Tool runner produced no result", assistantMessage.UUID)
 	}
 	msg := "Cancelled: parallel tool call errored"
 	if siblingErroredToolDescription != "" {
@@ -383,14 +374,6 @@ func (e *StreamingToolExecutor) collectResults(tool *trackedTool) {
 			contextModifiers = append(contextModifiers, upd.ContextModifier)
 		}
 	}
-	if len(messages) == 0 {
-		diaglog.LineOrStderr("[streamingtool] no tool output from runner; synthetic tool_result tool_use_id=%s assistant_uuid=%s",
-			tool.id, tool.assistantMessage.UUID)
-		messages = []types.Message{
-			e.createSyntheticErrorMessage(tool.id, "no_tool_output", tool.assistantMessage, ""),
-		}
-	}
-
 	e.mu.Lock()
 	tool.results = messages
 	tool.contextModifiers = contextModifiers

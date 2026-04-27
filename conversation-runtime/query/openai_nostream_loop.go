@@ -49,11 +49,6 @@ func runOpenAINonStreamingParityModelLoop(
 	cur := append([]types.Message(nil), work...)
 
 	for round := 0; round < maxRounds; round++ {
-		var err error
-		cur, err = messagesapi.RepairToolUseToolResultPairing(cur)
-		if err != nil {
-			return err
-		}
 		msgsJSON, err := ccbhydrate.MessagesJSONNormalized(cur, nil, messagesapi.OptionsFromEnv())
 		if err != nil {
 			return err

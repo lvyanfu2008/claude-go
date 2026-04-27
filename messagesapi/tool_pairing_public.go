@@ -14,7 +14,30 @@ func ToolUseIDsInAssistant(m types.Message) []string {
 	if err := ensureInnerFromContent(&m2); err != nil {
 		return nil
 	}
-	return toolUseIDsInAssistant(&m2)
+	return toolUseIDsInAssistantBlocks(&m2)
+}
+
+func toolUseIDsInAssistantBlocks(m *types.Message) []string {
+	inner, err := getInner(m)
+	if err != nil {
+		return nil
+	}
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, b := range blocks {
+		if t, _ := b["type"].(string); t != "tool_use" {
+			continue
+		}
+		id, _ := b["id"].(string)
+		if id == "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // AssistantHasToolUse reports whether the assistant message includes any tool_use block.
@@ -23,24 +46,18 @@ func AssistantHasToolUse(m types.Message) bool {
 }
 
 // UserMessagesCoverAssistantToolUses returns true when every tool_use id from the assistant
-// appears as a tool_result (tool_use_id) in the given user messages (any order across messages).
+// appears as a tool_result in the given user messages (Type user; tool_use_id / tool_call_id in content).
 func UserMessagesCoverAssistantToolUses(asst types.Message, userMsgs []types.Message) bool {
 	need := ToolUseIDsInAssistant(asst)
 	if len(need) == 0 {
 		return true
 	}
-	// Do not use IsEffectiveUserMessage alone: lenient / deep-only rows in userRun
-	// must still contribute tool_result ids.
 	have := make(map[string]struct{})
 	for i := range userMsgs {
-		u := &userMsgs[i]
-		if IsExplicitAssistantMessage(*u) {
+		if userMsgs[i].Type != types.MessageTypeUser {
 			continue
 		}
-		for _, id := range toolResultIDsInUserMessage(u) {
-			have[id] = struct{}{}
-		}
-		for _, id := range toolResultUseIDsFromMessageDeep(u) {
+		for _, id := range toolResultIDsInUserMessageStrict(&userMsgs[i]) {
 			have[id] = struct{}{}
 		}
 	}
@@ -52,9 +69,9 @@ func UserMessagesCoverAssistantToolUses(asst types.Message, userMsgs []types.Mes
 	return true
 }
 
-func toolResultIDsInUserMessage(m *types.Message) []string {
+func toolResultIDsInUserMessageStrict(m *types.Message) []string {
 	m2 := messagerow.NormalizeMessageJSON(*m)
-	if !IsEffectiveUserMessage(m2) {
+	if m2.Type != types.MessageTypeUser {
 		return nil
 	}
 	if err := ensureInnerFromContent(&m2); err != nil {
@@ -70,24 +87,15 @@ func toolResultIDsInUserMessage(m *types.Message) []string {
 	}
 	var ids []string
 	for _, b := range blocks {
-		if id := toolResultBlockID(b); id != "" {
+		if t, _ := b["type"].(string); t != "tool_result" {
+			continue
+		}
+		if id, _ := b["tool_use_id"].(string); id != "" {
+			ids = append(ids, id)
+		}
+		if id, _ := b["tool_call_id"].(string); id != "" {
 			ids = append(ids, id)
 		}
 	}
 	return ids
-}
-
-// toolResultBlockID returns the tool use/call id for a tool_result content block
-// (Anthropic tool_use_id or OpenAI-style tool_call_id on replay).
-func toolResultBlockID(b map[string]any) string {
-	if t, _ := b["type"].(string); t != "tool_result" {
-		return ""
-	}
-	if id, _ := b["tool_use_id"].(string); id != "" {
-		return id
-	}
-	if id, _ := b["tool_call_id"].(string); id != "" {
-		return id
-	}
-	return ""
 }
