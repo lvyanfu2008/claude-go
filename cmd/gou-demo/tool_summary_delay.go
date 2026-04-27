@@ -116,6 +116,7 @@ func (m *model) handleUpdateToolSummaryDelayTick(_ gouToolSummaryDelayTickMsg) (
 	if m.uiScreen == gouDemoScreenPrompt && m.anyToolSummaryDelayPending() {
 		m.rebuildHeightCache()
 	}
+
+	//return m, nil
 	return m, tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} })
 }
-

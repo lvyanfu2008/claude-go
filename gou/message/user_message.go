@@ -7,9 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"goc/ccb-engine/diaglog"
 	"goc/types"
+
+	"charm.land/lipgloss/v2"
 )
 
 // UserMessageRenderer renders user messages.
