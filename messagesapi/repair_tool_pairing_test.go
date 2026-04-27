@@ -96,6 +96,46 @@ func TestRepairToolUseToolResultPairing_patchesUserWhenPartial(t *testing.T) {
 	}
 }
 
+func TestRepairToolUseToolResultPairing_skipsProgressBeforeUser(t *testing.T) {
+	asst := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "a1",
+		Message: mustJSON(t, map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "tool_use", "id": "call_00", "name": "x", "input": map[string]any{}}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_use", "id": "call_00", "name": "x", "input": map[string]any{}}}),
+	}
+	prog := types.Message{Type: types.MessageTypeProgress, UUID: "p1"}
+	u1 := types.Message{
+		Type: types.MessageTypeUser,
+		UUID: "u1",
+		Message: mustJSON(t, map[string]any{
+			"role":    "user",
+			"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "call_00", "content": "ok"}},
+		}),
+		Content: mustJSON(t, []any{map[string]any{"type": "tool_result", "tool_use_id": "call_00", "content": "ok"}}),
+	}
+	out, err := RepairToolUseToolResultPairing([]types.Message{asst, prog, u1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 3 {
+		t.Fatalf("len=%d want 3 (no synthetic)", len(out))
+	}
+	if out[1].Type != types.MessageTypeProgress {
+		t.Fatalf("order: want progress at 1, got %q", out[1].Type)
+	}
+	inner, err := getInner(&out[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, err := parseContentArrayOrString(inner.Content)
+	if err != nil || len(blocks) != 1 {
+		t.Fatalf("user blocks=%v", blocks)
+	}
+}
+
 func TestRepairToolUseToolResultPairing_noopWhenToolResultsSplitAcrossUsers(t *testing.T) {
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,

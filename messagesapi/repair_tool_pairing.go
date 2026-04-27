@@ -35,6 +35,13 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 		}
 		asstUUID := m.UUID
 		j := i + 1
+		// Transcript / agent buffers may interleave non-API messages (e.g. progress) between
+		// assistant and user. Do not treat those as the end of the “next user” run.
+		var interstitial []types.Message
+		for j < len(messages) && isInterstitialBeforeToolUserPairing(messagerow.NormalizeMessageJSON(messages[j])) {
+			interstitial = append(interstitial, messagerow.NormalizeMessageJSON(messages[j]))
+			j++
+		}
 		var userRun []types.Message
 		for j < len(messages) {
 			u := messagerow.NormalizeMessageJSON(messages[j])
@@ -44,10 +51,16 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 			userRun = append(userRun, u)
 			j++
 		}
+		out = append(out, interstitial...)
 		if len(userRun) == 0 {
 			diaglog.LineOrStderr("[tool-pairing] inserted user message: %d synthetic tool_result(s) (assistant=%s tool_use_ids=%v)",
 				len(required), asstUUID, required)
 			out = append(out, syntheticUserWithToolResults(required, asstUUID))
+			// j==i+1: next message is the non-user we broke on; let the outer for-loop advance
+			// to it. j>i+1: we consumed interstitials, skip those indices to avoid double-append.
+			if j > i+1 {
+				i = j - 1
+			}
 			continue
 		}
 		if UserMessagesCoverAssistantToolUses(m, userRun) {
@@ -67,6 +80,15 @@ func RepairToolUseToolResultPairing(messages []types.Message) ([]types.Message, 
 		i = j - 1
 	}
 	return out, nil
+}
+
+// isInterstitialBeforeToolUserPairing returns true for rows that are not part of the
+// Anthropic/OpenAI request but may appear on disk between an assistant and tool user.
+func isInterstitialBeforeToolUserPairing(m types.Message) bool {
+	if m.Type == types.MessageTypeProgress {
+		return true
+	}
+	return false
 }
 
 func toolUseIDsInAssistant(m *types.Message) []string {
