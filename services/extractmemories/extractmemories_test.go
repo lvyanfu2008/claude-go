@@ -563,6 +563,34 @@ func TestExecuteSimpleMode(t *testing.T) {
 	}
 }
 
+// CLAUDE_CODE_SIMPLE=0 is not bare mode (project defaults often set 0). Extraction
+// must not treat it as simple — otherwise merge env + truthy check diverge.
+func TestExecuteClaudeCodeSimpleZeroIsNotSimpleMode(t *testing.T) {
+	os.Setenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL", "1")
+	defer os.Unsetenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL")
+	os.Setenv("CLAUDE_CODE_SIMPLE", "0")
+	defer os.Unsetenv("CLAUDE_CODE_SIMPLE")
+	os.Setenv("CLAUDE_CODE_TENGU_BRAMBLE_LINTEL", "3")
+	defer os.Unsetenv("CLAUDE_CODE_TENGU_BRAMBLE_LINTEL")
+	memDir := filepath.Join(t.TempDir(), "projects", "test", "memory")
+	os.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
+	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
+
+	state := NewState()
+	_, err := Execute(context.Background(), state, ExtractionParams{
+		Messages:       []types.Message{makeMsg("1", types.MessageTypeUser)},
+		ToolUseContext: types.ToolUseContext{},
+		Cwd:            t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Reached throttle logic (turn 1 < 3), not the simple_mode return before throttle.
+	if state.TurnsSinceLastExtraction != 1 {
+		t.Fatalf("expected throttle counter 1 (past simple guard), got %d", state.TurnsSinceLastExtraction)
+	}
+}
+
 func TestExecuteThrottle(t *testing.T) {
 	os.Setenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL", "1")
 	defer os.Unsetenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL")

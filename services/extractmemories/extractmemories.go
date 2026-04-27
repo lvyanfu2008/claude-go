@@ -25,6 +25,7 @@ import (
 	"goc/claudemd"
 	"goc/conversation-runtime/query"
 	"goc/growthbook"
+	"goc/querycontext"
 	"goc/tools/localtools"
 	"goc/tools/toolexecution"
 	"goc/types"
@@ -144,9 +145,10 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 		return nil, nil
 	}
 
-	// Guard: skip if --simple mode.
-	if strings.TrimSpace(os.Getenv("CLAUDE_CODE_SIMPLE")) != "" {
-		fileExtractMemoriesLogf("skip reason=simple_mode CLAUDE_CODE_SIMPLE_set")
+	// Guard: skip if --simple / bare mode (truthy only — CLAUDE_CODE_SIMPLE=0 is off,
+	// same as claudemd.IsAutoMemoryEnabled and querycontext.BareModeFromEnv).
+	if querycontext.IsEnvTruthy(os.Getenv("CLAUDE_CODE_SIMPLE")) {
+		fileExtractMemoriesLogf("skip reason=simple_mode CLAUDE_CODE_SIMPLE_truthy")
 		return nil, nil
 	}
 
