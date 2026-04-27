@@ -70,7 +70,6 @@ func (m *model) messagesForScroll() []types.Message {
 		TranscriptMode:       m.uiScreen == gouDemoScreenTranscript,
 		ShowAllInTranscript:  m.transcriptShowAll || m.transcriptDumpMode,
 		VirtualScrollEnabled: !gouDemoVirtualScrollDisabled(),
-		ResolvedToolUseIDs:   m.resolvedToolIDs,
 	})
 }
 

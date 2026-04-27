@@ -87,7 +87,6 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 		TranscriptMode:       isInTranscript,
 		ShowAllInTranscript:  showAll,
 		VirtualScrollEnabled: true,
-		ResolvedToolUseIDs:   m.resolvedToolIDs,
 	})
 
 	var b strings.Builder
