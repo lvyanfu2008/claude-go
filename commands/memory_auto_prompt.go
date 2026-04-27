@@ -13,13 +13,7 @@ import (
 
 // Auto-only (non-KAIROS, non-TEAM) memory prompt is built in claudemd.BuildAgentMemoryLines
 // to mirror memdir.ts buildMemoryLines('auto memory', ...).
-// KAIROS + TEAM: embedded snapshots; regenerate via scripts/dump-memory-prompts-for-go.ts
-
-//go:embed data/memory_prompt_kairos_daily_index.txt
-var memoryPromptKairosDailyIndexTmpl string
-
-//go:embed data/memory_prompt_kairos_daily_skip_index.txt
-var memoryPromptKairosDailySkipIndexTmpl string
+// TEAM: embedded snapshots; regenerate via scripts/dump-memory-prompts-for-go.ts
 
 //go:embed data/memory_prompt_team_combined_index.txt
 var memoryPromptTeamCombinedIndexTmpl string
@@ -28,7 +22,6 @@ var memoryPromptTeamCombinedIndexTmpl string
 var memoryPromptTeamCombinedSkipIndexTmpl string
 
 const (
-	memoryPromptKairosPathPlaceholder  = "/__AUTO_MEM_PATH__/"
 	memoryPromptTeamAutoDirPlaceholder = "/__AUTO_DIR__/"
 	memoryPromptTeamTeamDirPlaceholder = "/__TEAM_DIR__/"
 )
@@ -96,11 +89,7 @@ func BuildAutoMemoryPrompt(o GouDemoSystemOpts) string {
 	skipIndex := o.MemorySkipIndex
 
 	if featuregates.Feature("KAIROS") && o.KairosActive {
-		tmpl := memoryPromptKairosDailyIndexTmpl
-		if skipIndex {
-			tmpl = memoryPromptKairosDailySkipIndexTmpl
-		}
-		s := strings.ReplaceAll(tmpl, memoryPromptKairosPathPlaceholder, memoryDirDisplayPath(memDir))
+		s := claudemd.BuildKairosDailyLogPrompt(memoryDirDisplayPath(memDir), skipIndex)
 		s = appendMemorySearchPastContext(s, memDir, cwd, o)
 		return strings.TrimSpace(s)
 	}

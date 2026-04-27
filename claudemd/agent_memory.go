@@ -321,6 +321,46 @@ func buildTrustingRecallSection() []string {
 	}
 }
 
+// BuildKairosDailyLogPrompt mirrors memdir.ts buildAssistantDailyLogPrompt.
+// It does not include buildSearchingPastContextSection; the commands layer
+// appends that via appendMemorySearchPastContext when the gate is on.
+// memDirDisplay should match memoryDirDisplayPath(GetAutoMemPath(cwd)) (trailing slash, ToSlash).
+func BuildKairosDailyLogPrompt(memDirDisplay string, skipIndex bool) string {
+	logPath := memDirDisplay + "logs/YYYY/MM/YYYY-MM-DD.md"
+	lines := []string{
+		"# auto memory",
+		"",
+		"You have a persistent, file-based memory system found at: `" + memDirDisplay + "`",
+		"",
+		"This session is long-lived. As you work, record anything worth remembering by **appending** to today's daily log file:",
+		"",
+		"`" + logPath + "`",
+		"",
+		"Substitute today's date (from `currentDate` in your context) for `YYYY-MM-DD`. When the date rolls over mid-session, start appending to the new day's file.",
+		"",
+		"Write each entry as a short timestamped bullet. Create the file (and parent directories) on first write if it does not exist. Do not rewrite or reorganize the log — it is append-only. A separate nightly process distills these logs into `MEMORY.md` and topic files.",
+		"",
+		"## What to log",
+		"- User corrections and preferences (\"use bun, not npm\"; \"stop summarizing diffs\")",
+		"- Facts about the user, their role, or their goals",
+		"- Project context that is not derivable from the code (deadlines, incidents, decisions and their rationale)",
+		"- Pointers to external systems (dashboards, Linear projects, Slack channels)",
+		"- Anything the user explicitly asks you to remember",
+		"",
+	}
+	lines = append(lines, buildWhatNotToSaveSection()...)
+	lines = append(lines, "")
+	if !skipIndex {
+		lines = append(lines,
+			"## "+entrypointName,
+			"",
+			"`"+entrypointName+"` is the distilled index (maintained nightly from your logs) and is loaded into your context automatically. Read it for orientation, but do not edit it directly — record new information in today's log instead.",
+			"",
+		)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // buildSearchingPastContextLines builds the searching past context guidance.
 func buildSearchingPastContextLines(memoryDir string) []string {
 	return []string{
