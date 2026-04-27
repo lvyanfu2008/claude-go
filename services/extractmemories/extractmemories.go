@@ -155,6 +155,14 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 		return nil, nil
 	}
 
+	// Guard: isExtractModeActive mirrors TS isExtractModeActive() in memdir/paths.ts.
+	// Extraction only runs in interactive sessions by default; non-interactive (-p/--print)
+	// sessions are gated behind tengu_slate_thimble.
+	if p.ToolUseContext.Options.IsNonInteractiveSession && !growthbook.IsTenguSlateThimble() {
+		fileExtractMemoriesLogf("skip reason=non_interactive_slate_thimble_off")
+		return nil, nil
+	}
+
 	cwd := strings.TrimSpace(p.Cwd)
 	if cwd == "" {
 		cwd = "."

@@ -403,8 +403,8 @@ func TestStateLastMemoryMessageUUID(t *testing.T) {
 // Prompt section builders (smoke tests)
 // ---------------------------------------------------------------------------
 
-func TestMemoryFormatSection(t *testing.T) {
-	s := memoryFormatSection()
+func TestTypesSectionIndividual(t *testing.T) {
+	s := typesSectionIndividual()
 	if !strings.Contains(s, "user") {
 		t.Error("expected user type in section")
 	}
@@ -417,6 +417,16 @@ func TestMemoryFormatSection(t *testing.T) {
 	if !strings.Contains(s, "reference") {
 		t.Error("expected reference type in section")
 	}
+	// Verify detailed XML-like structure from TS TYPES_SECTION_INDIVIDUAL
+	if !strings.Contains(s, "<when_to_save>") {
+		t.Error("expected when_to_save tags in section")
+	}
+	if !strings.Contains(s, "<how_to_use>") {
+		t.Error("expected how_to_use tags in section")
+	}
+	if !strings.Contains(s, "<examples>") {
+		t.Error("expected examples tags in section")
+	}
 }
 
 func TestWhatNotToSaveSection(t *testing.T) {
@@ -427,25 +437,71 @@ func TestWhatNotToSaveSection(t *testing.T) {
 	if !strings.Contains(s, "Git history") {
 		t.Error("expected 'Git history' in section")
 	}
+	// Verify explicit-save gate from TS WHAT_NOT_TO_SAVE_SECTION
+	if !strings.Contains(s, "explicitly asks you to save") {
+		t.Error("expected explicit-save gate in section")
+	}
 }
 
 func TestHowToSaveSection(t *testing.T) {
-	s := howToSaveSection()
+	s := howToSaveSection(false)
 	if !strings.Contains(s, "```markdown") {
 		t.Error("expected markdown code block in section")
 	}
 	if !strings.Contains(s, "MEMORY.md") {
 		t.Error("expected MEMORY.md reference in section")
 	}
+	if !strings.Contains(s, "two-step process") {
+		t.Error("expected two-step process for skipIndex=false")
+	}
 }
 
-func TestWhenToAccessSection(t *testing.T) {
-	s := whenToAccessSection()
-	if !strings.Contains(s, "When memories seem relevant") {
-		t.Error("expected relevance guidance in section")
+func TestHowToSaveSectionSkipIndex(t *testing.T) {
+	s := howToSaveSection(true)
+	if !strings.Contains(s, "```markdown") {
+		t.Error("expected markdown code block in section")
 	}
-	if !strings.Contains(s, "stale") {
-		t.Error("expected stale memory guidance in section")
+	// skipIndex=true should NOT mention MEMORY.md or two-step process
+	if strings.Contains(s, "two-step process") {
+		t.Error("skipIndex=true should not mention two-step process")
+	}
+	if strings.Contains(s, "Step 2") {
+		t.Error("skipIndex=true should not have Step 2")
+	}
+}
+
+func TestMemoryFrontmatterExample(t *testing.T) {
+	s := memoryFrontmatterExample()
+	if !strings.Contains(s, "```markdown") {
+		t.Error("expected markdown code block")
+	}
+	if !strings.Contains(s, "name:") {
+		t.Error("expected name field")
+	}
+	if !strings.Contains(s, "type:") {
+		t.Error("expected type field")
+	}
+}
+
+func TestOpener(t *testing.T) {
+	s := opener(5, "existing.md — name=test desc", "/tmp/mem/", "/tmp/mem/")
+	if !strings.Contains(s, "memory extraction subagent") {
+		t.Error("expected subagent framing")
+	}
+	if !strings.Contains(s, "Available tools:") {
+		t.Error("expected tool list")
+	}
+	if !strings.Contains(s, "read-only Bash") {
+		t.Error("expected read-only Bash description")
+	}
+	if !strings.Contains(s, "turn 1") {
+		t.Error("expected turn-budget strategy")
+	}
+	if !strings.Contains(s, "Bash rm is not permitted") {
+		t.Error("expected Bash rm prohibition")
+	}
+	if !strings.Contains(s, "existing.md") {
+		t.Error("expected existing memories listing")
 	}
 }
 
@@ -497,8 +553,8 @@ func TestBuildExtractionPrompt(t *testing.T) {
 	if result == "" {
 		t.Fatal("expected non-empty prompt")
 	}
-	if !strings.Contains(result, "Extract Memories") {
-		t.Error("expected 'Extract Memories' heading")
+	if !strings.Contains(result, "memory extraction subagent") {
+		t.Error("expected prompt to contain 'memory extraction subagent'")
 	}
 	if !strings.Contains(result, "user_role.md") {
 		t.Error("expected existing memory listing")
@@ -655,6 +711,33 @@ func TestExecuteClaudeCodeSimpleZeroIsNotSimpleMode(t *testing.T) {
 	// Reached throttle logic (turn 1 < 3), not the simple_mode return before throttle.
 	if state.TurnsSinceLastExtraction != 1 {
 		t.Fatalf("expected throttle counter 1 (past simple guard), got %d", state.TurnsSinceLastExtraction)
+	}
+}
+
+func TestExecuteNonInteractiveSkipsWithoutSlateThimble(t *testing.T) {
+	os.Setenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL", "1")
+	defer os.Unsetenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL")
+	os.Setenv("CLAUDE_CODE_TENGU_SLATE_THIMBLE", "0")
+	defer os.Unsetenv("CLAUDE_CODE_TENGU_SLATE_THIMBLE")
+	memDir := filepath.Join(t.TempDir(), "projects", "test", "memory")
+	os.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
+	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
+
+	state := NewState()
+	paths, err := Execute(context.Background(), state, ExtractionParams{
+		Messages: []types.Message{makeMsg("1", types.MessageTypeUser)},
+		ToolUseContext: types.ToolUseContext{
+			Options: types.ToolUseContextOptionsData{
+				IsNonInteractiveSession: true,
+			},
+		},
+		Cwd: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if paths != nil {
+		t.Fatalf("expected nil when non-interactive without slate_thimble, got %v", paths)
 	}
 }
 
@@ -924,8 +1007,12 @@ func TestBuildExtractionPromptSkipIndex(t *testing.T) {
 	if strings.Contains(result, "MEMORY.md index") {
 		t.Error("expected MEMORY.md index to be suppressed when SkipIndex=true")
 	}
-	if !strings.Contains(result, "Extract Memories") {
-		t.Error("expected 'Extract Memories' heading")
+	if !strings.Contains(result, "memory extraction subagent") {
+		t.Error("expected prompt to contain 'memory extraction subagent'")
+	}
+	// SkipIndex=true should NOT mention Step 2 (MEMORY.md index update).
+	if strings.Contains(result, "Step 2") {
+		t.Error("expected no 'Step 2' when SkipIndex=true")
 	}
 }
 

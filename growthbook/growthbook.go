@@ -388,6 +388,13 @@ func IsTenguMothCopse() bool {
 	return DefaultManager().IsOn("moth_copse")
 }
 
+// IsTenguSlateThimble returns true if the "tengu_slate_thimble" flag is enabled.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_slate_thimble', false) in memdir/paths.ts.
+// When true, extractMemories also runs in non-interactive sessions (e.g., -p/--print pipe mode).
+func IsTenguSlateThimble() bool {
+	return DefaultManager().IsOn("slate_thimble")
+}
+
 // GetTenguBrambleLintel returns the throttle interval for extractMemories.
 // Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_bramble_lintel', null) ?? 1 in extractMemories.ts.
 // Defaults to 1 (every eligible turn).
