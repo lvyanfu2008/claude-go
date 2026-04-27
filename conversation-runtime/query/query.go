@@ -145,11 +145,8 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		if useStream {
 			openAI := StreamingUsesOpenAIChat()
 			openAINoStream := openAI && OpenAIChatNoStreamEnabled()
-			gemma := UseGemmaProvider()
 			var streamPath string
 			switch {
-			case gemma:
-				streamPath = "gemma vertex ai"
 			case openAINoStream:
 				streamPath = "openai chat/completions JSON (GOU_QUERY_OPENAI_CHAT_NO_STREAM)"
 			case openAI:
@@ -166,8 +163,6 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			}
 			var streamErr error
 			switch {
-			case gemma:
-				streamErr = runGemmaStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			case openAINoStream:
 				streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			case openAI:

@@ -437,7 +437,7 @@ func ReplayOpenAIStreamChatResponse(sseBody []byte, model string, emit func(anth
 }
 
 // NormalizeOpenAINonStreamChatBodyToolCallsLoose rewrites choices[0].message.tool_calls so sloppy
-// OpenAI-compatible models (e.g. Gemma) still replay through [ReplayOpenAINonStreamChatResponse]:
+// OpenAI-compatible models still replay through [ReplayOpenAINonStreamChatResponse]:
 // wraps a lone tool-call object as an array, lifts top-level name/arguments into function.{name,arguments},
 // coerces non-string arguments to a JSON string, fills missing id/type/index.
 func NormalizeOpenAINonStreamChatBodyToolCallsLoose(respBody []byte) []byte {

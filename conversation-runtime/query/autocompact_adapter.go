@@ -23,7 +23,7 @@ import (
 //  1. Materializes [compactservice.AutoCompactTrackingState] from the host's
 //     [AutocompactInput.Tracking] raw blob (which [queryLoop] round-trips).
 //  2. Calls AutoCompactIfNeeded with a Summarizer that mirrors TS [queryModel] provider
-//     routing (Gemma → OpenAI chat/completions → Anthropic /v1/messages) for one text-only summary round.
+//     routing (OpenAI chat/completions → Anthropic /v1/messages) for one text-only summary round.
 //  3. Serializes [CompactionResult] + tracking back into the [AutocompactResult] wire shape.
 //
 // Hooks + attachments fall through to the no-op defaults. Hosts that want real

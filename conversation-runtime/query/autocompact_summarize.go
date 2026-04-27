@@ -12,7 +12,6 @@ import (
 	goccontext "goc/context"
 	"goc/anthropicmessages"
 	"goc/ccb-engine/apilog"
-	"goc/ccb-engine/gemma"
 	"goc/compactservice"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"
@@ -37,13 +36,11 @@ func autocompactOpenAIMaxWire(in compactservice.SummaryStreamInput) int {
 
 // summarizeAutocompact mirrors TS [queryModel] routing for a single text-only compact
 // summary call, in the same order as [queryLoop] streaming parity:
-// Gemma → OpenAI non-stream → OpenAI SSE → Anthropic Messages.
+// OpenAI non-stream → OpenAI SSE → Anthropic Messages.
 func summarizeAutocompact(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
 	openAI := StreamingUsesOpenAIChat()
 	openAINoStream := openAI && OpenAIChatNoStreamEnabled()
 	switch {
-	case UseGemmaProvider():
-		return summarizeAutocompactGemma(ctx, in)
 	case openAINoStream:
 		return summarizeAutocompactOpenAINoStream(ctx, in)
 	case openAI:
@@ -248,89 +245,6 @@ func summarizeAutocompactOpenAINoStream(ctx context.Context, in compactservice.S
 	acc := newAssistantStreamAccumulator()
 	if err := ReplayOpenAINonStreamChatResponse(respBody, model, acc.OnEvent); err != nil {
 		return compactservice.SummaryStreamResult{}, err
-	}
-
-	uuid := randomUUID()
-	inner, err := acc.AssistantWire(uuid)
-	if err != nil {
-		return compactservice.SummaryStreamResult{}, err
-	}
-	asst := types.Message{
-		Type:    types.MessageTypeAssistant,
-		UUID:    uuid,
-		Message: inner,
-	}
-	types.SyncAssistantMessageID(&asst)
-	usage := compactservice.GetTokenUsage(asst)
-	return compactservice.SummaryStreamResult{AssistantMessage: asst, Usage: usage}, nil
-}
-
-func summarizeAutocompactGemma(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
-	projectID := strings.TrimSpace(os.Getenv("VERTEX_AI_PROJECT_ID"))
-	location := strings.TrimSpace(os.Getenv("VERTEX_AI_LOCATION"))
-	endpointID := strings.TrimSpace(os.Getenv("VERTEX_AI_ENDPOINT_ID"))
-	modelName := strings.TrimSpace(os.Getenv("VERTEX_AI_MODEL_NAME"))
-
-	config := gemma.DefaultConfig()
-	if projectID != "" {
-		config.ProjectID = projectID
-	}
-	if location != "" {
-		config.Location = location
-	}
-	if endpointID != "" {
-		config.EndpointID = endpointID
-	}
-	if modelName != "" {
-		config.ModelName = modelName
-	}
-
-	client := gemma.NewClient(config)
-
-	model := strings.TrimSpace(in.Model)
-	if model == "" {
-		model = config.ModelName
-	}
-	maxOut := in.MaxOutputTokens
-	if maxOut <= 0 {
-		maxOut = compactservice.CompactMaxOutputTokens
-	}
-
-	wireMsgs := append([]types.Message{}, in.Messages...)
-	wireMsgs = append(wireMsgs, in.SummaryRequest)
-	msgsJSON, err := ccbhydrate.MessagesJSONNormalized(wireMsgs, nil, messagesapi.OptionsFromEnv())
-	if err != nil {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact gemma hydrate: %w", err)
-	}
-	msgsWire, err := gemmaWireMessagesFromHydratedJSON(msgsJSON)
-	if err != nil {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact gemma wire: %w", err)
-	}
-
-	req := gemma.ChatRequest{
-		Model:       config.ModelName,
-		Messages:    msgsWire,
-		MaxTokens:   maxOut,
-		Temperature: 0,
-	}
-	sys := strings.TrimSpace(strings.Join(in.SystemPrompt, "\n\n"))
-	if sys != "" {
-		req.Messages = append([]gemma.Message{{Role: "system", Content: sys}}, req.Messages...)
-	}
-
-	raw, err := client.ChatCompletionRaw(ctx, req)
-	if err != nil {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact gemma: %w", err)
-	}
-	innerBody, err := gemma.UnwrapVertexPredictionsOpenAI(raw)
-	if err != nil {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact gemma unwrap: %w", err)
-	}
-	innerBody = NormalizeOpenAINonStreamChatBodyToolCallsLoose(innerBody)
-
-	acc := newAssistantStreamAccumulator()
-	if err := ReplayOpenAINonStreamChatResponse(innerBody, model, acc.OnEvent); err != nil {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact gemma replay: %w", err)
 	}
 
 	uuid := randomUUID()
