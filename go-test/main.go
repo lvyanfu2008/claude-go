@@ -45,6 +45,7 @@ func logToFileExample() {
 	fileLogger.Info("踏青")
 	fileLogger.Info("hello, china")
 	fileLogger.Info("hello, lyf")
+	fileLogger.Info("你好，chind")
 	fileLogger.Info("hello")
 	fileLogger.Info("ht")
 

@@ -95,6 +95,7 @@ func NewState() *State {
 // extractMemoriesPassportOrHost returns true if post-turn extract-memories should run:
 //   - GrowthBook tengu_passport_quail, or
 //   - GOC_EXTRACT_MEMORIES=1|true|yes|on (host integration when GB is off).
+//
 // Set GOC_EXTRACT_MEMORIES=0|false|off|no to disable when using passport_quail in GB.
 func extractMemoriesPassportOrHost() bool {
 	if growthbook.IsTenguPassportQuail() {
@@ -256,11 +257,11 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 func newMessagesSinceCursor(messages []types.Message, cursorUUID string) []types.Message {
 	if cursorUUID == "" {
 		// First run: take the last 10 messages.
-		if len(messages) <= 10 {
+		if len(messages) <= 25 {
 			return messages
 		}
-		out := make([]types.Message, 10)
-		copy(out, messages[len(messages)-10:])
+		out := make([]types.Message, 25)
+		copy(out, messages[len(messages)-25:])
 		return out
 	}
 
