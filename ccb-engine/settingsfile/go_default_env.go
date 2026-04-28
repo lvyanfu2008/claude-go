@@ -44,5 +44,8 @@ func GoProjectSettingsEnvDefaults() map[string]string {
 		"CLAUDE_CODE_SIMPLE":                       "0",
 		"CLAUDE_DEBUG_PROCESS_USER_INPUT":          "0",
 		"CLAUDE_CODE_GO_DEBUG_AGENT_TOOL_SCHEMA":   "1",
+		"GOC_EXTRACT_MEMORIES_LOG_FILE":            "/Users/lvyanfu/.cache/claude/extract-memories.log",
+		"GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD":     "0",
+		"CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT":       "/Users/lvyanfu/.cache/claude/system_prompt_debug.log",
 	}
 }

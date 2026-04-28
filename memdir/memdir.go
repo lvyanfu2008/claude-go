@@ -5,9 +5,33 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"goc/claudebase"
 )
+
+// autoMemoryDebugLogPath returns the debug log path from env or "".
+func autoMemoryDebugLogPath() string {
+	return strings.TrimSpace(os.Getenv("CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT"))
+}
+
+func appendAutoMemoryDebugLine(inner string) {
+	logPath := autoMemoryDebugLogPath()
+	if logPath == "" {
+		return
+	}
+	t := time.Now().UTC()
+	ts := fmt.Sprintf("%s.%03dZ", t.Format("2006-01-02T15:04:05"), t.Nanosecond()/1e6)
+	line := fmt.Sprintf("%s [DEBUG] %s\n", ts, strings.TrimSpace(inner))
+	dir := filepath.Dir(logPath)
+	_ = os.MkdirAll(dir, 0o755)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	_, _ = f.WriteString(line)
+	_ = f.Close()
+}
 
 // Constants from src/memdir/memdir.ts for MEMORY.md / team entrypoint truncation.
 const (
@@ -302,7 +326,9 @@ func claudeProjectSessionDir(originalCwd string) string {
 // BuildAutoMemoryPrompt mirrors loadMemoryPrompt() (src/memdir/memdir.ts): KAIROS daily log, TEAMMEM combined,
 // auto-only buildMemoryLines; ensureMemoryDirExists on team + auto-only branches; cowork extra only on team + auto.
 func BuildAutoMemoryPrompt(o AutoMemoryPromptOpts) string {
+	appendAutoMemoryDebugLine(fmt.Sprintf("[BuildAutoMemoryPrompt] ENTER cwd=%q kairosActive=%v teamMemActive=%v memorySkipIndex=%v memorySearchPastContext=%v embeddedSearch=%v", o.Cwd, o.KairosActive, o.TeamMemActive, o.MemorySkipIndex, o.MemorySearchPastContext, o.EmbeddedSearchTools))
 	if !IsAutoMemoryEnabled() {
+		appendAutoMemoryDebugLine("[BuildAutoMemoryPrompt] IsAutoMemoryEnabled()=false → returning EMPTY")
 		return ""
 	}
 	cwd := strings.TrimSpace(o.Cwd)
@@ -310,17 +336,22 @@ func BuildAutoMemoryPrompt(o AutoMemoryPromptOpts) string {
 		cwd = "."
 	}
 	memDir := GetAutoMemPath(cwd)
+	appendAutoMemoryDebugLine(fmt.Sprintf("[BuildAutoMemoryPrompt] memDir=%q", memDir))
 	skipIndex := o.MemorySkipIndex
 
 	if o.KairosActive {
+		appendAutoMemoryDebugLine("[BuildAutoMemoryPrompt] branch=KAIROS")
 		s := BuildKairosDailyLogPrompt(memoryDirDisplayPath(memDir), skipIndex)
 		if o.MemorySearchPastContext {
 			s = AppendMemorySearchPastContext(s, memDir, cwd, o.EmbeddedSearchTools || o.ReplModeEnabled)
 		}
-		return strings.TrimSpace(s)
+		result := strings.TrimSpace(s)
+		appendAutoMemoryDebugLine(fmt.Sprintf("[BuildAutoMemoryPrompt] KAIROS result len=%d has_when_to_save=%v", len(result), strings.Contains(result, "<when_to_save>")))
+		return result
 	}
 
 	if o.TeamMemActive && IsTeamMemoryPromptActive() {
+		appendAutoMemoryDebugLine("[BuildAutoMemoryPrompt] branch=TEAMMEM")
 		teamDir := GetTeamMemPath(cwd)
 		_ = EnsureMemoryDirExists(teamDir)
 		var extra []string
@@ -336,9 +367,12 @@ func BuildAutoMemoryPrompt(o AutoMemoryPromptOpts) string {
 		if o.MemorySearchPastContext {
 			s = AppendMemorySearchPastContext(s, memDir, cwd, o.EmbeddedSearchTools || o.ReplModeEnabled)
 		}
-		return strings.TrimSpace(s)
+		result := strings.TrimSpace(s)
+		appendAutoMemoryDebugLine(fmt.Sprintf("[BuildAutoMemoryPrompt] TEAMMEM result len=%d has_when_to_save=%v", len(result), strings.Contains(result, "<when_to_save>")))
+		return result
 	}
 
+	appendAutoMemoryDebugLine("[BuildAutoMemoryPrompt] branch=DEFAULT (auto memory)")
 	_ = EnsureMemoryDirExists(memDir)
 	var extra []string
 	if x := strings.TrimSpace(os.Getenv("CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES")); x != "" {
@@ -346,8 +380,11 @@ func BuildAutoMemoryPrompt(o AutoMemoryPromptOpts) string {
 	}
 	lines := BuildAgentMemoryLines("auto memory", memoryDirDisplayPath(memDir), extra, skipIndex, false)
 	s := strings.Join(lines, "\n")
+	appendAutoMemoryDebugLine(fmt.Sprintf("[BuildAutoMemoryPrompt] BuildAgentMemoryLines returned %d lines, joined=%d chars, has_when_to_save=%v", len(lines), len(s), strings.Contains(s, "<when_to_save>")))
 	if o.MemorySearchPastContext {
 		s = AppendMemorySearchPastContext(s, memDir, cwd, o.EmbeddedSearchTools || o.ReplModeEnabled)
 	}
-	return strings.TrimSpace(s)
+	result := strings.TrimSpace(s)
+	appendAutoMemoryDebugLine(fmt.Sprintf("[BuildAutoMemoryPrompt] DEFAULT result len=%d has_when_to_save=%v", len(result), strings.Contains(result, "<when_to_save>")))
+	return result
 }

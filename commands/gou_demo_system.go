@@ -3,14 +3,39 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"goc/commands/featuregates"
 	"goc/growthbook"
 	"goc/modelenv"
 	"goc/types"
 )
+
+// systemPromptDebugLogPath returns the debug log path from env or "" to disable.
+func systemPromptDebugLogPath() string {
+	return strings.TrimSpace(os.Getenv("CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT"))
+}
+
+func appendSystemPromptDebugLine(inner string) {
+	logPath := systemPromptDebugLogPath()
+	if logPath == "" {
+		return
+	}
+	t := time.Now().UTC()
+	ts := fmt.Sprintf("%s.%03dZ", t.Format("2006-01-02T15:04:05"), t.Nanosecond()/1e6)
+	line := fmt.Sprintf("%s [DEBUG] %s\n", ts, strings.TrimSpace(inner))
+	dir := filepath.Dir(logPath)
+	_ = os.MkdirAll(dir, 0o755)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	_, _ = f.WriteString(line)
+	_ = f.Close()
+}
 
 // GouDemoSystemOpts drives phase-2 system string assembly (mirrors TS getSystemPrompt; see prompts.go for constants/helpers).
 type GouDemoSystemOpts struct {
@@ -137,7 +162,7 @@ func ApplyGouDemoRuntimeEnv(o *GouDemoSystemOpts) {
 	if _, ok := os.LookupEnv("CLAUDE_CODE_GO_KAIROS_ACTIVE"); ok {
 		o.KairosActive = envTruthyGo("CLAUDE_CODE_GO_KAIROS_ACTIVE")
 	} else {
-		o.KairosActive = true
+		o.KairosActive = false
 	}
 	o.CoordinatorMode = envTruthyGo("CLAUDE_CODE_GO_COORDINATOR_MODE")
 	o.Undercover = envTruthyGo("CLAUDE_CODE_GO_UNDERCOVER")
@@ -150,6 +175,7 @@ const issuesExplainerDoingTasks = "use `/issue` or the options described in `/he
 // BuildGouDemoSystemPrompt mirrors TS getSystemPrompt slice order: static prefix through output efficiency,
 // optional SYSTEM_PROMPT_DYNAMIC_BOUNDARY, then dynamic sections (session, memory, ant override, env, …).
 func BuildGouDemoSystemPrompt(o GouDemoSystemOpts) string {
+	appendSystemPromptDebugLine(fmt.Sprintf("[BuildGouDemoSystemPrompt] ENTER cwd=%q modelID=%q userTypeAnt=%v kairosActive=%v memorySkipIndex=%v memorySearchPastContext=%v verificationAgentGuidance=%v explorePlanAgents=%v", o.Cwd, o.ModelID, o.UserTypeAnt, o.KairosActive, o.MemorySkipIndex, o.MemorySearchPastContext, o.VerificationAgentGuidance, o.ExplorePlanAgentsEnabled))
 	if envTruthyGo("CLAUDE_CODE_SIMPLE") {
 		// Date: callers may set via session; TS uses getSessionStartDate().
 		return strings.TrimSpace(SimpleModeSystemPrompt(o.Cwd, os.Getenv("CLAUDE_CODE_GO_SESSION_START_DATE")))
@@ -186,10 +212,16 @@ func BuildGouDemoSystemPrompt(o GouDemoSystemOpts) string {
 		parts = append(parts, SystemPromptDynamicBoundary)
 	}
 	if sg := SessionSpecificGuidanceFull(o); strings.TrimSpace(sg) != "" {
+		appendSystemPromptDebugLine(fmt.Sprintf("[BuildGouDemoSystemPrompt] SessionSpecificGuidanceFull returned %d chars: %q", len(sg), previewForDebugLog(sg, 200)))
 		parts = append(parts, strings.TrimSpace(sg))
+	} else {
+		appendSystemPromptDebugLine("[BuildGouDemoSystemPrompt] SessionSpecificGuidanceFull returned EMPTY")
 	}
 	if mem := BuildAutoMemoryPrompt(o); strings.TrimSpace(mem) != "" {
+		appendSystemPromptDebugLine(fmt.Sprintf("[BuildGouDemoSystemPrompt] BuildAutoMemoryPrompt returned %d chars, has_when_to_save=%v, has_types=%v, preview=%q", len(mem), strings.Contains(mem, "<when_to_save>"), strings.Contains(mem, "<types>"), previewForDebugLog(mem, 300)))
 		parts = append(parts, strings.TrimSpace(mem))
+	} else {
+		appendSystemPromptDebugLine("[BuildGouDemoSystemPrompt] BuildAutoMemoryPrompt returned EMPTY")
 	}
 	if s := strings.TrimSpace(antModelOverrideSection(o)); s != "" {
 		parts = append(parts, s)
@@ -257,7 +289,18 @@ func BuildGouDemoSystemPrompt(o GouDemoSystemOpts) string {
 	if br != "" {
 		parts = append(parts, br)
 	}
-	return strings.Join(parts, "\n\n")
+	result := strings.Join(parts, "\n\n")
+	appendSystemPromptDebugLine(fmt.Sprintf("[BuildGouDemoSystemPrompt] RESULT total=%d chars partCount=%d has_when_to_save=%v has_SessionSpecific=%v has_auto_memory=%v", len(result), len(parts), strings.Contains(result, "<when_to_save>"), strings.Contains(result, "Session-specific guidance"), strings.Contains(result, "auto memory")))
+	return result
+}
+
+// previewForDebugLog truncates s to maxLen chars for debug logging.
+func previewForDebugLog(s string, maxLen int) string {
+	cleaned := strings.ReplaceAll(s, "\n", "\\n")
+	if len(cleaned) <= maxLen {
+		return cleaned
+	}
+	return cleaned[:maxLen] + "…"
 }
 
 func slicesCloneStringSlice(s []string) []string {

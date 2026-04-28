@@ -5,10 +5,17 @@ import (
 	"os"
 	"strings"
 
+	"goc/commands"
 	"goc/modelenv"
 	"goc/tstenv"
 	"goc/types"
 )
+
+// swarmFieldsByTool mirrors TS SWARM_FIELDS_BY_TOOL in src/utils/api.ts.
+// Fields stripped from the input schema when agent swarms are not enabled.
+var swarmFieldsByTool = map[string][]string{
+	"Agent": {"name", "team_name", "mode"},
+}
 
 // APIToolDefinition mirrors model-facing tool rows sent in tools[].
 // Shape intentionally tracks TS toolToAPISchema output fields we currently
@@ -61,6 +68,11 @@ func ToolToAPISchema(spec types.ToolSpec, opts ToolToAPISchemaOptions) APIToolDe
 		Description: spec.Description,
 		InputSchema: spec.InputJSONSchema,
 	}
+	// Mirror TS filterSwarmFieldsFromSchema: strip name/team_name/mode from Agent
+	// tool input_schema when agent swarms are not enabled (src/utils/api.ts lines 166-168).
+	if !commands.AgentSwarmsEnabled() {
+		out.InputSchema = filterSwarmFields(out.Name, out.InputSchema)
+	}
 	if opts.DeferLoading {
 		v := true
 		out.DeferLoading = &v
@@ -91,5 +103,32 @@ func modelSupportsStructuredOutputs(model string) bool {
 	// TS checks model capability; Go mirrors that intent conservatively for
 	// Anthropic Claude families where strict structured outputs are supported.
 	return strings.Contains(m, "claude")
+}
+
+// filterSwarmFields removes swarm-related fields from a tool's input_schema
+// properties when agent swarms are not enabled. Mirrors TS filterSwarmFieldsFromSchema
+// in src/utils/api.ts.
+func filterSwarmFields(name string, schema json.RawMessage) json.RawMessage {
+	fieldsToRemove := swarmFieldsByTool[name]
+	if len(fieldsToRemove) == 0 {
+		return schema
+	}
+	var m map[string]any
+	if err := json.Unmarshal(schema, &m); err != nil {
+		return schema
+	}
+	props, ok := m["properties"].(map[string]any)
+	if !ok {
+		return schema
+	}
+	for _, f := range fieldsToRemove {
+		delete(props, f)
+	}
+	m["properties"] = props
+	result, err := json.Marshal(m)
+	if err != nil {
+		return schema
+	}
+	return json.RawMessage(result)
 }
 
