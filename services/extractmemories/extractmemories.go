@@ -580,37 +580,112 @@ func buildRestrictedExecutionDeps(memoryDir string) toolexecution.ExecutionDeps 
 	memDir := strings.TrimSpace(memoryDir)
 	invokeReadFileState := localtools.NewReadFileState()
 
+	dispatchTool := func(ctx context.Context, name string, input json.RawMessage) (string, bool, error) {
+		switch name {
+		case "Read":
+			return localtools.ReadFromJSON(input, nil, invokeReadFileState, nil)
+		case "Glob":
+			return localtools.GlobFromJSON(ctx, input, nil)
+		case "Grep":
+			return localtools.GrepFromJSON(ctx, input, nil)
+		case "Bash":
+			return localtools.BashFromJSON(ctx, input, "", true)
+		case "Write":
+			if memDir != "" {
+				if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {
+					return "", false, fmt.Errorf("Write: path not in memory directory")
+				}
+			}
+			return localtools.WriteFromJSONDeps(input, nil, invokeReadFileState, nil)
+		case "Edit":
+			if memDir != "" {
+				if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {
+					return "", false, fmt.Errorf("Edit: path not in memory directory")
+				}
+			}
+			return localtools.EditFromJSONDeps(input, nil, invokeReadFileState, false, nil)
+		default:
+			return "", false, fmt.Errorf("tool %q not allowed in extraction sub-agent", name)
+		}
+	}
+
 	return toolexecution.ExecutionDeps{
 		InvokeTool: func(ctx context.Context, name, _ string, input json.RawMessage) (string, bool, error) {
-			switch name {
-			case "Read":
-				return localtools.ReadFromJSON(input, nil, invokeReadFileState, nil)
-			case "Glob":
-				return localtools.GlobFromJSON(ctx, input, nil)
-			case "Grep":
-				return localtools.GrepFromJSON(ctx, input, nil)
-			case "Bash":
-				// Read-only bash: set GOU_DEMO_READONLY_BASH-like env.
-				return localtools.BashFromJSON(ctx, input, "", true)
-			case "Write":
-				if memDir != "" {
-					if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {
-						return "", false, fmt.Errorf("Write: path not in memory directory")
-					}
-				}
-				return localtools.WriteFromJSONDeps(input, nil, invokeReadFileState, nil)
-			case "Edit":
-				if memDir != "" {
-					if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {
-						return "", false, fmt.Errorf("Edit: path not in memory directory")
-					}
-				}
-				return localtools.EditFromJSONDeps(input, nil, invokeReadFileState, false, nil)
-			default:
-				return "", false, fmt.Errorf("tool %q not allowed in extraction sub-agent", name)
+			// Allow REPL — when REPL mode is enabled (ant-default), primitive
+			// tools are hidden from the outer tool list so the forked agent
+			// calls REPL instead. Each inner primitive is re-dispatched
+			// through dispatchTool, so the Read/Bash/Edit/Write gates below
+			// still apply. Mirrors TS extractMemories.ts:180-182.
+			if name == "REPL" {
+				return dispatchREPLTool(ctx, input, dispatchTool)
 			}
+			return dispatchTool(ctx, name, input)
 		},
 	}
+}
+
+// replToolInput matches the TS REPL tool input shape (src/tools/REPLTool/).
+type replToolInput struct {
+	Tool  string          `json:"tool"`
+	Input json.RawMessage `json:"input"`
+	Batch []struct {
+		Name  string          `json:"name"`
+		Input json.RawMessage `json:"input"`
+	} `json:"batch"`
+}
+
+// dispatchREPLTool parses a REPL tool input and dispatches each inner tool
+// call through dispatchTool. Inner tools are re-gated by the same
+// Read/Glob/Grep/Bash/Write/Edit restrictions.
+func dispatchREPLTool(ctx context.Context, input json.RawMessage, dispatch func(ctx context.Context, name string, input json.RawMessage) (string, bool, error)) (string, bool, error) {
+	var in replToolInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", true, err
+	}
+
+	type step struct {
+		name  string
+		input json.RawMessage
+	}
+	var steps []step
+	if len(in.Batch) > 0 {
+		for _, b := range in.Batch {
+			raw := b.Input
+			if raw == nil {
+				raw = json.RawMessage(`{}`)
+			}
+			steps = append(steps, step{name: b.Name, input: raw})
+		}
+	} else {
+		raw := in.Input
+		if raw == nil {
+			raw = json.RawMessage(`{}`)
+		}
+		steps = append(steps, step{name: in.Tool, input: raw})
+	}
+
+	if len(steps) == 0 {
+		return "", true, fmt.Errorf("REPL input: use {\"tool\":\"Read\",\"input\":{...}} or {\"batch\":[{\"name\":\"Read\",\"input\":{...}}]}")
+	}
+
+	var blocks []string
+	for i, st := range steps {
+		nm := strings.TrimSpace(st.name)
+		if nm == "" || nm == "REPL" {
+			return "", true, fmt.Errorf("REPL step %d: invalid tool name %q", i, st.name)
+		}
+		out, isErr, err := dispatch(ctx, nm, st.input)
+		if err != nil {
+			return "", true, err
+		}
+		prefix := fmt.Sprintf("[%s] ", nm)
+		if isErr {
+			prefix = fmt.Sprintf("[%s ERROR] ", nm)
+		}
+		blocks = append(blocks, prefix+strings.TrimSpace(out))
+	}
+
+	return strings.Join(blocks, "\n\n"), false, nil
 }
 
 // filePathFromInput extracts the file_path from a Write/Edit tool input.
