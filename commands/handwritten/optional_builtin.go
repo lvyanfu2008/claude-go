@@ -2,6 +2,7 @@ package handwritten
 
 import (
 	"goc/commands/featuregates"
+	"goc/tools/tool"
 	"goc/types"
 )
 
@@ -11,9 +12,11 @@ func optionalBuiltinAfterVim() []types.Command {
 	if featuregates.Feature("CCR_REMOTE_SETUP") {
 		out = append(out, cmdWebSetup())
 	}
-	if featuregates.Feature("FORK_SUBAGENT") {
+
+	if tool.IsForkSubagentEnabled() {
 		out = append(out, cmdFork())
 	}
+
 	if featuregates.Feature("BUDDY") {
 		out = append(out, cmdBuddy())
 	}

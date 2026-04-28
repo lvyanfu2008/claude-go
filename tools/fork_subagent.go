@@ -5,61 +5,21 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/mattn/go-isatty"
-
-	"goc/commands/featuregates"
 	"goc/types"
 )
 
 // envTruthy from http_tools.go — takes env key name, calls os.Getenv internally.
 // Declared separately in that file; used here for coordinator/non-interactive shims.
 
-// coordinatorModeEnvShim mirrors coordinatorModeLikeTS in commands/prompts_gates.go.
-// Checks FEATURE_COORDINATOR_MODE + CLAUDE_CODE_COORDINATOR_MODE.
-func coordinatorModeEnvShim() bool {
-	if !featuregates.Feature("COORDINATOR_MODE") {
-		return false
-	}
-	return envTruthy("CLAUDE_CODE_COORDINATOR_MODE")
-}
-
-// nonInteractiveSessionEnvShim approximates getIsNonInteractiveSession() from TS
-// bootstrap/state.js when no session struct is in scope.
-// TS checks: -p/--print, --init-only, --sdk-url, or !process.stdout.isTTY
-// Go mirrors via env vars + stdout terminal detection.
-func nonInteractiveSessionEnvShim() bool {
-	return envTruthy("CLAUDE_CODE_NONINTERACTIVE") ||
-		envTruthy("HEADLESS") ||
-		envTruthy("GOU_DEMO_NON_INTERACTIVE") ||
-		!isatty.IsTerminal(os.Stdout.Fd())
-}
-
 // Fork subagent constants — mirrors forkSubagent.ts.
 const (
-	forkBoilerplateTag  = "fork-boilerplate"
-	forkDirectivePrefix = "Your directive: "
-	forkSubagentType    = "fork"
+	forkBoilerplateTag    = "fork-boilerplate"
+	forkDirectivePrefix   = "Your directive: "
+	forkSubagentType      = "fork"
 	forkPlaceholderResult = "Fork started — processing in background"
 )
-
-// isForkSubagentEnabled mirrors forkSubagent.ts isForkSubagentEnabled.
-// Gate: FEATURE_FORK_SUBAGENT=1, excludes coordinator mode and non-interactive sessions.
-// Matches commands.ForkSubagentEnabled — standalone variant for tools package callers.
-func isForkSubagentEnabled() bool {
-	if !featuregates.Feature("FORK_SUBAGENT") {
-		return false
-	}
-	if coordinatorModeEnvShim() {
-		return false
-	}
-	if nonInteractiveSessionEnvShim() {
-		return false
-	}
-	return true
-}
 
 // isInForkChild mirrors forkSubagent.ts isInForkChild.
 // Scans messages for <fork-boilerplate> tag to detect recursive forking.

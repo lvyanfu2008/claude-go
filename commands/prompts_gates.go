@@ -2,6 +2,7 @@
 package commands
 
 import (
+	"goc/tools/tool"
 	"os"
 	"runtime"
 	"strconv"
@@ -121,16 +122,7 @@ func nonInteractiveSessionEnvShim() bool {
 // Coordinator uses coordinatorModeLikeTS, not o.CoordinatorMode (see CLAUDE_CODE_GO_COORDINATOR_MODE vs TS).
 // Non-interactive: session bit or env shim, matching "fork off" in CI / headless / gou-demo.
 func ForkSubagentEnabled(o GouDemoSystemOpts) bool {
-	if !featuregates.Feature("FORK_SUBAGENT") {
-		return false
-	}
-	if coordinatorModeLikeTS() {
-		return false
-	}
-	if o.NonInteractiveSession || nonInteractiveSessionEnvShim() {
-		return false
-	}
-	return true
+	return tool.IsForkSubagentEnabled()
 }
 
 // CachedMicrocompactFRCConfig mirrors fields read by getFunctionResultClearingSection in prompts.ts.

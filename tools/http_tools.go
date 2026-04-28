@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"goc/tools/tool"
 	"io"
 	"net/http"
 	"net/url"
@@ -163,13 +164,7 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
 }
 
 func envTruthy(k string) bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(k)))
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+	return tool.EnvTruthy(k)
 }
 
 // WebSearchFromJSON mirrors WebSearchTool output shape ({data: ...}); uses ANTHROPIC_WEB_SEARCH_URL when configured.

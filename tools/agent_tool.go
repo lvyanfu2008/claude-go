@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"goc/tools/tool"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	}
 
 	messages := cfg.Messages
-	forkEnabled := isForkSubagentEnabled()
+	forkEnabled := tool.IsForkSubagentEnabled()
 	isForkPath := strings.TrimSpace(in.SubagentType) == "" && forkEnabled
 
 	// Recursive fork guard
@@ -89,28 +90,28 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		pm = m
 	}
 	s := &AgentSession{
-		ID:                                 agentID,
-		Name:                               name,
-		TeamName:                           strings.TrimSpace(in.TeamName),
-		AgentType:                          selected.AgentType,
-		Description:                        strings.TrimSpace(in.Description),
-		Model:                              model,
-		PermissionMode:                     pm,
-		MaxTurns:                           selected.MaxTurns,
-		AllowedTools:                       ResolveAllowedTools(selected, availableAgentToolNames()),
-		Skills:                             append([]string(nil), selected.Skills...),
-		RequiredMcpServers:                 append([]string(nil), selected.RequiredMcpServers...),
-		AvailableMcpServers:                append([]string(nil), cfg.AvailableMCPServers...),
-		Prompt:                             in.Prompt,
-		WorkDir:                            cfg.WorkDir,
-		ProjectRoot:                        cfg.ProjectRoot,
-		Isolation:                          strings.TrimSpace(in.Isolation),
-		SystemPrompt:                       selected.SystemPrompt,
-		Memory:                            selected.Memory,
-		OmitClaudeMd:                       selected.OmitClaudeMd,
-		Hooks:                             selected.Hooks,
-		CreatedAt:                          time.Now().UTC(),
-		UpdatedAt:                          time.Now().UTC(),
+		ID:                  agentID,
+		Name:                name,
+		TeamName:            strings.TrimSpace(in.TeamName),
+		AgentType:           selected.AgentType,
+		Description:         strings.TrimSpace(in.Description),
+		Model:               model,
+		PermissionMode:      pm,
+		MaxTurns:            selected.MaxTurns,
+		AllowedTools:        ResolveAllowedTools(selected, availableAgentToolNames()),
+		Skills:              append([]string(nil), selected.Skills...),
+		RequiredMcpServers:  append([]string(nil), selected.RequiredMcpServers...),
+		AvailableMcpServers: append([]string(nil), cfg.AvailableMCPServers...),
+		Prompt:              in.Prompt,
+		WorkDir:             cfg.WorkDir,
+		ProjectRoot:         cfg.ProjectRoot,
+		Isolation:           strings.TrimSpace(in.Isolation),
+		SystemPrompt:        selected.SystemPrompt,
+		Memory:              selected.Memory,
+		OmitClaudeMd:        selected.OmitClaudeMd,
+		Hooks:               selected.Hooks,
+		CreatedAt:           time.Now().UTC(),
+		UpdatedAt:           time.Now().UTC(),
 	}
 	if s.Description == "" {
 		s.Description = selected.WhenToUse
@@ -302,11 +303,11 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	}
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{
-			Success:      true,
-			AgentID:      s.ID,
-			Name:         s.Name,
-			AgentType:    s.AgentType,
-			Message:      "Agent completed",
+			Success:          true,
+			AgentID:          s.ID,
+			Name:             s.Name,
+			AgentType:        s.AgentType,
+			Message:          "Agent completed",
 			Output:           output,
 			WorktreePath:     s.WorktreePath,
 			ProgressMessages: s.ProgressMessages,
@@ -391,10 +392,10 @@ func ResumeAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	persistAgentMetadata(cfg, s)
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{
-			Success:      true,
-			AgentID:      s.ID,
-			Name:         s.Name,
-			AgentType:    s.AgentType,
+			Success:          true,
+			AgentID:          s.ID,
+			Name:             s.Name,
+			AgentType:        s.AgentType,
 			Message:          "Agent resumed",
 			Output:           output,
 			WorktreePath:     s.WorktreePath,

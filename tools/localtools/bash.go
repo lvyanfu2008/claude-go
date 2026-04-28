@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"goc/tools/tool"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,10 +30,10 @@ func BashFromJSON(ctx context.Context, raw []byte, workDir string, localDefault 
 		return "", true, fmt.Errorf("Bash tool disabled in Go runner (set CCB_ENGINE_LOCAL_BASH=1, or run gou-demo with local Bash default on and without GOU_DEMO_NO_LOCAL_BASH; use socket worker for full TS execution)")
 	}
 	var in struct {
-		Command           string  `json:"command"`
-		Timeout           float64 `json:"timeout"`
-		Description       string  `json:"description"`
-		RunInBackground   *bool   `json:"run_in_background"`
+		Command         string  `json:"command"`
+		Timeout         float64 `json:"timeout"`
+		Description     string  `json:"description"`
+		RunInBackground *bool   `json:"run_in_background"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
@@ -83,11 +84,5 @@ func BashFromJSON(ctx context.Context, raw []byte, workDir string, localDefault 
 }
 
 func envTruthy(k string) bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(k)))
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+	return tool.EnvTruthy(k)
 }
