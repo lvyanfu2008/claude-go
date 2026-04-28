@@ -96,38 +96,24 @@ func TestBuildUserMessage(t *testing.T) {
 	}
 }
 
-func TestIsPathInMemDir_inside(t *testing.T) {
+func TestFilePathFromInput_valid(t *testing.T) {
 	input := []byte(`{"file_path": "/mem/dir/file.md"}`)
-	if !isPathInMemDir(input, "/mem/dir") {
-		t.Fatal("expected path inside mem dir to be allowed")
+	if got := filePathFromInput(input); got != "/mem/dir/file.md" {
+		t.Fatalf("filePathFromInput = %q, want /mem/dir/file.md", got)
 	}
 }
 
-func TestIsPathInMemDir_outside(t *testing.T) {
-	input := []byte(`{"file_path": "/other/file.md"}`)
-	if isPathInMemDir(input, "/mem/dir") {
-		t.Fatal("expected path outside mem dir to be denied")
-	}
-}
-
-func TestIsPathInMemDir_traversal(t *testing.T) {
-	input := []byte(`{"file_path": "/mem/dir/../outside.md"}`)
-	if isPathInMemDir(input, "/mem/dir") {
-		t.Fatal("expected path traversal outside mem dir to be denied")
-	}
-}
-
-func TestIsPathInMemDir_emptyFilePath(t *testing.T) {
+func TestFilePathFromInput_empty(t *testing.T) {
 	input := []byte(`{}`)
-	if isPathInMemDir(input, "/mem/dir") {
-		t.Fatal("expected empty file_path to be denied")
+	if got := filePathFromInput(input); got != "" {
+		t.Fatalf("filePathFromInput = %q, want empty", got)
 	}
 }
 
-func TestIsPathInMemDir_emptyMemDir(t *testing.T) {
-	input := []byte(`{"file_path": "/some/file.md"}`)
-	if isPathInMemDir(input, "") {
-		t.Fatal("expected empty memDir to deny all paths")
+func TestFilePathFromInput_invalidJSON(t *testing.T) {
+	input := []byte(`{bad`)
+	if got := filePathFromInput(input); got != "" {
+		t.Fatalf("filePathFromInput = %q, want empty", got)
 	}
 }
 

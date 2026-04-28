@@ -100,9 +100,15 @@ func GetTeamMemPath(originalCwd string) string {
 	return filepath.Join(auto, "team") + string(filepath.Separator)
 }
 
-// IsAutoMemPath mirrors src/memdir/paths.ts isAutoMemPath: absolute file path lies under
-// GetAutoMemPath(originalCwd) (project-scoped auto-memory directory).
-func IsAutoMemPath(absFilePath, originalCwd string) bool {
+// IsAutoMemPath mirrors src/memdir/paths.ts isAutoMemPath.
+// TS: export function isAutoMemPath(absolutePath: string): boolean {
+//
+//		const normalizedPath = normalize(absolutePath)
+//		return normalizedPath.startsWith(getAutoMemPath())
+//	  }
+//
+// getAutoMemPath() is memoized by project root — no cwd argument needed.
+func IsAutoMemPath(absFilePath string) bool {
 	if !IsAutoMemoryEnabled() {
 		return false
 	}
@@ -110,19 +116,15 @@ func IsAutoMemPath(absFilePath, originalCwd string) bool {
 	if p == "" {
 		return false
 	}
-	memRoot := strings.TrimSuffix(filepath.Clean(GetAutoMemPath(originalCwd)), string(filepath.Separator))
-	if memRoot == "" || memRoot == "." {
-		return false
-	}
 	abs := filepath.Clean(p)
 	if !filepath.IsAbs(abs) {
 		return false
 	}
-	rel, err := filepath.Rel(memRoot, abs)
-	if err != nil {
+	memRoot := strings.TrimSuffix(filepath.Clean(GetAutoMemPath("")), string(filepath.Separator))
+	if memRoot == "" || memRoot == "." {
 		return false
 	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return strings.HasPrefix(abs, memRoot+string(filepath.Separator)) || abs == memRoot
 }
 
 func expandTildeMemoryDir(raw string) string {

@@ -9,8 +9,8 @@ const memoryDriftCaveat = "- Memory records can become stale over time. Use memo
 // dirsExistGuidance mirrors memdir.ts DIRS_EXIST_GUIDANCE.
 const dirsExistGuidance = "Both directories already exist — write to them directly with the Write tool (do not run mkdir or check for their existence)."
 
-// buildMemoryFrontmatterExample mirrors src/memdir/memoryTypes.ts MEMORY_FRONTMATTER_EXAMPLE.
-func buildMemoryFrontmatterExample() []string {
+// BuildMemoryFrontmatterExample mirrors src/memdir/memoryTypes.ts MEMORY_FRONTMATTER_EXAMPLE.
+func BuildMemoryFrontmatterExample() []string {
 	return []string{
 		"```markdown",
 		"---",
@@ -24,8 +24,8 @@ func buildMemoryFrontmatterExample() []string {
 	}
 }
 
-// buildTypesSectionIndividual mirrors src/memdir/memoryTypes.ts TYPES_SECTION_INDIVIDUAL.
-func buildTypesSectionIndividual() []string {
+// BuildTypesSectionIndividual mirrors src/memdir/memoryTypes.ts TYPES_SECTION_INDIVIDUAL.
+func BuildTypesSectionIndividual() []string {
 	return []string{
 		"## Types of memory",
 		"",
@@ -168,8 +168,8 @@ func buildTypesSectionCombined() []string {
 	}
 }
 
-// buildWhatNotToSaveSection mirrors src/memdir/memoryTypes.ts WHAT_NOT_TO_SAVE_SECTION.
-func buildWhatNotToSaveSection() []string {
+// BuildWhatNotToSaveSection mirrors src/memdir/memoryTypes.ts WHAT_NOT_TO_SAVE_SECTION.
+func BuildWhatNotToSaveSection() []string {
 	return []string{
 		"## What NOT to save in memory",
 		"",

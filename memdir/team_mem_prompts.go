@@ -28,7 +28,7 @@ func BuildTeamCombinedMemoryPrompt(autoDirDisplay, teamDirDisplay string, skipIn
 		"",
 	}
 	lines = append(lines, buildTypesSectionCombined()...)
-	lines = append(lines, buildWhatNotToSaveSection()...)
+	lines = append(lines, BuildWhatNotToSaveSection()...)
 	lines = append(lines,
 		"- You MUST avoid saving sensitive data within shared team memories. For example, never save API keys or user credentials.",
 		"",

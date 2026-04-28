@@ -167,8 +167,8 @@ func BuildAgentMemoryLines(
 		"If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find and remove the relevant entry.",
 		"",
 	}
-	lines = append(lines, buildTypesSectionIndividual()...)
-	lines = append(lines, buildWhatNotToSaveSection()...)
+	lines = append(lines, BuildTypesSectionIndividual()...)
+	lines = append(lines, BuildWhatNotToSaveSection()...)
 	lines = append(lines, "")
 	lines = append(lines, howToSave...)
 	lines = append(lines, "")
@@ -220,7 +220,7 @@ func BuildKairosDailyLogPrompt(memDirDisplay string, skipIndex bool) string {
 		"- Anything the user explicitly asks you to remember",
 		"",
 	}
-	lines = append(lines, buildWhatNotToSaveSection()...)
+	lines = append(lines, BuildWhatNotToSaveSection()...)
 	lines = append(lines, "")
 	if !skipIndex {
 		lines = append(lines,

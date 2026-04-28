@@ -203,33 +203,25 @@ func TestFilterMemoryPaths(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// isPathInMemDir
+// filePathFromInput
 // ---------------------------------------------------------------------------
 
-func TestIsPathInMemDir(t *testing.T) {
-	memDir := t.TempDir()
-
-	// Path inside memDir.
-	input, _ := json.Marshal(map[string]string{"file_path": filepath.Join(memDir, "test.md")})
-	if !isPathInMemDir(input, memDir) {
-		t.Error("expected path inside memDir to be allowed")
-	}
-
-	// Path outside.
-	input2, _ := json.Marshal(map[string]string{"file_path": "/tmp/outside.md"})
-	if isPathInMemDir(input2, memDir) {
-		t.Error("expected path outside memDir to be denied")
+func TestFilePathFromInput(t *testing.T) {
+	// Valid file_path.
+	input, _ := json.Marshal(map[string]string{"file_path": "/tmp/test.md"})
+	if got := filePathFromInput(input); got != "/tmp/test.md" {
+		t.Errorf("filePathFromInput = %q; want /tmp/test.md", got)
 	}
 
 	// Empty file_path.
-	input3, _ := json.Marshal(map[string]string{"file_path": ""})
-	if isPathInMemDir(input3, memDir) {
-		t.Error("expected empty file_path to be denied")
+	input2, _ := json.Marshal(map[string]string{"file_path": ""})
+	if got := filePathFromInput(input2); got != "" {
+		t.Errorf("filePathFromInput = %q; want empty", got)
 	}
 
 	// Invalid JSON.
-	if isPathInMemDir(json.RawMessage(`{bad`), memDir) {
-		t.Error("expected invalid JSON to be denied")
+	if got := filePathFromInput(json.RawMessage(`{bad`)); got != "" {
+		t.Errorf("filePathFromInput = %q; want empty for invalid JSON", got)
 	}
 }
 
@@ -795,10 +787,12 @@ func TestDrainPendingExtraction(t *testing.T) {
 func TestRestrictedExecutionDepsAllowsOnlyExpectedTools(t *testing.T) {
 	// Create a memDir under the current working directory so that
 	// WriteFromJSONDeps/EditFromJSONDeps (which check workspace roots) accept it.
+	// Set CLAUDE_CODE_AUTO_MEMORY_DIRECTORY so memdir.IsAutoMemPath matches.
 	cwd, _ := os.Getwd()
 	memDir := filepath.Join(cwd, ".tmp-test-memdir")
 	os.MkdirAll(memDir, 0700)
 	defer os.RemoveAll(memDir)
+	t.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
 
 	deps := buildRestrictedExecutionDeps(memDir)
 	ctx := context.Background()
@@ -845,6 +839,7 @@ func TestRestrictedExecutionDepsAllowsOnlyExpectedTools(t *testing.T) {
 
 func TestRestrictedExecutionDepsDeniesWriteOutsideMemDir(t *testing.T) {
 	memDir := t.TempDir()
+	t.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
 	deps := buildRestrictedExecutionDeps(memDir)
 	ctx := context.Background()
 

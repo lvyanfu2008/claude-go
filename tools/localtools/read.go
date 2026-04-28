@@ -557,8 +557,7 @@ func ReadToolResultMapOptsForToolInput(input []byte, roots []string, memCwd, mai
 	if err != nil {
 		return opts
 	}
-	mc := strings.TrimSpace(memCwd)
-	if memdir.IsAutoMemoryEnabled() && memdir.IsAutoMemPath(abs, mc) {
+	if memdir.IsAutoMemoryEnabled() && memdir.IsAutoMemPath(abs) {
 		if st, err := os.Stat(abs); err == nil {
 			ms := st.ModTime().UnixMilli()
 			opts.MemoryFileMtimeMs = &ms

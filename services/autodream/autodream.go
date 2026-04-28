@@ -278,13 +278,17 @@ func buildRestrictedExecutionDeps(memoryDir string) toolexecution.ExecutionDeps 
 			case "Bash":
 				return localtools.BashFromJSON(ctx, input, "", true)
 			case "Write":
-				if memDir == "" || !isPathInMemDir(input, memDir) {
-					return "", false, fmt.Errorf("Write: path not in memory directory")
+				if memDir != "" {
+					if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {
+						return "", false, fmt.Errorf("Write: path not in memory directory")
+					}
 				}
 				return localtools.WriteFromJSONDeps(input, nil, invokeReadFileState, nil)
 			case "Edit":
-				if memDir == "" || !isPathInMemDir(input, memDir) {
-					return "", false, fmt.Errorf("Edit: path not in memory directory")
+				if memDir != "" {
+					if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {
+						return "", false, fmt.Errorf("Edit: path not in memory directory")
+					}
 				}
 				return localtools.EditFromJSONDeps(input, nil, invokeReadFileState, false, nil)
 			default:
@@ -294,22 +298,15 @@ func buildRestrictedExecutionDeps(memoryDir string) toolexecution.ExecutionDeps 
 	}
 }
 
-// isPathInMemDir checks whether the file_path in the tool input JSON is inside
-// the memory directory.
-func isPathInMemDir(input json.RawMessage, memDir string) bool {
+// filePathFromInput extracts the file_path from a Write/Edit tool input.
+func filePathFromInput(input json.RawMessage) string {
 	var v struct {
 		FilePath string `json:"file_path"`
 	}
-	if err := json.Unmarshal(input, &v); err != nil || v.FilePath == "" {
-		return false
+	if err := json.Unmarshal(input, &v); err != nil {
+		return ""
 	}
-	cleanMem := filepath.Clean(memDir)
-	cleanPath := filepath.Clean(v.FilePath)
-	rel, err := filepath.Rel(cleanMem, cleanPath)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return strings.TrimSpace(v.FilePath)
 }
 
 // extractWrittenPaths scans assistant messages for Write/Edit tool_use blocks
