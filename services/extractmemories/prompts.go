@@ -133,14 +133,7 @@ func howToSaveSection(skipIndex bool) string {
 
 // memoryFrontmatterExample mirrors TS MEMORY_FRONTMATTER_EXAMPLE.
 func memoryFrontmatterExample() string {
-	return "```markdown\n" +
-		"---\n" +
-		"name: {{memory name}}\n" +
-		"description: {{one-line description — used to decide relevance in future conversations, so be specific}}\n" +
-		"type: {{user, feedback, project, reference}}\n" +
-		"---\n\n" +
-		"{{memory content — for feedback/project types, structure as: rule/fact, then **Why:** and **How to apply:** lines}}\n" +
-		"```\n"
+	return strings.Join(memdir.BuildMemoryFrontmatterExample(), "\n")
 }
 
 // memoryFileInfo holds parsed metadata from a memory file's frontmatter.
@@ -150,8 +143,6 @@ type memoryFileInfo struct {
 	Type        string `yaml:"type"`
 }
 
-// scanExistingMemories lists existing .md files (other than MEMORY.md) in memoryDir,
-// with frontmatter metadata (name, description, type) parsed from each file.
 func scanExistingMemories(memoryDir string) string {
 	if memoryDir == "" {
 		return ""

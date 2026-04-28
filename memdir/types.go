@@ -233,7 +233,7 @@ func buildTeamHowToSaveLines(skipIndex bool) []string {
 			"Write each memory to its own file in the chosen directory (private or team, per the type's scope guidance) using this frontmatter format:",
 			"",
 		}
-		h = append(h, buildMemoryFrontmatterExample()...)
+		h = append(h, BuildMemoryFrontmatterExample()...)
 		h = append(h,
 			"",
 			"- Keep the name, description, and type fields in memory files up-to-date with the content",
@@ -251,7 +251,7 @@ func buildTeamHowToSaveLines(skipIndex bool) []string {
 		"**Step 1** — write the memory to its own file in the chosen directory (private or team, per the type's scope guidance) using this frontmatter format:",
 		"",
 	}
-	h = append(h, buildMemoryFrontmatterExample()...)
+	h = append(h, BuildMemoryFrontmatterExample()...)
 	h = append(h,
 		"",
 		"**Step 2** — add a pointer to that file in the same directory's `"+entrypointName+"`. Each directory (private and team) has its own `"+entrypointName+"` index — each entry should be one line, under ~150 characters: `- [Title](file.md) — one-line hook`. They have no frontmatter. Never write memory content directly into a `"+entrypointName+"`.",

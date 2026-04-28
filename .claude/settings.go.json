@@ -3,9 +3,9 @@
     "CCB_ENGINE_MODEL": "deepseek-v4-pro",
     "OPENAI_ENABLE_THINKING": "1",
     "CLAUDE_CODE_LOG_API_REQUEST_BODY": "1",
-    "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "0",
+    "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "1",
     "GOC_EXTRACT_MEMORIES_LOG_FILE": "/Users/lvyanfu/.cache/claude/extract-memories.log",
-    "GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD": "1"
+    "GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD": "0"
   },
   "hooks": {
     "UserPromptSubmit": [

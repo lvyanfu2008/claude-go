@@ -125,7 +125,7 @@ func BuildAgentMemoryLines(
 			"Write each memory to its own file (e.g., `user_role.md`, `feedback_testing.md`) using this frontmatter format:",
 			"",
 		}
-		howToSave = append(howToSave, buildMemoryFrontmatterExample()...)
+		howToSave = append(howToSave, BuildMemoryFrontmatterExample()...)
 		howToSave = append(howToSave,
 			"",
 			"- Keep the name, description, and type fields in memory files up-to-date with the content",
@@ -142,7 +142,7 @@ func BuildAgentMemoryLines(
 			"**Step 1** — write the memory to its own file (e.g., `user_role.md`, `feedback_testing.md`) using this frontmatter format:",
 			"",
 		}
-		howToSave = append(howToSave, buildMemoryFrontmatterExample()...)
+		howToSave = append(howToSave, BuildMemoryFrontmatterExample()...)
 		howToSave = append(howToSave,
 			"",
 			"**Step 2** — add a pointer to that file in `MEMORY.md`. `MEMORY.md` is an index, not a memory — each entry should be one line, under ~150 characters: `- [Title](file.md) — one-line hook`. It has no frontmatter. Never write memory content directly into `MEMORY.md`.",
