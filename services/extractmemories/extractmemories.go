@@ -256,12 +256,12 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 // If cursor is empty, returns the last 10 messages (first-run heuristic matching TS).
 func newMessagesSinceCursor(messages []types.Message, cursorUUID string) []types.Message {
 	if cursorUUID == "" {
-		// First run: take the last 10 messages.
-		if len(messages) <= 25 {
+		// First run: take the last 50 messages.
+		if len(messages) <= 50 {
 			return messages
 		}
-		out := make([]types.Message, 25)
-		copy(out, messages[len(messages)-25:])
+		out := make([]types.Message, 50)
+		copy(out, messages[len(messages)-50:])
 		return out
 	}
 
