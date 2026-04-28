@@ -81,7 +81,11 @@ func WriteFromJSONDeps(raw []byte, roots []string, state *ReadFileState, deps *W
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
 	}
-	abs, err := ResolveUnderRoots(in.FilePath, roots)
+	baseDir := "."
+	if len(roots) > 0 && strings.TrimSpace(roots[0]) != "" {
+		baseDir = roots[0]
+	}
+	abs, err := ExpandPath(in.FilePath, baseDir)
 	if err != nil {
 		return "", true, err
 	}

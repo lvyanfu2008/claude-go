@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"goc/claudemd"
+	"goc/memdir"
 )
 
 func TestBuildAutoMemoryPromptKairosRequiresKairosActive(t *testing.T) {
@@ -12,7 +12,7 @@ func TestBuildAutoMemoryPromptKairosRequiresKairosActive(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SIMPLE", "")
 	t.Setenv("FEATURE_TEAMMEM", "0")
 
-	if !claudemd.IsAutoMemoryEnabled() {
+	if !memdir.IsAutoMemoryEnabled() {
 		t.Fatal("test expects auto memory enabled")
 	}
 

@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"goc/claudemd"
 	"goc/conversation-runtime/query"
+	"goc/memdir"
 	"goc/tools/localtools"
 	"goc/tools/toolexecution"
 	"goc/types"
@@ -79,12 +79,12 @@ func Execute(
 	}
 
 	// Guard: auto-memory must be enabled.
-	if !claudemd.IsAutoMemoryEnabled() {
+	if !memdir.IsAutoMemoryEnabled() {
 		return nil, nil
 	}
 
 	if memoryDir == "" {
-		memoryDir = claudemd.GetAutoMemPath(originalCwd)
+		memoryDir = memdir.GetAutoMemPath(originalCwd)
 		if memoryDir == "" {
 			return nil, nil
 		}

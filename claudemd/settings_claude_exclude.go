@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"goc/claudebase"
 )
 
 type settingsExcludesJSON struct {
@@ -51,14 +53,14 @@ func mergeStringUniq(acc, next []string) []string {
 }
 
 func userSettingsFileName() string {
-	if truthy(os.Getenv("CLAUDE_CODE_USE_COWORK_PLUGINS")) {
+	if claudebase.Truthy(os.Getenv("CLAUDE_CODE_USE_COWORK_PLUGINS")) {
 		return "cowork_settings.json"
 	}
 	return "settings.json"
 }
 
 func readUserClaudeMdExcludes() []string {
-	cfg, err := ClaudeConfigHomeDir()
+	cfg, err := claudebase.ClaudeConfigHomeDir()
 	if err != nil {
 		return nil
 	}

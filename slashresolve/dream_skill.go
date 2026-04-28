@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"goc/claudemd"
+	"goc/memdir"
 	"goc/sessiontranscript"
 	"goc/types"
 )
@@ -102,7 +102,7 @@ func resolveDream(args string, opt *BundledResolveOptions) (types.SlashResolveRe
 	if err != nil {
 		absCwd = cwd
 	}
-	memoryRoot := claudemd.GetAutoMemPath(absCwd)
+	memoryRoot := memdir.GetAutoMemPath(absCwd)
 	transcriptDir := sessiontranscript.ProjectDirForOriginalCwd(absCwd, sessiontranscript.ConfigHomeDir())
 
 	// Stamp the consolidation lock optimistically (best-effort, TS side-effect parity).

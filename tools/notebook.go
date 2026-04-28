@@ -43,7 +43,11 @@ func NotebookEditFromJSON(raw []byte, roots []string) (string, bool, error) {
 		return "", true, fmt.Errorf("cell_id is required unless edit_mode=insert")
 	}
 
-	abs, err := localtools.ResolveUnderRoots(in.NotebookPath, roots)
+	baseDir := "."
+	if len(roots) > 0 && strings.TrimSpace(roots[0]) != "" {
+		baseDir = roots[0]
+	}
+	abs, err := localtools.ExpandPath(in.NotebookPath, baseDir)
 	if err != nil {
 		return "", true, err
 	}

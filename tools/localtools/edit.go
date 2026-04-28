@@ -88,7 +88,11 @@ func EditFromJSONDeps(raw []byte, roots []string, state *ReadFileState, userModi
 		return "", true, fmt.Errorf("No changes to make: old_string and new_string are exactly the same.")
 	}
 
-	abs, err := ResolveUnderRoots(in.FilePath, roots)
+	baseDir := "."
+	if len(roots) > 0 && strings.TrimSpace(roots[0]) != "" {
+		baseDir = roots[0]
+	}
+	abs, err := ExpandPath(in.FilePath, baseDir)
 	if err != nil {
 		return "", true, err
 	}

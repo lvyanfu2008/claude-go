@@ -1,4 +1,4 @@
-package claudemd
+package memdir
 
 import (
 	"encoding/json"

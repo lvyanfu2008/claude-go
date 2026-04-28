@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"goc/claudebase"
 )
 
 // LoadOptions drives getMemoryFiles-equivalent loading.
@@ -56,7 +58,7 @@ func loadMemoryFilesUncached(opts LoadOptions) []MemoryFileInfo {
 	}
 
 	includeExternal := opts.ForceIncludeExternal || opts.HasClaudeMdExternalIncludesApproved
-	if truthy(os.Getenv("CLAUDE_CODE_CLAUDE_MD_EXTERNAL_INCLUDES_APPROVED")) {
+	if claudebase.Truthy(os.Getenv("CLAUDE_CODE_CLAUDE_MD_EXTERNAL_INCLUDES_APPROVED")) {
 		includeExternal = true
 	}
 
@@ -74,7 +76,7 @@ func loadMemoryFilesUncached(opts LoadOptions) []MemoryFileInfo {
 	result := mh.LoadAllMemoryFiles(absOrig, includeExternal)
 
 	// 处理额外的目录（--add-dir）
-	if truthy(os.Getenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD")) || len(opts.AdditionalWorkingDirs) > 0 {
+	if claudebase.Truthy(os.Getenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD")) || len(opts.AdditionalWorkingDirs) > 0 {
 		processed := make(map[string]struct{})
 		for _, d := range opts.AdditionalWorkingDirs {
 			ad, err := filepath.Abs(strings.TrimSpace(d))
@@ -116,20 +118,6 @@ func isInstructionsMemoryType(t MemoryType) bool {
 	default:
 		return false
 	}
-}
-
-// IsTeamMemoryPromptActive mirrors loadMemoryPrompt's isTeamMemoryEnabled gate inside the TEAMMEM branch
-// (FEATURE_TEAMMEM + auto memory + teamMemoryEnabled).
-func IsTeamMemoryPromptActive() bool {
-	return featureTeamMem() && IsAutoMemoryEnabled() && teamMemoryEnabled()
-}
-
-func teamMemoryEnabled() bool {
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_TEAM_MEMORY_ENABLED")); v != "" {
-		return truthy(v)
-	}
-	// Without GrowthBook, default ON when FEATURE_TEAMMEM and auto-memory are on (team dir lives under auto mem).
-	return true
 }
 
 // BuildClaudeMdString runs LoadMemoryFiles → FilterInjectedMemoryFiles → FormatGetClaudeMds.

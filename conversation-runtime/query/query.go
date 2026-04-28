@@ -47,8 +47,11 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 	state := NewStateFromParams(params)
 	_ = state
 
-	// postLoopMessages captures assistant messages yielded during the model loop
-	// for post-turn hooks (e.g. extractMemories).
+	// postLoopMessages captures assistant and user (tool_result) messages yielded
+	// during the model loop for post-turn hooks (e.g. extractMemories).
+	// User messages with tool_result blocks are needed so that downstream
+	// consumers (e.g. auto-memory sub-agent) see complete tool_use/tool_result
+	// pairs and do not violate the Anthropic API contract.
 	var postLoopMessages []types.Message
 
 	cfg := BuildQueryConfig()
@@ -156,7 +159,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			}
 			diaglog.Line("[query] streaming parity: %s (model=%s)", streamPath, strings.TrimSpace(in.ModelID))
 			capYield := func(qy QueryYield, err error) bool {
-				if qy.Message != nil && qy.Message.Type == types.MessageTypeAssistant {
+				if qy.Message != nil && (qy.Message.Type == types.MessageTypeAssistant || qy.Message.Type == types.MessageTypeUser) {
 					postLoopMessages = append(postLoopMessages, *qy.Message)
 				}
 				return yield(qy, err)
@@ -193,7 +196,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 				if y.Terminal != nil {
 					return false
 				}
-				if y.Message != nil && y.Message.Type == types.MessageTypeAssistant {
+				if y.Message != nil && (y.Message.Type == types.MessageTypeAssistant || y.Message.Type == types.MessageTypeUser) {
 					postLoopMessages = append(postLoopMessages, *y.Message)
 				}
 				return yield(y, nil)

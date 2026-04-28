@@ -3,6 +3,8 @@ package claudemd
 import (
 	"os"
 	"path/filepath"
+
+	"goc/memdir"
 )
 
 const maxIncludeDepth = 5
@@ -16,7 +18,7 @@ func ParseMemoryFileContent(rawContent, filePath string, typ MemoryType, include
 	stripped, _ := StripHTMLCommentsFenceAware(withoutFrontmatter)
 	finalContent := stripped
 	if typ == MemoryAutoMem || typ == MemoryTeamMem {
-		finalContent = TruncateEntrypointContent(stripped)
+		finalContent = memdir.TruncateEntrypointContent(stripped)
 	}
 	contentDiffers := finalContent != rawContent
 	if includeBasePath != "" {

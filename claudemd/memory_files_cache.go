@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"goc/claudebase"
 	"goc/hookexec"
 )
 
@@ -93,10 +94,10 @@ func memoryFileCacheKey(opts LoadOptions) string {
 	}
 	sort.Strings(extras)
 	inc1 := opts.ForceIncludeExternal || opts.HasClaudeMdExternalIncludesApproved
-	if truthy(os.Getenv("CLAUDE_CODE_CLAUDE_MD_EXTERNAL_INCLUDES_APPROVED")) {
+	if claudebase.Truthy(os.Getenv("CLAUDE_CODE_CLAUDE_MD_EXTERNAL_INCLUDES_APPROVED")) {
 		inc1 = true
 	}
-	addDir := truthy(os.Getenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD")) || len(extras) > 0
+	addDir := claudebase.Truthy(os.Getenv("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD")) || len(extras) > 0
 	var excl string
 	if opts.ClaudeMdExcludesOverride != nil {
 		join := make([]string, len(*opts.ClaudeMdExcludesOverride))

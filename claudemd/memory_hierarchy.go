@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"goc/claudebase"
+	"goc/memdir"
 )
 
 // MemoryHierarchy 定义了记忆文件的完整层次结构
@@ -63,7 +66,7 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 
 	// 用户内存：~/.claude/CLAUDE.md
 	mh.pathResolvers[MemoryUser] = func(_ string) []string {
-		cfg, err := ClaudeConfigHomeDir()
+		cfg, err := claudebase.ClaudeConfigHomeDir()
 		if err != nil {
 			return []string{}
 		}
@@ -77,8 +80,8 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 		dirs := directoryChainUp(cwd)
 
 		// 处理 Git 工作树嵌套情况
-		gitRoot := FindGitRoot(cwd)
-		canonicalRoot := ResolveCanonicalGitRoot(cwd)
+		gitRoot := claudebase.FindGitRoot(cwd)
+		canonicalRoot := claudebase.ResolveCanonicalGitRoot(cwd)
 		isNestedWorktree := gitRoot != "" && canonicalRoot != "" &&
 			NormalizePathForComparison(gitRoot) != NormalizePathForComparison(canonicalRoot) &&
 			PathInWorkingPath(gitRoot, canonicalRoot)
@@ -122,19 +125,19 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 
 	// 自动记忆：<auto-memory-path>/MEMORY.md
 	mh.pathResolvers[MemoryAutoMem] = func(cwd string) []string {
-		if !IsAutoMemoryEnabled() {
+		if !memdir.IsAutoMemoryEnabled() {
 			return []string{}
 		}
-		autoPath := strings.TrimSuffix(GetAutoMemPath(cwd), string(filepath.Separator))
+		autoPath := strings.TrimSuffix(memdir.GetAutoMemPath(cwd), string(filepath.Separator))
 		return []string{filepath.Join(autoPath, "MEMORY.md")}
 	}
 
 	// 团队记忆：<auto-memory-path>/team/MEMORY.md
 	mh.pathResolvers[MemoryTeamMem] = func(cwd string) []string {
-		if !IsTeamMemoryPromptActive() {
+		if !memdir.IsTeamMemoryPromptActive() {
 			return []string{}
 		}
-		autoPath := strings.TrimSuffix(GetAutoMemPath(cwd), string(filepath.Separator))
+		autoPath := strings.TrimSuffix(memdir.GetAutoMemPath(cwd), string(filepath.Separator))
 		return []string{filepath.Join(autoPath, "team", "MEMORY.md")}
 	}
 }
@@ -154,10 +157,10 @@ func (mh *MemoryHierarchy) initSettingSourceCheckers() {
 	mh.settingSourceCheckers[MemoryLocal] = localMemoryEnabled
 
 	// 自动记忆：检查自动记忆是否启用
-	mh.settingSourceCheckers[MemoryAutoMem] = IsAutoMemoryEnabled
+	mh.settingSourceCheckers[MemoryAutoMem] = memdir.IsAutoMemoryEnabled
 
 	// 团队记忆：检查团队记忆是否启用
-	mh.settingSourceCheckers[MemoryTeamMem] = IsTeamMemoryPromptActive
+	mh.settingSourceCheckers[MemoryTeamMem] = memdir.IsTeamMemoryPromptActive
 }
 
 // LoadAllMemoryFiles 加载所有记忆文件，按照正确的优先级顺序
@@ -315,8 +318,8 @@ func (mh *MemoryHierarchy) loadProjectRulesFiles(
 	dirs := directoryChainUp(cwd)
 
 	// 处理 Git 工作树嵌套情况
-	gitRoot := FindGitRoot(cwd)
-	canonicalRoot := ResolveCanonicalGitRoot(cwd)
+	gitRoot := claudebase.FindGitRoot(cwd)
+	canonicalRoot := claudebase.ResolveCanonicalGitRoot(cwd)
 	isNestedWorktree := gitRoot != "" && canonicalRoot != "" &&
 		NormalizePathForComparison(gitRoot) != NormalizePathForComparison(canonicalRoot) &&
 		PathInWorkingPath(gitRoot, canonicalRoot)
@@ -348,7 +351,7 @@ func isSettingSourceEnabled(source string) bool {
 	// 完整的实现应该解析 settings.json 文件
 	envVar := fmt.Sprintf("CLAUDE_CODE_SETTING_SOURCES_%s", strings.ToUpper(source))
 	if val := strings.TrimSpace(os.Getenv(envVar)); val != "" {
-		return truthy(val)
+		return claudebase.Truthy(val)
 	}
 
 	// 默认启用所有设置源

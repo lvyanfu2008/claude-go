@@ -1,109 +1,20 @@
 package commands
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-
-	"goc/claudemd"
 	"goc/commands/featuregates"
+	"goc/memdir"
 )
 
-// Memory system prompts for Go mirror src/memdir (memdir.ts, teamMemPrompts.ts, etc.); no embedded dumps.
-
-func memoryDirDisplayPath(memDir string) string {
-	p := strings.TrimSpace(memDir)
-	if p == "" {
-		return ""
-	}
-	p = filepath.Clean(strings.TrimSuffix(p, string(filepath.Separator)))
-	p = filepath.ToSlash(p)
-	return p + "/"
-}
-
-// claudeProjectSessionDir mirrors getProjectDir(getOriginalCwd()) for transcript paths in buildSearchingPastContextSection.
-func claudeProjectSessionDir(originalCwd string) string {
-	abs, err := filepath.Abs(strings.TrimSpace(originalCwd))
-	if err != nil || abs == "" {
-		abs = "."
-	}
-	key := claudemd.SanitizePath(abs)
-	if cr := claudemd.ResolveCanonicalGitRoot(abs); cr != "" {
-		key = claudemd.SanitizePath(cr)
-	}
-	base := claudemd.MemoryBaseDir()
-	if base == "" {
-		return ""
-	}
-	return filepath.Join(base, "projects", key)
-}
-
-func memorySearchingPastContextBlock(memoryDir, projectDir string, embeddedOrRepl bool) string {
-	memSearch := fmt.Sprintf(`%s with pattern="<search term>" path="%s" glob="*.md"`, grepToolName, memoryDir)
-	transcriptSearch := fmt.Sprintf(`%s with pattern="<search term>" path="%s/" glob="*.jsonl"`, grepToolName, strings.TrimSuffix(filepath.ToSlash(projectDir), "/"))
-	if embeddedOrRepl {
-		memSearch = fmt.Sprintf(`grep -rn "<search term>" %s --include="*.md"`, memoryDir)
-		transcriptSearch = fmt.Sprintf(`grep -rn "<search term>" %s/ --include="*.jsonl"`, strings.TrimSuffix(filepath.ToSlash(projectDir), "/"))
-	}
-	return fmt.Sprintf("## Searching past context\n\nWhen looking for past context:\n1. Search topic files in your memory directory:\n```\n%s\n```\n2. Session transcript logs (last resort — large files, slow):\n```\n%s\n```\nUse narrow search terms (error messages, file paths, function names) rather than broad keywords.\n", memSearch, transcriptSearch)
-}
-
-func appendMemorySearchPastContext(s string, memDir, cwd string, o GouDemoSystemOpts) string {
-	if !o.MemorySearchPastContext {
-		return s
-	}
-	pdir := claudeProjectSessionDir(cwd)
-	if pdir == "" {
-		return s
-	}
-	md := strings.TrimSuffix(filepath.ToSlash(memDir), "/")
-	return s + "\n\n" + memorySearchingPastContextBlock(md, pdir, o.EmbeddedSearchTools || o.ReplModeEnabled)
-}
-
-// BuildAutoMemoryPrompt mirrors loadMemoryPrompt() (src/memdir/memdir.ts): KAIROS daily log, TEAMMEM combined,
-// auto-only buildMemoryLines; ensureMemoryDirExists on team + auto-only branches; cowork extra only on team + auto.
+// BuildAutoMemoryPrompt mirrors loadMemoryPrompt() (src/memdir/memdir.ts).
+// Thin wrapper that resolves feature gates and delegates to memdir.BuildAutoMemoryPrompt.
 func BuildAutoMemoryPrompt(o GouDemoSystemOpts) string {
-	if !claudemd.IsAutoMemoryEnabled() {
-		return ""
-	}
-	cwd := strings.TrimSpace(o.Cwd)
-	if cwd == "" {
-		cwd = "."
-	}
-	memDir := claudemd.GetAutoMemPath(cwd)
-	skipIndex := o.MemorySkipIndex
-
-	if featuregates.Feature("KAIROS") && o.KairosActive {
-		s := claudemd.BuildKairosDailyLogPrompt(memoryDirDisplayPath(memDir), skipIndex)
-		s = appendMemorySearchPastContext(s, memDir, cwd, o)
-		return strings.TrimSpace(s)
-	}
-
-	if featuregates.Feature("TEAMMEM") && claudemd.IsTeamMemoryPromptActive() {
-		teamDir := claudemd.GetTeamMemPath(cwd)
-		_ = claudemd.EnsureMemoryDirExists(teamDir)
-		var extra []string
-		if x := strings.TrimSpace(os.Getenv("CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES")); x != "" {
-			extra = []string{x}
-		}
-		s := claudemd.BuildTeamCombinedMemoryPrompt(
-			memoryDirDisplayPath(memDir),
-			memoryDirDisplayPath(teamDir),
-			skipIndex,
-			extra,
-		)
-		s = appendMemorySearchPastContext(s, memDir, cwd, o)
-		return strings.TrimSpace(s)
-	}
-
-	_ = claudemd.EnsureMemoryDirExists(memDir)
-	var extra []string
-	if x := strings.TrimSpace(os.Getenv("CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES")); x != "" {
-		extra = []string{x}
-	}
-	lines := claudemd.BuildAgentMemoryLines("auto memory", memoryDirDisplayPath(memDir), extra, skipIndex, false)
-	s := strings.Join(lines, "\n")
-	s = appendMemorySearchPastContext(s, memDir, cwd, o)
-	return strings.TrimSpace(s)
+	return memdir.BuildAutoMemoryPrompt(memdir.AutoMemoryPromptOpts{
+		Cwd:                    o.Cwd,
+		MemorySkipIndex:        o.MemorySkipIndex,
+		KairosActive:           featuregates.Feature("KAIROS") && o.KairosActive,
+		TeamMemActive:          featuregates.Feature("TEAMMEM"),
+		EmbeddedSearchTools:    o.EmbeddedSearchTools,
+		ReplModeEnabled:        o.ReplModeEnabled,
+		MemorySearchPastContext: o.MemorySearchPastContext,
+	})
 }

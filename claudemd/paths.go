@@ -5,19 +5,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"goc/claudebase"
 )
 
-// ClaudeConfigHomeDir mirrors getClaudeConfigHomeDir.
-func ClaudeConfigHomeDir() (string, error) {
-	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
-		return filepath.Clean(d), nil
-	}
-	h, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(h, ".claude"), nil
-}
+// ClaudeConfigHomeDir has moved to goc/claudebase.
 
 // ManagedFilePath mirrors settings/managedPath.ts getManagedFilePath.
 func ManagedFilePath() string {
@@ -38,7 +30,7 @@ func ManagedFilePath() string {
 
 // MemoryPath mirrors config.ts getMemoryPath (subset used by getMemoryFiles).
 func MemoryPath(memoryType MemoryType, _ string) string {
-	cfg, err := ClaudeConfigHomeDir()
+	cfg, err := claudebase.ClaudeConfigHomeDir()
 	if err != nil {
 		cfg = ""
 	}
@@ -57,7 +49,7 @@ func managedClaudeRulesDir() string {
 }
 
 func userClaudeRulesDir() (string, error) {
-	cfg, err := ClaudeConfigHomeDir()
+	cfg, err := claudebase.ClaudeConfigHomeDir()
 	if err != nil {
 		return "", err
 	}

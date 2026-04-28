@@ -7,8 +7,52 @@ import (
 	"strings"
 )
 
+// ExpandPath mirrors TS expandPath (src/utils/path.ts): expands ~ to home dir,
+// resolves relative paths against baseDir, and returns a clean absolute path.
+// No workspace root boundary check — access control is handled by the permission system.
+func ExpandPath(filePath string, baseDir string) (string, error) {
+	trimmed := strings.TrimSpace(filePath)
+	if trimmed == "" {
+		return "", fmt.Errorf("empty path")
+	}
+
+	// Handle ~ and ~/ prefix
+	if trimmed == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Clean(home), nil
+	}
+	if strings.HasPrefix(trimmed, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Clean(filepath.Join(home, trimmed[2:])), nil
+	}
+
+	// Absolute paths are returned as-is (cleaned)
+	if filepath.IsAbs(trimmed) {
+		return filepath.Clean(trimmed), nil
+	}
+
+	// Relative path: resolve against baseDir (or cwd if empty)
+	base := baseDir
+	if strings.TrimSpace(base) == "" {
+		base = "."
+	}
+	joined := filepath.Join(base, trimmed)
+	abs, err := filepath.Abs(joined)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve path %q: %w", trimmed, err)
+	}
+	return filepath.Clean(abs), nil
+}
+
 // ResolveUnderRoots maps file_path to a clean absolute path that must lie under one of roots (prefix match).
 // Relative paths are joined with primaryRoot (first element of roots, or "." if empty).
+// Deprecated: use [ExpandPath] for path resolution without workspace boundary enforcement.
 func ResolveUnderRoots(filePath string, roots []string) (string, error) {
 	filePath = strings.TrimSpace(filePath)
 	if filePath == "" {

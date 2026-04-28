@@ -24,9 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"goc/claudemd"
 	"goc/conversation-runtime/query"
 	"goc/growthbook"
+	"goc/memdir"
 	"goc/querycontext"
 	"goc/tools/localtools"
 	"goc/tools/toolexecution"
@@ -126,7 +126,7 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 		cwdForLog, len(p.Messages), state.LastMemoryMessageUUID, ExtractMemoriesRelaxThreshold())
 
 	// Guard: auto memory must be enabled.
-	if !claudemd.IsAutoMemoryEnabled() {
+	if !memdir.IsAutoMemoryEnabled() {
 		fileExtractMemoriesLogf("skip reason=auto_memory_disabled")
 		return nil, nil
 	}
@@ -167,14 +167,14 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	if cwd == "" {
 		cwd = "."
 	}
-	memoryDir := claudemd.GetAutoMemPath(cwd)
+	memoryDir := memdir.GetAutoMemPath(cwd)
 	if memoryDir == "" {
 		fileExtractMemoriesLogf("skip reason=empty_memory_dir cwd=%q", cwd)
 		return nil, nil
 	}
 	fileExtractMemoriesLogf("memory_dir=%q", memoryDir)
 
-	_ = claudemd.EnsureMemoryDirExists(memoryDir)
+	_ = memdir.EnsureMemoryDirExists(memoryDir)
 
 	throttle := growthbook.GetTenguBrambleLintel()
 
@@ -315,7 +315,7 @@ func hasMemoryWritesSince(messages []types.Message, cursorUUID string) bool {
 			if memoryDir == "" {
 				// Lazily initialise from cwd.
 				cwd, _ := os.Getwd()
-				memoryDir = claudemd.GetAutoMemPath(cwd)
+				memoryDir = memdir.GetAutoMemPath(cwd)
 			}
 			if memoryDir == "" {
 				continue
@@ -331,7 +331,7 @@ func hasMemoryWritesSince(messages []types.Message, cursorUUID string) bool {
 			if input.FilePath == "" {
 				continue
 			}
-			if claudemd.IsAutoMemPath(input.FilePath, "") {
+			if memdir.IsAutoMemPath(input.FilePath, "") {
 				return true
 			}
 		}

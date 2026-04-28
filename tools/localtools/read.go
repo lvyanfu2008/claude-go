@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"goc/claudemd"
+	"goc/memdir"
 	"goc/permissionrules"
 	"goc/types"
 )
@@ -183,13 +183,18 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
 	}
-	if err := validateReadPath(in.FilePath, roots); err != nil {
+	if err := validateReadPath(in.FilePath); err != nil {
 		return "", true, err
 	}
 	if err := ValidateReadPagesParameter(in.Pages); err != nil {
 		return "", true, err
 	}
-	abs, err := ResolveUnderRoots(in.FilePath, roots)
+	// Resolve base dir from primary root (mirrors TS getCwd behavior).
+	baseDir := "."
+	if len(roots) > 0 && strings.TrimSpace(roots[0]) != "" {
+		baseDir = roots[0]
+	}
+	abs, err := ExpandPath(in.FilePath, baseDir)
 	if err != nil {
 		return "", true, err
 	}
@@ -411,7 +416,7 @@ func isLikelyBinaryExt(ext string) bool {
 	}
 }
 
-func validateReadPath(filePath string, roots []string) error {
+func validateReadPath(filePath string) error {
 	trimmed := strings.TrimSpace(filePath)
 	clean := filepath.Clean(trimmed)
 
@@ -421,13 +426,13 @@ func validateReadPath(filePath string, roots []string) error {
 		return nil
 	}
 
-	// Catch obvious device paths before workspace-root resolution.
+	// Catch obvious device paths before path expansion.
 	if strings.HasPrefix(clean, "/dev/") {
 		return fmt.Errorf("cannot read from device path: %s", clean)
 	}
-	abs, err := ResolveUnderRoots(filePath, roots)
+	abs, err := ExpandPath(filePath, ".")
 	if err != nil {
-		return nil // Keep existing root/path errors from ResolveUnderRoots in the main path.
+		return nil // Non-fatal pre-check: path resolution errors surface in the main path.
 	}
 	if isDevicePath(abs) {
 		return fmt.Errorf("cannot read from device path: %s", abs)
@@ -544,12 +549,16 @@ func ReadToolResultMapOptsForToolInput(input []byte, roots []string, memCwd, mai
 	if fp == "" {
 		return opts
 	}
-	abs, err := ResolveUnderRoots(fp, roots)
+	baseDir := "."
+	if len(roots) > 0 && strings.TrimSpace(roots[0]) != "" {
+		baseDir = roots[0]
+	}
+	abs, err := ExpandPath(fp, baseDir)
 	if err != nil {
 		return opts
 	}
 	mc := strings.TrimSpace(memCwd)
-	if claudemd.IsAutoMemoryEnabled() && claudemd.IsAutoMemPath(abs, mc) {
+	if memdir.IsAutoMemoryEnabled() && memdir.IsAutoMemPath(abs, mc) {
 		if st, err := os.Stat(abs); err == nil {
 			ms := st.ModTime().UnixMilli()
 			opts.MemoryFileMtimeMs = &ms

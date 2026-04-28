@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"goc/claudemd"
+	"goc/memdir"
 	"goc/types"
 )
 
@@ -288,7 +288,7 @@ func TestNewMessagesSinceCursor(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHasMemoryWritesSince(t *testing.T) {
-	memDir := claudemd.GetAutoMemPath(t.TempDir())
+	memDir := memdir.GetAutoMemPath(t.TempDir())
 	os.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
 	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
 

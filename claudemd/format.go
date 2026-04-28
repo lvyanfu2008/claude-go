@@ -3,6 +3,8 @@ package claudemd
 import (
 	"os"
 	"strings"
+
+	"goc/claudebase"
 )
 
 // MemoryInstructionPrompt matches claudemd.ts MEMORY_INSTRUCTION_PROMPT.
@@ -13,7 +15,7 @@ const MaxMemoryCharacterCount = 40000
 
 // FormatGetClaudeMds mirrors getClaudeMds (no filter callback).
 func FormatGetClaudeMds(memoryFiles []MemoryFileInfo) string {
-	skipProjectLevel := truthy(os.Getenv("CLAUDE_CODE_TENGU_PAPER_HALYARD"))
+	skipProjectLevel := claudebase.Truthy(os.Getenv("CLAUDE_CODE_TENGU_PAPER_HALYARD"))
 	var memories []string
 	for _, file := range memoryFiles {
 		if skipProjectLevel && (file.Type == MemoryProject || file.Type == MemoryLocal) {
@@ -57,14 +59,14 @@ func descriptionForType(t MemoryType) string {
 }
 
 func featureTeamMem() bool {
-	return truthy(os.Getenv("FEATURE_TEAMMEM"))
+	return claudebase.Truthy(os.Getenv("FEATURE_TEAMMEM"))
 }
 
 // FilterInjectedMemoryFiles mirrors filterInjectedMemoryFiles when memory prefetching is enabled.
 // Defaults to enabled to match TS behavior, can be disabled with CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX=1
 func FilterInjectedMemoryFiles(files []MemoryFileInfo) []MemoryFileInfo {
 	// Default to filtering (skip index) unless explicitly disabled
-	skipIndex := truthy(os.Getenv("CLAUDE_CODE_TENGU_MOTH_COPSE")) || !truthy(os.Getenv("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX"))
+	skipIndex := claudebase.Truthy(os.Getenv("CLAUDE_CODE_TENGU_MOTH_COPSE")) || !claudebase.Truthy(os.Getenv("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX"))
 	if !skipIndex {
 		return files
 	}

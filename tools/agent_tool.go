@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"goc/claudemd"
 	"goc/commands"
+	"goc/memdir"
 	"goc/tools/toolpool"
 	"goc/types"
 )
@@ -123,9 +123,9 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	}
 
 	// Append agent memory prompt if memory scope is configured and auto-memory is enabled.
-	if s.Memory != "" && claudemd.IsAutoMemoryEnabled() {
-		scope := claudemd.AgentMemoryScope(s.Memory)
-		memPrompt := claudemd.LoadAgentMemoryPrompt(s.AgentType, scope)
+	if s.Memory != "" && memdir.IsAutoMemoryEnabled() {
+		scope := memdir.AgentMemoryScope(s.Memory)
+		memPrompt := memdir.LoadAgentMemoryPrompt(s.AgentType, scope)
 		if memPrompt != "" {
 			if s.SystemPrompt != "" {
 				s.SystemPrompt += "\n\n" + memPrompt

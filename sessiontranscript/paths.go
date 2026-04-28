@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"goc/claudemd"
+	"goc/claudebase"
 )
 
 // ConfigHomeDir matches getClaudeConfigHomeDir: CLAUDE_CONFIG_DIR or ~/.claude (NFC via filepath.Clean).
@@ -28,7 +28,7 @@ func ProjectsDir(configHome string) string {
 
 // ProjectDirForOriginalCwd matches getProjectDir(projectPath) in sessionStoragePortable.ts.
 func ProjectDirForOriginalCwd(projectPath, configHome string) string {
-	return filepath.Join(ProjectsDir(configHome), claudemd.SanitizePath(projectPath))
+	return filepath.Join(ProjectsDir(configHome), claudebase.SanitizePath(projectPath))
 }
 
 // TranscriptPath matches getTranscriptPath: join(sessionProjectDir ?? projectDir(originalCwd), sessionId+".jsonl").
