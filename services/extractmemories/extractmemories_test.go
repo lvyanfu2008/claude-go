@@ -264,14 +264,30 @@ func TestNewMessagesSinceCursor(t *testing.T) {
 		t.Fatalf("expected all 4 when cursor not found, got %d", len(got4))
 	}
 
-	// More than 10 messages without cursor: only last 10.
-	tenMsgs := make([]types.Message, 15)
-	for i := range tenMsgs {
-		tenMsgs[i] = makeMsg(string(rune('a'+i)), types.MessageTypeUser)
+	// First run with fewer than 50 messages: return all.
+	under50 := make([]types.Message, 15)
+	for i := range under50 {
+		under50[i] = makeMsg(string(rune('a'+i)), types.MessageTypeUser)
 	}
-	got5 := newMessagesSinceCursor(tenMsgs, "")
-	if len(got5) != 10 {
-		t.Fatalf("expected 10 messages without cursor (first run), got %d", len(got5))
+	got5 := newMessagesSinceCursor(under50, "")
+	if len(got5) != 15 {
+		t.Fatalf("expected all 15 messages without cursor (first run), got %d", len(got5))
+	}
+}
+
+func TestNewMessagesSinceCursorOver50(t *testing.T) {
+	// First run with more than 50 messages: cap at last 50.
+	manyMsgs := make([]types.Message, 75)
+	for i := range manyMsgs {
+		manyMsgs[i] = makeMsg(string(rune('a'+i%26)), types.MessageTypeUser)
+	}
+	got := newMessagesSinceCursor(manyMsgs, "")
+	if len(got) != 50 {
+		t.Fatalf("expected 50 messages without cursor (first run cap), got %d", len(got))
+	}
+	// Verify they're the LAST 50, not the first 50.
+	if got[0].UUID != manyMsgs[25].UUID {
+		t.Error("expected last 50 messages, first doesn't match")
 	}
 }
 
@@ -1099,4 +1115,86 @@ func TestExecuteAdvancesCursorOnPriorMemoryWrite(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	_ = paths
+}
+
+// ---------------------------------------------------------------------------
+// Execute: coalescing gate (inProgress + pendingParams)
+// ---------------------------------------------------------------------------
+
+func TestExecuteCoalescingGate(t *testing.T) {
+	os.Setenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL", "1")
+	defer os.Unsetenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL")
+	memDir := filepath.Join(t.TempDir(), "projects", "test", "memory")
+	os.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
+	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
+
+	state := NewState()
+	// Simulate in-progress extraction.
+	state.inProgress = true
+
+	p := ExtractionParams{
+		Messages:       []types.Message{makeMsg("1", types.MessageTypeUser)},
+		Cwd:            t.TempDir(),
+		ToolUseContext: types.ToolUseContext{},
+	}
+	paths, err := Execute(context.Background(), state, p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if paths != nil {
+		t.Fatalf("expected nil paths when coalesced, got %v", paths)
+	}
+	if state.pendingParams == nil {
+		t.Fatal("expected pendingParams to be set after coalescing")
+	}
+	if !state.inProgress {
+		t.Error("expected inProgress to remain true after coalescing")
+	}
+	// Verify the stashed params match what we passed in.
+	if len(state.pendingParams.Messages) != 1 || state.pendingParams.Messages[0].UUID != "1" {
+		t.Errorf("pendingParams messages mismatch: %+v", state.pendingParams.Messages)
+	}
+}
+
+func TestExecuteCoalescingOverwrite(t *testing.T) {
+	os.Setenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL", "1")
+	defer os.Unsetenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL")
+	memDir := filepath.Join(t.TempDir(), "projects", "test", "memory")
+	os.Setenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY", memDir)
+	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
+
+	state := NewState()
+	state.inProgress = true
+
+	// First coalesce.
+	p1 := ExtractionParams{
+		Messages:       []types.Message{makeMsg("first", types.MessageTypeUser)},
+		Cwd:            t.TempDir(),
+		ToolUseContext: types.ToolUseContext{},
+	}
+	Execute(context.Background(), state, p1)
+
+	// Second coalesce should overwrite.
+	p2 := ExtractionParams{
+		Messages:       []types.Message{makeMsg("second", types.MessageTypeUser)},
+		Cwd:            t.TempDir(),
+		ToolUseContext: types.ToolUseContext{},
+	}
+	paths, err := Execute(context.Background(), state, p2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if paths != nil {
+		t.Fatalf("expected nil paths when coalesced, got %v", paths)
+	}
+	// Should hold the second (latest) params (overwrite semantics).
+	if state.pendingParams == nil || state.pendingParams.Messages[0].UUID != "second" {
+		t.Errorf("expected pendingParams to hold second (latest) call, got UUID=%q",
+			func() string {
+				if state.pendingParams != nil && len(state.pendingParams.Messages) > 0 {
+					return state.pendingParams.Messages[0].UUID
+				}
+				return "nil"
+			}())
+	}
 }

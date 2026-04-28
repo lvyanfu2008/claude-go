@@ -46,6 +46,18 @@ type State struct {
 	// was skipped or throttled. Reset to 0 when extraction actually runs.
 	// Mirrors TS turnsSinceLastExtraction counter.
 	TurnsSinceLastExtraction int
+
+	// inProgress guards against overlapping extraction runs.
+	// When true, new Execute calls stash their params in pendingParams
+	// instead of starting a concurrent extraction (coalescing).
+	// Mirrors TS inProgress flag in initExtractMemories().
+	inProgress bool
+
+	// pendingParams holds the most recent ExtractionParams stashed during
+	// an in-progress extraction. Run as a trailing extraction when the
+	// current extraction completes. Overwrite semantics — only the latest
+	// call is kept. Mirrors TS pendingContext in initExtractMemories().
+	pendingParams *ExtractionParams
 }
 
 // ExtractionParams carries all context needed to run a single extraction pass.
@@ -164,92 +176,35 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 		return nil, nil
 	}
 
-	cwd := strings.TrimSpace(p.Cwd)
-	if cwd == "" {
-		cwd = "."
-	}
-	memoryDir := memdir.GetAutoMemPath(cwd)
-	if memoryDir == "" {
-		fileExtractMemoriesLogf("skip reason=empty_memory_dir cwd=%q", cwd)
-		return nil, nil
-	}
-	fileExtractMemoriesLogf("memory_dir=%q", memoryDir)
-
-	_ = memdir.EnsureMemoryDirExists(memoryDir)
-
-	throttle := growthbook.GetTenguBrambleLintel()
-
-	// Guard: turn throttle — don't run extraction on every turn.
+	// Coalescing gate: if an extraction is already in progress, stash
+	// params for a trailing run instead of starting a concurrent one.
+	// Mirrors TS inProgress check in executeExtractMemories.
 	state.mu.Lock()
-	state.TurnsSinceLastExtraction++
-	turnCount := state.TurnsSinceLastExtraction
-	state.mu.Unlock()
-	if turnCount < throttle {
-		fileExtractMemoriesLogf("skip reason=throttle turn_since_extraction=%d throttle=%d", turnCount, throttle)
-		return nil, nil
-	}
-
-	// Determine which messages are "new" since the last extraction.
-	newMessages := newMessagesSinceCursor(p.Messages, state.LastMemoryMessageUUID)
-	if len(newMessages) == 0 {
-		fileExtractMemoriesLogf("skip reason=no_new_messages")
-		return nil, nil
-	}
-	fileExtractMemoriesLogf("new_messages=%d", len(newMessages))
-
-	// Check if the main agent already wrote memory files in this turn.
-	if hasMemoryWritesSince(p.Messages, state.LastMemoryMessageUUID) {
-		fileExtractMemoriesLogf("skip reason=main_agent_already_wrote_memory")
-		// Advance cursor to avoid re-processing these messages (TS line 348-359).
-		if len(p.Messages) > 0 {
-			last := p.Messages[len(p.Messages)-1]
-			state.mu.Lock()
-			state.LastMemoryMessageUUID = last.UUID
-			state.mu.Unlock()
-		}
-		return nil, nil
-	}
-
-	// Build the extraction prompt and run the sub-agent.
-	writtenPaths, err := runExtractionSubagent(ctx, p, memoryDir, newMessages)
-	if err != nil {
-		fileExtractMemoriesLogf("error subagent: %v", err)
-		return nil, fmt.Errorf("extractmemories: %w", err)
-	}
-	fileExtractMemoriesLogf("subagent raw_written_paths=%d paths=%q", len(writtenPaths), writtenPaths)
-
-	// Filter out MEMORY.md itself.
-	memoryPaths := filterMemoryPaths(writtenPaths, memoryDir)
-	fileExtractMemoriesLogf("after_filter memory_paths=%d paths=%q", len(memoryPaths), memoryPaths)
-
-	// Update cursor: use the UUID of the last message in the full list.
-	if len(p.Messages) > 0 {
-		last := p.Messages[len(p.Messages)-1]
-		state.mu.Lock()
-		state.LastMemoryMessageUUID = last.UUID
-		state.TurnsSinceLastExtraction = 0
+	if state.inProgress {
+		state.pendingParams = &p
 		state.mu.Unlock()
-	}
-
-	if len(memoryPaths) == 0 {
-		fileExtractMemoriesLogf("done reason=no_files_after_filter (no memory_saved message)")
+		fileExtractMemoriesLogf("coalesced reason=extraction_in_progress")
 		return nil, nil
 	}
+	state.inProgress = true
+	state.mu.Unlock()
 
-	// Emit "memory saved" system message (TS createMemorySavedMessage).
-	if p.AppendSystemMessage != nil {
-		newUUID := p.NewUUID
-		if newUUID == nil {
-			newUUID = query.RandomUUID
+	// When the current extraction finishes, dispatch any stashed trailing
+	// extraction. Mirrors TS finally block in executeExtractMemories.
+	defer func() {
+		state.mu.Lock()
+		state.inProgress = false
+		trailing := state.pendingParams
+		state.pendingParams = nil
+		state.mu.Unlock()
+		if trailing != nil {
+			fileExtractMemoriesLogf("trailing extraction start")
+			runExtractionCore(ctx, state, *trailing, true)
+			fileExtractMemoriesLogf("trailing extraction done")
 		}
-		msg := createMemorySavedMessage(memoryPaths, newUUID)
-		p.AppendSystemMessage(msg)
-		fileExtractMemoriesLogf("done memory_saved paths=%q append_callback=true", memoryPaths)
-	} else {
-		fileExtractMemoriesLogf("done memory_paths=%d append_callback=nil (no memory_saved message)", len(memoryPaths))
-	}
+	}()
 
-	return memoryPaths, nil
+	return runExtractionCore(ctx, state, p, false)
 }
 
 // newMessagesSinceCursor returns messages newer than the cursor UUID.
@@ -504,10 +459,102 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 	return written, nil
 }
 
+// runExtractionCore is the inner extraction logic: throttle, new-message
+// detection, sub-agent invocation, cursor update, and result reporting.
+// When isTrailingRun is true, the throttle check is skipped (mirrors TS
+// isTrailingRun parameter in executeExtractMemoriesImpl).
+func runExtractionCore(ctx context.Context, state *State, p ExtractionParams, isTrailingRun bool) ([]string, error) {
+	cwd := strings.TrimSpace(p.Cwd)
+	if cwd == "" {
+		cwd = "."
+	}
+	memoryDir := memdir.GetAutoMemPath(cwd)
+	if memoryDir == "" {
+		fileExtractMemoriesLogf("skip reason=empty_memory_dir cwd=%q", cwd)
+		return nil, nil
+	}
+	fileExtractMemoriesLogf("memory_dir=%q", memoryDir)
+
+	_ = memdir.EnsureMemoryDirExists(memoryDir)
+
+	if !isTrailingRun {
+		throttle := growthbook.GetTenguBrambleLintel()
+		state.mu.Lock()
+		state.TurnsSinceLastExtraction++
+		turnCount := state.TurnsSinceLastExtraction
+		state.mu.Unlock()
+		if turnCount < throttle {
+			fileExtractMemoriesLogf("skip reason=throttle turn_since_extraction=%d throttle=%d", turnCount, throttle)
+			return nil, nil
+		}
+	}
+
+	// Determine which messages are "new" since the last extraction.
+	newMessages := newMessagesSinceCursor(p.Messages, state.LastMemoryMessageUUID)
+	if len(newMessages) == 0 {
+		fileExtractMemoriesLogf("skip reason=no_new_messages")
+		return nil, nil
+	}
+	fileExtractMemoriesLogf("new_messages=%d", len(newMessages))
+
+	// Check if the main agent already wrote memory files in this turn.
+	if hasMemoryWritesSince(p.Messages, state.LastMemoryMessageUUID) {
+		fileExtractMemoriesLogf("skip reason=main_agent_already_wrote_memory")
+		if len(p.Messages) > 0 {
+			last := p.Messages[len(p.Messages)-1]
+			state.mu.Lock()
+			state.LastMemoryMessageUUID = last.UUID
+			state.mu.Unlock()
+		}
+		return nil, nil
+	}
+
+	// Build the extraction prompt and run the sub-agent.
+	writtenPaths, err := runExtractionSubagent(ctx, p, memoryDir, newMessages)
+	if err != nil {
+		fileExtractMemoriesLogf("error subagent: %v", err)
+		return nil, fmt.Errorf("extractmemories: %w", err)
+	}
+	fileExtractMemoriesLogf("subagent raw_written_paths=%d paths=%q", len(writtenPaths), writtenPaths)
+
+	// Filter out MEMORY.md itself.
+	memoryPaths := filterMemoryPaths(writtenPaths, memoryDir)
+	fileExtractMemoriesLogf("after_filter memory_paths=%d paths=%q", len(memoryPaths), memoryPaths)
+
+	// Update cursor: use the UUID of the last message in the full list.
+	if len(p.Messages) > 0 {
+		last := p.Messages[len(p.Messages)-1]
+		state.mu.Lock()
+		state.LastMemoryMessageUUID = last.UUID
+		state.TurnsSinceLastExtraction = 0
+		state.mu.Unlock()
+	}
+
+	if len(memoryPaths) == 0 {
+		fileExtractMemoriesLogf("done reason=no_files_after_filter (no memory_saved message)")
+		return nil, nil
+	}
+
+	// Emit "memory saved" system message (TS createMemorySavedMessage).
+	if p.AppendSystemMessage != nil {
+		newUUID := p.NewUUID
+		if newUUID == nil {
+			newUUID = query.RandomUUID
+		}
+		msg := createMemorySavedMessage(memoryPaths, newUUID)
+		p.AppendSystemMessage(msg)
+		fileExtractMemoriesLogf("done memory_saved paths=%q append_callback=true", memoryPaths)
+	} else {
+		fileExtractMemoriesLogf("done memory_paths=%d append_callback=nil (no memory_saved message)", len(memoryPaths))
+	}
+
+	return memoryPaths, nil
+}
+
 // DrainPendingExtraction waits for any in-flight extraction to complete.
 // Mirrors TS drainPendingExtraction in extractMemories.ts.
-// In Go, extraction is synchronous (runs inside OnQueryComplete), so this is a
-// no-op. It exists for API parity.
+// In Go, extraction is synchronous (runs inside the Execute defer block), so
+// this is a no-op. It exists for API parity.
 func DrainPendingExtraction(timeoutMs ...int) {
 	// Extraction is synchronous — nothing to drain.
 }
