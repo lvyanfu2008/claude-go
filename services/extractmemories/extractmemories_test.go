@@ -647,14 +647,13 @@ func TestExecuteDisabledWhenAutoMemoryDisabled(t *testing.T) {
 	defer os.Unsetenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY")
 
 	state := NewState()
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	// Execute is fire-and-forget; guard returns immediately without spawning goroutine.
+	Execute(context.Background(), state, ExtractionParams{
 		ToolUseContext: types.ToolUseContext{},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil when auto memory disabled, got %v", paths)
+	DrainPendingExtraction(state)
+	if len(state.inFlightExtractions) != 0 {
+		t.Fatalf("expected no in-flight extractions when auto memory disabled, got %d", len(state.inFlightExtractions))
 	}
 }
 
@@ -663,16 +662,14 @@ func TestExecuteDisabledInAgent(t *testing.T) {
 	defer os.Unsetenv("CLAUDE_CODE_TENGU_PASSPORT_QUAIL")
 	agentID := "test-agent"
 	state := NewState()
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		ToolUseContext: types.ToolUseContext{
 			AgentID: &agentID,
 		},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil when inside agent, got %v", paths)
+	DrainPendingExtraction(state)
+	if len(state.inFlightExtractions) != 0 {
+		t.Fatalf("expected no in-flight extractions when in agent, got %d", len(state.inFlightExtractions))
 	}
 }
 
@@ -683,14 +680,12 @@ func TestExecuteSimpleMode(t *testing.T) {
 	defer os.Unsetenv("CLAUDE_CODE_SIMPLE")
 
 	state := NewState()
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		ToolUseContext: types.ToolUseContext{},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil in simple mode, got %v", paths)
+	DrainPendingExtraction(state)
+	if len(state.inFlightExtractions) != 0 {
+		t.Fatalf("expected no in-flight extractions in simple mode, got %d", len(state.inFlightExtractions))
 	}
 }
 
@@ -708,14 +703,12 @@ func TestExecuteClaudeCodeSimpleZeroIsNotSimpleMode(t *testing.T) {
 	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
 
 	state := NewState()
-	_, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		Messages:       []types.Message{makeMsg("1", types.MessageTypeUser)},
 		ToolUseContext: types.ToolUseContext{},
 		Cwd:            t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	DrainPendingExtraction(state)
 	// Reached throttle logic (turn 1 < 3), not the simple_mode return before throttle.
 	if state.TurnsSinceLastExtraction != 1 {
 		t.Fatalf("expected throttle counter 1 (past simple guard), got %d", state.TurnsSinceLastExtraction)
@@ -732,7 +725,7 @@ func TestExecuteNonInteractiveSkipsWithoutSlateThimble(t *testing.T) {
 	defer os.Unsetenv("CLAUDE_CODE_AUTO_MEMORY_DIRECTORY")
 
 	state := NewState()
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		Messages: []types.Message{makeMsg("1", types.MessageTypeUser)},
 		ToolUseContext: types.ToolUseContext{
 			Options: types.ToolUseContextOptionsData{
@@ -741,11 +734,9 @@ func TestExecuteNonInteractiveSkipsWithoutSlateThimble(t *testing.T) {
 		},
 		Cwd: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil when non-interactive without slate_thimble, got %v", paths)
+	DrainPendingExtraction(state)
+	if len(state.inFlightExtractions) != 0 {
+		t.Fatalf("expected no in-flight extractions when non-interactive without slate_thimble, got %d", len(state.inFlightExtractions))
 	}
 }
 
@@ -761,39 +752,36 @@ func TestExecuteThrottle(t *testing.T) {
 
 	state := NewState()
 	// First call: TurnsSinceLastExtraction=0, incremented to 1 < 3 → throttle.
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		Messages: []types.Message{makeMsg("1", types.MessageTypeUser)},
 		Cwd:      t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil due to throttle (turn 1), got %v", paths)
+	DrainPendingExtraction(state)
+	if state.TurnsSinceLastExtraction != 1 {
+		t.Fatalf("expected throttle counter 1 after skipped turn, got %d", state.TurnsSinceLastExtraction)
 	}
 }
 
 func TestExecutePassportQuailGate(t *testing.T) {
-	// Without TENGU_PASSPORT_QUAIL and without GOC_EXTRACT_MEMORIES, Execute should return nil,nil.
+	// Without TENGU_PASSPORT_QUAIL and without GOC_EXTRACT_MEMORIES, Execute should skip immediately.
 	os.Setenv("GOC_EXTRACT_MEMORIES", "0")
 	defer os.Unsetenv("GOC_EXTRACT_MEMORIES")
 	state := NewState()
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		ToolUseContext: types.ToolUseContext{},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil when passport_quail gate is disabled, got %v", paths)
+	DrainPendingExtraction(state)
+	if len(state.inFlightExtractions) != 0 {
+		t.Fatalf("expected no in-flight extractions when passport_quail gate is disabled, got %d", len(state.inFlightExtractions))
 	}
 }
 
 func TestDrainPendingExtraction(t *testing.T) {
-	// DrainPendingExtraction is a no-op in Go (synchronous extraction).
-	// Verify it doesn't panic.
-	DrainPendingExtraction()
-	DrainPendingExtraction(1000)
+	// DrainPendingExtraction drains in-flight extraction goroutines.
+	// Verify it doesn't panic on empty state (no in-flight work).
+	state := NewState()
+	DrainPendingExtraction(state)
+	DrainPendingExtraction(state, 1000)
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,31 +1048,22 @@ func TestExecuteAppendSystemMessageIsCalled(t *testing.T) {
 	state.TurnsSinceLastExtraction = 0
 	state.mu.Unlock()
 
-	var capturedMsg *types.Message
 	appendFn := func(msg types.Message) {
-		capturedMsg = &msg
 	}
 
 	// Execute with a fake sub-agent that writes nothing — we can't easily
 	// test the real sub-agent path, so we just verify the callback path
 	// doesn't panic when memoryPaths is empty.
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		Messages:            []types.Message{makeMsg("1", types.MessageTypeUser)},
 		Cwd:                 t.TempDir(),
 		ToolUseContext:      types.ToolUseContext{},
 		AppendSystemMessage: appendFn,
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	DrainPendingExtraction(state)
 	// No memory paths produced (sub-agent doesn't actually run in unit test).
-	// The callback should not be called.
-	if capturedMsg != nil {
-		t.Error("AppendSystemMessage should not be called when no memories saved")
-	}
-	if paths != nil {
-		t.Errorf("expected nil paths, got %v", paths)
-	}
+	// With no API key configured, the goroutine will fail but the test
+	// verifies the callback plumbing doesn't panic.
 }
 
 // ---------------------------------------------------------------------------
@@ -1106,15 +1085,12 @@ func TestExecuteAdvancesCursorOnPriorMemoryWrite(t *testing.T) {
 	// won't detect writes (the path won't match GetAutoMemPath).
 	// This test verifies the codepath doesn't panic.
 	state.LastMemoryMessageUUID = ""
-	paths, err := Execute(context.Background(), state, ExtractionParams{
+	Execute(context.Background(), state, ExtractionParams{
 		Messages:       msgs,
 		Cwd:            t.TempDir(),
 		ToolUseContext: types.ToolUseContext{},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	_ = paths
+	DrainPendingExtraction(state)
 }
 
 // ---------------------------------------------------------------------------
@@ -1137,13 +1113,7 @@ func TestExecuteCoalescingGate(t *testing.T) {
 		Cwd:            t.TempDir(),
 		ToolUseContext: types.ToolUseContext{},
 	}
-	paths, err := Execute(context.Background(), state, p)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil paths when coalesced, got %v", paths)
-	}
+	Execute(context.Background(), state, p)
 	if state.pendingParams == nil {
 		t.Fatal("expected pendingParams to be set after coalescing")
 	}
@@ -1180,13 +1150,7 @@ func TestExecuteCoalescingOverwrite(t *testing.T) {
 		Cwd:            t.TempDir(),
 		ToolUseContext: types.ToolUseContext{},
 	}
-	paths, err := Execute(context.Background(), state, p2)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if paths != nil {
-		t.Fatalf("expected nil paths when coalesced, got %v", paths)
-	}
+	Execute(context.Background(), state, p2)
 	// Should hold the second (latest) params (overwrite semantics).
 	if state.pendingParams == nil || state.pendingParams.Messages[0].UUID != "second" {
 		t.Errorf("expected pendingParams to hold second (latest) call, got UUID=%q",

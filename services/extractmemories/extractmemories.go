@@ -58,6 +58,11 @@ type State struct {
 	// current extraction completes. Overwrite semantics — only the latest
 	// call is kept. Mirrors TS pendingContext in initExtractMemories().
 	pendingParams *ExtractionParams
+
+	// inFlightExtractions tracks completion channels for async extraction
+	// goroutines. Each entry is closed when the goroutine completes.
+	// Mirrors TS inFlightExtractions Set<Promise<void>>.
+	inFlightExtractions []chan struct{}
 }
 
 // ExtractionParams carries all context needed to run a single extraction pass.
@@ -123,14 +128,14 @@ func extractMemoriesPassportOrHost() bool {
 	return false
 }
 
-// Execute runs one extraction pass: reviews recent messages and runs a
-// restricted sub-agent that may write/update memory files.
+// Execute starts an async extraction pass: reviews recent messages and
+// runs a restricted sub-agent that may write/update memory files.
+// Returns immediately — extraction work runs in a goroutine.
+// Results (if any) are delivered via p.AppendSystemMessage callback.
 //
-// Returns the list of written memory file paths (excluding MEMORY.md).
-// Returns nil, nil when extraction is skipped (disabled, inside agent, no new messages).
-//
-// Mirrors TS executeExtractMemories.
-func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, error) {
+// Mirrors TS executeExtractMemories (fire-and-forget, tracked in
+// inFlightExtractions, drained at shutdown by DrainPendingExtraction).
+func Execute(ctx context.Context, state *State, p ExtractionParams) {
 	cwdForLog := strings.TrimSpace(p.Cwd)
 	if cwdForLog == "" {
 		cwdForLog = "."
@@ -141,7 +146,7 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	// Guard: auto memory must be enabled.
 	if !memdir.IsAutoMemoryEnabled() {
 		fileExtractMemoriesLogf("skip reason=auto_memory_disabled")
-		return nil, nil
+		return
 	}
 
 	// Guard: skip if running inside a sub-agent (only the top-level conversation extracts).
@@ -151,21 +156,21 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 			aid = aid[:64] + "…"
 		}
 		fileExtractMemoriesLogf("skip reason=subagent agent_id=%q", aid)
-		return nil, nil
+		return
 	}
 
 	// Guard: feature flag gate (TS tengu_passport_quail, default false) or host
 	// opt-in (GOC_EXTRACT_MEMORIES=1) for environments without GrowthBook.
 	if !extractMemoriesPassportOrHost() {
 		fileExtractMemoriesLogf("skip reason=passport_or_host extract_memories_flag=false")
-		return nil, nil
+		return
 	}
 
 	// Guard: skip if --simple / bare mode (truthy only — CLAUDE_CODE_SIMPLE=0 is off,
 	// same as claudemd.IsAutoMemoryEnabled and querycontext.BareModeFromEnv).
 	if querycontext.IsEnvTruthy(os.Getenv("CLAUDE_CODE_SIMPLE")) {
 		fileExtractMemoriesLogf("skip reason=simple_mode CLAUDE_CODE_SIMPLE_truthy")
-		return nil, nil
+		return
 	}
 
 	// Guard: isExtractModeActive mirrors TS isExtractModeActive() in memdir/paths.ts.
@@ -173,38 +178,60 @@ func Execute(ctx context.Context, state *State, p ExtractionParams) ([]string, e
 	// sessions are gated behind tengu_slate_thimble.
 	if p.ToolUseContext.Options.IsNonInteractiveSession && !growthbook.IsTenguSlateThimble() {
 		fileExtractMemoriesLogf("skip reason=non_interactive_slate_thimble_off")
-		return nil, nil
+		return
 	}
 
 	// Coalescing gate: if an extraction is already in progress, stash
 	// params for a trailing run instead of starting a concurrent one.
-	// Mirrors TS inProgress check in executeExtractMemories.
+	// Mirrors TS inProgress check in executeExtractMemoriesImpl.
 	state.mu.Lock()
 	if state.inProgress {
 		state.pendingParams = &p
 		state.mu.Unlock()
 		fileExtractMemoriesLogf("coalesced reason=extraction_in_progress")
-		return nil, nil
+		return
 	}
 	state.inProgress = true
 	state.mu.Unlock()
 
-	// When the current extraction finishes, dispatch any stashed trailing
-	// extraction. Mirrors TS finally block in executeExtractMemories.
-	defer func() {
-		state.mu.Lock()
-		state.inProgress = false
-		trailing := state.pendingParams
-		state.pendingParams = nil
-		state.mu.Unlock()
-		if trailing != nil {
-			fileExtractMemoriesLogf("trailing extraction start")
-			runExtractionCore(ctx, state, *trailing, true)
-			fileExtractMemoriesLogf("trailing extraction done")
-		}
-	}()
+	// Track in-flight extraction (mirrors TS inFlightExtractions.add(p)).
+	done := make(chan struct{})
+	state.mu.Lock()
+	state.inFlightExtractions = append(state.inFlightExtractions, done)
+	state.mu.Unlock()
 
-	return runExtractionCore(ctx, state, p, false)
+	go func() {
+		defer close(done)
+
+		// Remove from tracking when done (mirrors TS inFlightExtractions.delete(p)).
+		defer func() {
+			state.mu.Lock()
+			for i, ch := range state.inFlightExtractions {
+				if ch == done {
+					state.inFlightExtractions = append(state.inFlightExtractions[:i], state.inFlightExtractions[i+1:]...)
+					break
+				}
+			}
+			state.mu.Unlock()
+		}()
+
+		// When the current extraction finishes, dispatch any stashed trailing
+		// extraction. Mirrors TS finally block in runExtraction.
+		defer func() {
+			state.mu.Lock()
+			state.inProgress = false
+			trailing := state.pendingParams
+			state.pendingParams = nil
+			state.mu.Unlock()
+			if trailing != nil {
+				fileExtractMemoriesLogf("trailing extraction start")
+				runExtractionCore(ctx, state, *trailing, true)
+				fileExtractMemoriesLogf("trailing extraction done")
+			}
+		}()
+
+		runExtractionCore(ctx, state, p, false)
+	}()
 }
 
 // newMessagesSinceCursor returns messages newer than the cursor UUID.
@@ -551,12 +578,42 @@ func runExtractionCore(ctx context.Context, state *State, p ExtractionParams, is
 	return memoryPaths, nil
 }
 
-// DrainPendingExtraction waits for any in-flight extraction to complete.
+// DrainPendingExtraction waits for any in-flight extraction on state to complete.
 // Mirrors TS drainPendingExtraction in extractMemories.ts.
-// In Go, extraction is synchronous (runs inside the Execute defer block), so
-// this is a no-op. It exists for API parity.
-func DrainPendingExtraction(timeoutMs ...int) {
-	// Extraction is synchronous — nothing to drain.
+//
+// Default timeout is 60s (matches TS PENDING_EXTRACTION_TIMEOUT_MS).
+// The timeout is a soft cap — once hit, DrainPendingExtraction returns
+// without waiting for remaining extractions. Called at shutdown after
+// response flush to let the forked agent complete before the 5s
+// gracefulShutdownSync failsafe kills it.
+func DrainPendingExtraction(state *State, timeoutMs ...int) {
+	timeout := 60000 // 60s default, matches TS
+	if len(timeoutMs) > 0 && timeoutMs[0] > 0 {
+		timeout = timeoutMs[0]
+	}
+
+	// Snapshot in-flight channels so we don't hold the lock while waiting.
+	state.mu.Lock()
+	if len(state.inFlightExtractions) == 0 {
+		state.mu.Unlock()
+		return
+	}
+	channels := make([]chan struct{}, len(state.inFlightExtractions))
+	copy(channels, state.inFlightExtractions)
+	state.mu.Unlock()
+
+	timer := time.NewTimer(time.Duration(timeout) * time.Millisecond)
+	defer timer.Stop()
+
+	for _, ch := range channels {
+		select {
+		case <-ch:
+			// This extraction completed.
+		case <-timer.C:
+			// Soft timeout — return without waiting for the rest.
+			return
+		}
+	}
 }
 
 // buildExtractionUserMessage creates a user message with the extraction prompt.

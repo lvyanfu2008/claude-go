@@ -2504,7 +2504,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							}
 						}
 						qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
-							_, exErr := extractmemories.Execute(ctx, m.extractMemState, extractmemories.ExtractionParams{
+							extractmemories.Execute(ctx, m.extractMemState, extractmemories.ExtractionParams{
 								Messages:       qcp.Messages,
 								ToolUseContext: qcp.ToolUseContext,
 								SystemPrompt:   qcp.SystemPrompt,
@@ -2520,9 +2520,6 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 									}
 								},
 							})
-							if exErr != nil {
-								gouDemoTracef("extractmemories: %v", exErr)
-							}
 							_, dreamErr := autodream.Execute(ctx, m.autoDreamState,
 								qcp.ToolUseContext, qcp.SystemPrompt,
 								qcp.UserContext, qcp.SystemContext,
