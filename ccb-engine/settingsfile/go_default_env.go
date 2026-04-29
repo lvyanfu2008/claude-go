@@ -31,7 +31,6 @@ func GoProjectSettingsEnvDefaults() map[string]string {
 		"CLAUDE_CODE_TENGU_HIVE_EVIDENCE":          "1",
 		"CLAUDE_CODE_TENGU_CORAL_FERN":             "1",
 		"FEATURE_TOKEN_BUDGET":                     "1",
-		"FEATURE_FORK_SUBAGENT":                    "1",
 		"FEATURE_VERIFICATION_AGENT":               "1",
 		"FEATURE_MONITOR_TOOL":                     "1",
 		"FEATURE_REVIEW_ARTIFACT":                  "0",

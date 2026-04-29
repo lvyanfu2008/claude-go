@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-func TestExtractMemoriesLogFileAppend(t *testing.T) {
+func TestExtractMemoriesLogToDiagLog(t *testing.T) {
 	dir := t.TempDir()
-	logPath := filepath.Join(dir, "nested", "extract-mem.log")
-	t.Setenv("GOC_EXTRACT_MEMORIES_LOG_FILE", logPath)
-	t.Setenv("GOC_EXTRACT_MEMORIES_LOG", "") // not off
+	logPath := filepath.Join(dir, "debug.log")
+	t.Setenv("CLAUDE_CODE_DIAG_LOG_FILE", logPath)
+	t.Setenv("GOC_EXTRACT_MEMORIES_LOG", "")
 
 	fileExtractMemoriesLogf("test line %d", 1)
 	fileExtractMemoriesLogf("test line %d", 2)
@@ -31,28 +31,35 @@ func TestExtractMemoriesLogFileAppend(t *testing.T) {
 
 func TestExtractMemoriesLogExplicitlyOff(t *testing.T) {
 	dir := t.TempDir()
-	logPath := filepath.Join(dir, "off.log")
-	t.Setenv("GOC_EXTRACT_MEMORIES_LOG_FILE", logPath)
+	logPath := filepath.Join(dir, "debug.log")
+	t.Setenv("CLAUDE_CODE_DIAG_LOG_FILE", logPath)
 	t.Setenv("GOC_EXTRACT_MEMORIES_LOG", "0")
 
 	fileExtractMemoriesLogf("should not appear")
 
-	if _, err := os.Stat(logPath); err == nil {
-		b, _ := os.ReadFile(logPath)
-		t.Fatalf("log file should not be created, got: %q", string(b))
+	b, err := os.ReadFile(logPath)
+	if err != nil {
+		// File not created at all — that's fine, means nothing was written
+		return
+	}
+	if strings.Contains(string(b), "should not appear") {
+		t.Fatalf("log line should not appear when logging is off")
 	}
 }
 
-func TestExtractMemoriesLogFileClaudeCodeAlias(t *testing.T) {
+func TestExtractMemoriesLogExplicitlyOffClaudeCodeAlias(t *testing.T) {
 	dir := t.TempDir()
-	logPath := filepath.Join(dir, "a.log")
-	t.Setenv("GOC_EXTRACT_MEMORIES_LOG_FILE", "")
-	t.Setenv("CLAUDE_CODE_EXTRACT_MEMORIES_LOG_FILE", logPath)
+	logPath := filepath.Join(dir, "debug.log")
+	t.Setenv("CLAUDE_CODE_DIAG_LOG_FILE", logPath)
+	t.Setenv("CLAUDE_CODE_EXTRACT_MEMORIES_LOG", "false")
 
-	fileExtractMemoriesLogf("alias")
+	fileExtractMemoriesLogf("should not appear")
 
 	b, err := os.ReadFile(logPath)
-	if err != nil || !strings.Contains(string(b), "alias") {
-		t.Fatalf("read log: %v body=%q", err, string(b))
+	if err != nil {
+		return
+	}
+	if strings.Contains(string(b), "should not appear") {
+		t.Fatalf("log line should not appear when CLAUDE_CODE_EXTRACT_MEMORIES_LOG=false")
 	}
 }

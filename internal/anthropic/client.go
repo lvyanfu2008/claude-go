@@ -54,14 +54,21 @@ type ToolDefinition struct {
 	DeferLoading   *bool  `json:"defer_loading,omitempty"`
 }
 
+// OutputFormat mirrors the Anthropic API output_format field for structured outputs.
+type OutputFormat struct {
+	Type   string `json:"type"`
+	Schema any    `json:"schema"`
+}
+
 // CreateMessageRequest is POST /v1/messages body.
 type CreateMessageRequest struct {
-	Model     string           `json:"model"`
-	MaxTokens int              `json:"max_tokens"`
-	Messages  []Message        `json:"messages"`
-	System    string           `json:"system,omitempty"`
-	Tools     []ToolDefinition `json:"tools,omitempty"`
-	Stream    bool             `json:"stream,omitempty"`
+	Model        string           `json:"model"`
+	MaxTokens    int              `json:"max_tokens"`
+	Messages     []Message        `json:"messages"`
+	System       string           `json:"system,omitempty"`
+	Tools        []ToolDefinition `json:"tools,omitempty"`
+	Stream       bool             `json:"stream,omitempty"`
+	OutputFormat *OutputFormat    `json:"output_format,omitempty"`
 	// AnthropicBeta is sent as the anthropic-beta HTTP header (comma-separated), not JSON body.
 	AnthropicBeta []string `json:"-"`
 }

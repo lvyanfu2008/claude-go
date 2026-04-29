@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"goc/claudemd"
 	"goc/memdir"
 	"goc/types"
 )
@@ -31,7 +30,7 @@ func ExtractMemoriesRelaxThreshold() bool {
 // Mirrors src/services/extractMemories/prompts.ts buildExtractAutoOnlyPrompt.
 func buildExtractionPrompt(p ExtractionParams, newMessages []types.Message, memoryDir string) string {
 	memDisplay := memoryDirDisplayPath(memoryDir)
-	existingMemories := scanExistingMemories(memoryDir)
+	existingMemories := memdir.FormatMemoryManifest(memdir.ScanMemoryFiles(memoryDir))
 	memoryIndex := readMemoryIndex(memoryDir)
 	newCount := countModelVisibleMessages(newMessages)
 
@@ -136,79 +135,6 @@ func memoryFrontmatterExample() string {
 	return strings.Join(memdir.BuildMemoryFrontmatterExample(), "\n")
 }
 
-// memoryFileInfo holds parsed metadata from a memory file's frontmatter.
-type memoryFileInfo struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Type        string `yaml:"type"`
-}
-
-func scanExistingMemories(memoryDir string) string {
-	if memoryDir == "" {
-		return ""
-	}
-	entries, err := os.ReadDir(memoryDir)
-	if err != nil {
-		return ""
-	}
-	var lines []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		if strings.EqualFold(e.Name(), entrypointName) {
-			continue
-		}
-		line := e.Name()
-		// Parse frontmatter for richer context.
-		if info := readMemoryFileFrontmatter(filepath.Join(memoryDir, e.Name())); info != nil {
-			parts := []string{e.Name()}
-			if info.Name != "" {
-				parts = append(parts, "name="+info.Name)
-			}
-			if info.Description != "" {
-				d := info.Description
-				if len(d) > 80 {
-					d = d[:80] + "..."
-				}
-				parts = append(parts, d)
-			}
-			line = strings.Join(parts, " — ")
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return strings.Join(lines, "\n")
-}
-
-// readMemoryFileFrontmatter reads a .md file and parses its YAML frontmatter
-// into a memoryFileInfo. Returns nil if the file has no valid frontmatter.
-func readMemoryFileFrontmatter(path string) *memoryFileInfo {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	fm, _ := claudemd.ParseFrontmatter(string(data))
-	if len(fm) == 0 {
-		return nil
-	}
-	var info memoryFileInfo
-	if v, ok := fm["name"]; ok {
-		info.Name, _ = v.(string)
-	}
-	if v, ok := fm["description"]; ok {
-		info.Description, _ = v.(string)
-	}
-	if v, ok := fm["type"]; ok {
-		info.Type, _ = v.(string)
-	}
-	if info.Name == "" && info.Description == "" {
-		return nil
-	}
-	return &info
-}
 
 // readMemoryIndex reads MEMORY.md from memoryDir (first 200 lines, matching TS truncation).
 func readMemoryIndex(memoryDir string) string {
