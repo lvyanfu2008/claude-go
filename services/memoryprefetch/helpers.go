@@ -179,18 +179,16 @@ func getUserMessageText(m types.Message) string {
 		return strings.TrimSpace(text)
 	}
 	// Try array of content blocks
-	var blocks []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+	//{
+	//  "content" : "你好",
+	//  "role" : "user"
+	//}
+	var block struct {
+		Role string `json:"role"`
+		Text string `json:"content"`
 	}
-	if json.Unmarshal(raw, &blocks) == nil {
-		var parts []string
-		for _, b := range blocks {
-			if b.Type == "text" && b.Text != "" {
-				parts = append(parts, b.Text)
-			}
-		}
-		return strings.TrimSpace(strings.Join(parts, "\n"))
+	if json.Unmarshal(raw, &block) == nil {
+		return strings.TrimSpace(block.Text)
 	}
 	return ""
 }
