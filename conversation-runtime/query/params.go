@@ -54,6 +54,12 @@ type CallModelInput struct {
 	// Cwd and ModelID are optional hints for hosts that implement [QueryDeps.CallModel].
 	Cwd     string
 	ModelID string
+	// MemoryPrefetch optional handle created by queryLoop; consumed inside streaming loops
+	// after tool results. Mirrors TS `using pendingMemoryPrefetch` in query.ts.
+	MemoryPrefetch interface {
+		Poll() []types.Message
+		Close()
+	}
 	// Options bag grows with parity; keep JSON for uncommon fields during migration.
 	Options json.RawMessage
 }

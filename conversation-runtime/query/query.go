@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/diaglog"
+	"goc/services/memoryprefetch"
 	"goc/types"
 )
 
@@ -136,6 +137,13 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		fullSystem := StripSystemPromptDynamicBoundaryForAPI(
 			AppendSystemContext(params.SystemPrompt, params.SystemContext))
 		cwd, _ := os.Getwd()
+
+		// Start relevant-memory prefetch once per user turn (mirrors TS
+		// `using pendingMemoryPrefetch = startRelevantMemoryPrefetch(...)`).
+		// Runs while the model streams and tools execute; consumed after
+		// tool results in each loop iteration.
+		memHandle := memoryprefetch.StartRelevantMemoryPrefetch(ctx, work, cwd)
+
 		in := &CallModelInput{
 			Messages:       msgs,
 			SystemPrompt:   fullSystem,
@@ -144,6 +152,10 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			SignalDone:     ctx.Done(),
 			Cwd:            cwd,
 			ModelID:        strings.TrimSpace(params.ToolUseContext.Options.MainLoopModel),
+		}
+		if memHandle != nil {
+			defer memHandle.Close()
+			in.MemoryPrefetch = memHandle
 		}
 		if useStream {
 			openAI := StreamingUsesOpenAIChat()

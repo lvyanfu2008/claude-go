@@ -200,6 +200,21 @@ func runStreamingParityModelLoop(
 			}
 		}
 
+		// Consume memory prefetch after tool results (mirrors TS query.ts
+		// collect point after toolResults.push). Attachment messages are
+		// converted to <system-reminder>-wrapped user messages by
+		// normalizeAttachmentForAPI in the next API round.
+		if in.MemoryPrefetch != nil {
+			for _, mm := range in.MemoryPrefetch.Poll() {
+				mmCopy := mm
+				if !yieldStreamingParity(ctx, deps, QueryYield{Message: &mmCopy}, yield) {
+					ex.Discard()
+					return context.Canceled
+				}
+				cur = append(cur, mmCopy)
+			}
+		}
+
 		if !acc.HasToolUse() {
 			return nil
 		}
