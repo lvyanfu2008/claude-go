@@ -15,7 +15,8 @@ import (
 	"time"
 
 	"goc/anthropicmessages"
-	"goc/modelenv"
+	"goc/ccb-engine/apilog"
+	"goc/tstenv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -147,12 +148,12 @@ const defaultAnthropicBaseURL = "https://api.anthropic.com"
 const anthropicAPIVersion = "2023-06-01"
 
 type messageRequest struct {
-	Model        string      `json:"model"`
-	MaxTokens    int         `json:"max_tokens"`
-	Messages     []msgPart   `json:"messages"`
-	System       string      `json:"system,omitempty"`
-	Stream       bool        `json:"stream,omitempty"`
-	OutputFormat any         `json:"output_format,omitempty"`
+	Model        string    `json:"model"`
+	MaxTokens    int       `json:"max_tokens"`
+	Messages     []msgPart `json:"messages"`
+	System       string    `json:"system,omitempty"`
+	Stream       bool      `json:"stream,omitempty"`
+	OutputFormat any       `json:"output_format,omitempty"`
 }
 
 type msgPart struct {
@@ -167,10 +168,6 @@ type messageResponse struct {
 type contentBlock struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
-}
-
-type selectMemoriesOutput struct {
-	SelectedMemories []string `json:"selected_memories"`
 }
 
 func postMessage(ctx context.Context, apiKey, baseURL string, req messageRequest, betaHeaders []string) (*messageResponse, error) {
@@ -223,6 +220,23 @@ func postMessage(ctx context.Context, apiKey, baseURL string, req messageRequest
 	return &out, nil
 }
 
+// modelSupportsStructuredOutputs mirrors src/utils/betas.ts modelSupportsStructuredOutputs.
+// Structured outputs beta header is only safe for firstParty and Foundry providers
+// (not Bedrock, Vertex, OpenAI/DeepSeek, etc.).
+func modelSupportsStructuredOutputs(model string) bool {
+	provider := tstenv.GetAPIProvider()
+	if provider != tstenv.FirstParty && provider != tstenv.Foundry {
+		return false
+	}
+	canonical := strings.ToLower(model)
+	return strings.Contains(canonical, "claude-sonnet-4-6") ||
+		strings.Contains(canonical, "claude-sonnet-4-5") ||
+		strings.Contains(canonical, "claude-opus-4-1") ||
+		strings.Contains(canonical, "claude-opus-4-5") ||
+		strings.Contains(canonical, "claude-opus-4-6") ||
+		strings.Contains(canonical, "claude-haiku-4-5")
+}
+
 func jsonMarshalNoEscape(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -251,7 +265,52 @@ func parseContentBlocks(raw json.RawMessage) ([]contentBlock, error) {
 	return blocks, nil
 }
 
-// selectRelevantMemories calls Sonnet to pick up to 5 most relevant memory filenames.
+// selectMemoriesOutputSchema is the JSON schema embedded in the prompt (Anthropic path
+// uses native json_schema output_format; OpenAI/DeepSeek path uses json_object and embeds
+// this schema as a text hint so the model knows the expected field names).
+var selectMemoriesOutputSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"selected_memories": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "string",
+			},
+		},
+	},
+	"required":             []string{"selected_memories"},
+	"additionalProperties": false,
+}
+
+// selectMemoriesJSONSchemaText is the JSON schema serialized as a string for embedding
+// in the OpenAI/DeepSeek prompt (used by schemaToPromptHint equivalent).
+func selectMemoriesJSONSchemaText() string {
+	b, _ := json.Marshal(selectMemoriesOutputSchema)
+	return string(b)
+}
+
+// getDefaultHaikuModelForMemdir mirrors TS getDefaultHaikuModel()
+// (src/utils/model/model.ts:164-181).
+func getDefaultHaikuModelForMemdir() string {
+	provider := tstenv.GetAPIProvider()
+	// For OpenAI/DeepSeek provider, check OPENAI_DEFAULT_HAIKU_MODEL first
+	if provider == tstenv.OpenAI {
+		if v := strings.TrimSpace(os.Getenv("OPENAI_DEFAULT_HAIKU_MODEL")); v != "" {
+			return v
+		}
+	}
+	// Anthropic-specific override (for first-party and other providers)
+	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")); v != "" {
+		return v
+	}
+	// Haiku 4.5 is available on all platforms
+	return "claude-haiku-4-5-20251001"
+}
+
+// selectRelevantMemories mirrors TS selectRelevantMemories (sideQuery.ts) called by selectRelevantMemories
+// (findRelevantMemories.ts:77-157). Routes through Anthropic Messages API for
+// firstParty/foundry, OpenAI Chat Completions for OpenAI/DeepSeek. Other providers
+// (Bedrock/Vertex/Gemini/Grok) return nil (no selectRelevantMemories path).
 func selectRelevantMemories(
 	ctx context.Context,
 	query string,
@@ -270,16 +329,36 @@ func selectRelevantMemories(
 		toolsSection = "\n\nRecently used tools: " + strings.Join(recentTools, ", ")
 	}
 
+	provider := tstenv.GetAPIProvider()
+	switch provider {
+	case tstenv.FirstParty, tstenv.Foundry:
+		return sideQueryAnthropic(ctx, query, manifest, toolsSection, validFilenames)
+	case tstenv.OpenAI:
+		return sideQueryOpenAI(ctx, query, manifest, toolsSection, validFilenames)
+	default:
+		// Bedrock, Vertex, Gemini, Grok — no sideQuery path; mirror TS
+		// sideQuery failure → catch → return [].
+		return nil, nil
+	}
+}
+
+// sideQueryAnthropic uses the Anthropic Messages API with native
+// json_schema output_format (structured outputs beta when supported).
+func sideQueryAnthropic(
+	ctx context.Context,
+	query, manifest, toolsSection string,
+	validFilenames map[string]bool,
+) ([]string, error) {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
 		apiKey = os.Getenv("ANTHROPIC_AUTH_TOKEN")
 	}
 	baseURL := os.Getenv("ANTHROPIC_BASE_URL")
 
-	sonnetModel := modelenv.ResolveWithFallback("claude-sonnet-4-20250514")
+	haikuModel := getDefaultHaikuModelForMemdir()
 
 	req := messageRequest{
-		Model:     sonnetModel,
+		Model:     haikuModel,
 		MaxTokens: 256,
 		System:    selectMemoriesSystemPrompt,
 		Messages: []msgPart{
@@ -289,29 +368,203 @@ func selectRelevantMemories(
 			},
 		},
 		OutputFormat: map[string]any{
-			"type": "json_schema",
-			"schema": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"selected_memories": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "string",
-						},
-					},
-				},
-				"required":             []string{"selected_memories"},
-				"additionalProperties": false,
-			},
+			"type":   "json_schema",
+			"schema": selectMemoriesOutputSchema,
 		},
 	}
 
-	resp, err := postMessage(ctx, apiKey, baseURL, req, []string{"structured-outputs-2025-12-15"})
+	var betaHeaders []string
+	if modelSupportsStructuredOutputs(haikuModel) {
+		betaHeaders = []string{"structured-outputs-2025-12-15"}
+	}
+	resp, err := postMessage(ctx, apiKey, baseURL, req, betaHeaders)
 	if err != nil {
 		return nil, err
 	}
 
-	blocks, err := parseContentBlocks(resp.Content)
+	return parseSelectMemoriesResponse(resp.Content, validFilenames)
+}
+
+// openAIChatCompletionRequest is the minimal OpenAI Chat Completions request body.
+type openAIChatCompletionRequest struct {
+	Model          string           `json:"model"`
+	Messages       []openAIChatMsg  `json:"messages"`
+	MaxTokens      int              `json:"max_tokens"`
+	ResponseFormat *json.RawMessage `json:"response_format,omitempty"`
+}
+
+type openAIChatMsg struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type openAIChatCompletionResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+// sideQueryOpenAI uses OpenAI Chat Completions API (non-streaming)
+// with response_format: json_object. The JSON schema is embedded as a text hint
+// in the system prompt so the model knows which key names to use
+// (e.g. "selected_memories" vs "memory_files").
+//
+// This path is DeepSeek-compatible: DeepSeek and many other OpenAI-compatible
+// providers do not support the json_schema response_format type, only json_object.
+// DeepSeek also requires the word "json" in the prompt when using json_object,
+// which the schema text hint satisfies.
+func sideQueryOpenAI(
+	ctx context.Context,
+	query, manifest, toolsSection string,
+	validFilenames map[string]bool,
+) ([]string, error) {
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if apiKey == "" {
+		return nil, fmt.Errorf("memdir: OPENAI_API_KEY missing for OpenAI provider")
+	}
+	baseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	// Resolve Haiku model to OpenAI equivalent.
+	haikuModel := getDefaultHaikuModelForMemdir()
+	openaiModel := resolveOpenAIModelInline(haikuModel)
+
+	// Build the JSON schema text hint for DeepSeek compatibility.
+	// Mirrors TS schemaToPromptHint (sideQuery.ts:103-108).
+	schemaText := selectMemoriesJSONSchemaText()
+	formatHint := fmt.Sprintf("Respond in JSON format. The response must conform to this JSON schema:\n%s", schemaText)
+
+	// Build system prompt with format hint appended.
+	// The format hint includes the word "json" which DeepSeek requires when using
+	// response_format: json_object.
+	systemContent := selectMemoriesSystemPrompt + "\n" + formatHint
+
+	rf := json.RawMessage(`{"type":"json_object"}`)
+	reqBody := openAIChatCompletionRequest{
+		Model: openaiModel,
+		Messages: []openAIChatMsg{
+			{Role: "system", Content: systemContent},
+			{
+				Role:    "user",
+				Content: fmt.Sprintf("Query: %s\n\nAvailable memories:\n%s%s", query, manifest, toolsSection),
+			},
+		},
+		MaxTokens:      256,
+		ResponseFormat: &rf,
+	}
+
+	body, err := jsonMarshalNoEscape(reqBody)
+	if err != nil {
+		return nil, err
+	}
+	apilog.LogRequestBody("memdir sideQueryOpenAI", body)
+
+	url := baseURL + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("authorization", "Bearer "+apiKey)
+	httpReq.Header.Set("content-type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	apilog.LogResponseBody("memdir sideQueryOpenAI", respBody)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("openai chat %s: %s", resp.Status, truncateStr(string(respBody), 800))
+	}
+
+	var chatResp openAIChatCompletionResponse
+	if err := json.Unmarshal(respBody, &chatResp); err != nil {
+		return nil, fmt.Errorf("decode openai response: %w", err)
+	}
+	if chatResp.Error != nil && strings.TrimSpace(chatResp.Error.Message) != "" {
+		return nil, fmt.Errorf("openai api error: %s", chatResp.Error.Message)
+	}
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("openai: empty choices")
+	}
+
+	text := chatResp.Choices[0].Message.Content
+	raw := json.RawMessage(text)
+
+	return parseSelectMemoriesResponse(raw, validFilenames)
+}
+
+// resolveOpenAIModelInline is a minimal inline version of ResolveOpenAIModel
+// (query/openai_model_resolve.go) for use in memdir without importing the query package.
+func resolveOpenAIModelInline(anthropicModel string) string {
+
+	return anthropicModel
+	//clean := strings.TrimSuffix(strings.TrimSpace(anthropicModel), "[1m]")
+	//
+	//// Check env overrides in same precedence as ResolveOpenAIModel
+	//if cm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MODEL")); cm != "" {
+	//	clean = strings.TrimSuffix(strings.TrimSpace(cm), "[1m]")
+	//} else if v := strings.TrimSpace(os.Getenv("CCB_ENGINE_MODEL")); v != "" {
+	//	return v
+	//}
+	//
+	//// Check family-specific env override
+	//low := strings.ToLower(clean)
+	//if strings.Contains(low, "haiku") {
+	//	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")); v != "" {
+	//		return v
+	//	}
+	//	return "gpt-4o-mini"
+	//}
+	//if strings.Contains(low, "sonnet") {
+	//	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_SONNET_MODEL")); v != "" {
+	//		return v
+	//	}
+	//	return "gpt-4o"
+	//}
+	//if strings.Contains(low, "opus") {
+	//	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_OPUS_MODEL")); v != "" {
+	//		return v
+	//	}
+	//	return "o3"
+	//}
+	//// Fallback: exact match from the default map
+	//switch clean {
+	//case "claude-haiku-4-5-20251001":
+	//	return "gpt-4o-mini"
+	//case "claude-3-5-haiku-20241022":
+	//	return "gpt-4o-mini"
+	//case "claude-sonnet-4-20250514", "claude-sonnet-4-5-20250929", "claude-sonnet-4-6":
+	//	return "gpt-4o"
+	//case "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022":
+	//	return "gpt-4o"
+	//case "claude-opus-4-20250514", "claude-opus-4-1-20250805", "claude-opus-4-5-20251101", "claude-opus-4-6":
+	//	return "o3"
+	//}
+	//if clean == "" {
+	//	return "gpt-4o"
+	//}
+	//return clean
+}
+
+// parseSelectMemoriesResponse parses the LLM response content into selected filenames.
+// Mirrors TS findRelevantMemories.ts:129-146 — tries selected_memories first,
+// then falls back to memory_files.
+func parseSelectMemoriesResponse(raw json.RawMessage, validFilenames map[string]bool) ([]string, error) {
+	blocks, err := parseContentBlocks(raw)
 	if err != nil {
 		return nil, fmt.Errorf("parse content blocks: %w", err)
 	}
@@ -328,13 +581,29 @@ func selectRelevantMemories(
 		return nil, nil
 	}
 
-	var parsed selectMemoriesOutput
+	var parsed map[string]any
 	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
-		return nil, fmt.Errorf("parse selected_memories JSON: %w", err)
+		return nil, fmt.Errorf("parse JSON: %w", err)
+	}
+
+	// Try selected_memories first, then memory_files (TS fallback order).
+	var filenames []string
+	if arr, ok := parsed["selected_memories"].([]any); ok {
+		for _, f := range arr {
+			if s, ok := f.(string); ok {
+				filenames = append(filenames, s)
+			}
+		}
+	} else if arr, ok := parsed["memory_files"].([]any); ok {
+		for _, f := range arr {
+			if s, ok := f.(string); ok {
+				filenames = append(filenames, s)
+			}
+		}
 	}
 
 	var selected []string
-	for _, f := range parsed.SelectedMemories {
+	for _, f := range filenames {
 		if validFilenames[f] {
 			selected = append(selected, f)
 		}
@@ -343,7 +612,7 @@ func selectRelevantMemories(
 }
 
 // FindRelevantMemories mirrors src/memdir/findRelevantMemories.ts.
-// It scans the memory directory, calls Sonnet to select up to 5 most relevant
+// It scans the memory directory, calls Haiku to select up to 5 most relevant
 // memory files for the given query, and returns their absolute paths + mtimes.
 //
 // alreadySurfaced filters out paths shown in prior turns so the selector

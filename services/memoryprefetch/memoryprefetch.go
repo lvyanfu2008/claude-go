@@ -11,7 +11,9 @@ package memoryprefetch
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
+	"unicode"
 
 	"goc/growthbook"
 	"goc/memdir"
@@ -58,8 +60,17 @@ func StartRelevantMemoryPrefetch(
 		return nil
 	}
 	input := getUserMessageText(lastMsg)
-	if input == "" || !hasWordBoundary(input) {
+	// Single-word prompts lack enough context for meaningful term extraction.
+	// Chinese text doesn't use spaces, so also check CJK character count.
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
 		return nil
+	}
+	if !hasWordBoundary(trimmed) {
+		cjkCount := countCJK(trimmed)
+		if cjkCount < 4 {
+			return nil
+		}
 	}
 
 	surfacedPaths, surfacedBytes := collectSurfacedMemories(messages)
@@ -170,7 +181,7 @@ var ErrNoResult = errors.New("memoryprefetch: no relevant memories found")
 
 // hasWordBoundary returns true if the input contains at least one whitespace
 // character, ensuring the query has enough context for meaningful selection.
-// Mirrors TS: !input || !/\s/.test(input.trim()) → skip single-word prompts.
+// Mirrors TS: /\s/.test(trimmed).
 func hasWordBoundary(input string) bool {
 	for _, r := range input {
 		if r == ' ' || r == '\t' || r == '\n' {
@@ -178,4 +189,20 @@ func hasWordBoundary(input string) bool {
 		}
 	}
 	return false
+}
+
+// countCJK returns the number of CJK characters (Han, Katakana, Hiragana)
+// in the input. Mirrors TS:
+//
+//	(trimmed.match(/[\p{Script=Han}\p{Script=Katakana}\p{Script=Hiragana}]/gu) || []).length
+func countCJK(input string) int {
+	count := 0
+	for _, r := range input {
+		if unicode.Is(unicode.Han, r) ||
+			unicode.Is(unicode.Katakana, r) ||
+			unicode.Is(unicode.Hiragana, r) {
+			count++
+		}
+	}
+	return count
 }

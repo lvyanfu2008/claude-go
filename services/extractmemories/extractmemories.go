@@ -617,6 +617,8 @@ func DrainPendingExtraction(state *State, timeoutMs ...int) {
 }
 
 // buildExtractionUserMessage creates a user message with the extraction prompt.
+// The message is marked IsMeta=true (system-generated, not user input) so
+// startRelevantMemoryPrefetch and isHumanTurn skip it.
 func buildExtractionUserMessage(prompt string, newUUID func() string) types.Message {
 	uuid := newUUID()
 	content := map[string]any{
@@ -624,10 +626,12 @@ func buildExtractionUserMessage(prompt string, newUUID func() string) types.Mess
 		"content": prompt,
 	}
 	b, _ := json.Marshal(content)
+	isMeta := true
 	return types.Message{
 		Type:    types.MessageTypeUser,
 		UUID:    uuid,
 		Message: b,
+		IsMeta:  &isMeta,
 	}
 }
 

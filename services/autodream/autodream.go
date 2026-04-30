@@ -246,6 +246,8 @@ func buildExtraSection(sessionIDs []string) string {
 }
 
 // buildUserMessage creates a user message with the given prompt content.
+// The message is marked IsMeta=true (system-generated, not user input) so
+// startRelevantMemoryPrefetch and isHumanTurn skip it.
 func buildUserMessage(prompt string, newUUID func() string) types.Message {
 	uuid := newUUID()
 	content := map[string]any{
@@ -253,10 +255,12 @@ func buildUserMessage(prompt string, newUUID func() string) types.Message {
 		"content": prompt,
 	}
 	b, _ := json.Marshal(content)
+	isMeta := true
 	return types.Message{
 		Type:    types.MessageTypeUser,
 		UUID:    uuid,
 		Message: b,
+		IsMeta:  &isMeta,
 	}
 }
 

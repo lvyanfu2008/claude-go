@@ -55,12 +55,12 @@ type AgentMemoryPromptParams struct {
 // AutoMemoryPromptOpts holds parameters for BuildAutoMemoryPrompt.
 // Feature gates are resolved by the caller (commands side) and passed in.
 type AutoMemoryPromptOpts struct {
-	Cwd                    string
-	MemorySkipIndex        bool
-	KairosActive           bool
-	TeamMemActive          bool
-	EmbeddedSearchTools    bool
-	ReplModeEnabled        bool
+	Cwd                     string
+	MemorySkipIndex         bool
+	KairosActive            bool
+	TeamMemActive           bool
+	EmbeddedSearchTools     bool
+	ReplModeEnabled         bool
 	MemorySearchPastContext bool
 }
 
