@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
+	"goc/compactquerysource"
 	"goc/compactservice"
 	"goc/conversation-runtime/query"
 	"goc/growthbook"
@@ -245,8 +245,8 @@ func runSessionMemorySubagent(
 	restrictedDeps := buildSessionMemoryExecutionDeps(memoryPath, readFileState)
 
 	qdeps := query.QueryDeps{
-		NewUUID:            query.RandomUUID,
-		ToolexecutionDeps:  restrictedDeps,
+		NewUUID:           query.RandomUUID,
+		ToolexecutionDeps: restrictedDeps,
 	}
 
 	qp := query.QueryParams{
@@ -317,7 +317,7 @@ func Hook(state *State, sessionID, cwd string) func(ctx context.Context, params 
 
 	return func(ctx context.Context, params query.QueryCompleteParams) {
 		// Only run on main REPL thread (not subagents, teammates, etc.).
-		if !strings.EqualFold(string(params.QuerySource), "repl_main_thread") {
+		if !compactquerysource.MainThreadLike(string(params.QuerySource)) {
 			return
 		}
 
@@ -425,7 +425,7 @@ func ManuallyExtract(
 		Messages:       messages,
 		SystemPrompt:   systemPrompt,
 		UserContext:    userContext,
-		SystemContext:   systemContext,
+		SystemContext:  systemContext,
 		ToolUseContext: toolUseContext,
 		QuerySource:    types.QuerySource("session_memory_manual"),
 		Cwd:            cwd,
