@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
+	"goc/memdir"
 	"goc/types"
 )
 
@@ -198,6 +200,149 @@ func getUserMessageText(m types.Message) string {
 type RelevantMemory struct {
 	Path    string
 	MtimeMs int64
+}
+
+// ---- agent mentions (mirrors TS extractAgentMentions) ----
+
+// AgentMemoryDef mirrors the subset of AgentDefinition needed by
+// GetRelevantMemoryAttachments: agentType and memory scope only.
+type AgentMemoryDef struct {
+	AgentType string                `json:"agentType"`
+	Memory    memdir.AgentMemoryScope `json:"memory,omitempty"`
+}
+
+// ReadFileStateChecker mirrors TS FileStateCache.has(): checks whether
+// a file path has been read via FileRead/FileWrite/FileEdit tools (any
+// iteration this turn), so the memory selector can de-dup.
+type ReadFileStateChecker interface {
+	Has(absPath string) bool
+}
+
+var (
+	// quotedAgentRe matches @"<type> (agent)" — autocomplete selection format.
+	quotedAgentRe = regexp.MustCompile(`(^|\s)@"([\w:.@-]+) \(agent\)"`)
+	// unquotedAgentRe matches @agent-<type> — legacy/manual typing format.
+	unquotedAgentRe = regexp.MustCompile(`(^|\s)@(agent-[\w:.@-]+)`)
+)
+
+// extractAgentMentions extracts agent type mentions from user input content.
+// Supports two formats:
+//  1. @"<type> (agent)" — autocomplete selection (e.g. @"code-reviewer (agent)")
+//  2. @agent-<type> — manual typing (e.g. @agent-code-reviewer)
+//
+// Mirrors TS extractAgentMentions in attachments.ts:2811-2837.
+func extractAgentMentions(content string) []string {
+	seen := make(map[string]bool)
+	var results []string
+
+	// Match quoted format: @"<type> (agent)"
+	for _, match := range quotedAgentRe.FindAllStringSubmatch(content, -1) {
+		if len(match) >= 3 && match[2] != "" && !seen[match[2]] {
+			seen[match[2]] = true
+			results = append(results, match[2])
+		}
+	}
+
+	// Match unquoted format: @agent-<type>
+	for _, match := range unquotedAgentRe.FindAllStringSubmatch(content, -1) {
+		if len(match) >= 3 && match[2] != "" && !seen[match[2]] {
+			seen[match[2]] = true
+			results = append(results, match[2])
+		}
+	}
+
+	return results
+}
+
+// ---- recent successful tools (mirrors TS collectRecentSuccessfulTools) ----
+
+// isHumanTurn mirrors TS isHumanTurn(m): m.type === 'user' && !m.isMeta && m.toolUseResult === undefined.
+func isHumanTurn(m types.Message) bool {
+	return m.Type == types.MessageTypeUser &&
+		(m.IsMeta == nil || !*m.IsMeta) &&
+		m.ToolUseResult == nil
+}
+
+// isToolResultBlock mirrors TS isToolResultBlock: type === 'tool_result' && typeof tool_use_id === 'string'.
+func isToolResultBlock(block map[string]any) bool {
+	if block == nil {
+		return false
+	}
+	t, _ := block["type"].(string)
+	if t != "tool_result" {
+		return false
+	}
+	_, ok := block["tool_use_id"].(string)
+	return ok
+}
+
+// collectRecentSuccessfulTools returns tool names that succeeded (and never
+// errored) since the previous real turn boundary. The memory selector uses
+// this to suppress docs about tools that are already working.
+//
+// Backward scan: tool_use lives in assistant content; tool_result in user
+// content. Results are seen before uses in backward order, so we collect
+// both by ID and resolve after the scan.
+//
+// Mirrors TS collectRecentSuccessfulTools in attachments.ts:2474-2512.
+func collectRecentSuccessfulTools(messages []types.Message, lastUserMessage types.Message) []string {
+	useIDToName := make(map[string]string)
+	resultByUseID := make(map[string]bool)
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		m := messages[i]
+		if isHumanTurn(m) && m.UUID != lastUserMessage.UUID {
+			break
+		}
+		if m.Type == types.MessageTypeAssistant && len(m.Message) > 0 {
+			// Try to parse m.Message as array of content blocks
+			var blocks []map[string]any
+			if json.Unmarshal(m.Message, &blocks) == nil {
+				for _, block := range blocks {
+					if t, _ := block["type"].(string); t == "tool_use" {
+						if id, _ := block["id"].(string); id != "" {
+							if name, _ := block["name"].(string); name != "" {
+								useIDToName[id] = name
+							}
+						}
+					}
+				}
+			}
+		} else if m.Type == types.MessageTypeUser && len(m.Message) > 0 {
+			var blocks []map[string]any
+			if json.Unmarshal(m.Message, &blocks) == nil {
+				for _, block := range blocks {
+					if isToolResultBlock(block) {
+						id, _ := block["tool_use_id"].(string)
+						isError, _ := block["is_error"].(bool)
+						resultByUseID[id] = isError
+					}
+				}
+			}
+		}
+	}
+
+	failed := make(map[string]bool)
+	succeeded := make(map[string]bool)
+	for id, name := range useIDToName {
+		errored, ok := resultByUseID[id]
+		if !ok {
+			continue
+		}
+		if errored {
+			failed[name] = true
+		} else {
+			succeeded[name] = true
+		}
+	}
+
+	var results []string
+	for name := range succeeded {
+		if !failed[name] {
+			results = append(results, name)
+		}
+	}
+	return results
 }
 
 // newRelevantMemoriesAttachment creates an attachment message for the memories.

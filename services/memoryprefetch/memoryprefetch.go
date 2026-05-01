@@ -40,13 +40,18 @@ type handleResult struct {
 
 // StartRelevantMemoryPrefetch mirrors TS startRelevantMemoryPrefetch.
 // It checks feature flags, extracts the last user message, scans for
-// surfaced-total byte throttle, and starts a background goroutine.
+// surfaced-total byte throttle, collects recent successful tools, and
+// starts a background goroutine that calls GetRelevantMemoryAttachments.
 // Returns nil when the prefetch should not run (disabled, no input,
 // session throttle exceeded).
+//
+// agents and readFileState may be nil; if nil they default to empty.
 func StartRelevantMemoryPrefetch(
 	ctx context.Context,
 	messages []types.Message,
 	cwd string,
+	agents []AgentMemoryDef,
+	readFileState ReadFileStateChecker,
 ) *Handle {
 	if !memdir.IsAutoMemoryEnabled() {
 		return nil
@@ -78,34 +83,28 @@ func StartRelevantMemoryPrefetch(
 		return nil
 	}
 
-	memoryDir := memdir.GetAutoMemPath(cwd)
+	recentTools := collectRecentSuccessfulTools(messages, lastMsg)
 
 	ch := make(chan handleResult, 1)
 	done := make(chan struct{})
 
 	go func() {
 		defer close(ch)
-		// Find relevant memory paths using Sonnet side-query
-		selected := memdir.FindRelevantMemories(
+		memories, err := GetRelevantMemoryAttachments(
 			ctx,
 			input,
-			memoryDir,
-			nil, // recentTools — not yet wired
+			agents,
+			readFileState,
+			recentTools,
 			surfacedPaths,
+			cwd,
 		)
-		if len(selected) == 0 {
-			return
-		}
-		// Convert to RelevantMemory
-		var sel []RelevantMemory
-		for _, s := range selected {
-			sel = append(sel, RelevantMemory{
-				Path:    s.Path,
-				MtimeMs: s.MtimeMs,
-			})
-		}
-		memories := readMemoriesForSurfacing(sel)
-		if len(memories) == 0 {
+		if err != nil || len(memories) == 0 {
+			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				// Errors in memory prefetch are non-fatal and intentionally
+				// never surfaced to the user (mirrors TS .catch(logError)).
+				_ = err
+			}
 			return
 		}
 		// Notify result; Poll() reads this
@@ -119,6 +118,87 @@ func StartRelevantMemoryPrefetch(
 		ch:   ch,
 		done: done,
 	}
+}
+
+// GetRelevantMemoryAttachments finds and reads relevant memory files for the
+// given user input. It supports agent @-mention routing (agent memory dirs),
+// readFileState filtering (dedup files already read via tools), recentTools
+// (suppress docs for tools already working), multi-directory concurrent
+// search, and surfaced-path de-duplication.
+//
+// Mirrors TS getRelevantMemoryAttachments in attachments.ts:2197-2243.
+func GetRelevantMemoryAttachments(
+	ctx context.Context,
+	input string,
+	agents []AgentMemoryDef,
+	readFileState ReadFileStateChecker,
+	recentTools []string,
+	alreadySurfaced map[string]bool,
+	cwd string,
+) ([]SurfacedMemory, error) {
+	// If an agent is @-mentioned, search only its memory dir (isolation).
+	// Otherwise search the auto-memory dir.
+	var dirs []string
+	mentions := extractAgentMentions(input)
+	for _, mention := range mentions {
+		agentType := strings.TrimPrefix(mention, "agent-")
+		for _, def := range agents {
+			if def.AgentType == agentType && def.Memory != "" {
+				dirs = append(dirs, memdir.GetAgentMemoryDir(agentType, def.Memory))
+			}
+		}
+	}
+	if len(dirs) == 0 {
+		dirs = []string{memdir.GetAutoMemPath(cwd)}
+	} else {
+		// Deduplicate dirs (multiple mentions of same agent)
+		seen := make(map[string]bool)
+		var unique []string
+		for _, d := range dirs {
+			if !seen[d] {
+				seen[d] = true
+				unique = append(unique, d)
+			}
+		}
+		dirs = unique
+	}
+
+	// Concurrent search across all memory dirs
+	type dirResult struct {
+		results []memdir.RelevantMemory
+	}
+	resultsCh := make(chan dirResult, len(dirs))
+	for _, dir := range dirs {
+		go func(d string) {
+			selected := memdir.FindRelevantMemories(ctx, input, d, recentTools, alreadySurfaced)
+			resultsCh <- dirResult{results: selected}
+		}(dir)
+	}
+
+	var allResults []memdir.RelevantMemory
+	for range dirs {
+		r := <-resultsCh
+		allResults = append(allResults, r.results...)
+	}
+
+	// Filter: exclude paths already in readFileState (read by tools this turn)
+	// or already surfaced in a prior turn's memory attachment.
+	var selected []RelevantMemory
+	for _, m := range allResults {
+		if readFileState != nil && readFileState.Has(m.Path) {
+			continue
+		}
+		if alreadySurfaced[m.Path] {
+			continue
+		}
+		selected = append(selected, RelevantMemory{Path: m.Path, MtimeMs: m.MtimeMs})
+	}
+	if len(selected) > 5 {
+		selected = selected[:5]
+	}
+
+	memories := readMemoriesForSurfacing(selected)
+	return memories, nil
 }
 
 // Poll returns the memories if the background goroutine has finished and

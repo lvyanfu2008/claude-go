@@ -2,12 +2,14 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"os"
 	"strings"
 
 	"goc/ccb-engine/diaglog"
+	"goc/memdir"
 	"goc/services/memoryprefetch"
 	"goc/types"
 )
@@ -138,11 +140,34 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			AppendSystemContext(params.SystemPrompt, params.SystemContext))
 		cwd, _ := os.Getwd()
 
+		// Parse agent definitions for memory prefetch (agent @-mention routing).
+		// Mirrors TS: toolUseContext.options.agentDefinitions.activeAgents.
+		var agents []memoryprefetch.AgentMemoryDef
+		if raw := params.ToolUseContext.Options.AgentDefinitions; len(raw) > 0 {
+			var defs struct {
+				ActiveAgents []struct {
+					AgentType string          `json:"agentType"`
+					Memory    json.RawMessage `json:"memory"`
+				} `json:"activeAgents"`
+			}
+			if json.Unmarshal(raw, &defs) == nil {
+				for _, a := range defs.ActiveAgents {
+					var scope string
+					if json.Unmarshal(a.Memory, &scope) == nil && scope != "" {
+						agents = append(agents, memoryprefetch.AgentMemoryDef{
+							AgentType: a.AgentType,
+							Memory:    memdir.AgentMemoryScope(scope),
+						})
+					}
+				}
+			}
+		}
+
 		// Start relevant-memory prefetch once per user turn (mirrors TS
 		// `using pendingMemoryPrefetch = startRelevantMemoryPrefetch(...)`).
 		// Runs while the model streams and tools execute; consumed after
 		// tool results in each loop iteration.
-		memHandle := memoryprefetch.StartRelevantMemoryPrefetch(ctx, work, cwd)
+		memHandle := memoryprefetch.StartRelevantMemoryPrefetch(ctx, work, cwd, agents, params.ReadFileState)
 
 		in := &CallModelInput{
 			Messages:       msgs,

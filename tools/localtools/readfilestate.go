@@ -47,6 +47,17 @@ func (s *ReadFileState) Set(absPath string, e *ReadFileEntry) {
 	s.m[absPath] = e
 }
 
+// Has returns true if absPath is tracked in the state (mirrors TS FileStateCache.has()).
+func (s *ReadFileState) Has(absPath string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.m[absPath]
+	return ok
+}
+
 // Keys returns all file paths currently tracked in the state (mirrors TS FileStateCache.keys()).
 // The returned slice is a snapshot copy.
 func (s *ReadFileState) Keys() []string {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"goc/anthropicmessages"
+	"goc/services/memoryprefetch"
 	"goc/tools/toolexecution"
 	"goc/types"
 )
@@ -42,6 +43,10 @@ type QueryParams struct {
 	AutoCompactTracking json.RawMessage `json:"-"`
 	// ToolPermissionContext optional merged deny/ask rules for [toolexecution.ExecutionDeps.ToolPermission] on streaming parity.
 	ToolPermissionContext *types.ToolPermissionContextData `json:"-"`
+	// ReadFileState optional session-scoped map of file paths read via FileRead/Write/Edit tools.
+	// Used by the memory prefetch layer to avoid re-surfacing files the model already has in context.
+	// Mirrors TS toolUseContext.readFileState (FileStateCache).
+	ReadFileState memoryprefetch.ReadFileStateChecker `json:"-"`
 }
 
 // CallModelInput groups arguments passed to QueryDeps.CallModel (mirrors deps.callModel({...}) in query.ts).

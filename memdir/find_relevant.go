@@ -502,9 +502,13 @@ func sideQueryOpenAI(
 	}
 
 	text := chatResp.Choices[0].Message.Content
-	raw := json.RawMessage(text)
-
-	return parseSelectMemoriesResponse(raw, validFilenames)
+	// Wrap plain text string as content blocks array matching Anthropic format
+	// so parseContentBlocks can decode it. Mirrors TS sideQuery.ts:323-326.
+	wrapped, err := json.Marshal([]contentBlock{{Type: "text", Text: text}})
+	if err != nil {
+		return nil, fmt.Errorf("marshal content blocks: %w", err)
+	}
+	return parseSelectMemoriesResponse(wrapped, validFilenames)
 }
 
 // resolveOpenAIModelInline is a minimal inline version of ResolveOpenAIModel
