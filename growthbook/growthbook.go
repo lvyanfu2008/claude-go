@@ -488,6 +488,12 @@ func IsTenguSlateThimble() bool {
 	return DefaultManager().IsOn("slate_thimble")
 }
 
+// IsTenguSessionMemory returns true if the "tengu_session_memory" gate is enabled.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_session_memory', false) in sessionMemory.ts.
+func IsTenguSessionMemory() bool {
+	return DefaultManager().IsOn("session_memory")
+}
+
 // GetTenguBrambleLintel returns the throttle interval for extractMemories.
 // Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_bramble_lintel', null) ?? 1 in extractMemories.ts.
 // Defaults to 1 (every eligible turn).

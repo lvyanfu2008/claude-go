@@ -58,6 +58,17 @@ func (s *ReadFileState) Has(absPath string) bool {
 	return ok
 }
 
+// Delete removes absPath from the state (mirrors TS FileStateCache.delete()).
+// Used by sessionMemory to evict a stale cache entry before re-reading the file.
+func (s *ReadFileState) Delete(absPath string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, absPath)
+}
+
 // Keys returns all file paths currently tracked in the state (mirrors TS FileStateCache.keys()).
 // The returned slice is a snapshot copy.
 func (s *ReadFileState) Keys() []string {

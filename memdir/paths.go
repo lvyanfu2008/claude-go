@@ -127,6 +127,22 @@ func IsAutoMemPath(absFilePath string) bool {
 	return strings.HasPrefix(abs, memRoot+string(filepath.Separator)) || abs == memRoot
 }
 
+// GetSessionMemoryDir mirrors TS getSessionMemoryDir() from utils/permissions/filesystem.ts.
+// Path format: {projectDir}/{sessionId}/session-memory/
+func GetSessionMemoryDir(sessionID, cwd string) string {
+	base := claudeProjectSessionDir(cwd)
+	if base == "" {
+		return ""
+	}
+	return filepath.Join(base, sessionID, "session-memory") + string(filepath.Separator)
+}
+
+// GetSessionMemoryPath mirrors TS getSessionMemoryPath() from utils/permissions/filesystem.ts.
+// Path format: {projectDir}/{sessionId}/session-memory/summary.md
+func GetSessionMemoryPath(sessionID, cwd string) string {
+	return filepath.Join(GetSessionMemoryDir(sessionID, cwd), "summary.md")
+}
+
 func expandTildeMemoryDir(raw string) string {
 	s := strings.TrimSpace(raw)
 	if strings.HasPrefix(s, "~/") || strings.HasPrefix(s, `~\`) {

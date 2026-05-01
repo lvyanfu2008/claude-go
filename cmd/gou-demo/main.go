@@ -73,13 +73,14 @@ import (
 	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
-	"goc/mcpcommands"
 	"goc/growthbook"
+	"goc/mcpcommands"
 	"goc/messagesapi"
 	"goc/modelenv"
 	"goc/querycontext"
 	"goc/services/autodream"
 	"goc/services/extractmemories"
+	"goc/services/sessionmemory"
 	"goc/sessiontranscript"
 	"goc/tools"
 	"goc/tools/localtools"
@@ -623,6 +624,17 @@ type model struct {
 	// extractMemState tracks post-turn extract-memories throttling and cursor (TS extractMemories).
 	extractMemState *extractmemories.State
 
+	// sessionMemState tracks post-turn session memory extraction (TS sessionMemory).
+	sessionMemState *sessionmemory.State
+	// sessionMemHook is the per-turn hook callback (mirrors TS initSessionMemory hook).
+	sessionMemHook func(ctx context.Context, params query.QueryCompleteParams)
+	// lastGuidance is the most recent system prompt guidance text, set after query building.
+	lastGuidance string
+	// lastUserCtx is the most recent user context map, set after query building.
+	lastUserCtx map[string]string
+	// lastSystemCtx is the most recent system context map, set after query building.
+	lastSystemCtx map[string]string
+
 	// Task list (mirrors TS TaskListV2)
 	taskList *taskListModel
 }
@@ -751,6 +763,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	}
 
 	lm := modelenv.EffectiveMainLoopModel()
+
+	sessionMemState := sessionmemory.NewState()
 	return &model{
 		store:               st,
 		pr:                  pr,
@@ -770,6 +784,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		useMsgViewport:      gouDemoBubblesViewport(),
 		autoDreamState:      autodream.NewState(),
 		extractMemState:     extractmemories.NewState(),
+		sessionMemState:     sessionMemState,
+		sessionMemHook:      sessionmemory.Hook(sessionMemState, st.ConversationID, cwd),
 		taskList:            newTaskListModel(st.ConversationID),
 	}
 }
@@ -2251,10 +2267,14 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 		gouDemoLogToolUseContext(params.RuntimeContext)
 	}
 	params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
-		SessionID:     m.store.ConversationID,
-		Store:         m.store,
-		ReadFileState: m.readFileState,
-		Cwd:           cwd,
+		SessionID:        m.store.ConversationID,
+		Store:            m.store,
+		ReadFileState:    m.readFileState,
+		Cwd:              cwd,
+		SessionMemState:  m.sessionMemState,
+		GuidancePtr:      &m.lastGuidance,
+		UserContextPtr:   &m.lastUserCtx,
+		SystemContextPtr: &m.lastSystemCtx,
 	})
 	gouDemoTracef("ProcessUserInput start priorMsgs=%d", len(m.store.Messages))
 	r, err := processuserinput.ProcessUserInput(context.Background(), params)
@@ -2394,6 +2414,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 					}
 					guidance = strings.Join(base, "\n\n")
 				}
+				m.lastGuidance = guidance
 
 				listing := ""
 				var listingMeta *ccbhydrate.SkillListingMeta
@@ -2461,6 +2482,8 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							userCtx = gouDemoUserContextMapForQuery(partsRes.UserContext)
 							systemCtx = partsRes.SystemContext
 						}
+						m.lastUserCtx = userCtx
+						m.lastSystemCtx = systemCtx
 						tcx := types.ToolUseContext{}
 						if params.RuntimeContext != nil {
 							tcx = params.RuntimeContext.ToolUseContext
@@ -2531,6 +2554,8 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							if dreamErr != nil {
 								gouDemoTracef("autodream: %v", dreamErr)
 							}
+							// Session memory extraction (TS sessionMemory post-turn hook).
+							m.sessionMemHook(ctx, qcp)
 						}
 						qp := query.QueryParams{
 							Messages:        msgsForQ,

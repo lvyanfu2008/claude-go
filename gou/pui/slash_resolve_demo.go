@@ -10,7 +10,9 @@ import (
 
 	"goc/commands/handlers"
 	processuserinput "goc/conversation-runtime/process-user-input"
+	"goc/conversation-runtime/query"
 	"goc/gou/conversation"
+	"goc/services/sessionmemory"
 	"goc/slashresolve"
 	"goc/tools/localtools"
 	"goc/types"
@@ -28,6 +30,14 @@ type SlashResolveHandlerOptions struct {
 	ReadFileState *localtools.ReadFileState
 	// Cwd is the current working directory, used by /files to relativize paths.
 	Cwd string
+	// SessionMemState is the session memory state, needed by /summary for manual extraction.
+	SessionMemState *sessionmemory.State
+	// GuidancePtr points to the most recent system prompt guidance (updated after each query).
+	GuidancePtr *string
+	// UserContextPtr points to the most recent user context map (updated after each query).
+	UserContextPtr *map[string]string
+	// SystemContextPtr points to the most recent system context map (updated after each query).
+	SystemContextPtr *map[string]string
 }
 
 // NewSlashResolveProcessSlashCommand returns a [processuserinput.ProcessUserInputParams.ProcessSlashCommand]
@@ -93,7 +103,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		switch cmd.Type {
 		case "local", "local-jsx":
-			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd)
+			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd, ctx, opt.SessionID, opt.SessionMemState, opt.GuidancePtr, opt.UserContextPtr, opt.SystemContextPtr)
 		case "prompt":
 			// handled below
 		default:
@@ -152,6 +162,12 @@ func handleLocalCommand(
 	p *processuserinput.ProcessUserInputParams,
 	rfs *localtools.ReadFileState,
 	cwd string,
+	ctx context.Context,
+	sessionID string,
+	sessionMemState *sessionmemory.State,
+	guidancePtr *string,
+	userCtxPtr *map[string]string,
+	systemCtxPtr *map[string]string,
 ) (*processuserinput.ProcessUserInputBaseResult, error) {
 	// State-mutating commands that need store access.
 	if name == "clear" || name == "reset" || name == "new" {
@@ -166,6 +182,9 @@ func handleLocalCommand(
 	}
 	if name == "advisor" {
 		return handleAdvisorCommand(args)
+	}
+	if name == "summary" {
+		return handleSummaryCommand(ctx, store, p, cwd, sessionID, sessionMemState, guidancePtr, userCtxPtr, systemCtxPtr)
 	}
 
 	// Pure-text local commands: try the handler registry.
@@ -334,6 +353,67 @@ func handleAdvisorCommand(args string) (*processuserinput.ProcessUserInputBaseRe
 	}
 	return &processuserinput.ProcessUserInputBaseResult{
 		Messages:    []types.Message{localTextResultNotice(b)},
+		ShouldQuery: false,
+	}, nil
+}
+
+// handleSummaryCommand runs a manual session memory extraction via sessionmemory.ManuallyExtract.
+func handleSummaryCommand(
+	ctx context.Context,
+	store *conversation.Store,
+	p *processuserinput.ProcessUserInputParams,
+	cwd string,
+	sessionID string,
+	state *sessionmemory.State,
+	guidancePtr *string,
+	userCtxPtr *map[string]string,
+	systemCtxPtr *map[string]string,
+) (*processuserinput.ProcessUserInputBaseResult, error) {
+	if state == nil {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice("Session memory state not available.")},
+			ShouldQuery: false,
+		}, nil
+	}
+
+	guidance := ""
+	if guidancePtr != nil {
+		guidance = *guidancePtr
+	}
+	var userCtx map[string]string
+	if userCtxPtr != nil {
+		userCtx = *userCtxPtr
+	}
+	var systemCtx map[string]string
+	if systemCtxPtr != nil {
+		systemCtx = *systemCtxPtr
+	}
+
+	var tc types.ToolUseContext
+	if p != nil && p.RuntimeContext != nil {
+		tc = p.RuntimeContext.ToolUseContext
+	}
+
+	result := sessionmemory.ManuallyExtract(
+		ctx,
+		state,
+		sessionID,
+		cwd,
+		store.Messages,
+		tc,
+		query.SystemPrompt{guidance},
+		userCtx,
+		systemCtx,
+	)
+
+	if result.Success {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("Session memory updated: %s", result.MemoryPath))},
+			ShouldQuery: false,
+		}, nil
+	}
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice(fmt.Sprintf("Session memory extraction failed: %s", result.Error))},
 		ShouldQuery: false,
 	}, nil
 }
