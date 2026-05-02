@@ -299,7 +299,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	tc.ConversationID = &cfg.SessionID
 	tc.ContentReplacementState = s.ContentReplacementState
 
-	qdeps := query.ProductionDeps()
+	qdeps := query.ProductionDeps(nil)
 	toolCfg := Config{
 		Roots:        []string{cfg.ProjectRoot},
 		WorkDir:      s.WorkDir,

@@ -43,7 +43,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 	_ = consumedCommandUUIDs
 	deps := params.Deps
 	if deps == nil {
-		d := ProductionDeps()
+		d := ProductionDeps(nil)
 		deps = &d
 	}
 

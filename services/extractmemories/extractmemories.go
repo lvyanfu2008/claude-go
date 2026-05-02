@@ -451,7 +451,7 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 	maxTurns := maxExtractionTurns
 
 	// Build tool execution deps with restricted InvokeTool.
-	qdeps := query.ProductionDeps()
+	qdeps := query.ProductionDeps(nil)
 	qdeps.NewUUID = newUUID
 	qdeps.ToolexecutionDeps = buildRestrictedExecutionDeps(memoryDir)
 

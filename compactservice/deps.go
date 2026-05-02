@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"strings"
+
+	"goc/types"
 )
 
 // Deps bundles the injection points for compactConversation + autoCompactIfNeeded.
@@ -47,7 +49,20 @@ type Deps struct {
 	// subset). Receives the same query source string as [CompactOptions.QuerySource] /
 	// [RecompactionInfo.QuerySource] via [compactQuerySourceForCleanup]. Nil defaults to no-op.
 	AfterSuccessfulCompact func(querySource string)
+
+	// TrySessionMemoryCompact attempts to use session memory for compaction (zero-token-cost
+	// alternative to API-based compaction). Returns nil when SM compaction cannot be used,
+	// in which case the caller falls back to CompactConversation. Mirrors TS
+	// trySessionMemoryCompaction in sessionMemoryCompact.ts.
+	// Nil defaults to no-op (always returns nil, nil).
+	TrySessionMemoryCompact TrySessionMemoryCompactFn
 }
+
+// TrySessionMemoryCompactFn is the function signature for [Deps.TrySessionMemoryCompact].
+// Hosts that have a sessionmemory.State should set this to a closure that calls
+// sessionmemory.TrySessionMemoryCompaction, capturing state, sessionID, cwd,
+// transcriptPath, hooks, model, and planAttachmentProvider.
+type TrySessionMemoryCompactFn func(ctx context.Context, messages []types.Message, agentID string, autoCompactThreshold *int) (*CompactionResult, error)
 
 // resolve sets sensible defaults on Deps fields that are nil.
 func (d *Deps) resolve() {

@@ -58,6 +58,7 @@ import (
 	"goc/ccb-engine/settingsfile"
 	"goc/claudeinit"
 	"goc/commands"
+	"goc/compactservice"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
@@ -74,6 +75,7 @@ import (
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/growthbook"
+	"goc/hookexec"
 	"goc/mcpcommands"
 	"goc/messagesapi"
 	"goc/modelenv"
@@ -2489,7 +2491,38 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							tcx = params.RuntimeContext.ToolUseContext
 						}
 						tcx.Options.MainLoopModel = mainLoopModel
-						qdeps := query.ProductionDeps()
+						var trySMCompact compactservice.TrySessionMemoryCompactFn
+			if m.sessionMemState != nil {
+				sessionID := m.store.ConversationID
+				trySMCompact = func(ctx context.Context, messages []types.Message, agentID string, autoCompactThreshold *int) (*compactservice.CompactionResult, error) {
+					return sessionmemory.TrySessionMemoryCompaction(
+						ctx,
+						m.sessionMemState,
+						sessionID,
+						cwd,
+						messages,
+						"", // transcriptPath
+						autoCompactThreshold,
+						func(ctx context.Context, trigger string, model string) ([]types.Message, error) {
+							runner := hookexec.SessionStartHookRunner(toolProjectRoot, cwd, sessionID, "")
+							res, err := runner(ctx, compactservice.SessionStartHookTrigger(trigger),
+								compactservice.SessionStartHookInput{Model: model})
+							if err != nil {
+								return nil, err
+							}
+							msgs := make([]types.Message, len(res))
+							for i, r := range res {
+								msgs[i] = r
+							}
+							return msgs, nil
+						},
+						agentID,
+						mainLoopModel,
+						nil, // planAttachmentProvider
+					)
+				}
+			}
+			qdeps := query.ProductionDeps(trySMCompact)
 						te := toolexecution.ExecutionDeps{
 							InvokeTool:              runner.Run,
 							MainLoopModel:           mainLoopModel,

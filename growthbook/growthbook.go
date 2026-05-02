@@ -37,7 +37,8 @@ var localGateDefaults = map[string]any{
 	"fgts":                             true,
 
 	// ── P1: API-dependent features ───────────────────────────────────
-	"session_memory":     true,
+	"session_memory": true,
+	"sm_compact":     true,
 	"passport_quail":     true, // Auto memory extraction
 	"moth_copse":         true, // Skip memory index, use prefetched memories
 	"coral_fern":         true, // "Searching past context" section
@@ -492,6 +493,12 @@ func IsTenguSlateThimble() bool {
 // Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_session_memory', false) in sessionMemory.ts.
 func IsTenguSessionMemory() bool {
 	return DefaultManager().IsOn("session_memory")
+}
+
+// IsTenguSMCompact returns true if the "tengu_sm_compact" gate is enabled.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_sm_compact', false) in sessionMemoryCompact.ts.
+func IsTenguSMCompact() bool {
+	return DefaultManager().IsOn("sm_compact")
 }
 
 // GetTenguBrambleLintel returns the throttle interval for extractMemories.

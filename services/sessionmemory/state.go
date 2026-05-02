@@ -9,6 +9,8 @@ package sessionmemory
 import (
 	"sync"
 	"time"
+
+	"goc/growthbook"
 )
 
 // Config mirrors TS SessionMemoryConfig.
@@ -28,6 +30,20 @@ var DefaultConfig = Config{
 	MinimumMessageTokensToInit: 10000,
 	MinimumTokensBetweenUpdate: 5000,
 	ToolCallsBetweenUpdates:    3,
+}
+
+// SMCompactConfig mirrors TS SessionMemoryCompactConfig.
+type SMCompactConfig struct {
+	MinTokens            int
+	MinTextBlockMessages int
+	MaxTokens            int
+}
+
+// DefaultSMCompactConfig mirrors TS DEFAULT_SM_COMPACT_CONFIG.
+var DefaultSMCompactConfig = SMCompactConfig{
+	MinTokens:            10_000,
+	MinTextBlockMessages: 5,
+	MaxTokens:            40_000,
 }
 
 // extractionWaitTimeoutMs mirrors TS EXTRACTION_WAIT_TIMEOUT_MS.
@@ -75,6 +91,14 @@ type State struct {
 	// HasLoggedGateFailure guards against spamming the gate-disabled log event.
 	// Mirrors TS hasLoggedGateFailure.
 	HasLoggedGateFailure bool
+
+	// SMCompactConfig holds the session memory compact configuration.
+	// Mirrors TS smCompactConfig.
+	SMCompactConfig SMCompactConfig
+
+	// SMCompactConfigInitialized is set true after initSessionMemoryCompactConfig runs once.
+	// Mirrors TS configInitialized.
+	SMCompactConfigInitialized bool
 }
 
 // NewState creates an initialised State with default config.
@@ -191,6 +215,55 @@ func (s *State) GetToolCallsBetweenUpdates() int {
 	return cfg.ToolCallsBetweenUpdates
 }
 
+// GetSMCompactConfig returns a copy of the current SM compact config.
+// Mirrors TS getSessionMemoryCompactConfig.
+func (s *State) GetSMCompactConfig() SMCompactConfig {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.SMCompactConfig
+}
+
+// SetSMCompactConfig updates the SM compact config.
+// Mirrors TS setSessionMemoryCompactConfig.
+func (s *State) SetSMCompactConfig(cfg SMCompactConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.SMCompactConfig = cfg
+}
+
+// InitSMCompactConfig initializes the SM compact config from remote
+// (GrowthBook). Only runs once per session.
+// Mirrors TS initSessionMemoryCompactConfig.
+func (s *State) InitSMCompactConfig() {
+	s.mu.Lock()
+	if s.SMCompactConfigInitialized {
+		s.mu.Unlock()
+		return
+	}
+	s.SMCompactConfigInitialized = true
+	s.mu.Unlock()
+
+	// Try to load remote config from GrowthBook.
+	// Falls back to DefaultSMCompactConfig if no remote config is set.
+	remote := growthbook.DefaultManager().Get("tengu_sm_compact_config")
+
+	cfg := DefaultSMCompactConfig
+
+	if m, ok := remote.(map[string]any); ok {
+		if v, ok := m["minTokens"].(float64); ok && v > 0 {
+			cfg.MinTokens = int(v)
+		}
+		if v, ok := m["minTextBlockMessages"].(float64); ok && v > 0 {
+			cfg.MinTextBlockMessages = int(v)
+		}
+		if v, ok := m["maxTokens"].(float64); ok && v > 0 {
+			cfg.MaxTokens = int(v)
+		}
+	}
+
+	s.SetSMCompactConfig(cfg)
+}
+
 // Reset resets all state to defaults (useful for testing).
 // Mirrors TS resetSessionMemoryState.
 func (s *State) Reset() {
@@ -204,6 +277,8 @@ func (s *State) Reset() {
 	s.SessionMemoryInitialized = false
 	s.LastMemoryMessageUUID = ""
 	s.HasLoggedGateFailure = false
+	s.SMCompactConfig = DefaultSMCompactConfig
+	s.SMCompactConfigInitialized = false
 }
 
 // nowMS returns the current time in milliseconds since Unix epoch.

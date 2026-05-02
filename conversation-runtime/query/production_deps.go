@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+
+	"goc/compactservice"
 )
 
 // ProductionDeps mirrors src/conversation-runtime/queryPipeline/deps.ts productionDeps().
@@ -13,10 +15,15 @@ import (
 // passes autoCompactIfNeeded directly. The adapter uses a direct no-tools streaming call
 // for the summary, and defaults to no-op for pre/post-compact hooks and attachment regeneration
 // until those subsystems land Go parity (see compactservice/doc.go for the full list).
-func ProductionDeps() QueryDeps {
+//
+// trySMCompact is an optional [compactservice.TrySessionMemoryCompactFn] that enables
+// session-memory compaction. Hosts that have a sessionmemory.State should provide a closure
+// that bridges to sessionmemory.TrySessionMemoryCompaction. Pass nil to disable (harmless —
+// API-based compaction is used as fallback).
+func ProductionDeps(trySMCompact compactservice.TrySessionMemoryCompactFn) QueryDeps {
 	return QueryDeps{
 		NewUUID:     randomUUID,
-		Autocompact: newCompactAdapter(),
+		Autocompact: NewCompactAdapter(trySMCompact),
 	}
 }
 

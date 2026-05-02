@@ -252,9 +252,9 @@ type AutoCompactIfNeededResult struct {
 }
 
 // AutoCompactIfNeeded mirrors autoCompactIfNeeded in services/compact/autoCompact.ts.
-// Circuit-breaker, kill-switch, and query-source guards are honored; trySessionMemoryCompaction
-// is NOT yet ported (TODO: Go has no session-memory subsystem — hosts override Deps.Summarize
-// with a memory-aware implementation if they need that optimization).
+// Circuit-breaker, kill-switch, and query-source guards are honored.
+// Session-memory compaction (via Deps.TrySessionMemoryCompact) is tried first;
+// falls back to API-based CompactConversation when SM compaction is unavailable.
 func AutoCompactIfNeeded(ctx context.Context, in AutoCompactIfNeededInput) (AutoCompactIfNeededResult, error) {
 	if IsEnvTruthy("DISABLE_COMPACT") {
 		diaglog.Line("[compactservice/autocompact] skip: DISABLE_COMPACT is set (all compaction off)")
@@ -284,6 +284,25 @@ func AutoCompactIfNeeded(ctx context.Context, in AutoCompactIfNeededInput) (Auto
 	thr := GetAutoCompactThreshold(in.Model, in.Betas, in.Thresholds)
 	diaglog.Line("[compactservice/autocompact] running: estimated_tokens=%d threshold=%d model=%q query_source=%q snip_tokens_freed=%d",
 		tokenBefore, thr, in.Model, in.QuerySource, in.SnipTokensFreed)
+
+	// Try session-memory compaction first (zero-token-cost alternative).
+	// Falls through to API-based compaction when SM compaction returns nil.
+	if in.Deps.TrySessionMemoryCompact != nil {
+		smResult, smErr := in.Deps.TrySessionMemoryCompact(ctx, in.Messages, in.AgentID, &thr)
+		if smErr != nil {
+			diaglog.Line("[compactservice/autocompact] sm_compact: error: %v", smErr)
+		}
+		if smResult != nil {
+			diaglog.Line("[compactservice/autocompact] sm_compact: success: pre_compact_tokens=%d post_compact_tokens=%d true_post_compact_estimate=%d",
+				smResult.PreCompactTokenCount, smResult.PostCompactTokenCount, smResult.TruePostCompactTokenCount)
+			zero := 0
+			return AutoCompactIfNeededResult{
+				WasCompacted:        true,
+				CompactionResult:    smResult,
+				ConsecutiveFailures: &zero,
+			}, nil
+		}
+	}
 
 	recomp := &RecompactionInfo{
 		IsRecompactionInChain:     in.Tracking != nil && in.Tracking.Compacted,

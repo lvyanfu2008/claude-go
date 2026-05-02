@@ -15,7 +15,7 @@ import (
 	"goc/types"
 )
 
-// newCompactAdapter returns a [QueryDeps.Autocompact] function that wires into
+// NewCompactAdapter returns a [QueryDeps.Autocompact] function that wires into
 // compactservice.AutoCompactIfNeeded. Mirrors the TS productionDeps autocompact slot
 // (queryPipeline/deps.ts) where autoCompactIfNeeded is plugged in directly.
 //
@@ -26,10 +26,14 @@ import (
 //     routing (OpenAI chat/completions → Anthropic /v1/messages) for one text-only summary round.
 //  3. Serializes [CompactionResult] + tracking back into the [AutocompactResult] wire shape.
 //
-// Hooks + attachments fall through to the no-op defaults. Hosts that want real
-// pre/post-compact hooks + post-compact attachment regeneration supply their
-// own adapter that layers a CompactDepsBuilder over this.
-func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
+// trySMCompact is an optional function that bridges to sessionmemory.TrySessionMemoryCompaction.
+// When nil, session-memory compaction is disabled (harmless — the caller falls back to API).
+// Hosts that have a sessionmemory.State should provide a closure capturing state, sessionID,
+// cwd, transcriptPath, hooks, model, and planAttachmentProvider.
+//
+// Hooks + attachments use the default runners from hookexec. Hosts that need richer
+// pre/post-compact hooks supply their own adapter that layers a CompactDepsBuilder over this.
+func NewCompactAdapter(trySMCompact compactservice.TrySessionMemoryCompactFn) func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
 	return func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
 		if in == nil {
 			return nil, nil
@@ -48,8 +52,14 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 			projRoot = wd
 		}
 		sid := ""
-		if in.ToolUseContext != nil && in.ToolUseContext.ConversationID != nil {
-			sid = strings.TrimSpace(*in.ToolUseContext.ConversationID)
+		agentID := ""
+		if in.ToolUseContext != nil {
+			if in.ToolUseContext.ConversationID != nil {
+				sid = strings.TrimSpace(*in.ToolUseContext.ConversationID)
+			}
+			if in.ToolUseContext.AgentID != nil {
+				agentID = strings.TrimSpace(*in.ToolUseContext.AgentID)
+			}
 		}
 
 		deps := compactservice.Deps{
@@ -64,6 +74,7 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 					claudemd.ResetMemoryFilesCache("compact")
 				}
 			},
+			TrySessionMemoryCompact: trySMCompact,
 		}
 
 		snip := 0
@@ -74,7 +85,7 @@ func newCompactAdapter() func(ctx context.Context, in *AutocompactInput) (*Autoc
 		res, err := compactservice.AutoCompactIfNeeded(ctx, compactservice.AutoCompactIfNeededInput{
 			Messages:        in.Messages,
 			Model:           model,
-			AgentID:         "",
+			AgentID:         agentID,
 			QuerySource:     string(in.QuerySource),
 			Tracking:        tracking,
 			SnipTokensFreed: snip,

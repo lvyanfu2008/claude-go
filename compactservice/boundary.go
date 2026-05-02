@@ -18,14 +18,20 @@ const (
 	CompactTriggerAuto   CompactTrigger = "auto"
 )
 
-// PreservedSegmentMeta mirrors the { preservedKept, preservedTail } annotation that
-// annotateBoundaryWithPreservedSegment stamps onto compactMetadata in TS.
-// Used by partial compact to record how many tail messages survived compaction.
+// PreservedSegmentMeta mirrors the preservedSegment annotation that
+// annotateBoundaryWithPreservedSegment stamps onto compactMetadata in TS:
+//
+//	preservedSegment: {
+//	  headUuid: keep[0].uuid,
+//	  anchorUuid,
+//	  tailUuid: keep.at(-1).uuid,
+//	}
+//
+// Used by partial compact and SM compaction to record which tail messages survived.
 type PreservedSegmentMeta struct {
-	// Kept is the number of most-recent messages retained verbatim in the recent tail.
-	Kept int `json:"kept"`
-	// Total is the number of messages summarized (pre-compact conversation size).
-	Total int `json:"total"`
+	HeadUuid   string `json:"headUuid"`
+	AnchorUuid string `json:"anchorUuid"`
+	TailUuid   string `json:"tailUuid"`
 }
 
 // CompactMetadata mirrors CompactMetadata on SystemCompactBoundaryMessage in TS.
@@ -38,6 +44,15 @@ type CompactMetadata struct {
 	MessagesSummarized *int                 `json:"messagesSummarized,omitempty"`
 	// PreservedSegment is written by AnnotateBoundaryWithPreservedSegment for partial-compact paths.
 	PreservedSegment  *PreservedSegmentMeta `json:"preservedSegment,omitempty"`
+	// PreCompactDiscoveredTools mirrors TS preCompactDiscoveredTools — stamped by
+	// session-memory compaction to carry discovered tool names across the boundary.
+	PreCompactDiscoveredTools []string `json:"preCompactDiscoveredTools,omitempty"`
+}
+
+// NewUUID generates a RFC-4122 v4 UUID. Exported for use by packages that need
+// a standalone UUID generator without wiring Deps (e.g. sessionmemory).
+func NewUUID() string {
+	return newUUID()
 }
 
 // newUUID generates a RFC-4122 v4 UUID. Hosts override via Deps.NewUUID to match the
@@ -135,24 +150,31 @@ func FindLastCompactBoundaryIndex(messages []types.Message) int {
 }
 
 // AnnotateBoundaryWithPreservedSegment mirrors annotateBoundaryWithPreservedSegment in TS.
-// Finds the most recent compact boundary and stamps PreservedSegmentMeta onto its CompactMetadata.
-// Returns a new slice with the updated boundary; messages slice is not mutated.
-func AnnotateBoundaryWithPreservedSegment(messages []types.Message, kept, total int) []types.Message {
-	idx := FindLastCompactBoundaryIndex(messages)
-	if idx == -1 {
-		return messages
+//
+// TS signature:
+//
+//	export function annotateBoundaryWithPreservedSegment(
+//	  boundary: SystemCompactBoundaryMessage,
+//	  anchorUuid: UUID,
+//	  messagesToKeep: readonly Message[] | undefined,
+//	): SystemCompactBoundaryMessage
+//
+// Returns boundary unchanged if messagesToKeep is empty/nil.
+func AnnotateBoundaryWithPreservedSegment(boundary types.Message, anchorUuid string, messagesToKeep []types.Message) types.Message {
+	if len(messagesToKeep) == 0 {
+		return boundary
 	}
-	updated := make([]types.Message, len(messages))
-	copy(updated, messages)
-	b := updated[idx]
 	var meta CompactMetadata
-	if len(b.CompactMetadata) > 0 {
-		_ = json.Unmarshal(b.CompactMetadata, &meta)
+	if len(boundary.CompactMetadata) > 0 {
+		_ = json.Unmarshal(boundary.CompactMetadata, &meta)
 	}
-	meta.PreservedSegment = &PreservedSegmentMeta{Kept: kept, Total: total}
+	meta.PreservedSegment = &PreservedSegmentMeta{
+		HeadUuid:   messagesToKeep[0].UUID,
+		AnchorUuid: anchorUuid,
+		TailUuid:   messagesToKeep[len(messagesToKeep)-1].UUID,
+	}
 	if raw, err := json.Marshal(meta); err == nil {
-		b.CompactMetadata = raw
+		boundary.CompactMetadata = json.RawMessage(raw)
 	}
-	updated[idx] = b
-	return updated
+	return boundary
 }

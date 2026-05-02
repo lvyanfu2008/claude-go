@@ -25,7 +25,7 @@ func WireToolexecutionFromProcessUserInput(qp *query.QueryParams, p *ProcessUser
 		return
 	}
 	if qp.Deps == nil {
-		d := query.ProductionDeps()
+		d := query.ProductionDeps(nil)
 		qp.Deps = &d
 	}
 	if qp.Deps.ToolexecutionDeps.QueryCanUseTool == nil {
