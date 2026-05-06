@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"goc/tools/localtools"
+	"goc/tools/toolresultpersist"
 	"goc/conversation-runtime/streamingtool"
 	"goc/types"
 )
@@ -122,12 +123,12 @@ func RunToolUseChan(
 				return
 			}
 			if err != nil {
-				m := syntheticToolResult(deps, block.ID, err.Error(), true, assistant.UUID)
+				m := syntheticToolResultWithName(deps, block.Name, block.ID, err.Error(), true, assistant.UUID)
 				ch <- streamingtool.ToolRunUpdate{Message: &m}
 				return
 			}
 			content, isErr := toolRunResultString(res)
-			m := syntheticToolResult(deps, block.ID, content, isErr, assistant.UUID)
+			m := syntheticToolResultWithName(deps, block.Name, block.ID, content, isErr, assistant.UUID)
 			ch <- streamingtool.ToolRunUpdate{Message: &m}
 			return
 		}
@@ -197,21 +198,66 @@ func applyRuleBasedDecisionInRun(
 }
 
 func syntheticToolResult(deps ExecutionDeps, toolUseID, content string, isErr bool, assistantUUID string) types.Message {
+	return syntheticToolResultWithName(deps, "", toolUseID, content, isErr, assistantUUID)
+}
+
+// syntheticToolResultWithName creates a tool_result message with optional persistence.
+// When toolName is non-empty and ToolResultPersistConfig is set, the content may be
+// persisted to disk if it exceeds the threshold.
+func syntheticToolResultWithName(deps ExecutionDeps, toolName, toolUseID, content string, isErr bool, assistantUUID string) types.Message {
+	blockContent := content
+	if !isErr && deps.ToolResultPersistConfig != nil && toolName != "" {
+		maxSize := resolveMaxResultSizeChars(deps, toolName)
+		blockContent = persistBlockContent(deps, toolName, maxSize, content, toolUseID)
+	}
 	return CreateUserMessage(deps, []map[string]any{{
 		"type":        "tool_result",
-		"content":     content,
+		"content":     blockContent,
 		"is_error":    isErr,
 		"tool_use_id": toolUseID,
 	}}, content, assistantUUID)
 }
 
 func syntheticToolResultMapped(deps ExecutionDeps, toolUseID, toolResultBlockContent, toolUseResultRaw string, isErr bool, assistantUUID string) types.Message {
+	return syntheticToolResultMappedWithName(deps, "", toolUseID, toolResultBlockContent, toolUseResultRaw, isErr, assistantUUID)
+}
+
+// syntheticToolResultMappedWithName creates a mapped tool_result message with optional persistence.
+func syntheticToolResultMappedWithName(deps ExecutionDeps, toolName, toolUseID, toolResultBlockContent, toolUseResultRaw string, isErr bool, assistantUUID string) types.Message {
+	blockContent := toolResultBlockContent
+	if !isErr && deps.ToolResultPersistConfig != nil && toolName != "" {
+		maxSize := resolveMaxResultSizeChars(deps, toolName)
+		blockContent = persistBlockContent(deps, toolName, maxSize, toolResultBlockContent, toolUseID)
+	}
 	return CreateUserMessage(deps, []map[string]any{{
 		"type":        "tool_result",
-		"content":     toolResultBlockContent,
+		"content":     blockContent,
 		"is_error":    isErr,
 		"tool_use_id": toolUseID,
 	}}, toolUseResultRaw, assistantUUID)
+}
+
+// persistBlockContent wraps toolresultpersist.ProcessPreMappedToolResultBlock.
+func persistBlockContent(deps ExecutionDeps, toolName string, maxSize int64, content, toolUseID string) string {
+	cfg := deps.ToolResultPersistConfig
+	result := toolresultpersist.ProcessPreMappedToolResultBlock(
+		cfg.SessionInfo, toolName, maxSize, content, toolUseID, cfg.ProcessOptions,
+	)
+	if s, ok := result.(string); ok {
+		return s
+	}
+	return content
+}
+
+// resolveMaxResultSizeChars looks up the declared MaxResultSizeChars for a tool.
+func resolveMaxResultSizeChars(deps ExecutionDeps, toolName string) int64 {
+	cfg := deps.ToolResultPersistConfig
+	if cfg != nil && cfg.ToolMaxResultSizes != nil {
+		if sz, ok := cfg.ToolMaxResultSizes[toolName]; ok {
+			return sz
+		}
+	}
+	return 0
 }
 
 // syntheticToolMessageAfterInvoke mirrors toolExecution.ts addToolResult: tool_result.content
@@ -228,18 +274,18 @@ func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID str
 				opts := localtools.ReadToolResultMapOptsForToolInput(input, deps.ReadToolRoots, deps.ReadToolMemCWD, deps.MainLoopModel)
 				mapped, mErr := localtools.MapReadToolResultToAssistantText(body, opts)
 				if mErr != nil {
-					return syntheticToolResult(deps, toolUseID, mErr.Error(), true, assistantUUID)
+					return syntheticToolResultWithName(deps, toolName, toolUseID, mErr.Error(), true, assistantUUID)
 				}
-				return syntheticToolResultMapped(deps, toolUseID, mapped, body, false, assistantUUID)
+				return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
 			}
 		}
 	}
 	if !isErr && toolName == "Grep" && body != "" {
 		if block, err := localtools.MapGrepToolOutputToToolResultContent(body); err == nil {
-			return syntheticToolResultMapped(deps, toolUseID, block, body, false, assistantUUID)
+			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, block, body, false, assistantUUID)
 		}
 	}
-	return syntheticToolResult(deps, toolUseID, body, isErr, assistantUUID)
+	return syntheticToolResultWithName(deps, toolName, toolUseID, body, isErr, assistantUUID)
 }
 
 func toolRunResultString(res *types.ToolRunResult) (content string, isErr bool) {

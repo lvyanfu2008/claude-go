@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"goc/tools/toolresultpersist"
 	"goc/types"
 )
 
@@ -46,6 +47,40 @@ type ExecutionDeps struct {
 	// messages (e.g., Skill tool metadata + content). Checked before InvokeTool.
 	// Returns (messages, true) if handled, (nil, false) to fall through to InvokeTool.
 	MultiMessageToolHandler func(ctx context.Context, name, toolUseID string, input json.RawMessage, assistantUUID string) (messages []types.Message, handled bool)
+
+	// ToolResultPersistConfig, when non-nil, enables per-tool result persistence to disk
+	// (mirrors TS toolResultStorage.ts). When a tool result exceeds its MaxResultSizeChars
+	// threshold, the content is saved to {sessionDir}/tool-results/ and replaced with a
+	// preview message in the tool_result block.
+	ToolResultPersistConfig *ToolResultPersistConfig
+}
+
+// ToolResultPersistConfig bundles the configuration for tool result persistence.
+// Mirrors the combination of SessionInfo + ProcessOptions + ContentReplacementState from TS.
+type ToolResultPersistConfig struct {
+	// SessionInfo identifies the session for path computation.
+	SessionInfo toolresultpersist.SessionInfo
+
+	// ProcessOptions configures per-tool persistence thresholds.
+	ProcessOptions toolresultpersist.ProcessOptions
+
+	// ContentReplacementState for per-message aggregate budget enforcement.
+	// When nil, only per-tool persistence is active; when non-nil, the budget
+	// enforcement path is also enabled (mirrors TS ContentReplacementState gate).
+	ContentReplacementState *toolresultpersist.ContentReplacementState
+
+	// PerMessageBudgetLimit overrides the default aggregate budget limit.
+	// 0 uses the default (MaxToolResultsPerMessageChars).
+	PerMessageBudgetLimit int
+
+	// SkipToolNames is a set of tool names to never persist (e.g., "Read").
+	// Maps to TS skipToolNames in enforceToolResultBudget.
+	SkipToolNames map[string]bool
+
+	// ToolMaxResultSizes maps tool name → declared MaxResultSizeChars (from ToolSpec).
+	// Used by ProcessToolResultBlock to look up per-tool thresholds.
+	// When nil, tools are looked up via the Registry.
+	ToolMaxResultSizes map[string]int64
 }
 
 // WithExecutionDeps attaches deps for [DepsFromContext] (used by check_permissions path).

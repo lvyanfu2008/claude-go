@@ -307,6 +307,12 @@ func memoryDirDisplayPath(memDir string) string {
 	return p + "/"
 }
 
+// ClaudeProjectSessionDir returns the per-project session-parent directory under the config home.
+// Format: {configHome}/projects/{sanitized_path}
+func ClaudeProjectSessionDir(originalCwd string) string {
+	return claudeProjectSessionDir(originalCwd)
+}
+
 func claudeProjectSessionDir(originalCwd string) string {
 	abs, err := filepath.Abs(strings.TrimSpace(originalCwd))
 	if err != nil || abs == "" {

@@ -88,6 +88,7 @@ import (
 	"goc/tools/localtools"
 	"goc/tools/skilltools"
 	"goc/tools/toolexecution"
+	"goc/tools/toolresultpersist"
 	"goc/tscontext"
 	"goc/types"
 )
@@ -2534,6 +2535,17 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
 							te.SandboxingEnabled = true
 							te.AutoAllowBashWholeToolAskWhenSandboxed = true
+						}
+						// Opt-in tool result persistence: when set, large tool results are saved to disk
+						// and replaced with a preview in the tool_result block (mirrors TS toolResultStorage.ts).
+						if gouDemoEnvTruthy("GOU_DEMO_TOOL_RESULT_PERSIST") {
+							te.ToolResultPersistConfig = &toolexecution.ToolResultPersistConfig{
+								SessionInfo: toolresultpersist.SessionInfo{
+									SessionID: m.store.ConversationID,
+									Cwd:       cwd,
+								},
+								ProcessOptions: toolresultpersist.DefaultProcessOptions(),
+							}
 						}
 						m.installAskResolver(&te)
 						qdeps.ToolexecutionDeps = te
