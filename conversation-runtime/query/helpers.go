@@ -97,10 +97,12 @@ func toolResultUserMessage(toolUseID, errText, assistantUUID string) (types.Mess
 		return types.Message{}, err
 	}
 	src := assistantUUID
+	contentRaw, _ := json.Marshal(content)
 	return types.Message{
 		Type:                    types.MessageTypeUser,
 		UUID:                    randomUUID(),
 		Message:                 inner,
+		Content:                 contentRaw,
 		ToolUseResult:           types.ToolUseResultJSONBytes(errText),
 		SourceToolAssistantUUID: &src,
 	}, nil

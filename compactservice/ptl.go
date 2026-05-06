@@ -237,5 +237,6 @@ func createMetaUserMarker(target string) (types.Message, error) {
 		UUID:    newUUID(),
 		IsMeta:  &isMeta,
 		Message: json.RawMessage(innerJSON),
+		Content: func() json.RawMessage { b, _ := json.Marshal(target); return b }(),
 	}, nil
 }

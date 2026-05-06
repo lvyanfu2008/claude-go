@@ -769,6 +769,7 @@ func newCompactSummaryUserMessage(content string) types.Message {
 		Type:                      types.MessageTypeUser,
 		UUID:                      compactservice.NewUUID(),
 		Message:                   json.RawMessage(innerJSON),
+		Content: func() json.RawMessage { b, _ := json.Marshal(content); return b }(),
 		IsCompactSummary:          &isCompact,
 		IsVisibleInTranscriptOnly: &isVisible,
 	}

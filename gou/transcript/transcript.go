@@ -81,6 +81,7 @@ func fromAPIMessagesArray(data []byte) ([]types.Message, error) {
 			Type:    mt,
 			UUID:    fmt.Sprintf("api-%06d", i),
 			Message: inner,
+			Content: m.Content,
 		})
 	}
 	return out, nil

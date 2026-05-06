@@ -326,6 +326,7 @@ func newUserPromptMessage(prompt string, deps Deps) (types.Message, error) {
 		Type:    types.MessageTypeUser,
 		UUID:    deps.NewUUID(),
 		Message: json.RawMessage(innerJSON),
+		Content: func() json.RawMessage { b, _ := json.Marshal(prompt); return b }(),
 	}, nil
 }
 
@@ -342,6 +343,7 @@ func newCompactSummaryUserMessage(content string, deps Deps) (types.Message, err
 	return types.Message{
 		Type:                      types.MessageTypeUser,
 		UUID:                      deps.NewUUID(),
+		Content: func() json.RawMessage { b, _ := json.Marshal(content); return b }(),
 		Message:                   json.RawMessage(innerJSON),
 		IsCompactSummary:          &trueP,
 		IsVisibleInTranscriptOnly: &trueP,

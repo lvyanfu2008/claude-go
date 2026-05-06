@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,10 +115,12 @@ func summarizeAutocompactAnthropic(ctx context.Context, in compactservice.Summar
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, err
 	}
+	var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
 		UUID:    uuid,
 		Message: inner,
+		Content: contentExtract.Content,
 	}
 	types.SyncAssistantMessageID(&asst)
 
@@ -175,10 +178,12 @@ func summarizeAutocompactOpenAIStream(ctx context.Context, in compactservice.Sum
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, err
 	}
+	var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
 		UUID:    uuid,
 		Message: inner,
+		Content: contentExtract.Content,
 	}
 	types.SyncAssistantMessageID(&asst)
 	usage := compactservice.GetTokenUsage(asst)
@@ -252,10 +257,12 @@ func summarizeAutocompactOpenAINoStream(ctx context.Context, in compactservice.S
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, err
 	}
+	var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
 		UUID:    uuid,
 		Message: inner,
+		Content: contentExtract.Content,
 	}
 	types.SyncAssistantMessageID(&asst)
 	usage := compactservice.GetTokenUsage(asst)

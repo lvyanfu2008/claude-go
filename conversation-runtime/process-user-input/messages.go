@@ -52,6 +52,7 @@ func newUserMessage(content any, uuidOpt *string, isMeta *bool, permissionMode *
 		Type:    types.MessageTypeUser,
 		UUID:    id,
 		Message: json.RawMessage(msgInner),
+		Content: func() json.RawMessage { b, _ := json.Marshal(content); return b }(),
 	}
 	if isMeta != nil {
 		m.IsMeta = isMeta

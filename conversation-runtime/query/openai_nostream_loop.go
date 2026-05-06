@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -197,10 +198,12 @@ func runOpenAINonStreamingParityModelLoop(
 		if deps.NewUUID != nil {
 			asstUUID = deps.NewUUID()
 		}
+		var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(innerMsg, &contentExtract)
 		asst := types.Message{
 			Type:    types.MessageTypeAssistant,
 			UUID:    asstUUID,
 			Message: innerMsg,
+			Content: contentExtract.Content,
 		}
 		types.SyncAssistantMessageID(&asst)
 		if !yieldStreamingParity(ctx, deps, QueryYield{Message: &asst}, yield) {

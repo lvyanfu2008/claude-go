@@ -83,8 +83,9 @@ func buildForkedMessages(directive string, parentAssistant types.Message) []type
 
 	// Clone the assistant message with a new UUID
 	fullAssistantMsg := types.Message{
-		Type: types.MessageTypeAssistant,
-		UUID: forkUUID(),
+		Type:    types.MessageTypeAssistant,
+		UUID:    forkUUID(),
+		Content: func() json.RawMessage { b, _ := json.Marshal(content); return b }(),
 	}
 	if len(parentAssistant.Message) > 0 {
 		// Re-marshal with the full content (including tool_use blocks)
@@ -93,6 +94,7 @@ func buildForkedMessages(directive string, parentAssistant types.Message) []type
 			raw["content"] = content
 			if b, err := json.Marshal(raw); err == nil {
 				fullAssistantMsg.Message = b
+				fullAssistantMsg.Content = func() json.RawMessage { b, _ := json.Marshal(content); return b }()
 			}
 		}
 	}
@@ -187,6 +189,7 @@ func newForkUserMessage(text string) types.Message {
 		Type:    types.MessageTypeUser,
 		UUID:    forkUUID(),
 		Message: b,
+		Content: func() json.RawMessage { b, _ := json.Marshal(text); return b }(),
 	}
 }
 
@@ -200,6 +203,7 @@ func newForkUserMessageFromContent(content []map[string]any) types.Message {
 	return types.Message{
 		Type:    types.MessageTypeUser,
 		UUID:    forkUUID(),
+		Content: func() json.RawMessage { b, _ := json.Marshal(content); return b }(),
 		Message: b,
 	}
 }

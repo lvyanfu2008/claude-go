@@ -598,6 +598,7 @@ func preloadAgentSkills(ctx context.Context, s *AgentSession, workDir string, se
 			Type:    types.MessageTypeUser,
 			UUID:    sessiontranscript.NewUUID(),
 			Message: json.RawMessage(msgInner),
+			Content: func() json.RawMessage { b, _ := json.Marshal(metadata); return b }(),
 			IsMeta:  &trueVal,
 		}
 		skillMsgs = append(skillMsgs, msg)

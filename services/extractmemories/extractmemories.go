@@ -631,6 +631,7 @@ func buildExtractionUserMessage(prompt string, newUUID func() string) types.Mess
 		Type:    types.MessageTypeUser,
 		UUID:    uuid,
 		Message: b,
+		Content: func() json.RawMessage { b, _ := json.Marshal(prompt); return b }(),
 		IsMeta:  &isMeta,
 	}
 }

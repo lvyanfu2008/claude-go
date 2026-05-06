@@ -136,10 +136,12 @@ func buildDeepseekThinkingErrorAssistant(uuid string) (types.Message, error) {
 	if err != nil {
 		return types.Message{}, err
 	}
+	contentRaw, _ := json.Marshal(inner["content"])
 	return types.Message{
 		Type:              types.MessageTypeAssistant,
 		UUID:              uuid,
 		Message:           raw,
+		Content:           contentRaw,
 		IsApiErrorMessage: &t,
 	}, nil
 }

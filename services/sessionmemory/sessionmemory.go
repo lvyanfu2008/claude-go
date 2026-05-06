@@ -460,6 +460,7 @@ func createMetaUserMessage(prompt string) types.Message {
 		Type:    types.MessageTypeUser,
 		UUID:    query.RandomUUID(),
 		Message: b,
+		Content: func() json.RawMessage { b, _ := json.Marshal(prompt); return b }(),
 		IsMeta:  &isMeta,
 	}
 }

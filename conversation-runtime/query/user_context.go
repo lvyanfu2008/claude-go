@@ -82,6 +82,7 @@ func PrependUserContext(messages []types.Message, context map[string]string) []t
 		Type:    types.MessageTypeUser,
 		UUID:    randomUUID(),
 		Message: json.RawMessage(inner),
+		Content: func() json.RawMessage { b, _ := json.Marshal(content); return b }(),
 		IsMeta:  &meta,
 	}
 	out := make([]types.Message, 0, len(messages)+1)

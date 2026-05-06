@@ -153,6 +153,7 @@ func buildCompactSummarizer(apiKey, baseURL, model string) compactservice.Summar
 			Type:    types.MessageTypeAssistant,
 			UUID:    sessiontranscript.NewUUID(),
 			Message: innerJSON,
+			Content: func() json.RawMessage { b, _ := json.Marshal(summary); return b }(),
 		}
 		types.SyncAssistantMessageID(&asst)
 
