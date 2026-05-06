@@ -170,10 +170,12 @@ func runStreamingParityModelLoop(
 		if err != nil {
 			return err
 		}
+		var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
 		asst := types.Message{
 			Type:    types.MessageTypeAssistant,
 			UUID:    asstUUID,
 			Message: inner,
+			Content: contentExtract.Content,
 		}
 		types.SyncAssistantMessageID(&asst)
 		if !yieldStreamingParity(ctx, deps, QueryYield{Message: &asst}, yield) {

@@ -26,10 +26,12 @@ func CreateUserMessage(deps ExecutionDeps, content []map[string]any, toolUseResu
 		inner = []byte(`{"role":"user","content":[]}`)
 	}
 	src := sourceAssistantUUID
+	contentRaw, _ := json.Marshal(content)
 	return types.Message{
 		Type:                    types.MessageTypeUser,
 		UUID:                    randomUUID(deps),
 		Message:                 inner,
+		Content:                 contentRaw,
 		ToolUseResult:           types.ToolUseResultJSONBytes(toolUseResult),
 		SourceToolAssistantUUID: &src,
 	}

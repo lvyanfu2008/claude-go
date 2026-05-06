@@ -29,7 +29,7 @@ type toolResultCandidate struct {
 // MUTATED by EnforceToolResultBudget — the caller holds a stable reference.
 type ContentReplacementState struct {
 	SeenIDs      map[string]bool   `json:"seenIds"`      // set semantics
-	Replacements map[string]string  `json:"replacements"` // toolUseID → preview string
+	Replacements map[string]string `json:"replacements"` // toolUseID → preview string
 }
 
 // NewContentReplacementState creates a fresh state.
@@ -81,15 +81,15 @@ type contentReplacementWire struct {
 
 // ContentReplacementRecord mirrors TS ContentReplacementRecord for transcript persistence.
 type ContentReplacementRecord struct {
-	Kind        string `json:"kind"`        // "tool-result"
+	Kind        string `json:"kind"` // "tool-result"
 	ToolUseID   string `json:"toolUseId"`
 	Replacement string `json:"replacement"`
 }
 
 // EnforceResult contains the output of EnforceToolResultBudget.
 type EnforceResult struct {
-	Messages       []types.Message
-	NewlyReplaced  []ContentReplacementRecord
+	Messages      []types.Message
+	NewlyReplaced []ContentReplacementRecord
 }
 
 // EnforceToolResultBudget mirrors TS enforceToolResultBudget.
@@ -464,11 +464,20 @@ func replaceToolResultContents(messages []types.Message, replacementMap map[stri
 func buildToolNameMap(messages []types.Message) map[string]string {
 	m := make(map[string]string)
 	for _, msg := range messages {
-		if msg.Type != types.MessageTypeAssistant || len(msg.Content) == 0 {
+		var c struct {
+			Content json.RawMessage `json:"content"`
+		}
+
+		var raw json.RawMessage
+		if json.Unmarshal(msg.Message, &c) == nil && len(c.Content) > 0 {
+			raw = c.Content
+		}
+
+		if msg.Type != types.MessageTypeAssistant || len(raw) == 0 {
 			continue
 		}
 		var blocks []map[string]any
-		if json.Unmarshal(msg.Content, &blocks) != nil {
+		if json.Unmarshal(raw, &blocks) != nil {
 			continue
 		}
 		for _, b := range blocks {
