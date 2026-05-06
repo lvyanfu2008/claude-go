@@ -224,6 +224,30 @@ func EnforceToolResultBudget(
 	}
 }
 
+// ParseContentReplacementState deserializes a wire-format ContentReplacementState
+// (e.g. from ToolUseContext.ContentReplacementState) back into the Go struct.
+// Returns nil when raw is empty or invalid.
+func ParseContentReplacementState(raw json.RawMessage) *ContentReplacementState {
+	if len(raw) == 0 || !json.Valid(raw) {
+		return nil
+	}
+	var w contentReplacementWire
+	if err := json.Unmarshal(raw, &w); err != nil {
+		return nil
+	}
+	if len(w.Replacements) == 0 && len(w.SeenIDs) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(w.SeenIDs))
+	for _, id := range w.SeenIDs {
+		seen[id] = true
+	}
+	return &ContentReplacementState{
+		SeenIDs:      seen,
+		Replacements: w.Replacements,
+	}
+}
+
 // ApplyToolResultBudget mirrors TS applyToolResultBudget — query-loop integration.
 // Gates on state (nil means feature disabled → messages returned as-is).
 func ApplyToolResultBudget(

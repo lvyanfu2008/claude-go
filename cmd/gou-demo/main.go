@@ -291,6 +291,11 @@ func gouDemoEnvTruthy(key string) bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
+func gouDemoEnvFalsy(key string) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	return v == "0" || v == "false" || v == "no" || v == "off"
+}
+
 func gouDemoStatusLineEnabled() bool {
 	return gouDemoEnvTruthy("GOU_DEMO_STATUS_LINE")
 }
@@ -640,6 +645,10 @@ type model struct {
 
 	// Task list (mirrors TS TaskListV2)
 	taskList *taskListModel
+
+	// toolResultState tracks tool-result persistence decisions across turns.
+	// Shared between the write path (per-tool persist) and read path (per-message budget enforcement).
+	toolResultState *toolresultpersist.ContentReplacementState
 }
 
 func main() {
@@ -768,6 +777,10 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	lm := modelenv.EffectiveMainLoopModel()
 
 	sessionMemState := sessionmemory.NewState()
+	var toolResultState *toolresultpersist.ContentReplacementState
+	if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
+		toolResultState = toolresultpersist.NewContentReplacementState()
+	}
 	return &model{
 		store:               st,
 		pr:                  pr,
@@ -790,6 +803,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		sessionMemState:     sessionMemState,
 		sessionMemHook:      sessionmemory.Hook(sessionMemState, st.ConversationID, cwd),
 		taskList:            newTaskListModel(st.ConversationID),
+		toolResultState:     toolResultState,
 	}
 }
 
@@ -2492,6 +2506,9 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							tcx = params.RuntimeContext.ToolUseContext
 						}
 						tcx.Options.MainLoopModel = mainLoopModel
+						if m.toolResultState != nil {
+							tcx.ContentReplacementState = m.toolResultState.ToJSON()
+						}
 						var trySMCompact compactservice.TrySessionMemoryCompactFn
 						if m.sessionMemState != nil {
 							sessionID := m.store.ConversationID
@@ -2536,19 +2553,36 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							te.SandboxingEnabled = true
 							te.AutoAllowBashWholeToolAskWhenSandboxed = true
 						}
-						// Opt-in tool result persistence: when set, large tool results are saved to disk
-						// and replaced with a preview in the tool_result block (mirrors TS toolResultStorage.ts).
-						if gouDemoEnvTruthy("GOU_DEMO_TOOL_RESULT_PERSIST") {
+						// Tool result persistence: enabled by default (mirrors TS), set GOU_DEMO_TOOL_RESULT_PERSIST=0 to disable.
+						// Large tool results are saved to disk and replaced with a preview in the tool_result block.
+						if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
 							te.ToolResultPersistConfig = &toolexecution.ToolResultPersistConfig{
 								SessionInfo: toolresultpersist.SessionInfo{
 									SessionID: m.store.ConversationID,
 									Cwd:       cwd,
 								},
-								ProcessOptions: toolresultpersist.DefaultProcessOptions(),
+								ProcessOptions:          toolresultpersist.DefaultProcessOptions(),
+								ContentReplacementState: m.toolResultState,
 							}
 						}
 						m.installAskResolver(&te)
 						qdeps.ToolexecutionDeps = te
+						// Wire tool result budget enforcement when persistence is enabled.
+						// The closure captures the live Go *ContentReplacementState so mutations
+						// survive across turns (mirrors TS shared ContentReplacementState instance).
+						if m.toolResultState != nil {
+							statePtr := m.toolResultState
+							sessionInfo := te.ToolResultPersistConfig.SessionInfo
+							qdeps.ApplyToolResultBudget = func(ctx context.Context, in *query.ToolResultBudgetInput) ([]types.Message, error) {
+								return toolresultpersist.ApplyToolResultBudget(
+									in.Messages,
+									statePtr,
+									sessionInfo,
+									0,    // use default MaxToolResultsPerMessageChars
+									nil,  // skipToolNames
+								), nil
+							}
+						}
 						// Snapshot matches qp.Messages (TS QueryEngine messages at callModel): includes skill_listing row if appended above.
 						msgsForQ := slices.Clone(m.store.Messages)
 						if send := m.ccbSend; send != nil {
