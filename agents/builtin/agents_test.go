@@ -109,8 +109,8 @@ func TestConfigFromEnv(t *testing.T) {
 
 	t.Run("defaults", func(t *testing.T) {
 		cfg := ConfigFromEnv()
-		if cfg.EmbeddedSearchTools {
-			t.Error("EmbeddedSearchTools should be false by default")
+		if !cfg.EmbeddedSearchTools {
+			t.Error("EmbeddedSearchTools should be true by default (CHICAGO_MCP is in defaultTrueSet)")
 		}
 		if cfg.UserTypeAnt {
 			t.Error("UserTypeAnt should be false by default")
@@ -213,11 +213,11 @@ func TestAreExplorePlanAgentsEnabled(t *testing.T) {
 	defer save("FEATURE_BUILTIN_EXPLORE_PLAN_AGENTS")()
 	defer save("CLAUDE_CODE_TENGU_AMBER_STOAT")()
 
-	t.Run("feature flag off", func(t *testing.T) {
+	t.Run("feature flag on by default", func(t *testing.T) {
 		os.Unsetenv("FEATURE_BUILTIN_EXPLORE_PLAN_AGENTS")
 		os.Unsetenv("CLAUDE_CODE_TENGU_AMBER_STOAT")
-		if AreExplorePlanAgentsEnabled() {
-			t.Error("should be false when feature flag is unset")
+		if !AreExplorePlanAgentsEnabled() {
+			t.Error("should be true by default (BUILTIN_EXPLORE_PLAN_AGENTS is in defaultTrueSet)")
 		}
 	})
 
@@ -371,13 +371,15 @@ func TestGetBuiltInAgents_basic(t *testing.T) {
 			Using3PServices: false,
 		}
 		agents := GetBuiltInAgents(cfg, GuideContext{})
-		// Should have: general-purpose, statusline-setup, claude-code-guide.
-		// (Explore, Plan, Verification all gated off.)
-		if len(agents) != 3 {
-			t.Fatalf("expected 3 agents (general, statusline, guide), got %d: %+v", len(agents), agentTypes(agents))
+		// Should have: general-purpose, statusline-setup, Explore, Plan, claude-code-guide.
+		// (Verification gated off - needs TENGU_HIVE_EVIDENCE.)
+		if len(agents) != 5 {
+			t.Fatalf("expected 5 agents (general, statusline, explore, plan, guide), got %d: %+v", len(agents), agentTypes(agents))
 		}
 		assertAgentType(t, agents, "general-purpose")
 		assertAgentType(t, agents, "statusline-setup")
+			assertAgentType(t, agents, "Explore")
+			assertAgentType(t, agents, "Plan")
 		assertAgentType(t, agents, "claude-code-guide")
 	})
 

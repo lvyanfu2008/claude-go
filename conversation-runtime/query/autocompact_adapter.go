@@ -179,10 +179,10 @@ func modelFromToolUseContext(tcx *types.ToolUseContext) string {
 }
 
 // defaultSummarizer returns a [compactservice.SummarizerFn] that mirrors TS compact's
-// [queryModelWithStreaming] provider selection (see [summarizeAutocompact]).
+// [queryModelWithStreaming] provider selection (see [SummarizeAutocompact]).
 func defaultSummarizer(_ string) compactservice.SummarizerFn {
 	return func(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
-		return summarizeAutocompact(ctx, in)
+		return SummarizeAutocompact(ctx, in)
 	}
 }
 

@@ -37,6 +37,14 @@ func autocompactOpenAIMaxWire(in compactservice.SummaryStreamInput) int {
 	return ClampOpenAICompatibleMaxTokens(req)
 }
 
+// anthropicBaseURLIsDeepSeek returns true when ANTHROPIC_BASE_URL points to a
+// DeepSeek API endpoint. When true, message conversion must use the OpenAI path
+// because DeepSeek does not support Anthropic-format content blocks (e.g. thinking).
+func anthropicBaseURLIsDeepSeek() bool {
+	base := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
+	return strings.Contains(strings.ToLower(base), "deepseek")
+}
+
 // isFirstPartyAnthropicBaseURL mirrors TS isFirstPartyAnthropicBaseUrl in
 // src/utils/model/providers.ts: true when ANTHROPIC_BASE_URL is unset or
 // points to api.anthropic.com (or api-staging.anthropic.com for ant users).
@@ -57,6 +65,39 @@ func isFirstPartyAnthropicBaseURL() bool {
 		return true
 	}
 	return false
+}
+
+// openAIAutocompactAPIKey returns the API key for autocompact OpenAI/DeepSeek paths.
+// When ANTHROPIC_BASE_URL points to DeepSeek, DeepSeek users store their key in
+// ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN), not OPENAI_API_KEY.
+func openAIAutocompactAPIKey() string {
+	if anthropicBaseURLIsDeepSeek() {
+		if k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")); k != "" {
+			return k
+		}
+		return strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
+	}
+	return strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+}
+
+// openAIAutocompactBaseURL returns the base URL for autocompact OpenAI/DeepSeek paths.
+// When ANTHROPIC_BASE_URL points to DeepSeek, it is also the correct OpenAI-compatible
+// endpoint; otherwise falls back to OPENAI_BASE_URL.
+func openAIAutocompactBaseURL() string {
+	if anthropicBaseURLIsDeepSeek() {
+		if b := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL")); b != "" {
+			return strings.TrimSuffix(b, "/")
+		}
+	}
+	return openAIBaseURLFromEnv()
+}
+
+// openAIAutocompactErrSuffix returns a provider label for error messages.
+func openAIAutocompactErrSuffix() string {
+	if anthropicBaseURLIsDeepSeek() {
+		return "deepseek provider"
+	}
+	return "openai provider"
 }
 
 // resolveAutocompactHaikuModel resolves a cost-effective model for autocompact
@@ -87,15 +128,15 @@ func resolveAutocompactHaikuModel(mainModel string) string {
 	return fallback
 }
 
-// summarizeAutocompact mirrors TS [queryModel] routing for a single text-only compact
+// SummarizeAutocompact mirrors TS [queryModel] routing for a single text-only compact
 // summary call, in the same order as [queryLoop] streaming parity:
 // OpenAI non-stream → OpenAI SSE → Anthropic Messages.
 //
 // DeepSeek models are always routed to the OpenAI path because they do not support
 // the Anthropic /v1/messages endpoint.
-func summarizeAutocompact(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
+func SummarizeAutocompact(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
 	model := strings.TrimSpace(in.Model)
-	openAI := StreamingUsesOpenAIChat() || tstenv.IsDeepSeekModel(model)
+	openAI := StreamingUsesOpenAIChat() || tstenv.IsDeepSeekModel(model) || anthropicBaseURLIsDeepSeek()
 	openAINoStream := openAI && OpenAIChatNoStreamEnabled()
 	switch {
 	case openAINoStream:
@@ -192,11 +233,11 @@ func summarizeAutocompactAnthropic(ctx context.Context, in compactservice.Summar
 }
 
 func summarizeAutocompactOpenAIStream(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
-	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	apiKey := openAIAutocompactAPIKey()
 	if apiKey == "" {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: OPENAI_API_KEY missing — cannot summarize (openai provider)")
+		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: API key missing — cannot summarize (%s)", openAIAutocompactErrSuffix())
 	}
-	base := openAIBaseURLFromEnv()
+	base := openAIAutocompactBaseURL()
 	model := resolveAutocompactHaikuModel(strings.TrimSpace(in.Model))
 	maxOut := autocompactOpenAIMaxWire(in)
 
@@ -257,11 +298,11 @@ func summarizeAutocompactOpenAIStream(ctx context.Context, in compactservice.Sum
 }
 
 func summarizeAutocompactOpenAINoStream(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
-	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	apiKey := openAIAutocompactAPIKey()
 	if apiKey == "" {
-		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: OPENAI_API_KEY missing — cannot summarize (openai provider)")
+		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: API key missing — cannot summarize (%s)", openAIAutocompactErrSuffix())
 	}
-	base := strings.TrimSpace(openAIBaseURLFromEnv())
+	base := openAIAutocompactBaseURL()
 	model := resolveAutocompactHaikuModel(strings.TrimSpace(in.Model))
 	maxOut := autocompactOpenAIMaxWire(in)
 	url := strings.TrimSuffix(base, "/") + "/chat/completions"
