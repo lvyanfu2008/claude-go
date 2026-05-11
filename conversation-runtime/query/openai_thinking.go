@@ -35,6 +35,7 @@ func IsOpenAIThinkingEnabled(model string) bool {
 		return false
 	}
 	return strings.Contains(m, "deepseek-reasoner") ||
+		strings.Contains(m, "deepseek-r1-671b") ||
 		strings.Contains(m, "deepseek-v3.2") ||
 		strings.Contains(m, "deepseek-v4-pro")
 }

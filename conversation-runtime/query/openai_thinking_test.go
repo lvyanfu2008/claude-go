@@ -20,6 +20,22 @@ func TestIsOpenAIThinkingEnabled_V4ProAndFlash(t *testing.T) {
 	}
 }
 
+func TestIsOpenAIThinkingEnabled_R1AndV3(t *testing.T) {
+	t.Setenv("OPENAI_ENABLE_THINKING", "")
+	if !IsOpenAIThinkingEnabled("DeepSeek-R1-671B") {
+		t.Fatal("expected DeepSeek-R1-671B to enable thinking (reasoner family)")
+	}
+	if !IsOpenAIThinkingEnabled("deepseek-r1-671b") {
+		t.Fatal("expected lowercase deepseek-r1-671b to enable thinking")
+	}
+	if IsOpenAIThinkingEnabled("DeepSeek-V3-671B") {
+		t.Fatal("expected DeepSeek-V3-671B to disable thinking (chat family)")
+	}
+	if IsOpenAIThinkingEnabled("deepseek-v3-671b") {
+		t.Fatal("expected lowercase deepseek-v3-671b to disable thinking")
+	}
+}
+
 func TestIsOpenAIThinkingEnabled_envOverridesFlash(t *testing.T) {
 	t.Setenv("OPENAI_ENABLE_THINKING", "1")
 	if !IsOpenAIThinkingEnabled("deepseek-v4-flash") {
