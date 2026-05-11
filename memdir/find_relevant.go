@@ -329,6 +329,14 @@ func selectRelevantMemories(
 		toolsSection = "\n\nRecently used tools: " + strings.Join(recentTools, ", ")
 	}
 
+	// DeepSeek models do not support the Anthropic /v1/messages endpoint.
+	// When the resolved Haiku model is DeepSeek, route through OpenAI Chat
+	// Completions instead, regardless of API provider.
+	haikuModel := getDefaultHaikuModelForMemdir()
+	if tstenv.IsDeepSeekModel(haikuModel) {
+		return sideQueryOpenAI(ctx, query, manifest, toolsSection, validFilenames)
+	}
+
 	provider := tstenv.GetAPIProvider()
 	switch provider {
 	case tstenv.FirstParty, tstenv.Foundry:
@@ -514,54 +522,38 @@ func sideQueryOpenAI(
 // resolveOpenAIModelInline is a minimal inline version of ResolveOpenAIModel
 // (query/openai_model_resolve.go) for use in memdir without importing the query package.
 func resolveOpenAIModelInline(anthropicModel string) string {
-
-	return anthropicModel
-	//clean := strings.TrimSuffix(strings.TrimSpace(anthropicModel), "[1m]")
-	//
-	//// Check env overrides in same precedence as ResolveOpenAIModel
-	//if cm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MODEL")); cm != "" {
-	//	clean = strings.TrimSuffix(strings.TrimSpace(cm), "[1m]")
-	//} else if v := strings.TrimSpace(os.Getenv("CCB_ENGINE_MODEL")); v != "" {
-	//	return v
-	//}
-	//
-	//// Check family-specific env override
-	//low := strings.ToLower(clean)
-	//if strings.Contains(low, "haiku") {
-	//	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")); v != "" {
-	//		return v
-	//	}
-	//	return "gpt-4o-mini"
-	//}
-	//if strings.Contains(low, "sonnet") {
-	//	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_SONNET_MODEL")); v != "" {
-	//		return v
-	//	}
-	//	return "gpt-4o"
-	//}
-	//if strings.Contains(low, "opus") {
-	//	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_OPUS_MODEL")); v != "" {
-	//		return v
-	//	}
-	//	return "o3"
-	//}
-	//// Fallback: exact match from the default map
-	//switch clean {
-	//case "claude-haiku-4-5-20251001":
-	//	return "gpt-4o-mini"
-	//case "claude-3-5-haiku-20241022":
-	//	return "gpt-4o-mini"
-	//case "claude-sonnet-4-20250514", "claude-sonnet-4-5-20250929", "claude-sonnet-4-6":
-	//	return "gpt-4o"
-	//case "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022":
-	//	return "gpt-4o"
-	//case "claude-opus-4-20250514", "claude-opus-4-1-20250805", "claude-opus-4-5-20251101", "claude-opus-4-6":
-	//	return "o3"
-	//}
-	//if clean == "" {
-	//	return "gpt-4o"
-	//}
-	//return clean
+	if v := strings.TrimSpace(os.Getenv("OPENAI_DEFAULT_HAIKU_MODEL")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")); v != "" {
+		return v
+	}
+	clean := strings.TrimSuffix(strings.TrimSpace(anthropicModel), "[1m]")
+	low := strings.ToLower(clean)
+	if strings.Contains(low, "haiku") {
+		return "gpt-4o-mini"
+	}
+	if strings.Contains(low, "sonnet") {
+		return "gpt-4o"
+	}
+	if strings.Contains(low, "opus") {
+		return "o3"
+	}
+	switch clean {
+	case "claude-haiku-4-5-20251001", "claude-3-5-haiku-20241022":
+		return "gpt-4o-mini"
+	case "claude-sonnet-4-20250514", "claude-sonnet-4-5-20250929",
+		"claude-sonnet-4-6", "claude-3-7-sonnet-20250219",
+		"claude-3-5-sonnet-20241022":
+		return "gpt-4o"
+	case "claude-opus-4-20250514", "claude-opus-4-1-20250805",
+		"claude-opus-4-5-20251101", "claude-opus-4-6":
+		return "o3"
+	}
+	if clean == "" {
+		return "gpt-4o"
+	}
+	return clean
 }
 
 // parseSelectMemoriesResponse parses the LLM response content into selected filenames.

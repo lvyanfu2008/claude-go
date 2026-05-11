@@ -7,15 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
-	goccontext "goc/context"
 	"goc/anthropicmessages"
 	"goc/ccb-engine/apilog"
 	"goc/compactservice"
+	goccontext "goc/context"
 	"goc/gou/ccbhydrate"
 	"goc/messagesapi"
+	"goc/tstenv"
 	"goc/types"
 )
 
@@ -35,11 +37,65 @@ func autocompactOpenAIMaxWire(in compactservice.SummaryStreamInput) int {
 	return ClampOpenAICompatibleMaxTokens(req)
 }
 
+// isFirstPartyAnthropicBaseURL mirrors TS isFirstPartyAnthropicBaseUrl in
+// src/utils/model/providers.ts: true when ANTHROPIC_BASE_URL is unset or
+// points to api.anthropic.com (or api-staging.anthropic.com for ant users).
+func isFirstPartyAnthropicBaseURL() bool {
+	base := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))
+	if base == "" {
+		return true
+	}
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Host)
+	if host == "api.anthropic.com" {
+		return true
+	}
+	if strings.ToLower(os.Getenv("USER_TYPE")) == "ant" && host == "api-staging.anthropic.com" {
+		return true
+	}
+	return false
+}
+
+// resolveAutocompactHaikuModel resolves a cost-effective model for autocompact
+// when the main-loop model is DeepSeek. DeepSeek does not support the Anthropic
+// /v1/messages endpoint, so compaction must use an OpenAI-compatible endpoint with
+// a cheaper model. Precedence:
+//
+//	OPENAI_DEFAULT_HAIKU_MODEL > ANTHROPIC_DEFAULT_HAIKU_MODEL >
+//	ResolveOpenAIModel("claude-haiku-4-5-20251001")
+//
+// For non-DeepSeek models, returns the main model unchanged.
+func resolveAutocompactHaikuModel(mainModel string) string {
+	if !tstenv.IsDeepSeekModel(mainModel) {
+		return mainModel
+	}
+	if v := strings.TrimSpace(os.Getenv("OPENAI_DEFAULT_HAIKU_MODEL")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")); v != "" {
+		return v
+	}
+	fallback := ResolveOpenAIModel("claude-haiku-4-5-20251001")
+	// If ResolveOpenAIModel returns a DeepSeek model (e.g. via CCB_ENGINE_MODEL),
+	// fall back to a known safe OpenAI model.
+	if tstenv.IsDeepSeekModel(fallback) {
+		return "gpt-4o-mini"
+	}
+	return fallback
+}
+
 // summarizeAutocompact mirrors TS [queryModel] routing for a single text-only compact
 // summary call, in the same order as [queryLoop] streaming parity:
 // OpenAI non-stream → OpenAI SSE → Anthropic Messages.
+//
+// DeepSeek models are always routed to the OpenAI path because they do not support
+// the Anthropic /v1/messages endpoint.
 func summarizeAutocompact(ctx context.Context, in compactservice.SummaryStreamInput) (compactservice.SummaryStreamResult, error) {
-	openAI := StreamingUsesOpenAIChat()
+	model := strings.TrimSpace(in.Model)
+	openAI := StreamingUsesOpenAIChat() || tstenv.IsDeepSeekModel(model)
 	openAINoStream := openAI && OpenAIChatNoStreamEnabled()
 	switch {
 	case openAINoStream:
@@ -86,7 +142,11 @@ func summarizeAutocompactAnthropic(ctx context.Context, in compactservice.Summar
 		"max_tokens": maxOut,
 		"messages":   innerMsgs,
 		"stream":     true,
-		"thinking":   map[string]any{"type": "disabled"},
+	}
+	// thinking:disabled is Anthropic-specific — third-party providers (DeepSeek)
+	// that present an Anthropic-compatible /v1/messages endpoint reject it with 404.
+	if isFirstPartyAnthropicBaseURL() {
+		req["thinking"] = map[string]any{"type": "disabled"}
 	}
 	if sys != "" {
 		req["system"] = sys
@@ -115,7 +175,10 @@ func summarizeAutocompactAnthropic(ctx context.Context, in compactservice.Summar
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, err
 	}
-	var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
+	var contentExtract struct {
+		Content json.RawMessage `json:"content"`
+	}
+	json.Unmarshal(inner, &contentExtract)
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
 		UUID:    uuid,
@@ -134,7 +197,7 @@ func summarizeAutocompactOpenAIStream(ctx context.Context, in compactservice.Sum
 		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: OPENAI_API_KEY missing — cannot summarize (openai provider)")
 	}
 	base := openAIBaseURLFromEnv()
-	model := ResolveOpenAIModel(strings.TrimSpace(in.Model))
+	model := resolveAutocompactHaikuModel(strings.TrimSpace(in.Model))
 	maxOut := autocompactOpenAIMaxWire(in)
 
 	wireMsgs := append([]types.Message{}, in.Messages...)
@@ -178,7 +241,10 @@ func summarizeAutocompactOpenAIStream(ctx context.Context, in compactservice.Sum
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, err
 	}
-	var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
+	var contentExtract struct {
+		Content json.RawMessage `json:"content"`
+	}
+	json.Unmarshal(inner, &contentExtract)
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
 		UUID:    uuid,
@@ -196,7 +262,7 @@ func summarizeAutocompactOpenAINoStream(ctx context.Context, in compactservice.S
 		return compactservice.SummaryStreamResult{}, fmt.Errorf("autocompact: OPENAI_API_KEY missing — cannot summarize (openai provider)")
 	}
 	base := strings.TrimSpace(openAIBaseURLFromEnv())
-	model := ResolveOpenAIModel(strings.TrimSpace(in.Model))
+	model := resolveAutocompactHaikuModel(strings.TrimSpace(in.Model))
 	maxOut := autocompactOpenAIMaxWire(in)
 	url := strings.TrimSuffix(base, "/") + "/chat/completions"
 
@@ -257,7 +323,10 @@ func summarizeAutocompactOpenAINoStream(ctx context.Context, in compactservice.S
 	if err != nil {
 		return compactservice.SummaryStreamResult{}, err
 	}
-	var contentExtract struct{Content json.RawMessage `json:"content"`}; json.Unmarshal(inner, &contentExtract)
+	var contentExtract struct {
+		Content json.RawMessage `json:"content"`
+	}
+	json.Unmarshal(inner, &contentExtract)
 	asst := types.Message{
 		Type:    types.MessageTypeAssistant,
 		UUID:    uuid,

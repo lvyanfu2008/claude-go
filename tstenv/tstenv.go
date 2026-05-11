@@ -135,6 +135,12 @@ func AutoToolSearchPercentage() int {
 	return 10
 }
 
+// IsDeepSeekModel returns true when the model name is a DeepSeek variant
+// (openai-compatible but does NOT support the Anthropic /v1/messages endpoint).
+func IsDeepSeekModel(model string) bool {
+	return strings.Contains(strings.ToLower(model), "deepseek")
+}
+
 // ToolSearchEnabledOptimistic mirrors isToolSearchEnabledOptimistic (toolSearch.ts) without GrowthBook.
 func ToolSearchEnabledOptimistic() bool {
 	mode := GetToolSearchMode()
