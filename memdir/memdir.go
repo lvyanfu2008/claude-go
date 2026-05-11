@@ -304,6 +304,13 @@ func memoryDirDisplayPath(memDir string) string {
 	}
 	p = filepath.Clean(strings.TrimSuffix(p, string(filepath.Separator)))
 	p = filepath.ToSlash(p)
+	// Shorten: use ~ for home directory paths (mirrors TS getRelativeMemoryPath)
+	if home, err := os.UserHomeDir(); err == nil {
+		homeSlash := filepath.ToSlash(home) + "/"
+		if strings.HasPrefix(p, homeSlash) {
+			p = "~/" + strings.TrimPrefix(p, homeSlash)
+		}
+	}
 	return p + "/"
 }
 

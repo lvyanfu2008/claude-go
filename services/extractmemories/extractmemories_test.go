@@ -55,6 +55,7 @@ func writeToolBlock(name, filePath string) json.RawMessage {
 // ---------------------------------------------------------------------------
 
 func TestMemoryDirDisplayPath(t *testing.T) {
+	home, _ := os.UserHomeDir()
 	tests := []struct {
 		in   string
 		want string
@@ -63,6 +64,13 @@ func TestMemoryDirDisplayPath(t *testing.T) {
 		{"/tmp/mem", "/tmp/mem/"},
 		{"/tmp/mem/", "/tmp/mem/"},
 		{"relative/path", "relative/path/"},
+	}
+	// Add home-dir shortening test case if home is available.
+	if home != "" {
+		tests = append(tests, struct {
+			in   string
+			want string
+		}{filepath.Join(home, ".claude", "projects", "foo", "memory") + "/", "~/.claude/projects/foo/memory/"})
 	}
 	for _, tc := range tests {
 		got := memoryDirDisplayPath(tc.in)

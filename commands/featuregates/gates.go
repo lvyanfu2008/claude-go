@@ -12,9 +12,47 @@ func envTruthy(val string) bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
-// Feature is true when FEATURE_<name> is truthy (AGENTS.md: FEATURE_<FLAG_NAME>=1).
+// defaultTrueSet mirrors build.ts DEFAULT_BUILD_FEATURES — features that are
+// always enabled at build time in TS and should be on by default in Go.
+// Runtime env FEATURE_<NAME>=1 can enable additional features, but features
+// in this set cannot be disabled at runtime (matching TS compile-time behaviour).
+var defaultTrueSet = map[string]bool{
+	// P0: local features
+	"AGENT_TRIGGERS":              true,
+	"ULTRATHINK":                  true,
+	"BUILTIN_EXPLORE_PLAN_AGENTS": true,
+	"LODESTONE":                   true,
+	// P1: API-dependent features
+	"EXTRACT_MEMORIES": true,
+	"VERIFICATION_AGENT": true,
+	"KAIROS_BRIEF":       true,
+	"AWAY_SUMMARY":        true,
+	"ULTRAPLAN":           true,
+	// P2: daemon + remote control server
+	"DAEMON": true,
+	// PR-package restored features
+	"WORKFLOW_SCRIPTS":         true,
+	"HISTORY_SNIP":             true,
+	"CONTEXT_COLLAPSE":         true,
+	"MONITOR_TOOL":             true,
+	"FORK_SUBAGENT":            true,
+	"UDS_INBOX":                true,
+	"KAIROS":                   true,
+	"COORDINATOR_MODE":         true,
+	"LAN_PIPES":                true,
+	"POOR":                     true,
+	"AGENT_TRIGGERS_REMOTE":    true,
+	"CHICAGO_MCP":              true,
+	"VOICE_MODE":               true,
+	"SHOT_STATS":               true,
+	"PROMPT_CACHE_BREAK_DETECTION": true,
+	"TOKEN_BUDGET":                 true,
+}
+
+// Feature is true when the feature is in the TS-default set or when
+// FEATURE_<name> is truthy (matching src/commands.ts: FEATURE_<FLAG_NAME>=1).
 func Feature(name string) bool {
-	if name == "KAIROS" {
+	if defaultTrueSet[name] {
 		return true
 	}
 	return envTruthy(os.Getenv("FEATURE_" + name))
