@@ -37,7 +37,6 @@
 | 回放 / 管道 NDJSON → `ccbstream.Apply` | `goEngine` / `goc/gou/ccbstream` | **已做** |
 | 进程内 `ProcessUserInput` → 写入 `Store` | `processUserInput.ts` `ProcessUserInputBaseResult` / `goc/gou/pui` | **已做**（见下节边界） |
 | 真实 LLM（gou-demo） | `goc/conversation-runtime/query` 流式 parity | **已做**：`ANTHROPIC_API_KEY`（或 `ANTHROPIC_AUTH_TOKEN`）+ 宿主打开流式 parity（`ApplyQueryHostEnvGates` / `QueryParams.StreamingParity`）；可选 `GOU_QUERY_STREAMING_PARITY=1`；未配置或出错时仅 **system 提示**（无模拟流式）。`GOU_DEMO_CCB_INLINE=0` 关闭 HTTP 流式。 |
-| `process-user-input` CLI（stdin/stdout JSON） | `goc/cmd/process-user-input` | **可选**（测试 / 自动化；gou TUI 走进程内 `ProcessUserInput`，不依赖 spawn 该二进制） |
 | `result.execution`（bash/slash prepare 桩） | `bashprepare` / `slashprepare` 仍可能填充 `Execution` | **TUI 未执行**（仅 system 提示）；无 TS 侧 `attachments_plan` 等多步执行 |
 | Ink 级 UI（权限、工具块交互、chroma 等） | `REPL.tsx` 等 | **部分**：transcript（ctrl+o、/ 搜索、ctrl+e 展开、冻结滚动、**`[`** 滚动条 dump、**`v`** 外编辑器）；其余见 [gou-demo-transcript-ts-parity.md](../docs/plans/gou-demo-transcript-ts-parity.md) |
 
