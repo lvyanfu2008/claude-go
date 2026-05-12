@@ -1,7 +1,7 @@
 // Spinner verbs mirror claude-code/src/constants/spinnerVerbs.ts SPINNER_VERBS (default list).
 // Sync manually when TS changes.
 
-package main
+package app
 
 import "math/rand/v2"
 

@@ -1,7 +1,7 @@
 // Builtin status row mirrors TS PromptInputFooter StatusLine + BuiltinStatusLine.tsx
 // (model · Context % · tokens · optional cost · Debug mode).
 
-package main
+package app
 
 import (
 	"fmt"

@@ -17,6 +17,7 @@ import (
 
 	"goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
+	"goc/gou/app"
 	"goc/hookexec"
 	"goc/sessiontranscript"
 	"goc/types"
@@ -421,7 +422,22 @@ func runHeadless(prompt string) error {
 }
 
 func runInteractive(args []string) error {
-	fmt.Fprintf(os.Stderr, "[claude] interactive REPL not yet implemented via cobra\n")
-	fmt.Fprintf(os.Stderr, "[claude] use: go run ./cmd/gou-demo for the TUI\n")
-	return nil
+	cwd, _ := os.Getwd()
+	sessionID := GetSessionID()
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
+
+	pm := flagPermissionMode
+	if pm == "" {
+		pm = string(types.PermissionDefault)
+	}
+
+	cfg := app.Config{
+		SessionID:      sessionID,
+		PermissionMode: types.PermissionMode(pm),
+		CWD:            cwd,
+	}
+
+	return app.Run(cfg)
 }

@@ -1,0 +1,2696 @@
+// Command gou-demo is a minimal Bubble Tea full-screen UI: new message renderer + markdown + tool blocks (Phase 4 messagerow).
+// Extracted [model.Update] branches: update_streaming.go (query yield / NDJSON), update_layout.go (window resize).
+// Layout uses the full terminal size (main buffer by default). Optional GOU_DEMO_ALT_SCREEN=1 uses the alternate buffer (no shell scrollback mixing).
+// With GOU_DEMO_LOG=1, trace uses the same path rules as TS debug log (see goc/ccb-engine/debugpath); on TTY without GOU_DEMO_LOG_FILE, trace goes to that file, not stderr.
+//
+// Run from repo: cd goc && go run ./cmd/gou-demo
+//
+// Flags: -transcript=file.json (UI or API messages), -replay-cc=events.ndjson, -stream-stdin (pipe NDJSON),
+// Real model: [goc/conversation-runtime/query.Query] HTTP streaming parity when ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) is set
+// and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 (see [query.BuildQueryConfig]).
+// When a tool gate returns ask, GOU_QUERY_ASK_STRATEGY=allow auto-allows for headless demo (maps to [toolexecution.ExecutionDeps.AskResolver]).
+// GOU_TOOLEXEC_BASH_SANDBOX_1B=1 enables permissions.ts whole-tool ask bypass on Bash when the tool input carries a non-empty command without dangerously_disable_sandbox (see toolexecution.WholeToolAskSkippedForBash1b).
+// Go-side init port (subset of TS init.ts): gou-demo runs [goc/claudeinit.Init] (includes [settingsfile.EnsureProjectClaudeEnvOnce]). See docs/plans/go-init-port.md.
+// Go local tool parity (streaming parity + [skilltools.ParityToolRunner]): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. PowerShell is off unless CCB_ENGINE_LOCAL_POWERSHELL=1 (uses pwsh or powershell.exe). AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch is allowed by default; set CCB_ENGINE_DISABLE_WEB_FETCH=1 to block network fetches in the Go runner. See docs/plans/go-tools-parity.md.
+//
+// System # Language / # Output Style: merged from ~/.claude/settings.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
+// Extra CLAUDE.md roots: optional runtimeContext.toolPermissionContext.additionalWorkingDirectories (JSON) and/or GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS / CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS (comma or PATH-style list). Paths from runtime/env are always scanned when passed (see [querycontext.ExtraClaudeMdRootsForFetch]); CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 is only needed for env-only flows in claudemd that do not pass explicit roots.
+// Debug log (optional): GOU_DEMO_LOG_FILE=/path/to.log, or GOU_DEMO_LOG=1 (default file path matches TS getDebugLogPath via goc/ccb-engine/debugpath when stderr is TTY). GOU_DEMO_LOG_STDERR=1 forces stderr (may corrupt TUI). Lines are prefixed [gou-demo].
+// ToolUseContext dump: CLAUDE_CODE_LOG_TOOL_USE_CONTEXT or GOU_DEMO_LOG_TOOL_USE_CONTEXT = 1|summary|full (with logging enabled) prints JSON after each BuildDemoParams; full includes the entire commands[] snapshot.
+// Read/Grep/Glob stream tail: default keeps each tool_use + tool_result as separate rows (avoids looking like history was cleared). Set GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL=1 for TS-style merge into collapsed_read_search (gou/ccbstream/apply.go).
+// Prompt: merged one-line Grep/Glob/Read summaries (GOU_DEMO_TOOL_USE_SUMMARY_LINE) wait GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS after each assistant message first appears (default 2000 ms) while full Search/Read rows are shown; set to 0 to collapse immediately.
+//
+// Keys: ↑/↓/PgUp/PgDn scroll the message pane, End bottom. Prompt: default Enter send; Alt+Enter or Option+Enter (macOS) newline when the terminal sends Meta; Ctrl+J / LF newline. GOU_DEMO_REPL_ENTER_SUBMITS=0 for chat mode (Enter newline, Alt+Enter send). Shift+↑↓ move line. F2 toggles the slash list; leading "/" (TS) or mid-input " … /tok" shows the list; ↑/↓ move selection; Tab inserts; Enter applies selection and runs submit; input stays in the main field. Ctrl+l forces a full-screen clear + redraw (TS Global app:redraw). Ctrl+o toggles TS-style transcript (frozen tail; / search with n/N when not in dump; search bar Esc clears; ctrl+e show-all expands collapsed/grouped + full tool_result bodies except in dump). In the main prompt, user messages that contain only tool_result / advisor_tool_result blocks are omitted from the list (no "user / ↩ tool_result …" stub row); mixed user rows still fold tool_result bodies to one line + (ctrl+o to expand). Transcript (compact): same omission + tool_result folded on user rows; assistant rows show ⏺+⎿ summaries. Ctrl+e show-all or [ dump shows full blocks. [ (no search bar) enables dump: show-all + plain transcript to scrollback (Printf). v opens frozen transcript in $VISUAL/$EDITOR via temp file (tea.ExecProcess). Transcript pager (search bar closed, not dump): arrows/pgup/pgdn/end, j/k, g, G/shift+g, ctrl+u/d, ctrl+b/f, b, space (full page), ctrl+n/p (line). Esc/q/ctrl+c exit transcript when search bar closed. In prompt mode, q or Esc quit. Columns < 80 use a shorter header/footer (TS REPL isNarrow). Terminal tab title: OSC 0 unless CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1; loading shows a "…" prefix. CLAUDE_CODE_PERMISSION_MODE sets tool permission mode for submits (TS toolPermissionContext.mode).
+// Theme: CLAUDE_CODE_THEME=light (after merged settings env) selects a higher-contrast palette; see [theme.InitFromThemeName]. GOU_DEMO_STATUS_LINE=1 shows theme/msg counts above the prompt.
+// Message pane: new renderer ([message.VirtualList] in [gou/message]) drives both prompt and transcript screens. Prompt uses [bubbles/viewport] by default (full-document scroll + ctrl+y fold-all); disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no to render the visible slice directly on top of m.scrollTop.
+// Mouse: SGR mouse (cell motion) enables wheel + plain left-drag on the message list when not disabled by env. Set GOU_DEMO_DISABLE_MOUSE_SCROLL=1 to ignore wheel/drag in-app. Mirror TS fullscreen.ts: CLAUDE_CODE_DISABLE_MOUSE=1 or GOU_DEMO_DISABLE_MOUSE=1 omits SGR mouse (keyboard scroll still works), unless GOU_DEMO_DISALLOW_DISABLE_MOUSE=1. One-column TUI scrollbar is on by default when the pane is wide enough; GOU_DEMO_MESSAGE_SCROLLBAR=0|false|off|no or GOU_DEMO_NO_SCROLLBAR=1 turns it off. Alternate screen: opt-in GOU_DEMO_ALT_SCREEN=1 (default main buffer). Bubbles viewport: at-top wheel-up can release mouse for host scrollback; opt out with GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0|false|off|no.
+// Slash: /name is resolved in-process — disk skills via [goc/slashresolve.ResolveDiskSkill], bundled prompts via [goc/slashresolve.ResolveBundledSkill] (embedded markdown under slashresolve/bundleddata). Other prompt commands need a disk skill (SkillRoot) or a bundled definition. Unknown names that look like command names and are not root filesystem paths (non-Windows) return TS-style Unknown skill without calling the model; otherwise the line is treated as a normal user prompt.
+// MCP skills (scheme-2 R0/R1): -mcp-commands-json=path or GOU_DEMO_MCP_COMMANDS_JSON → JSON array of types.Command merged into Skill/commands (enable FEATURE_MCP_SKILLS=1 for listing).
+// MCP tool defs (assembleToolPool): -mcp-tools-json=path or GOU_DEMO_MCP_TOOLS_JSON → JSON array merged into Options.Tools when GOU_DEMO_USE_EMBEDDED_TOOLS_API=1 (see mcpcommands.EnvToolsJSONPath).
+//
+// Session JSONL (default on): persists via [goc/sessiontranscript] (~/.claude/projects/.../<session>.jsonl). After each successful ProcessUserInput + ApplyBaseResult, maybeRecordTranscript runs so user rows land before streaming yields. Streaming parity wires [query.QueryDeps.OnQueryYield] to RecordTranscript with a growing turn prefix (same as TS recordTranscript(messages)) so parentUuid chains; each yield is deduped by message UUID; turn end still calls maybeRecordTranscript for a full-store sync. File-history-snapshot stubs: default at most one line per session (before the first non-meta user) unless CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING (TS fileHistory off); GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER=1 restores one stub before every new non-meta user; GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT=1 omits stubs. User message UUIDs follow TS (crypto.randomUUID via process-user-input when DemoConfig.uuid is unset). Set GOU_DEMO_SESSION_ID to a UUID or the store gets a random UUID when the default "demo" id is invalid.
+// Skill listing follows TS delta (sentSkillNames): later submits omit skills already injected. Set GOU_DEMO_SKILL_LISTING_EVERY_TURN=1 to use a fresh sent map each submit so the full listing is attached every round (debug only; not TS production behavior).
+package app
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"goc/ccb-engine/diaglog"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/mattn/go-isatty"
+
+	"goc/ccb-engine/apilog"
+	"goc/ccb-engine/debugpath"
+	"goc/ccb-engine/settingsfile"
+	"goc/claudeinit"
+	"goc/commands"
+	"goc/compactservice"
+	processuserinput "goc/conversation-runtime/process-user-input"
+	"goc/conversation-runtime/query"
+	"goc/gou/ccbhydrate"
+	"goc/gou/ccbstream"
+	"goc/gou/conversation"
+	"goc/gou/layout"
+	"goc/gou/markdown"
+	goumsg "goc/gou/message"
+	"goc/gou/messagerow"
+	"goc/gou/prompt"
+	"goc/gou/pui"
+	"goc/gou/segdiff"
+	"goc/gou/textutil"
+	"goc/gou/theme"
+	"goc/gou/transcript"
+	"goc/growthbook"
+	"goc/hookexec"
+	"goc/messagesapi"
+	"goc/modelenv"
+	"goc/querycontext"
+	"goc/services/autodream"
+	"goc/services/extractmemories"
+	"goc/services/sessionmemory"
+	"goc/sessiontranscript"
+	"goc/tools"
+	"goc/tools/localtools"
+	"goc/tools/skilltools"
+	"goc/tools/toolexecution"
+	"goc/tools/toolresultpersist"
+	"goc/tscontext"
+	"goc/types"
+)
+
+// gouDemoTrace is set by setupGouDemoTrace from GOU_DEMO_LOG_FILE or GOU_DEMO_LOG.
+var gouDemoTrace *log.Logger
+
+// markdownHighlighter is the global code highlighter instance
+var markdownHighlighter *markdown.Highlighter
+
+// messagePaneGutterCols is the uniform left indent for message pane body lines (alignment with wrap width).
+const messagePaneGutterCols = 2
+
+func messageWrapCols(cols int) int {
+	if cols <= messagePaneGutterCols+8 {
+		return max(8, cols)
+	}
+	return cols - messagePaneGutterCols
+}
+
+// applyMessagePaneGutter wraps block to (cols − gutter) and prefixes each line with two spaces.
+func applyMessagePaneGutter(block string, cols int) string {
+	if block == "" {
+		return ""
+	}
+	wrapCols := messageWrapCols(cols)
+	wrapped := layout.WrapForViewport(block, wrapCols)
+	prefix := strings.Repeat(" ", messagePaneGutterCols)
+	lines := strings.Split(wrapped, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// messagePaneGutterRowCount matches [applyMessagePaneGutter] line count for height cache parity.
+func messagePaneGutterRowCount(block string, cols int) int {
+	g := applyMessagePaneGutter(block, cols)
+	if g == "" {
+		return 1
+	}
+	return max(1, strings.Count(g, "\n")+1)
+}
+
+// wrapHeadingForMessagePane wraps heading content to (messageWrapCols − levelPad) so after [applyMessagePaneGutter]
+// each physical line still includes the ATX level indent on continuations (not only the global two spaces).
+func wrapHeadingForMessagePane(content string, levelPad string, cols int) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+	innerW := messageWrapCols(cols) - len(levelPad)
+	if innerW < 8 {
+		innerW = max(8, messageWrapCols(cols)-2)
+	}
+	wrapped := layout.WrapForViewport(content, innerW)
+	if levelPad == "" {
+		return wrapped
+	}
+	lines := strings.Split(wrapped, "\n")
+	for i := range lines {
+		lines[i] = levelPad + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// gouDemoMergedSystemLocale mirrors apiparity.GouDemo: user + project settings.go.json / settings.local.json language/outputStyle with env override.
+// resolveToolProjectRoot returns CCB_ENGINE_PROJECT_ROOT if set, else the nearest Go project marker from cwd, else abs(cwd).
+func resolveToolProjectRoot(cwd string) string {
+	if r := strings.TrimSpace(os.Getenv("CCB_ENGINE_PROJECT_ROOT")); r != "" {
+		if a, err := filepath.Abs(r); err == nil {
+			return a
+		}
+	}
+	if pr, err := settingsfile.FindClaudeProjectRoot(cwd); err == nil {
+		return pr
+	}
+	if a, err := filepath.Abs(cwd); err == nil {
+		return a
+	}
+	return cwd
+}
+
+func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) {
+	projRoot := settingsfile.ProjectRootLastResolved()
+	locLang, locStyleKey, err := settingsfile.MergeGouDemoLocalePrefs(projRoot, true)
+	if err != nil {
+		gouDemoTracef("MergeGouDemoLocalePrefs: %v", err)
+		locLang, locStyleKey = "", ""
+	}
+	lang = strings.TrimSpace(os.Getenv("CLAUDE_CODE_LANGUAGE"))
+	if lang == "" {
+		lang = locLang
+	}
+	on, op := commands.ResolveGouDemoOutputStyle(
+		os.Getenv("CLAUDE_CODE_OUTPUT_STYLE_NAME"),
+		os.Getenv("CLAUDE_CODE_OUTPUT_STYLE_PROMPT"),
+		locStyleKey,
+	)
+	return lang, on, op
+}
+
+func defaultGouDemoTracePath() string {
+	p := debugpath.ResolveLogPath()
+	if p != "" {
+		return p
+	}
+	return filepath.Join(os.TempDir(), fmt.Sprintf("gou-demo-trace-%d.txt", os.Getpid()))
+}
+
+func setupGouDemoTrace() (cleanup func()) {
+	path := strings.TrimSpace(os.Getenv("GOU_DEMO_LOG_FILE"))
+	flags := log.LstdFlags | log.Lmicroseconds
+	if path != "" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			log.Printf("gou-demo: mkdir %q: %v", filepath.Dir(path), err)
+		}
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			log.Printf("gou-demo: GOU_DEMO_LOG_FILE %q: %v", path, err)
+			return func() {}
+		}
+		debugpath.MaybeUpdateLatestSymlink(path)
+		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
+		return func() { _ = f.Close() }
+	}
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_LOG")))
+	if v != "1" && v != "true" && v != "yes" && v != "on" {
+		return func() {}
+	}
+	// GOU_DEMO_LOG=1: writing to stderr while the TUI runs may corrupt line order and layout.
+	if gouDemoEnvTruthy("GOU_DEMO_LOG_STDERR") {
+		gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
+		return func() {}
+	}
+	if isatty.IsTerminal(os.Stderr.Fd()) {
+		p := defaultGouDemoTracePath()
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "[gou-demo] trace mkdir %q: %v; falling back to stderr\n", filepath.Dir(p), err)
+			gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
+			return func() {}
+		}
+		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[gou-demo] trace open %q: %v; falling back to stderr\n", p, err)
+			gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
+			return func() {}
+		}
+		debugpath.MaybeUpdateLatestSymlink(p)
+		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
+		lp := debugpath.LatestLinkPathFor(p)
+		if lp != "" {
+			gouDemoTrace.Printf("trace -> %s points to %s (TTY: stderr+TUI garbles; or GOU_DEMO_LOG_FILE=...)", lp, p)
+		} else {
+			gouDemoTrace.Printf("trace -> %s (TTY: stderr+TUI garbles output; use this file or GOU_DEMO_LOG_FILE=...)", p)
+		}
+		return func() { _ = f.Close() }
+	}
+	gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
+	return func() {}
+}
+
+func gouDemoTracef(format string, args ...any) {
+	if gouDemoTrace != nil {
+		gouDemoTrace.Printf(format, args...)
+	}
+}
+
+// gouDemoLogToolUseContext dumps ProcessUserInputContext / ToolUseContext JSON when CLAUDE_CODE_LOG_TOOL_USE_CONTEXT
+// or GOU_DEMO_LOG_TOOL_USE_CONTEXT is set (requires GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE so [gouDemoTrace] is configured — stderr+TUI is avoided by default).
+// Values: 1|true|summary — summary snapshot; full — entire serializable context (large). JSON is one-line (no indent).
+func gouDemoLogToolUseContext(rc *types.ProcessUserInputContextData) {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("CLAUDE_CODE_LOG_TOOL_USE_CONTEXT")))
+	if v == "" {
+		v = strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_LOG_TOOL_USE_CONTEXT")))
+	}
+	if v == "" {
+		return
+	}
+	full := v == "full"
+	if !full && v != "1" && v != "true" && v != "yes" && v != "on" && v != "summary" {
+		return
+	}
+	if gouDemoTrace == nil {
+		return
+	}
+	b, err := types.FormatProcessInputContextForLog(rc, full)
+	if err != nil {
+		gouDemoTracef("ToolUseContext log: marshal: %v", err)
+		return
+	}
+	mode := "summary"
+	if full {
+		mode = "full"
+	}
+	gouDemoTrace.Printf("ToolUseContext (%s JSON):\n%s\n", mode, string(b))
+}
+
+func gouDemoEnvTruthy(key string) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+func gouDemoEnvFalsy(key string) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	return v == "0" || v == "false" || v == "no" || v == "off"
+}
+
+func gouDemoStatusLineEnabled() bool {
+	return gouDemoEnvTruthy("GOU_DEMO_STATUS_LINE")
+}
+
+func gouDemoEnvWantsApiBodyLog() bool {
+	return gouDemoEnvTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") || gouDemoEnvTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
+}
+
+func gouDemoHasLLMKeys() bool {
+	for _, k := range []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY"} {
+		if strings.TrimSpace(os.Getenv(k)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// gouDemoWarnApilogExpectations prints stderr hints when CLAUDE_CODE_LOG_API_* cannot produce HTTP body logs.
+func gouDemoWarnApilogExpectations(ccbInline bool) {
+	if !gouDemoEnvWantsApiBodyLog() {
+		return
+	}
+	if !ccbInline {
+		fmt.Fprintf(os.Stderr,
+			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but this run has real HTTP / streaming parity disabled (GOU_DEMO_CCB_INLINE=0).\n"+
+				"           No HTTP → apilog will not append request/response lines. Unset GOU_DEMO_CCB_INLINE and set ANTHROPIC_API_KEY plus GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 for real API logs.\n")
+		return
+	}
+	if !gouDemoHasLLMKeys() {
+		fmt.Fprintf(os.Stderr,
+			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but no ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or OPENAI_API_KEY is set.\n"+
+				"           Put keys in ~/.claude/settings.json or project .claude/settings.go.json env, or export them.\n")
+	}
+}
+
+func previewForTrace(s string, max int) string {
+	if max <= 0 {
+		max = 120
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + fmt.Sprintf("…(%d runes)", len(r))
+}
+
+// gouQueryYieldMsg carries one assistant or user row from [query.Query] streaming parity (non-ccbstream protocol).
+type gouQueryYieldMsg struct {
+	Message types.Message
+}
+
+// gouStreamingToolUsesMsg carries in-flight tool_use snapshots from [query.QueryDeps.OnStreamingToolUses].
+// Uses==nil clears the store (Anthropic message_stop); non-nil replaces the live list (may be empty).
+type gouStreamingToolUsesMsg struct {
+	Uses []query.StreamingToolUseLive
+}
+
+// gouQueryDoneMsg marks completion of a query streaming parity turn (Err set on failure).
+type gouQueryDoneMsg struct {
+	Err error
+}
+
+// gouMemoryAppendMsg appends a system message on the main thread (e.g. subtype memory_saved from extract-memories).
+type gouMemoryAppendMsg struct {
+	Msg types.Message
+}
+
+func gouDemoAnthropicAPIKey() string {
+	k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+	if k != "" {
+		return k
+	}
+	return strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
+}
+
+// gouDemoPreferQueryStreamingParity is true when env gates parity and an Anthropic key is present (HTTP path usable).
+func gouDemoPreferQueryStreamingParity() bool {
+	if gouDemoAnthropicAPIKey() == "" {
+		return false
+	}
+	cfg := query.BuildQueryConfig()
+	return query.StreamingParityPathEnabled(cfg)
+}
+
+// gouDemoQueryMainLoopModel is the model id for HTTP streaming parity + ParityToolRunner.
+// /model sets CLAUDE_CODE_MODEL in-process; that must override ToolUseContext.Options from
+// [pui.BuildDemoParams] when they disagree (otherwise the API keeps an older id).
+func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string {
+	if cm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MODEL")); cm != "" {
+		return cm
+	}
+	if params != nil && params.RuntimeContext != nil {
+		if m := strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel); m != "" {
+			return m
+		}
+	}
+	return modelenv.EffectiveMainLoopModel()
+}
+
+// gouDemoUserContextMapForQuery copies live user context for [query.PrependUserContext].
+// Values must be raw (no <system-reminder> wrapper): TS prependUserContext wraps once per #key/value.
+// Do not pass [querycontext.FormatUserContextReminder] here — that string is already wrapped for ccbhydrate lead-in only.
+func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string {
+	if len(uc) == 0 {
+		return nil
+	}
+	out := make(map[string]string)
+	for k, v := range uc {
+		if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
+			continue
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// runQueryStreamingParityTurn runs [query.Query] in a goroutine and forwards whole messages to the Bubble Tea program.
+func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams) {
+	go func() {
+		ctx := context.Background()
+		for y, err := range query.Query(ctx, qp) {
+			if err != nil {
+				if programSend != nil {
+					programSend(gouQueryDoneMsg{Err: err})
+				}
+				return
+			}
+			if y.Message != nil && programSend != nil {
+				programSend(gouQueryYieldMsg{Message: *y.Message})
+			}
+			if y.Terminal != nil {
+				// Query encodes model/stream failures on Terminal.Error (second iter return is always nil err).
+				var doneErr error
+				if y.Terminal.Error != nil {
+					doneErr = y.Terminal.Error
+				}
+				if programSend != nil {
+					programSend(gouQueryDoneMsg{Err: doneErr})
+				}
+				return
+			}
+		}
+	}()
+}
+
+// teardropAsterisk matches TS constants/figures.ts TEARDROP_ASTERISK (Spinner.tsx).
+const teardropAsterisk = "\u273b"
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouSpinnerTickMsg{} })
+}
+
+func (m *model) beginQuerySpinner() {
+	m.queryBusyStartedAt = time.Now()
+	m.spinnerVerb = pickSpinnerVerb()
+	m.spinnerFrame = 0
+}
+
+func (m *model) endQuerySpinner() {
+	m.spinnerVerb = ""
+	m.queryBusyStartedAt = time.Time{}
+	m.spinnerFrame = 0
+}
+
+func padStreamRows(rows []string, h int) []string {
+	for len(rows) < h {
+		rows = append(rows, "")
+	}
+	if len(rows) > h {
+		return rows[:h]
+	}
+	return rows
+}
+
+func (m *model) promptBottomStreamRows() []string {
+	h := m.streamH
+	if h < 1 {
+		h = 1
+	}
+	w := m.width - 2
+	if w < 8 {
+		w = m.cols
+	}
+	if m.queryBusy {
+		var streamTail string
+		if strings.TrimSpace(m.store.StreamingText) != "" {
+			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
+			streamTail = styleMarkdownTokens(toks, m.cols, false)
+		} else {
+			streamTail = ""
+		}
+		if streamTail == "" {
+			return padStreamRows(nil, h)
+		}
+		wrapped := applyMessagePaneGutter(streamTail, w)
+		tailLines := strings.Split(wrapped, "\n")
+		return padStreamRows(tailLines, h)
+	}
+	if strings.TrimSpace(m.store.StreamingText) == "" {
+		return padStreamRows(nil, h)
+	}
+	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
+	toks := markdown.CachedLexerStreaming(m.store.StreamingText)
+	streamBody := styleMarkdownTokens(toks, m.cols, false)
+	streamWrapped := applyMessagePaneGutter(streamLabel+streamBody, w)
+	streamRows := strings.Split(streamWrapped, "\n")
+	return padStreamRows(streamRows, h)
+}
+
+type model struct {
+	store  *conversation.Store
+	pr     prompt.Model
+	width  int
+	height int
+	cols   int // terminal content width (title/footer); message list may use msgBodyCols when a scrollbar strip is shown
+
+	// msgBodyCols is wrap width for virtual message rows (m.cols or m.cols-1). msgScrollbarW is 0 or 1.
+	msgBodyCols   int
+	msgScrollbarW int
+
+	permAsk           *permissionAskOverlay
+	slashCommands     []types.Command
+	slashCommandsOnce bool
+	// slashListUser: F2 toggles the command list when not in TS auto-suggest (e.g. empty input).
+	// slashListSel is the index in the filtered list shown beside the input (TS-style / suggestions).
+	slashListUser bool
+	slashListSel  int
+	// slashResultPanel is local slash text output shown below the input until Esc (prompt screen only).
+	slashResultPanel *string
+
+	scrollTop    int
+	pendingDelta int
+	sticky       bool
+	heightCache  map[string]int
+
+	// processUserInputBaseResultHandoff mirrors TS ProcessUserInputBaseResult non-messages fields after last Apply (shouldQuery, model, allowedTools, effort, resultText, nextInput, submitNextInput).
+	processUserInputBaseResultHandoff pui.ProcessUserInputBaseResultHandoff
+
+	// layout
+	titleH  int
+	streamH int // reserved lines for streaming strip inside message pane
+
+	// ccbSend / ccbInline set by BindCCB after tea.NewProgram (real model path when ccbInline and streaming parity gates + key).
+	ccbSend   func(tea.Msg)
+	ccbInline bool
+
+	// skillListingSent tracks skill names already injected into the API transcript (TS sentSkillNames).
+	skillListingSent map[string]struct{}
+
+	// mcpCommandsJSONPath is -mcp-commands-json (overrides GOU_DEMO_MCP_COMMANDS_JSON when set).
+	mcpCommandsJSONPath string
+	// mcpToolsJSONPath is -mcp-tools-json (overrides GOU_DEMO_MCP_TOOLS_JSON when set).
+	mcpToolsJSONPath string
+
+	// readFileState is the session-scoped read file state, used by /files and tool execution.
+	readFileState *localtools.ReadFileState
+
+	// tsBridge when non-nil supplies in-process snapshot for commands/tools/prompt parts (tests; former TS bridge removed).
+	tsBridge *tscontext.Snapshot
+
+	// transcript appends messages after each completed turn (session JSONL).
+	transcript *sessiontranscript.Store
+
+	// REPL chrome (terminal title, permission pill): see repl_chrome.go.
+	permissionMode        types.PermissionMode
+	queryBusy             bool
+	queryBusyStartedAt    time.Time
+	spinnerVerb           string
+	spinnerFrame          int
+	lastEmittedTitlePlain string
+
+	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozenTranscriptState).
+	uiScreen           gouDemoScreen
+	transcriptFrozen   *frozenTranscriptSnapshot // nil in prompt; set on enterTranscriptScreen
+	transcriptShowAll  bool
+	transcriptDumpMode bool // [ : dump-to-scrollback + uncapped show-all (TS dumpMode)
+	// suspendAltScreenForScrollbackDump exits the alternate buffer so bracket-dump (tea.Printf) hits host scrollback (Bubble Tea v2: no tea.ExitAltScreen).
+	suspendAltScreenForScrollbackDump bool
+	promptSavedScrollTop              int
+	promptSavedSticky                 bool
+
+	transcriptEditorBusy   bool
+	transcriptEditorStatus string
+	transcriptEditorGen    int
+
+	transcriptSearchOpen   bool
+	transcriptSearchQuery  string
+	transcriptSearchHits   []int
+	transcriptSearchCursor int
+
+	// Message-list mouse scroll (see mouse_message_list.go; tea.WithMouseCellMotion).
+	msgListMouseDragging bool
+	msgListMouseLastY    int
+
+	// Bubbles/viewport message pane (default on, prompt only); see message_viewport_pane.go.
+	useMsgViewport      bool
+	msgViewport         viewport.Model
+	lastVpGeom          string
+	lastVpContentSig    string
+	vpNeedResizeContent bool
+	msgFoldAll          bool
+	msgFoldRev          int
+	msgViewportFallback bool
+	// msgHistoryBrowseMouseOff mirrors go-tui/main/test.go: at viewport top, wheel-up disables SGR mouse so the
+	// terminal scrollback wheel works; any key runs EnableMouseCellMotion + ClearScreen (see Update).
+	msgHistoryBrowseMouseOff bool
+
+	// TS lookups.resolvedToolUseIDs + StatusLine mainLoopModel
+	resolvedToolIDs     map[string]struct{}
+	groupedAgentLookups *messagerow.GroupedAgentLookups
+	lastMainLoopModel   string
+
+	// rebuildHeightCacheCalls increments in rebuildHeightCache (tests: streaming skip policy).
+	rebuildHeightCacheCalls int
+
+	// msgFirstShownAt records when each message UUID first appeared (for GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS).
+	msgFirstShownAt map[string]time.Time
+	// msgLastAssistantContentLen tracks len(Content) per assistant UUID so streaming bumps reset the summary delay window.
+	msgLastAssistantContentLen map[string]int
+
+	// manual rendering mode (buffer events until flushed)
+	manualRenderMode bool
+	pendingEvents    []tea.Msg
+
+	// New message rendering system integration
+	msgRenderer *MessageRendererIntegration
+
+	// autoDreamState tracks auto-dream scan throttle across turns.
+	autoDreamState *autodream.State
+
+	// extractMemState tracks post-turn extract-memories throttling and cursor (TS extractMemories).
+	extractMemState *extractmemories.State
+
+	// sessionMemState tracks post-turn session memory extraction (TS sessionMemory).
+	sessionMemState *sessionmemory.State
+	// sessionMemHook is the per-turn hook callback (mirrors TS initSessionMemory hook).
+	sessionMemHook func(ctx context.Context, params query.QueryCompleteParams)
+	// lastGuidance is the most recent system prompt guidance text, set after query building.
+	lastGuidance string
+	// lastUserCtx is the most recent user context map, set after query building.
+	lastUserCtx map[string]string
+	// lastSystemCtx is the most recent system context map, set after query building.
+	lastSystemCtx map[string]string
+
+	// Task list (mirrors TS TaskListV2)
+	taskList *taskListModel
+
+	// toolResultState tracks tool-result persistence decisions across turns.
+	// Shared between the write path (per-tool persist) and read path (per-message budget enforcement).
+	toolResultState *toolresultpersist.ContentReplacementState
+}
+
+// Config is the runtime configuration for the TUI app.
+type Config struct {
+	// SessionID is the conversation session ID. Auto-generated when empty.
+	SessionID string
+	// PermissionMode sets the tool permission mode for the session.
+	PermissionMode types.PermissionMode
+	// CWD is the working directory. Defaults to os.Getwd() when empty.
+	CWD string
+	// TranscriptPath is an optional JSON file to load initial messages from.
+	TranscriptPath string
+	// ReplayCCPath is an optional NDJSON stream file to replay before starting the TUI.
+	ReplayCCPath string
+	// StreamStdin feeds NDJSON stream events from stdin before opening the TUI.
+	StreamStdin bool
+	// MCPCommandsJSONPath overrides the path for MCP command definitions.
+	MCPCommandsJSONPath string
+	// MCPToolsJSONPath overrides the path for MCP tool definitions.
+	MCPToolsJSONPath string
+}
+
+// Run initializes and runs the TUI application. It blocks until the user exits.
+// Mirrors the combined behavior of TS cli.tsx + main.tsx REPL launch.
+func Run(config_ Config) error {
+	if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
+		return fmt.Errorf("claudeinit: %w", err)
+	}
+	defer claudeinit.RunCleanups()
+	theme.InitFromThemeName(os.Getenv("CLAUDE_CODE_THEME"))
+
+	hlConfig := markdown.DefaultHighlightConfig()
+	var hlErr error
+	markdownHighlighter, hlErr = markdown.NewHighlighter(hlConfig)
+	if hlErr != nil {
+		log.Printf("app: failed to create markdown highlighter: %v", hlErr)
+	} else {
+		log.Printf("app: markdown highlighter initialized with style=%s, formatter=%s", hlConfig.StyleName, hlConfig.FormatterName)
+	}
+
+	// Ensure Grep and Glob tools are available.
+	if os.Getenv("EMBEDDED_SEARCH_TOOLS") != "" {
+		gouDemoTracef("app: overriding EMBEDDED_SEARCH_TOOLS=%q", os.Getenv("EMBEDDED_SEARCH_TOOLS"))
+	}
+	os.Setenv("EMBEDDED_SEARCH_TOOLS", "0")
+
+	apilog.PrepareIfEnabled()
+	apilog.MaybePrintDiag()
+
+	if os.Getenv("GOC_EXTRACT_MEMORIES") == "" {
+		_ = os.Setenv("GOC_EXTRACT_MEMORIES", "1")
+	}
+
+	traceCleanup := setupGouDemoTrace()
+	defer traceCleanup()
+
+	if gouDemoEnvTruthy("GOU_DEMO_TS_CONTEXT_BRIDGE") {
+		return fmt.Errorf("GOU_DEMO_TS_CONTEXT_BRIDGE is no longer supported")
+	}
+
+	sessionID := config_.SessionID
+	if sessionID == "" {
+		sessionID = sessiontranscript.NewUUID()
+	}
+	st := &conversation.Store{ConversationID: sessionID}
+	if config_.TranscriptPath != "" {
+		msgs, err := transcript.LoadFile(config_.TranscriptPath)
+		if err != nil {
+			return fmt.Errorf("transcript: %w", err)
+		}
+		st.Messages = msgs
+	}
+	if config_.ReplayCCPath != "" {
+		if err := ccbstream.ReplayFile(config_.ReplayCCPath, st); err != nil {
+			return fmt.Errorf("replay-cc: %w", err)
+		}
+	}
+
+	mcpCmdPath := strings.TrimSpace(config_.MCPCommandsJSONPath)
+	mcpToolPath := strings.TrimSpace(config_.MCPToolsJSONPath)
+	m := newModel(st, mcpCmdPath, mcpToolPath, nil)
+
+	opts := []tea.ProgramOption{}
+	if config_.StreamStdin {
+		tty, err := os.Open("/dev/tty")
+		if err == nil {
+			opts = append(opts, tea.WithInput(tty))
+			defer tty.Close()
+		}
+	}
+	inlineCCB := true
+	if v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_CCB_INLINE"))); v == "0" || v == "false" || v == "off" || v == "no" {
+		inlineCCB = false
+	}
+	p := tea.NewProgram(m, opts...)
+	m.BindCCB(p.Send, inlineCCB)
+	gouDemoWarnApilogExpectations(inlineCCB)
+	gouDemoTracef("startup messages=%d ccbInline=%v", len(st.Messages), inlineCCB)
+	if gouDemoKittyKeyboardEnabled() {
+		defer func() { _ = prompt.WriteKittyKeyboardProtocolDisable() }()
+	}
+	if config_.StreamStdin {
+		ccbstream.Feed(os.Stdin, p)
+	}
+	res, runErr := p.Run()
+	if runErr != nil {
+		fmt.Fprintln(os.Stderr, runErr)
+	}
+	if m, ok := res.(*model); ok && gouDemoAltScreenEnabled() && (gouDemoEnvTruthy("GOU_DEMO_DUMP_ON_EXIT") || m.transcriptDumpMode) {
+		fmt.Print(transcriptExportPlain(m, exportTranscriptWidth(m)) + "\n")
+	}
+	return runErr
+}
+
+func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot) *model {
+	pr := prompt.New()
+	pr.SetEnterSubmits(gouDemoPromptEnterSubmits())
+
+	cwd, _ := os.Getwd()
+	fhSnap := !gouDemoEnvTruthy("GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT")
+	fhEachUser := gouDemoEnvTruthy("GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER")
+	tr := &sessiontranscript.Store{
+		SessionID:                 st.ConversationID,
+		OriginalCwd:               cwd,
+		Cwd:                       cwd,
+		FileHistorySnapshotOnUser: fhSnap,
+		// Default: at most one stub snapshot per session (TS often shows one line with checkpointing off or single-turn).
+		FileHistorySnapshotOnce: fhSnap && !fhEachUser,
+	}
+
+	lm := modelenv.EffectiveMainLoopModel()
+
+	sessionMemState := sessionmemory.NewState()
+	var toolResultState *toolresultpersist.ContentReplacementState
+	if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
+		toolResultState = toolresultpersist.NewContentReplacementState()
+	}
+	return &model{
+		store:               st,
+		pr:                  pr,
+		sticky:              true,
+		heightCache:         make(map[string]int),
+		skillListingSent:    make(map[string]struct{}),
+		resolvedToolIDs:     make(map[string]struct{}),
+		lastMainLoopModel:   lm,
+		titleH:              1,
+		streamH:             4,
+		mcpCommandsJSONPath: mcpCommandsJSONPath,
+		mcpToolsJSONPath:    mcpToolsJSONPath,
+		tsBridge:            tsBridge,
+		transcript:          tr,
+		readFileState:       localtools.NewReadFileState(),
+		permissionMode:      gouDemoPermissionModeFromEnv(),
+		useMsgViewport:      gouDemoBubblesViewport(),
+		autoDreamState:      autodream.NewState(),
+		extractMemState:     extractmemories.NewState(),
+		sessionMemState:     sessionMemState,
+		sessionMemHook:      sessionmemory.Hook(sessionMemState, st.ConversationID, cwd),
+		taskList:            newTaskListModel(st.ConversationID),
+		toolResultState:     toolResultState,
+	}
+}
+
+func (m *model) maybeRecordTranscript() {
+	if m.transcript == nil {
+		return
+	}
+	msgs := slices.Clone(m.store.Messages)
+	_, err := m.transcript.RecordTranscript(context.Background(), msgs, sessiontranscript.RecordOpts{AllMessages: msgs})
+	if err != nil && gouDemoTrace != nil {
+		gouDemoTracef("RecordTranscript: %v", err)
+	}
+}
+
+// BindCCB wires Bubble Tea Send and whether real HTTP streaming parity is allowed.
+func (m *model) BindCCB(send func(tea.Msg), inline bool) {
+	m.ccbSend = send
+	m.ccbInline = inline
+}
+
+func (m *model) Init() tea.Cmd {
+	var cmds []tea.Cmd
+	if gouDemoKittyKeyboardEnabled() {
+		cmds = append(cmds, func() tea.Msg {
+			_ = prompt.WriteKittyKeyboardProtocolEnable()
+			return nil
+		})
+	}
+	if gouDemoToolUseSummaryDelay() > 0 {
+		cmds = append(cmds, tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouToolSummaryDelayTickMsg{} }))
+	}
+	cmds = append(cmds, taskListTickCmd(m.taskList))
+
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
+
+// teaGlobalRedrawCmd mirrors TS useGlobalKeybindings app:redraw (ctrl+l): clear the terminal
+// so the next frame repaints fully (e.g. after the host cleared scrollback with Cmd+K).
+func teaGlobalRedrawCmd() tea.Cmd {
+	return func() tea.Msg { return tea.ClearScreen() }
+}
+
+func (m *model) inputAreaHeight() int {
+	n := m.pr.LineCount()
+	if m.uiScreen != gouDemoScreenTranscript {
+		n++ // horizontal rule above input
+	}
+	if m.uiScreen != gouDemoScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
+		s := m.builtinStatusLineView()
+		if s != "" {
+			n += strings.Count(s, "\n") + 1
+		}
+	}
+	if n < 2 {
+		n = 2
+	}
+	if n > 16 {
+		n = 16
+	}
+	return n
+}
+
+// promptAboveInputRuleLine is a faint full-width line between the context row and the multiline prompt.
+func promptAboveInputRuleLine(cols int) string {
+	if cols < 1 {
+		cols = 40
+	}
+	rule := strings.Repeat("─", cols)
+	return lipgloss.NewStyle().Faint(true).Foreground(theme.DimMuted()).Width(cols).Render(rule)
+}
+
+// bottomChromeHeight is prompt input height or transcript footer height (TS transcript has no prompt).
+func (m *model) bottomChromeHeight() int {
+	if m.uiScreen != gouDemoScreenTranscript {
+		h := m.inputAreaHeight()
+		h += m.slashResultPanelChromeExtra()
+		h += m.slashListChromeExtra()
+		return h
+	}
+	narrow := m.cols > 0 && m.cols < 80
+	foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
+	c := m.cols
+	if c < 1 {
+		c = 40
+	}
+	n := len(strings.Split(layout.WrapForViewport(foot, c), "\n"))
+	return max(4, n+1)
+}
+
+// handleKeyMsg is the tea.KeyPressMsg branch; also used when SyntheticTTYKeyFromUnknownMsg maps Kitty CSI to KeyPressMsg.
+func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.msgHistoryBrowseMouseOff {
+		m.msgHistoryBrowseMouseOff = false
+		m2, cmd := m.handleKeyMsgPreserving(msg)
+		if cmd == nil {
+			return m2, teaGlobalRedrawCmd()
+		}
+		return m2, tea.Sequence(teaGlobalRedrawCmd(), cmd)
+	}
+	return m.handleKeyMsgPreserving(msg)
+}
+
+func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.permAsk != nil && msg.String() == "ctrl+c" {
+		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
+		return m, tea.Quit
+	}
+	if m.handlePermissionKey(msg) {
+		return m, nil
+	}
+	if msg.String() == "ctrl+l" {
+		return m, teaGlobalRedrawCmd()
+	}
+	if m.msgViewportWanted() && msg.String() == "ctrl+y" {
+		m.msgFoldAll = !m.msgFoldAll
+		m.msgFoldRev++
+		return m, nil
+	}
+	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
+		m.slashListUser = false
+		return m, m.enterTranscriptScreen()
+	}
+	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
+		if msg.String() == "f5" {
+			gouDemoTracef("f5 pressed: entering manual render mode (buffering events)")
+			m.manualRenderMode = true
+			return m, nil
+		}
+		if msg.String() == "f6" {
+			gouDemoTracef("f6 pressed: flushing %d buffered events", len(m.pendingEvents))
+			m.manualRenderMode = false
+			var cmds []tea.Cmd
+			for _, e := range m.pendingEvents {
+				_, cmd := m.Update(e)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+			m.pendingEvents = nil
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...)
+			}
+			return m, nil
+		}
+	}
+
+	if handled, cmd := m.handleTranscriptKey(msg); handled {
+		return m, cmd
+	}
+	// Slash command list: ↑/↓/Tab must win over message-pane scroll (see isListViewportScrollKey).
+	if m.uiScreen == gouDemoScreenPrompt && m.handleSlashListNavKey(msg) {
+		return m, nil
+	}
+	if m.msgViewportWanted() && isListViewportScrollKey(msg.String()) {
+		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=true, key=%s, calling handleMsgViewportScrollKey", msg.String())
+		return m, m.handleMsgViewportScrollKey(msg)
+	} else if isListViewportScrollKey(msg.String()) {
+		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=false, key=%s, handling with traditional scroll", msg.String())
+		return m, m.handleTraditionalScrollKey(msg)
+	}
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		if m.slashListUser {
+			m.slashListUser = false
+			return m, nil
+		}
+		if m.slashResultPanel != nil {
+			m.clearSlashResultPanel()
+			m.rebuildHeightCache()
+			return m, nil
+		}
+		if m.uiScreen == gouDemoScreenTranscript {
+			return m, m.exitTranscriptScreenWithPostCmd()
+		}
+		return m, tea.Quit
+	case "f2":
+		m.toggleSlashListUser()
+		return m, nil
+	}
+	if m.uiScreen == gouDemoScreenTranscript {
+		switch msg.String() {
+		case "q":
+			return m, m.exitTranscriptScreenWithPostCmd()
+		case "up":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-1)
+			return m, nil
+		case "down":
+			m.sticky = false
+			m.scrollTop += 1
+			return m, nil
+		case "pgup":
+			m.sticky = false
+			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			return m, nil
+		case "pgdown":
+			m.sticky = false
+			m.scrollTop += listViewportH(m) / 2
+			return m, nil
+		case "end":
+			m.sticky = true
+			m.scrollTop = 1 << 30
+			return m, nil
+		}
+		return m, nil
+	}
+
+	// Slash list: Enter applies the highlighted command and runs full submit.
+	if m.uiScreen == gouDemoScreenPrompt && m.slashListVisible() && isPromptEnterKey(msg) {
+		if len(m.visibleSlashList()) > 0 {
+			m.applySlashTab()
+			fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
+			m.pr.SetValue("")
+			m.slashListUser = false
+			m.syncSlashListAfterPrompt()
+			line := strings.TrimSpace(fullPrompt)
+			if line == "" {
+				return m, nil
+			}
+			return m.gouSubmitFromPromptText(fullPrompt, line)
+		}
+	}
+	m.pr.Update(prompt.NormalizeTTYNewlineKey(msg))
+	m.syncSlashListAfterPrompt()
+	if m.pr.Submitted() {
+		fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
+		m.pr.SetValue("")
+		line := strings.TrimSpace(fullPrompt)
+		if line == "" {
+			return m, nil
+		}
+		return m.gouSubmitFromPromptText(fullPrompt, line)
+	}
+	return m, nil
+}
+
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.manualRenderMode {
+		switch msg.(type) {
+		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg:
+			m.pendingEvents = append(m.pendingEvents, msg)
+			return m, nil
+		}
+	}
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		return m.handleUpdateWindowSize(msg)
+
+	case gouPermissionAskMsg:
+		m.permAsk = &permissionAskOverlay{
+			toolName:  msg.toolName,
+			toolUseID: msg.toolUseID,
+			input:     msg.input,
+			prompt:    msg.prompt,
+			replyCh:   msg.replyCh,
+		}
+		return m, nil
+
+	case gouTranscriptEditorPrepMsg:
+		return m, m.handleTranscriptEditorChainMsg(msg)
+	case gouTranscriptEditorExecDoneMsg:
+		return m, m.handleTranscriptEditorChainMsg(msg)
+	case gouTranscriptEditorClearStatusMsg:
+		return m, m.handleTranscriptEditorChainMsg(msg)
+
+	case tea.MouseClickMsg, tea.MouseMotionMsg, tea.MouseWheelMsg, tea.MouseReleaseMsg:
+		if m.msgHistoryBrowseMouseOff && m.msgViewportWanted() {
+			return m, nil
+		}
+		if handled, cmd := m.tryHandleMessageListMouse(msg); handled {
+			return m, cmd
+		}
+
+	case tea.KeyPressMsg:
+		return m.handleKeyMsg(msg)
+
+	case gouQueryYieldMsg:
+		return m.handleUpdateGouQueryYield(msg)
+
+	case gouStreamingToolUsesMsg:
+		return m.handleUpdateGouStreamingToolUses(msg)
+
+	case gouSpinnerTickMsg: //120ms
+		return m.handleUpdateGouSpinnerTick(msg)
+
+	case gouQueryDoneMsg:
+		return m.handleUpdateGouQueryDone(msg)
+
+	case gouMemoryAppendMsg:
+		return m.handleUpdateGouMemoryAppend(msg)
+
+	case gouToolSummaryDelayTickMsg:
+		return m.handleUpdateToolSummaryDelayTick(msg)
+
+	case ccbstream.Msg:
+		return m.handleUpdateCCBStream(msg)
+
+	case taskListTickMsg:
+		m.taskList.poll()
+		return m, taskListTickCmd(m.taskList)
+	}
+
+	if syn, ok := prompt.SyntheticTTYKeyFromUnknownMsg(msg); ok {
+		return m.handleKeyMsg(syn)
+	}
+	if m.uiScreen != gouDemoScreenTranscript {
+		m.pr.Update(msg)
+	}
+	return m, nil
+}
+
+// taskListViewMaxDisplay matches the line budget for [model.View] (task list after stream rows); keep in sync with that block.
+func (m *model) taskListViewMaxDisplay() int {
+	if m.height <= 10 {
+		return 0
+	}
+	return min(10, max(3, m.height-14))
+}
+
+// taskListViewReservedRows is the vertical space between the message pane and the status line
+// that the task list can occupy. [listViewportH] must subtract this so the full frame
+// (title + messages + stream strip + task block + status + input) does not exceed [model.height]
+// and the input area stays visible.
+func (m *model) taskListViewReservedRows() int {
+	if m.uiScreen == gouDemoScreenTranscript {
+		return 0
+	}
+	if m.taskList == nil || !m.taskList.isVisible() {
+		return 0
+	}
+	// Upper bound: standalone header (1) + at most N task lines + at most one hidden-summary line.
+	md := m.taskListViewMaxDisplay()
+	if md == 0 {
+		return 2 // header + " … +…" (task_list.view maxDisplay=0)
+	}
+	return 2 + md
+}
+
+func listViewportH(m *model) int {
+	streamReserve := m.streamH
+	if m.uiScreen == gouDemoScreenTranscript {
+		streamReserve = 0
+	}
+	h := m.height - m.titleH - streamReserve - m.bottomChromeHeight() - 1
+	if gouDemoStatusLineEnabled() && m.statusLineString() != "" {
+		h--
+	}
+	if m.uiScreen != gouDemoScreenTranscript {
+		h -= m.taskListViewReservedRows()
+	}
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
+func (m *model) statusLineString() string {
+	if !gouDemoStatusLineEnabled() {
+		return ""
+	}
+	n := len(m.store.Messages)
+	vk := len(m.store.ItemKeys())
+	s := fmt.Sprintf("theme=%s msgs=%d items=%d cols=%d sticky=%v",
+		theme.ActiveTheme(), n, vk, m.cols, m.sticky)
+	return lipgloss.NewStyle().Faint(true).Render(s)
+}
+
+func (m *model) rebuildHeightCache() {
+	m.rebuildHeightCacheCalls++
+	m.syncMsgFirstShownAt()
+
+	m.groupedAgentLookups = messagerow.BuildGroupedAgentLookups(m.store.Messages)
+
+	// Convert bool map to struct{} map for existing formatMessageSegments logic
+	m.resolvedToolIDs = make(map[string]struct{})
+	for k, v := range m.groupedAgentLookups.ResolvedToolUseIDs {
+		if v {
+			m.resolvedToolIDs[k] = struct{}{}
+		}
+	}
+	if m.heightCache == nil {
+		m.heightCache = make(map[string]int)
+	}
+	hl := m.transcriptSearchHighlightNeedle()
+	baseCols := m.cols
+	if baseCols < 1 {
+		baseCols = 40
+	}
+	m.msgScrollbarW = 0
+	m.msgBodyCols = baseCols
+	m.fillMessageHeightCache(baseCols, hl)
+	vp := listViewportH(m)
+	if gouDemoMessageScrollbarStrip() && baseCols >= 18 && vp >= 3 {
+		if m.messageScrollContentHeight() > vp {
+			narrow := baseCols - 1
+			if narrow >= 8 {
+				m.fillMessageHeightCache(narrow, hl)
+				if m.messageScrollContentHeight() > vp {
+					m.msgScrollbarW = 1
+					m.msgBodyCols = narrow
+				} else {
+					m.fillMessageHeightCache(baseCols, hl)
+				}
+			}
+		}
+	}
+}
+
+// measureMessageRows returns terminal row count for heightCache / scrollbar offsets.
+// It uses the new message renderer ([goumsg.Dispatcher.Measure]) with the same [goumsg.RenderContext]
+// fields as [MessageRendererIntegration.ComputeVisibleRange], plus legacy parity tweaks:
+//   - [skipFoldedToolResultStubInPrompt] → 0 (omitted user stub rows)
+//   - user messages: +1 line (legacy messagerow appended a trailing newline before [layout.WrappedRowCount])
+//   - non-attachment: at least 1 row when non-empty measure path would otherwise undercount
+//
+// Transcript search highlight (searchHL) only affected the old messagerow path; Measure does not widen/wrap on hl.
+func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
+	if m.uiScreen == gouDemoScreenPrompt {
+		active := m.queryBusy &&
+			len(m.store.Messages) > 0 &&
+			m.store.Messages[len(m.store.Messages)-1].UUID == msg.UUID &&
+			msg.Type == types.MessageTypeCollapsedReadSearch &&
+			strings.TrimSpace(m.store.StreamingText) == ""
+		return &messagerow.RenderOpts{
+			FoldToolResultBody:         true,
+			CollapsedReadSearchActive:  active,
+			GroupedAgentLookups:        m.groupedAgentLookups,
+			ResolvedToolUseIDs:         m.resolvedToolIDs,
+			SuppressToolUseSummaryLine: m.suppressToolUseSummaryLine(msg),
+		}
+	}
+	if m.uiScreen == gouDemoScreenTranscript {
+		ro := &messagerow.RenderOpts{
+			GroupedAgentLookups:        m.groupedAgentLookups,
+			VerboseCollapsedReadSearch: true,
+			ResolvedToolUseIDs:         m.resolvedToolIDs,
+			TranscriptMode:             true,
+		}
+		if m.transcriptShowAll || m.transcriptDumpMode {
+			ro.ShowAllInTranscript = true
+		} else {
+			// Compact transcript (TS): fold tool_result bodies on user rows; assistant row shows ⏺+⎿ via [formatMessageSegments].
+			ro.FoldToolResultBody = true
+		}
+		return ro
+	}
+	return &messagerow.RenderOpts{
+		GroupedAgentLookups: m.groupedAgentLookups,
+		ResolvedToolUseIDs:  m.resolvedToolIDs,
+	}
+}
+
+func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string) int {
+	_ = searchHL
+	if m.skipFoldedToolResultStubInPrompt(msg) {
+		return 0
+	}
+	m.integrateMessageRenderer()
+	if cols < 1 {
+		cols = 40
+	}
+	isTranscript := m.uiScreen == gouDemoScreenTranscript
+	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+	cw := cols
+	ctx := &goumsg.RenderContext{
+		Width:          cols,
+		Theme:          m.msgRenderer.Palette(),
+		IsTranscript:   isTranscript,
+		IsStatic:       isTranscript,
+		Verbose:        verbose,
+		Highlighter:    markdownHighlighter,
+		AddMargin:      true,
+		ContainerWidth: &cw,
+	}
+	h, err := m.msgRenderer.MeasureMessage(&msg, ctx)
+	if err != nil {
+		h = 1
+	}
+	if msg.Type == types.MessageTypeUser {
+		// Match legacy height: user block had an extra trailing newline before WrappedRowCount.
+		h++
+	}
+	if msg.Type == types.MessageTypeAttachment {
+		return h
+	}
+	return max(1, h)
+}
+
+func extractPartialJSONField(input string, field string) string {
+	marker1 := `"` + field + `":"`
+	marker2 := `"` + field + `": "`
+
+	idx := strings.Index(input, marker2)
+	if idx == -1 {
+		idx = strings.Index(input, marker1)
+		if idx == -1 {
+			return ""
+		}
+		idx += len(marker1)
+	} else {
+		idx += len(marker2)
+	}
+
+	end := strings.IndexByte(input[idx:], '"')
+	if end == -1 {
+		return input[idx:]
+	}
+	return input[idx : idx+end]
+}
+
+func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, cols int, searchHL string) int {
+	if !group.IsGroup {
+		tu := group.Single
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if facing == "" {
+			facing = tu.Name
+		}
+		namePart := facing
+		if strings.TrimSpace(searchHL) != "" {
+			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
+		}
+		// 所有工具都显示活动状态
+		activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if activityLine == "" {
+			// 如果没有活动描述，使用工具名
+			activityLine = namePart
+			if p := strings.TrimSpace(paren); p != "" {
+				activityLine += " " + p
+			}
+		}
+		// 添加省略号表示正在执行
+		activityLine += "…"
+		// 添加交互提示
+		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+		block := head + "\n" + toolLine
+		return messagePaneGutterRowCount(block, cols)
+	}
+
+	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+	summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+	toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+	block := head + "\n" + toolLine
+	for _, item := range group.Items {
+		path := extractPartialJSONField(item.UnparsedInput, "file_path")
+		if path == "" {
+			path = extractPartialJSONField(item.UnparsedInput, "path")
+		}
+		if path == "" {
+			path = extractPartialJSONField(item.UnparsedInput, "pattern")
+		}
+		if path == "" {
+			path = "..."
+		}
+		treeLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path)
+		block += "\n" + treeLine
+	}
+	return messagePaneGutterRowCount(block, cols)
+}
+
+func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, cols, h int, searchHL string) string {
+	var block string
+	if !group.IsGroup {
+		tu := group.Single
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if facing == "" {
+			facing = tu.Name
+		}
+		namePart := facing
+		if strings.TrimSpace(searchHL) != "" {
+			namePart = highlightSearchPlain(namePart, searchHL, transcriptSearchHLStyle())
+		}
+		// 所有工具都显示活动状态
+		activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
+		if activityLine == "" {
+			// 如果没有活动描述，使用工具名
+			activityLine = namePart
+			if p := strings.TrimSpace(paren); p != "" {
+				activityLine += " " + p
+			}
+		}
+		// 添加省略号表示正在执行
+		activityLine += "…"
+		// 添加交互提示
+		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+		block = head + "\n" + toolLine
+	} else {
+		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
+		summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
+		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
+		block = head + "\n" + toolLine
+		for _, item := range group.Items {
+			path := extractPartialJSONField(item.UnparsedInput, "file_path")
+			if path == "" {
+				path = extractPartialJSONField(item.UnparsedInput, "path")
+			}
+			if path == "" {
+				path = extractPartialJSONField(item.UnparsedInput, "pattern")
+			}
+			if path == "" {
+				path = "..."
+			}
+			treeLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path)
+			block += "\n" + treeLine
+		}
+	}
+
+	block = applyMessagePaneGutter(block, cols)
+	lines := strings.Split(block, "\n")
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	if len(lines) > h && h > 0 {
+		lines = lines[:h]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m *model) View() tea.View {
+	if m.width == 0 {
+		return m.wrapRootView("Loading…")
+	}
+
+	vpH := listViewportH(m)
+	bodyCols := m.messageBodyColsForLayout()
+	useVp := m.msgViewportWanted()
+	if useVp {
+		m.msgViewportSyncGeometry()
+		m.applyMsgViewportContentFromView()
+		if m.msgViewportFallback {
+			useVp = false
+		}
+	}
+
+	var b strings.Builder
+	narrow := m.cols > 0 && m.cols < 80
+	plainTitle := replChromeComposeTerminalTitle(m.store.ConversationID, m.queryBusy, strings.TrimSpace(m.store.StreamingText) != "")
+	if !gouDemoTerminalTitleDisabled() && plainTitle != m.lastEmittedTitlePlain {
+		m.lastEmittedTitlePlain = plainTitle
+		if osc := oscSetWindowTitle(plainTitle); osc != "" {
+			b.WriteString(osc)
+		}
+	}
+	topBar := replChromeTopBar(narrow)
+	if m.uiScreen == gouDemoScreenTranscript {
+		topBar = replChromeTranscriptTopBar(narrow)
+	}
+	title := lipgloss.NewStyle().Bold(true).Render(topBar)
+	b.WriteString(title)
+	b.WriteByte('\n')
+
+	if useVp {
+		// Bubbles viewport + new renderer (applyMsgViewportContentFromView populates the full document).
+		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
+		b.WriteByte('\n')
+	} else {
+		// New renderer without bubbles viewport: virtual slice uses m.scrollTop; scrollbar reflects renderer totals.
+		msgPaneContent := m.renderMessagePaneWithNewRenderer()
+		lines := strings.Split(msgPaneContent, "\n")
+		if len(lines) > vpH {
+			lines = lines[:vpH]
+		}
+		for len(lines) < vpH {
+			lines = append(lines, "")
+		}
+		m.integrateMessageRenderer()
+		messagesPtr := m.messagePtrSliceForNewRenderer()
+		isTranscript := m.uiScreen == gouDemoScreenTranscript
+		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(
+			messagesPtr,
+			0,
+			1,
+			isTranscript,
+			verbose,
+			bodyCols,
+		)
+		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
+		b.WriteByte('\n')
+	}
+
+	if m.uiScreen != gouDemoScreenTranscript {
+		streamRows := m.promptBottomStreamRows()
+		if len(streamRows) > 0 {
+			b.WriteString(strings.Join(streamRows, "\n"))
+			b.WriteByte('\n')
+		}
+		// Task list (inline, after stream rows)
+		if m.taskList != nil && m.taskList.isVisible() {
+			maxDisplay := m.taskListViewMaxDisplay()
+			if tl := m.taskList.view(maxDisplay, m.cols); tl != "" {
+				indented := applyMessagePaneGutter(tl, m.width)
+				b.WriteString(indented)
+				b.WriteByte('\n')
+			}
+		}
+	}
+	if s := m.statusLineString(); s != "" {
+		b.WriteString(s)
+		b.WriteByte('\n')
+	}
+
+	if m.uiScreen == gouDemoScreenTranscript {
+		foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
+		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))
+	} else {
+		if s := m.builtinStatusLineView(); s != "" {
+			b.WriteString(s)
+			b.WriteByte('\n')
+		}
+		b.WriteString(promptAboveInputRuleLine(m.cols))
+		b.WriteByte('\n')
+		promptView := userInputViewWithPromptPrefix(m)
+		b.WriteString(promptView)
+		if blk := m.slashResultPanelViewBlock(); blk != "" {
+			b.WriteByte('\n')
+			b.WriteString(blk)
+		}
+		if m.slashListVisible() {
+			if sp := m.renderSlashPicker(m.cols, m.height); sp != "" {
+				b.WriteByte('\n')
+				b.WriteString(sp)
+			}
+		}
+	}
+	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
+	if m.permAsk != nil {
+		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.width))
+		out = lipgloss.JoinVertical(lipgloss.Left, out, mod)
+	}
+	return m.wrapRootView(out)
+}
+
+func (m *model) wrapRootView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = gouDemoAltScreenEnabled() && !m.suspendAltScreenForScrollbackDump
+	if gouDemoMouseCellMotionEnabled() {
+		if m.msgHistoryBrowseMouseOff {
+			v.MouseMode = tea.MouseModeNone
+		} else {
+			v.MouseMode = tea.MouseModeCellMotion
+		}
+	}
+	return v
+}
+
+func (m *model) showToolUseCtrlOExpandHint() bool {
+	return m.uiScreen == gouDemoScreenPrompt && !m.transcriptDumpMode
+}
+
+// userAssistantPairBlankLine is true when the UI inserts one empty line between adjacent
+// user and assistant scroll rows (either order).
+func userAssistantPairBlankLine(a, b types.Message) bool {
+	u, aType := types.MessageTypeUser, types.MessageTypeAssistant
+	c := types.MessageTypeCollapsedReadSearch
+	return a.Type == u && b.Type == aType || a.Type == c && b.Type == aType
+}
+
+// streamGapAfterUserMessage is true when the StreamingText tail should be separated from the
+// message list by the same blank line as user↔assistant rows (last scroll message is user).
+func streamGapAfterUserMessage(msgView []types.Message) bool {
+	return len(msgView) > 0 && msgView[len(msgView)-1].Type == types.MessageTypeUser
+}
+
+func userMessageHasPromptText(msg types.Message) bool {
+	if msg.Type != types.MessageTypeUser {
+		return false
+	}
+	msg = messagerow.NormalizeMessageJSON(msg)
+	if len(msg.Content) == 0 {
+		return false
+	}
+	var blocks []types.MessageContentBlock
+	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
+		return false
+	}
+	for _, b := range blocks {
+		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// userMessageRendersOnlyFoldedToolStubs is true when this user row would render only folded
+// tool_result/advisor_tool_result stubs (ToolBodyOmitted), with no other visible segments.
+// Matches actual [SegmentsFromMessageOpts] output so unknown content block types or API quirks
+// do not leave a lone "↩ tool_result tool_use_id=…" line under assistant ⎿ summaries.
+func (m *model) userMessageRendersOnlyFoldedToolStubs(msg types.Message) bool {
+	if msg.Type != types.MessageTypeUser {
+		return false
+	}
+	msg = messagerow.NormalizeMessageJSON(msg)
+	if len(msg.Content) == 0 {
+		return false
+	}
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
+	if len(segs) == 0 {
+		return false
+	}
+	hasFoldedTool := false
+	for _, s := range segs {
+		switch s.Kind {
+		case messagerow.SegTextMarkdown:
+			if strings.TrimSpace(s.Text) != "" {
+				return false
+			}
+		case messagerow.SegToolResult, messagerow.SegAdvisorToolResult:
+			if !s.ToolBodyOmitted {
+				return false
+			}
+			hasFoldedTool = true
+		case messagerow.SegThinking:
+			if strings.TrimSpace(s.Text) != "" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return hasFoldedTool
+}
+
+// skipOmittableToolResultUserRow hides user messages that only render folded tool_result stubs
+// (prompt always; transcript unless ctrl+e show-all or dump).
+// The assistant tool_use row already shows the summary; omitting avoids duplicate ↩ tool_result lines.
+func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
+	if messagerow.VerboseToolOutputEnabled() {
+		return false
+	}
+	if !m.userMessageRendersOnlyFoldedToolStubs(msg) {
+		return false
+	}
+	if m.uiScreen == gouDemoScreenPrompt {
+		return true
+	}
+	if m.uiScreen == gouDemoScreenTranscript && !m.transcriptShowAll && !m.transcriptDumpMode {
+		return true
+	}
+	return false
+}
+
+// userPromptPrefixStyled renders bright "> " for user rows (matches user message body emphasis).
+func userPromptPrefixStyled(userMsgRowBg bool) string {
+	st := lipgloss.NewStyle().Foreground(theme.UserMessageText()).Bold(true)
+	if userMsgRowBg {
+		st = st.Background(theme.UserMessageBackground())
+	}
+	return st.Render(UserPromptPointerGlyph() + " ")
+}
+
+// userInputViewWithPromptPrefix prepends the same dim "> " as user rows on the first line of the bottom input.
+func userInputViewWithPromptPrefix(m *model) string {
+	v := m.pr.View()
+	prefix := userPromptPrefixStyled(false)
+	lines := strings.Split(v, "\n")
+	if len(lines) == 0 {
+		return prefix
+	}
+	lines[0] = prefix + lines[0]
+	return strings.Join(lines, "\n")
+}
+
+// withUserPromptPointerIfNeeded prepends dim "> " before the first body line of user messages (same line as text).
+func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
+	if msg.Type != types.MessageTypeUser || !userMessageHasPromptText(msg) || body == "" {
+		return body
+	}
+	prefix := userPromptPrefixStyled(true)
+	lines := strings.Split(body, "\n")
+	if len(lines) == 0 {
+		return prefix
+	}
+	lines[0] = prefix + lines[0]
+	return strings.Join(lines, "\n")
+}
+
+// styleUserMessageLines applies a full-width gray background per row (ANSI-safe; lipgloss pads to cols).
+func styleUserMessageLines(rows []string, cols int) string {
+	st := lipgloss.NewStyle().Background(theme.UserMessageBackground()).Width(cols)
+	var b strings.Builder
+	for i, ln := range rows {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		// Check if the line already has ANSI escape sequences (already styled)
+		// If it does, we need to be careful about applying additional styles
+		if strings.Contains(ln, "\x1b[") {
+			// Line already has ANSI codes, apply background without resetting
+			// We'll wrap the existing styled text with background
+			b.WriteString(st.Render(ln))
+		} else {
+			// Plain text, apply background
+			b.WriteString(st.Render(ln))
+		}
+	}
+	return b.String()
+}
+
+func withCollapsedSpaceIfNeeded(msg types.Message, body string) string {
+	// Message pane uses [applyMessagePaneGutter] for uniform 2-space indent; no extra prefix here.
+	if msg.Type != types.MessageTypeCollapsedReadSearch || body == "" {
+		return body
+	}
+
+	return "  " + body
+}
+
+func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL string) string {
+	if m.skipFoldedToolResultStubInPrompt(msg) {
+		return ""
+	}
+	segs := messagerow.SegmentsFromMessageOpts(msg, m.messagerowOpts(msg))
+	var header string
+	if msg.Type != types.MessageTypeAttachment {
+		switch msg.Type {
+		case types.MessageTypeUser:
+			// No "user" title row: "> " on the first body line only (withUserPromptPointerIfNeeded).
+		case types.MessageTypeAssistant:
+			// No "assistant" title row — body starts directly (⏺/● lead still from formatMessageSegments).
+		case types.MessageTypeCollapsedReadSearch, types.MessageTypeGroupedToolUse:
+			// Same as assistant — no raw type label (TS compact collapsed row).
+		default:
+			header = lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(msg.Type)).Render(string(msg.Type))
+		}
+	}
+	diaglog.Line("formatMessageSegments type %s, message %s", msg.Type, msg.Message)
+	body := formatMessageSegments(segs, cols, m.showToolUseCtrlOExpandHint(), m.resolvedToolIDs, msg.Type == types.MessageTypeAssistant, searchHL, messagerow.CollectToolResultContentByToolUseID(m.store.Messages), true, msg.Type == types.MessageTypeUser)
+	body = withUserPromptPointerIfNeeded(msg, body)
+	body = withCollapsedSpaceIfNeeded(msg, body)
+	block := body
+	if header != "" {
+		block = header + "\n" + body
+	}
+	wrapped := applyMessagePaneGutter(block, cols)
+	rows := strings.Split(wrapped, "\n")
+	if len(rows) > maxRows {
+		rows = rows[:maxRows]
+	}
+	if msg.Type == types.MessageTypeUser {
+		return "\n" + styleUserMessageLines(rows, cols) + "\n"
+	}
+
+	return strings.Join(rows, "\n")
+}
+
+func toolRowLeadPrefix(userRow bool) string {
+	glyph := "\u25cf " // ● — TS figures.BLACK_CIRCLE non-darwin
+	if runtime.GOOS == "darwin" {
+		glyph = "\u23fa " // ⏺ — TS figures.BLACK_CIRCLE on darwin
+	}
+	return baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(glyph)
+}
+
+// prefixToolGlyphFirstLine prepends the dim tool lead (⏺ / ●) to the first line of rendered assistant text.
+func prefixToolGlyphFirstLine(body string) string {
+	if body == "" {
+		return toolRowLeadPrefix(false)
+	}
+	p := toolRowLeadPrefix(false)
+	i := strings.IndexByte(body, '\n')
+	if i < 0 {
+		return p + body
+	}
+	return p + body[:i] + body[i:]
+}
+
+func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
+	if resolved == nil || toolUseID == "" {
+		return false
+	}
+	_, ok := resolved[toolUseID]
+	return ok
+}
+
+// toolUseResolvedForDisplay treats a tool as resolved if it is in the resolved map, or (when detail is on)
+// if tool_result payload exists for that id — avoids stale resolved maps skipping ⏺+⎿ stats.
+func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, toolUseID string, allowResultPayloadAsResolved bool) bool {
+	if toolUseID == "" {
+		return false
+	}
+	if resolved != nil {
+		if _, ok := resolved[toolUseID]; ok {
+			return true
+		}
+	}
+	if allowResultPayloadAsResolved && toolResultByID != nil {
+		raw, ok := toolResultByID[toolUseID]
+		if ok && len(raw) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// toolUseSummaryLineResolvedForDisplay is true when every merged tool_use id in a SegToolUseSummaryLine has a result (or resolved map entry).
+func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, seg messagerow.Segment, allowResultPayloadAsResolved bool) bool {
+	ids := seg.ToolUseIDs
+	if len(ids) == 0 {
+		return toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, allowResultPayloadAsResolved)
+	}
+	for _, id := range ids {
+		if !toolUseResolvedForDisplay(resolved, toolResultByID, id, allowResultPayloadAsResolved) {
+			return false
+		}
+	}
+	return true
+}
+
+// segmentJoinSeparator inserts an extra blank line after assistant prose before a merged Grep/Glob/Read summary line.
+func segmentJoinSeparator(prev, cur messagerow.Segment) string {
+	if prev.Kind == messagerow.SegTextMarkdown && strings.TrimSpace(prev.Text) != "" && cur.Kind == messagerow.SegToolUseSummaryLine {
+		return "\n\n"
+	}
+	return "\n"
+}
+
+// transcriptAssistantPairBlankLine is true when the UI inserts one empty line between consecutive
+// assistant rows in transcript (breathing room before the next ⏺ block).
+func transcriptAssistantPairBlankLine(m *model, a, b types.Message) bool {
+	if m == nil || m.uiScreen != gouDemoScreenTranscript {
+		return false
+	}
+	return a.Type == types.MessageTypeAssistant && b.Type == types.MessageTypeAssistant
+}
+
+// priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
+// One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
+func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
+	for j := 0; j < idx && j < len(segs); j++ {
+		if segs[j].Kind == messagerow.SegTextMarkdown && strings.TrimSpace(segs[j].Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// baseMsgStyle adds the user-message row background so nested lipgloss.Render calls do not reset ANSI and punch holes in the gray bar.
+func baseMsgStyle(userRow bool) lipgloss.Style {
+	s := lipgloss.NewStyle()
+	if userRow {
+		s = s.Background(theme.UserMessageBackground())
+	}
+	return s
+}
+
+func logg(kind string, r string) {
+	//return
+	diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
+}
+
+// formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
+// assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
+// searchHL applies transcript search highlight to visible plain substrings (TS useSearchHighlight).
+// showResolvedToolStats enables ⎿ TranscriptResolvedHintExtra for resolved Search/Read when tool_result JSON is available (prompt + transcript).
+// userRow: when true, all lipgloss spans use the same row background as styleUserMessageLines (user-authored rows).
+func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, showResolvedToolStats bool, userRow bool) string {
+	hlSt := transcriptSearchHLStyle()
+	withHL := func(s string) string {
+		if strings.TrimSpace(searchHL) == "" {
+			return s
+		}
+		return highlightSearchPlain(s, searchHL, hlSt)
+	}
+	var b strings.Builder
+	var lastSegIdx int = -1
+	assistantTextLeadDone := false
+	for i, seg := range segs {
+		var piece string
+		switch seg.Kind {
+		case messagerow.SegTextMarkdown:
+			textForMd := seg.Text
+			if strings.TrimSpace(searchHL) != "" {
+				textForMd = highlightSearchPlain(seg.Text, searchHL, hlSt)
+			}
+			md := styleMarkdownTokens(markdown.CachedLexer(textForMd), cols, userRow)
+			if assistantLeadGlyph && !assistantTextLeadDone && strings.TrimSpace(seg.Text) != "" {
+				assistantTextLeadDone = true
+				md = prefixToolGlyphFirstLine(md)
+			}
+			piece = md
+			logg("SegTextMarkdown", piece)
+		case messagerow.SegToolUse:
+			if seg.ToolFacing != "" {
+				row1 := ""
+				if !priorNonEmptyAssistantText(segs, i) {
+					row1 = toolRowLeadPrefix(userRow)
+				}
+				row1 += baseMsgStyle(userRow).Foreground(theme.ToolUseAccent()).Bold(true).Render(withHL(seg.ToolFacing))
+				if p := strings.TrimSpace(seg.ToolParen); p != "" {
+					row1 += " (" + withHL(p) + ")"
+				}
+				var toolLines []string
+				toolLines = append(toolLines, row1)
+				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, showResolvedToolStats)
+				if showResolvedToolStats && res {
+					var raw json.RawMessage
+					if toolResultByID != nil {
+						raw = toolResultByID[seg.ToolUseID]
+					}
+					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
+					if hint != "" {
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
+						if extra != "" {
+							toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
+						}
+					}
+				} else if !res {
+					if act := strings.TrimSpace(seg.Text); act != "" {
+						actLine := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(withHL(act) + "…")
+						if toolUseCtrlOHint {
+							actLine += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+						}
+						toolLines = append(toolLines, actLine)
+					}
+					if h := strings.TrimSpace(seg.ToolHint); h != "" {
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
+					}
+				}
+				piece = strings.Join(toolLines, "\n")
+			} else {
+				line := baseMsgStyle(userRow).Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + withHL(seg.Text))
+				if toolUseCtrlOHint {
+					line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+				}
+				piece = line
+			}
+			logg("SegToolUse", piece)
+		case messagerow.SegToolResult:
+			piece = segdiff.FormatToolResultSegmentForTranscript(seg, userRow, toolUseCtrlOHint, cols, withHL, baseMsgStyle)
+			logg("SegToolResult", piece)
+		case messagerow.SegThinking:
+			body := textutil.LinkifyOSC8(seg.Text)
+			piece = baseMsgStyle(userRow).Bold(true).Render("● " + withHL(body))
+			logg("SegThinking", piece)
+		case messagerow.SegDisplayHint:
+			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			logg("SegDisplayHint", piece)
+		case messagerow.SegServerToolUse:
+			if seg.ToolFacing != "" {
+				row1 := ""
+				if !priorNonEmptyAssistantText(segs, i) {
+					row1 = toolRowLeadPrefix(userRow)
+				}
+				row1 += baseMsgStyle(userRow).Foreground(theme.ServerAccent()).Bold(true).Render(withHL(seg.ToolFacing))
+				if p := strings.TrimSpace(seg.ToolParen); p != "" {
+					row1 += " (" + withHL(p) + ")"
+				}
+				var toolLines []string
+				toolLines = append(toolLines, row1)
+				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, showResolvedToolStats)
+				if showResolvedToolStats && res {
+					var raw json.RawMessage
+					if toolResultByID != nil {
+						raw = toolResultByID[seg.ToolUseID]
+					}
+					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
+					if hint != "" {
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
+						if extra != "" {
+							toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
+						}
+					}
+				} else if !res {
+					if act := strings.TrimSpace(seg.Text); act != "" {
+						actLine := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(withHL(act) + "…")
+						if toolUseCtrlOHint {
+							actLine += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+						}
+						toolLines = append(toolLines, actLine)
+					}
+					if h := strings.TrimSpace(seg.ToolHint); h != "" {
+						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
+					}
+				}
+				piece = strings.Join(toolLines, "\n")
+			} else {
+				line := baseMsgStyle(userRow).Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + withHL(seg.Text))
+				if toolUseCtrlOHint {
+					line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+				}
+				piece = line
+			}
+			logg("SegServerToolUse", piece)
+		case messagerow.SegAdvisorToolResult:
+			st := baseMsgStyle(userRow).Foreground(theme.AdvisorAccent())
+			if seg.IsToolError {
+				st = baseMsgStyle(userRow).Foreground(theme.ToolError())
+			}
+			body := textutil.LinkifyOSC8(seg.Text)
+			line := st.Render("✧ " + withHL(body))
+			if seg.ToolBodyOmitted && toolUseCtrlOHint {
+				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+			}
+			piece = line
+			logg("SegAdvisorToolResult", piece)
+		case messagerow.SegGroupedToolUse:
+			piece = baseMsgStyle(userRow).Foreground(theme.GroupedAccent()).Bold(true).Render("▦ " + withHL(seg.Text))
+			logg("SegGroupedToolUse", piece)
+		case messagerow.SegCollapsedReadSearch:
+			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			logg("SegCollapsedReadSearch", piece)
+		case messagerow.SegToolUseSummaryLine:
+			line := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, showResolvedToolStats) && toolUseCtrlOHint {
+				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
+			}
+			piece = "  " + line
+			logg("SegToolUseSummaryLine", piece)
+		case messagerow.SegSkillListingAvailable:
+			n := seg.Num
+			if n < 1 {
+				n = 1
+			}
+			word := "skills"
+			if n == 1 {
+				word = "skill"
+			}
+			piece = baseMsgStyle(userRow).Bold(true).Render(strconv.Itoa(n)) + baseMsgStyle(userRow).Render(" "+word+" available")
+			logg("SegSkillListingAvailable", piece)
+		default:
+			piece = baseMsgStyle(userRow).Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
+			logg("default", piece)
+		}
+		if piece == "" {
+			continue
+		}
+		if b.Len() > 0 && lastSegIdx >= 0 {
+			b.WriteString(segmentJoinSeparator(segs[lastSegIdx], segs[i]))
+		}
+		b.WriteString(piece)
+		lastSegIdx = i
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// styleMarkdownInlineSegments renders paragraph/list_item runs with TS-style inline `code` color
+// and strong/emphasis (terminal lipgloss).
+func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix string, userRow bool) string {
+	if len(segs) == 0 {
+		return ""
+	}
+	stCode := baseMsgStyle(userRow).Foreground(theme.MarkdownInlineCode())
+	var stPlain, stBold, stItalic, stBoldItalic lipgloss.Style
+	if userRow {
+		ut := theme.UserMessageText()
+		stPlain = baseMsgStyle(userRow).Foreground(ut).Bold(true)
+		stBold = baseMsgStyle(userRow).Foreground(ut).Bold(true)
+		stItalic = baseMsgStyle(userRow).Foreground(ut).Italic(true)
+		stBoldItalic = baseMsgStyle(userRow).Foreground(ut).Bold(true).Italic(true)
+	} else {
+		stPlain = baseMsgStyle(userRow)
+		stBold = baseMsgStyle(userRow).Bold(true)
+		stItalic = baseMsgStyle(userRow).Italic(true)
+		stBoldItalic = baseMsgStyle(userRow).Bold(true).Italic(true)
+	}
+	var b strings.Builder
+	for i, seg := range segs {
+		txt := seg.Text
+		if i == 0 && linePrefix != "" {
+			txt = linePrefix + txt
+		}
+		if seg.Code {
+			b.WriteString(stCode.Render(txt))
+			continue
+		}
+		var st lipgloss.Style
+		switch {
+		case seg.Bold && seg.Italic:
+			st = stBoldItalic
+		case seg.Bold:
+			st = stBold
+		case seg.Italic:
+			st = stItalic
+		default:
+			st = stPlain
+		}
+		b.WriteString(st.Render(txt))
+	}
+	return b.String()
+}
+
+// headingMarkdownStyle is bold + heading color; level spacing is leading spaces only (no # in output).
+func headingMarkdownStyle(userRow bool) lipgloss.Style {
+	return baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading())
+}
+
+// styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).
+func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
+	if len(toks) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, t := range toks {
+		switch t.Type {
+		case "heading":
+			lv := min(max(t.Level, 1), 6)
+			levelPad := strings.Repeat(" ", (lv-1)*2)
+			hst := headingMarkdownStyle(userRow)
+			if len(t.Segments) > 0 {
+				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
+				rendered := hst.Render(inner)
+				parts = append(parts, wrapHeadingForMessagePane(rendered, levelPad, cols))
+			} else {
+				plain := strings.TrimSpace(t.Text)
+				wrapped := wrapHeadingForMessagePane(plain, levelPad, cols)
+				lines := strings.Split(wrapped, "\n")
+				var hb strings.Builder
+				for i, ln := range lines {
+					if i > 0 {
+						hb.WriteByte('\n')
+					}
+					hb.WriteString(hst.Render(ln))
+				}
+				parts = append(parts, hb.String())
+			}
+		case "code":
+			// Apply syntax highlighting if highlighter is available
+			var highlightedCode string
+			if markdownHighlighter != nil {
+				highlighted, err := markdownHighlighter.HighlightCode(t.Text, t.Lang)
+				if err == nil && highlighted != "" {
+					highlightedCode = highlighted
+				}
+			}
+
+			// If highlighting failed or highlighter is disabled, use plain code
+			if highlightedCode == "" {
+				cb := "```" + t.Lang + "\n" + t.Text
+				if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
+					cb += "\n"
+				}
+				cb += "```"
+				parts = append(parts, baseMsgStyle(userRow).Faint(true).Render(cb))
+			} else {
+				// For highlighted code, just show the highlighted content without backticks
+				parts = append(parts, baseMsgStyle(userRow).Render(highlightedCode))
+			}
+		case "list_item":
+			indent := strings.Repeat(" ", t.ListIndent)
+			var prefix string
+			if t.ListContinuation {
+				prefix = indent + "   "
+			} else if t.ListOrdered && t.ListIndex > 0 {
+				prefix = indent + fmt.Sprintf("%d. ", t.ListIndex)
+			} else {
+				prefix = indent + "- "
+			}
+			if len(t.Segments) > 0 {
+				parts = append(parts, styleMarkdownInlineSegments(t.Segments, prefix, userRow))
+			} else if userRow {
+				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(prefix+t.Text))
+			} else {
+				parts = append(parts, baseMsgStyle(userRow).Render(prefix+t.Text))
+			}
+		case "blockquote":
+			if len(t.Segments) > 0 {
+				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
+				pref := "> " + strings.ReplaceAll(inner, "\n", "\n> ")
+				parts = append(parts, pref)
+			} else if userRow {
+				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Italic(true).Bold(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
+			} else {
+				parts = append(parts, baseMsgStyle(userRow).Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
+			}
+		case "hr":
+			parts = append(parts, baseMsgStyle(userRow).Faint(true).Render("---"))
+		case "paragraph":
+			if len(t.Segments) > 0 {
+				parts = append(parts, styleMarkdownInlineSegments(t.Segments, "", userRow))
+			} else {
+				if userRow {
+					parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(t.Text))
+				} else {
+					parts = append(parts, t.Text)
+				}
+			}
+		default:
+			if userRow {
+				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(t.Text))
+			} else {
+				parts = append(parts, t.Text)
+			}
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+// handleTraditionalScrollKey handles scroll keys when not using viewport (traditional virtual scrolling).
+func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.String() {
+	case "down":
+		m.sticky = false
+		m.scrollTop += 1
+		return nil
+	case "up":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-1)
+		return nil
+	case "pgdown", "space":
+		m.sticky = false
+		m.scrollTop += listViewportH(m) / 2
+		return nil
+	case "pgup", "b":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		return nil
+	case "end", "G", "shift+g", "ctrl+end":
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return nil
+	case "home", "ctrl+home":
+		m.sticky = false
+		m.scrollTop = 0
+		return nil
+	case "ctrl+u":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		return nil
+	case "ctrl+d":
+		m.sticky = false
+		m.scrollTop += listViewportH(m) / 2
+		return nil
+	case "ctrl+b":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+		return nil
+	case "ctrl+f":
+		m.sticky = false
+		m.scrollTop += listViewportH(m)
+		return nil
+	case "ctrl+n":
+		m.sticky = false
+		m.scrollTop += 1
+		return nil
+	case "ctrl+p":
+		m.sticky = false
+		m.scrollTop = max(0, m.scrollTop-1)
+		return nil
+	}
+	return nil
+}
+func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	gouDemoTracef("enter input=%q", previewForTrace(line, 120))
+	cwd, _ := os.Getwd()
+	toolProjectRoot := resolveToolProjectRoot(cwd)
+	mergedLang, mergedOutName, mergedOutPrompt := gouDemoMergedSystemLocale()
+	preExp := fullPrompt
+	demoCfg := pui.DemoConfig{
+		SessionID:           m.store.ConversationID,
+		Language:            mergedLang,
+		MCPCommandsJSONPath: m.mcpCommandsJSONPath,
+		MCPToolsJSONPath:    m.mcpToolsJSONPath,
+		PreExpansionInput:   &preExp,
+		PermissionMode:      &m.permissionMode,
+	}
+	if m.tsBridge != nil {
+		demoCfg.TSContextBridge = m.tsBridge
+	}
+	params, err := pui.BuildDemoParams(line, m.store, demoCfg)
+	if err != nil {
+		gouDemoTracef("BuildDemoParams error: %v", err)
+		m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: build params: %v", err)))
+		m.rebuildHeightCache()
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return m, cmd
+	}
+	if params.RuntimeContext != nil {
+		gouDemoLogToolUseContext(params.RuntimeContext)
+	}
+	params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
+		SessionID:        m.store.ConversationID,
+		Store:            m.store,
+		ReadFileState:    m.readFileState,
+		Cwd:              cwd,
+		SessionMemState:  m.sessionMemState,
+		GuidancePtr:      &m.lastGuidance,
+		UserContextPtr:   &m.lastUserCtx,
+		SystemContextPtr: &m.lastSystemCtx,
+	})
+	gouDemoTracef("ProcessUserInput start priorMsgs=%d", len(m.store.Messages))
+	r, err := processuserinput.ProcessUserInput(context.Background(), params)
+	gouDemoTracef("ProcessUserInput end err=%v", err)
+	if err != nil {
+		m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("processUserInput: %v", err)))
+		m.rebuildHeightCache()
+		m.sticky = true
+		m.scrollTop = 1 << 30
+		return m, cmd
+	}
+	rStore := r
+	if r != nil && strings.HasPrefix(line, "/") && r.Execution == nil && !r.ShouldQuery &&
+		extractSlashLocalPanelText(r) != "" {
+		rStore = slashResultForStoreOmittingPanelDupes(r)
+	}
+	out := pui.ApplyBaseResult(m.store, rStore, &m.processUserInputBaseResultHandoff)
+	gouDemoTracef("after ApplyBaseResult shouldQuery=%v effectiveShouldQuery=%v hadExecutionRequest=%v messagesAppended=%d",
+		r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(rStore.Messages))
+	if out.NextInput != "" {
+		m.pr.SetValue(out.NextInput)
+		m.syncSlashListAfterPrompt()
+	}
+	m.applySlashResultPanelFromSubmit(line, r, out)
+	m.rebuildHeightCache()
+	m.sticky = true
+	m.scrollTop = 1 << 30
+	// Flush user (and any other new rows) before OnQueryYield appends streaming assistant/tool lines so JSONL follows conversation time order.
+	m.maybeRecordTranscript()
+	if out.EffectiveShouldQuery && !out.HadExecutionRequest {
+		usedCCB := false
+		var normToolsJSON json.RawMessage
+		if params.RuntimeContext != nil {
+			normToolsJSON = params.RuntimeContext.ToolUseContext.Options.Tools
+		}
+		var normToolDefs []struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal(normToolsJSON, &normToolDefs)
+		toolSpecs := make([]messagesapi.ToolSpec, 0, len(normToolDefs))
+		for _, t := range normToolDefs {
+			toolSpecs = append(toolSpecs, messagesapi.ToolSpec{Name: t.Name})
+		}
+		normOpts := messagesapi.OptionsFromEnv()
+		if gouDemoEnvTruthy("GOU_DEMO_NON_INTERACTIVE") {
+			normOpts.NonInteractive = true
+		}
+		tryMsgs := func() (json.RawMessage, error) {
+			return ccbhydrate.MessagesJSONNormalized(m.store.Messages, toolSpecs, normOpts)
+		}
+		if m.ccbInline && m.ccbSend != nil {
+			baseMsgs, err := tryMsgs()
+			if err != nil {
+				gouDemoTracef("gou-demo: ccbhydrate.MessagesJSON error: %v", err)
+				m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: ccb messages JSON: %v", err)))
+				m.rebuildHeightCache()
+			} else if len(bytes.TrimSpace(baseMsgs)) < 3 || bytes.Equal(bytes.TrimSpace(baseMsgs), []byte("[]")) {
+				gouDemoTracef("gou-demo: empty messages JSON bytes=%d", len(baseMsgs))
+				m.store.AppendMessage(pui.SystemNotice("gou-demo: empty chat transcript (cannot call model)"))
+				m.rebuildHeightCache()
+			} else {
+				var toolsJSON json.RawMessage
+				if params.RuntimeContext != nil {
+					toolsJSON = params.RuntimeContext.ToolUseContext.Options.Tools
+				}
+				var toolDefs []struct {
+					Name string `json:"name"`
+				}
+				_ = json.Unmarshal(toolsJSON, &toolDefs)
+				names := make([]string, 0, len(toolDefs))
+				for _, t := range toolDefs {
+					names = append(names, t.Name)
+				}
+				hasSkillTool := false
+				skillNm := skilltools.SkillToolName()
+				for _, t := range toolDefs {
+					if t.Name == skillNm {
+						hasSkillTool = true
+						break
+					}
+				}
+				skillListing := params.SkillListingCommands
+				if len(skillListing) == 0 {
+					skillListing = commands.SkillToolCommands(params.Commands)
+				}
+				discoverNm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME"))
+				mainLoopModel := gouDemoQueryMainLoopModel(params)
+				m.lastMainLoopModel = mainLoopModel
+				gouOpts := commands.GouDemoSystemOpts{
+					EnabledToolNames:       commands.EnabledToolNames(names),
+					SkillToolCommands:      skillListing,
+					ModelID:                mainLoopModel,
+					Cwd:                    cwd,
+					Language:               mergedLang,
+					DiscoverSkillsToolName: discoverNm,
+					NonInteractiveSession:  gouDemoEnvTruthy("GOU_DEMO_NON_INTERACTIVE"),
+					OutputStyleName:        mergedOutName,
+					OutputStylePrompt:      mergedOutPrompt,
+				}
+				commands.ApplyGouDemoRuntimeEnv(&gouOpts)
+				var customSys, appendSys string
+				if params.RuntimeContext != nil {
+					if p := params.RuntimeContext.ToolUseContext.Options.CustomSystemPrompt; p != nil {
+						customSys = strings.TrimSpace(*p)
+					}
+					if p := params.RuntimeContext.ToolUseContext.Options.AppendSystemPrompt; p != nil {
+						appendSys = strings.TrimSpace(*p)
+					}
+				}
+				extraRoots := querycontext.ExtraClaudeMdRootsForFetch(params.RuntimeContext)
+				fetchOpts := querycontext.FetchOpts{
+					CustomSystemPrompt: customSys,
+					Gou:                gouOpts,
+					ExtraClaudeMdRoots: extraRoots,
+				}
+				if m.tsBridge != nil {
+					fetchOpts.TSSnapshot = m.tsBridge
+				}
+				partsRes, errParts := querycontext.FetchSystemPromptParts(context.Background(), fetchOpts)
+				var guidance string
+				var userCtxReminder string
+				if errParts != nil {
+					gouDemoTracef("FetchSystemPromptParts: %v (fallback BuildGouDemoSystemPrompt)", errParts)
+					m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: system context: %v (using base prompt only)", errParts)))
+					m.rebuildHeightCache()
+					guidance = commands.BuildGouDemoSystemPrompt(gouOpts)
+				} else {
+					userCtxReminder = querycontext.FormatUserContextReminder(partsRes.UserContext)
+					var base []string
+					if customSys != "" {
+						base = []string{customSys}
+					} else {
+						base = slices.Clone(partsRes.DefaultSystemPrompt)
+					}
+					if appendSys != "" {
+						base = append(base, appendSys)
+					}
+					guidance = strings.Join(base, "\n\n")
+				}
+				m.lastGuidance = guidance
+
+				listing := ""
+				var listingMeta *ccbhydrate.SkillListingMeta
+				if !gouDemoEnvTruthy("GOU_DEMO_SKIP_SKILL_LISTING") {
+					listingSent := m.skillListingSent
+					if gouDemoEnvTruthy("GOU_DEMO_SKILL_LISTING_EVERY_TURN") {
+						listingSent = make(map[string]struct{})
+					}
+					if s, n, initial, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, listingSent, nil); ok {
+						listing = s
+						listingMeta = &ccbhydrate.SkillListingMeta{SkillCount: n, IsInitial: initial}
+					}
+				}
+				msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.store.Messages, userCtxReminder, listing, listingMeta, toolSpecs, normOpts)
+				if errL != nil {
+					gouDemoTracef("gou-demo: MessagesJSONWithLeadingMeta error: %v", errL)
+					m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
+					m.rebuildHeightCache()
+				} else {
+					reqID := fmt.Sprintf("turn-%d", time.Now().UnixNano())
+					m.store.ClearStreaming()
+					m.store.ClearStreamingToolUses()
+					// TS: skill_listing attachment is pushed to mutableMessages before callModel (QueryEngine attachment case).
+					if strings.TrimSpace(listing) != "" {
+						if att, ok := ccbhydrate.SkillListingStoreMessage(listing, listingMeta); ok {
+							m.store.AppendMessage(att)
+							m.rebuildHeightCache()
+						}
+					}
+					gouDemoTracef("gou-demo model turn start requestID=%s msgsJSONBytes=%d toolsBytes=%d systemBytes=%d",
+						reqID, len(msgsJSON), len(toolsJSON), len(guidance))
+					cwdAbs, errAbs := filepath.Abs(cwd)
+					if errAbs != nil {
+						cwdAbs = cwd
+					}
+					runner := skilltools.ParityToolRunner{
+						DemoToolRunner: skilltools.DemoToolRunner{
+							Commands:  params.Commands,
+							SessionID: m.store.ConversationID,
+						},
+						WorkDir:          cwdAbs,
+						ProjectRoot:      toolProjectRoot,
+						ReadFileState:    m.readFileState,
+						LocalBashDefault: true,
+						AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
+						MainLoopModel:    mainLoopModel,
+						Messages:         m.store.Messages,
+						MessagesFunc:     func() []types.Message { return m.store.Messages },
+						SystemPrompt:     []string{guidance},
+						ProgressCallback: func(msg *types.Message) {
+							if send := m.ccbSend; send != nil {
+								send(gouQueryYieldMsg{Message: *msg})
+							}
+						},
+						EditDeps: &localtools.EditDeps{
+							OnNotebookEdit: func(absPath, oldString, newString string, replaceAll bool, roots []string, state *localtools.ReadFileState, userModified bool) (string, bool, error) {
+								return tools.NotebookEditFromEdit(absPath, oldString, newString, replaceAll, roots)
+							},
+						},
+					}
+					if gouDemoPreferQueryStreamingParity() {
+						var userCtx map[string]string
+						var systemCtx map[string]string
+						if errParts == nil {
+							userCtx = gouDemoUserContextMapForQuery(partsRes.UserContext)
+							systemCtx = partsRes.SystemContext
+						}
+						m.lastUserCtx = userCtx
+						m.lastSystemCtx = systemCtx
+						tcx := types.ToolUseContext{}
+						if params.RuntimeContext != nil {
+							tcx = params.RuntimeContext.ToolUseContext
+						}
+						tcx.Options.MainLoopModel = mainLoopModel
+						if m.toolResultState != nil {
+							tcx.ContentReplacementState = m.toolResultState.ToJSON()
+						}
+						var trySMCompact compactservice.TrySessionMemoryCompactFn
+						if m.sessionMemState != nil {
+							sessionID := m.store.ConversationID
+							trySMCompact = func(ctx context.Context, messages []types.Message, agentID string, autoCompactThreshold *int) (*compactservice.CompactionResult, error) {
+								return sessionmemory.TrySessionMemoryCompaction(
+									ctx,
+									m.sessionMemState,
+									sessionID,
+									cwd,
+									messages,
+									"", // transcriptPath
+									autoCompactThreshold,
+									func(ctx context.Context, trigger string, model string) ([]types.Message, error) {
+										runner := hookexec.SessionStartHookRunner(toolProjectRoot, cwd, sessionID, "")
+										res, err := runner(ctx, compactservice.SessionStartHookTrigger(trigger),
+											compactservice.SessionStartHookInput{Model: model})
+										if err != nil {
+											return nil, err
+										}
+										msgs := make([]types.Message, len(res))
+										for i, r := range res {
+											msgs[i] = r
+										}
+										return msgs, nil
+									},
+									agentID,
+									mainLoopModel,
+									nil, // planAttachmentProvider
+								)
+							}
+						}
+						qdeps := query.ProductionDeps(trySMCompact)
+						te := toolexecution.ExecutionDeps{
+							InvokeTool:              runner.Run,
+							MainLoopModel:           mainLoopModel,
+							ReadToolRoots:           runner.ToolReadMappingRoots(),
+							ReadToolMemCWD:          runner.ToolReadMappingMemCWD(),
+							MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(params.Commands, m.store.ConversationID),
+						}
+						// Opt-in TS permissions.ts 1b: whole-tool alwaysAsk on Bash skipped when input looks sandboxed (see toolexecution.BashSandboxRule1b).
+						if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
+							te.SandboxingEnabled = true
+							te.AutoAllowBashWholeToolAskWhenSandboxed = true
+						}
+						// Tool result persistence: enabled by default (mirrors TS), set GOU_DEMO_TOOL_RESULT_PERSIST=0 to disable.
+						// Large tool results are saved to disk and replaced with a preview in the tool_result block.
+						if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
+							te.ToolResultPersistConfig = &toolexecution.ToolResultPersistConfig{
+								SessionInfo: toolresultpersist.SessionInfo{
+									SessionID: m.store.ConversationID,
+									Cwd:       cwd,
+								},
+								ProcessOptions:          toolresultpersist.DefaultProcessOptions(),
+								ContentReplacementState: m.toolResultState,
+							}
+						}
+						m.installAskResolver(&te)
+						qdeps.ToolexecutionDeps = te
+						// Wire tool result budget enforcement when persistence is enabled.
+						// The closure captures the live Go *ContentReplacementState so mutations
+						// survive across turns (mirrors TS shared ContentReplacementState instance).
+						if m.toolResultState != nil {
+							statePtr := m.toolResultState
+							sessionInfo := te.ToolResultPersistConfig.SessionInfo
+							qdeps.ApplyToolResultBudget = func(ctx context.Context, in *query.ToolResultBudgetInput) ([]types.Message, error) {
+								return toolresultpersist.ApplyToolResultBudget(
+									in.Messages,
+									statePtr,
+									sessionInfo,
+									0,    // use default MaxToolResultsPerMessageChars
+									nil,  // skipToolNames
+								), nil
+							}
+						}
+						// Snapshot matches qp.Messages (TS QueryEngine messages at callModel): includes skill_listing row if appended above.
+						msgsForQ := slices.Clone(m.store.Messages)
+						if send := m.ccbSend; send != nil {
+							qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
+								send(gouStreamingToolUsesMsg{Uses: uses})
+								return nil
+							}
+						}
+						if m.transcript != nil {
+							tr := m.transcript
+							// Mirror TS recordTranscript(messages): each yield appends to the same turn prefix so
+							// sessiontranscript dedup sees already-recorded user (and prior yields) before new rows.
+							turnPrefix := slices.Clone(msgsForQ)
+							qdeps.OnQueryYield = func(ctx context.Context, y query.QueryYield) error {
+								if y.Message == nil {
+									return nil
+								}
+								turnPrefix = append(turnPrefix, *y.Message)
+								_, err := tr.RecordTranscript(ctx, turnPrefix, sessiontranscript.RecordOpts{AllMessages: turnPrefix})
+								return err
+							}
+						}
+						qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
+							extractmemories.Execute(ctx, m.extractMemState, extractmemories.ExtractionParams{
+								Messages:       qcp.Messages,
+								ToolUseContext: qcp.ToolUseContext,
+								SystemPrompt:   qcp.SystemPrompt,
+								UserContext:    qcp.UserContext,
+								SystemContext:  qcp.SystemContext,
+								Cwd:            qcp.Cwd,
+								QuerySource:    qcp.QuerySource,
+								NewUUID:        query.RandomUUID,
+								SkipIndex:      growthbook.IsTenguMothCopse(),
+								AppendSystemMessage: func(msg types.Message) {
+									if send := m.ccbSend; send != nil {
+										send(gouMemoryAppendMsg{Msg: msg})
+									}
+								},
+							})
+							_, dreamErr := autodream.Execute(ctx, m.autoDreamState,
+								qcp.ToolUseContext, qcp.SystemPrompt,
+								qcp.UserContext, qcp.SystemContext,
+								qcp.QuerySource, query.RandomUUID,
+								commands.ClaudeConfigHome(), qcp.Cwd,
+								"", /* memoryDir — let Execute resolve */
+								m.store.ConversationID,
+							)
+							if dreamErr != nil {
+								gouDemoTracef("autodream: %v", dreamErr)
+							}
+							// Session memory extraction (TS sessionMemory post-turn hook).
+							m.sessionMemHook(ctx, qcp)
+						}
+						qp := query.QueryParams{
+							Messages:        msgsForQ,
+							SystemPrompt:    query.AsSystemPrompt([]string{guidance}),
+							UserContext:     userCtx,
+							SystemContext:   systemCtx,
+							ToolUseContext:  tcx,
+							QuerySource:     params.QuerySource,
+							StreamingParity: true,
+							Deps:            &qdeps,
+						}
+						if params.RuntimeContext != nil && params.RuntimeContext.ToolPermissionContext != nil {
+							pc := *params.RuntimeContext.ToolPermissionContext
+							types.NormalizeToolPermissionContextData(&pc)
+							qp.ToolPermissionContext = &pc
+						}
+						processuserinput.ApplyQueryHostEnvGates(&qp)
+						processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
+						gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
+							reqID, len(m.store.Messages), len(toolsJSON))
+						m.beginQuerySpinner()
+						m.queryBusy = true
+						m.store.ClearStreamingToolUses()
+						runQueryStreamingParityTurn(m.ccbSend, qp)
+						usedCCB = true
+					} else {
+						m.store.AppendMessage(pui.SystemNotice(
+							"gou-demo: ccb-engine/localturn was removed. For a real model reply, set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1.",
+						))
+						m.rebuildHeightCache()
+					}
+				}
+			}
+		}
+		if usedCCB {
+			if cmd != nil {
+				return m, tea.Batch(cmd, spinnerTickCmd())
+			}
+			return m, spinnerTickCmd()
+		}
+		if !m.ccbInline {
+			m.store.AppendMessage(pui.SystemNotice(
+				"gou-demo: real HTTP / streaming parity is disabled (GOU_DEMO_CCB_INLINE=0). Unset it and set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) with GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 for a model reply.",
+			))
+			m.rebuildHeightCache()
+			m.sticky = true
+			m.scrollTop = 1 << 30
+		}
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	}
+	gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
+	return m, cmd
+}

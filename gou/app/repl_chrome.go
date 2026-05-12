@@ -1,6 +1,6 @@
 // REPL-aligned UI chrome for gou-demo (terminal title OSC, narrow layout, permission mode labels).
 // Mirrors Ink REPL / PromptInputFooter conventions without importing TS.
-package main
+package app
 
 import (
 	"os"

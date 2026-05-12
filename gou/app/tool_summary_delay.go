@@ -1,6 +1,6 @@
 // Tool summary delay: before merged "Searched for … / Read …" lines, show full Search/Grep/Read rows for a configurable time (GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS).
 
-package main
+package app
 
 import (
 	"os"

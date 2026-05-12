@@ -1,4 +1,4 @@
-package main
+package app
 
 // isListViewportScrollKey reports keys forwarded to bubbles/viewport for the prompt message pane
 // (see gouDemoMsgViewportKeyMap + handleMsgViewportScrollKey). In handleKeyMsgPreserving, slash
