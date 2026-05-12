@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"goc/claudebase"
 )
 
 const (
@@ -183,19 +185,9 @@ func ProjectsDir(configHome string) string {
 	return filepath.Join(configHome, "projects")
 }
 
-// sanitizePath mirrors claudemd.SanitizePath (djb2 hash for long paths).
+// sanitizePath delegates to claudebase.SanitizePath.
 func sanitizePath(p string) string {
-	const maxLen = 240
-	p = filepath.Clean(p)
-	if len(p) <= maxLen {
-		return p
-	}
-	// DJB2 hash.
-	h := uint64(5381)
-	for i := 0; i < len(p); i++ {
-		h = (h * 33) ^ uint64(p[i])
-	}
-	return p[:maxLen] + "-" + strconv.FormatUint(h, 16)
+	return claudebase.SanitizePath(p)
 }
 
 // looksLikeUUID checks whether s looks like a UUID (hex with hyphens).

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"goc/claudebase"
 )
 
 func TestReadLastConsolidatedAt_noFile(t *testing.T) {
@@ -206,7 +208,8 @@ func TestProjectDirForOriginalCwd(t *testing.T) {
 	projectPath := "/home/user/my-project"
 
 	dir := ProjectDirForOriginalCwd(projectPath, configHome)
-	expected := filepath.Join(configHome, "projects", projectPath)
+	// sanitizePath now delegates to claudebase.SanitizePath which replaces non-alphanumeric chars with '-'.
+	expected := filepath.Join(configHome, "projects", claudebase.SanitizePath(projectPath))
 	if dir != expected {
 		t.Fatalf("expected %q, got %q", expected, dir)
 	}
@@ -215,23 +218,26 @@ func TestProjectDirForOriginalCwd(t *testing.T) {
 func TestSanitizePath_short(t *testing.T) {
 	p := "/short/path"
 	result := sanitizePath(p)
-	if result != p {
-		t.Fatalf("expected %q for short path, got %q", p, result)
+	// claudebase.SanitizePath replaces non-alphanumeric chars (including /) with '-'.
+	expected := "-short-path"
+	if result != expected {
+		t.Fatalf("expected %q for short path, got %q", expected, result)
 	}
 }
 
 func TestSanitizePath_long(t *testing.T) {
-	// Build a path > 240 chars.
+	// Build a path > 200 chars (MAXSanitizedLength).
 	long := "/" + strings.Repeat("a", 250)
 	result := sanitizePath(long)
-	if len(result) <= 240 {
-		t.Fatalf("expected truncated path with hash suffix > 240 chars, got %d", len(result))
+	if len(result) <= 200 {
+		t.Fatalf("expected truncated path with hash suffix > 200 chars, got %d", len(result))
 	}
 	if !strings.Contains(result, "-") {
 		t.Fatalf("expected hash suffix in truncated path, got %q", result)
 	}
-	if !strings.HasPrefix(result, "/"+strings.Repeat("a", 239)) {
-		t.Fatalf("expected first 240 chars of path as prefix (%d chars total), got %q", len(result), result)
+	// First 200 chars should be the sanitized prefix (all non-alpha replaced with -).
+	if !strings.HasPrefix(result, strings.Repeat("-", 1)+strings.Repeat("a", 199)) {
+		t.Fatalf("expected first 200 chars of sanitized path, got %q", result)
 	}
 }
 
