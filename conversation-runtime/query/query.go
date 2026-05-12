@@ -215,7 +215,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			}
 			if deps.OnQueryComplete != nil {
 				cwd, _ := os.Getwd()
-				allMsgs := append(append([]types.Message{}, state.Messages...), postLoopMessages...)
+				allMsgs := append(append([]types.Message{}, work...), postLoopMessages...)
 				deps.OnQueryComplete(ctx, QueryCompleteParams{
 					Messages:       allMsgs,
 					SystemPrompt:   params.SystemPrompt,
@@ -242,7 +242,7 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			}
 			if deps.OnQueryComplete != nil {
 				cwd, _ := os.Getwd()
-				allMsgs := append(append([]types.Message{}, state.Messages...), postLoopMessages...)
+				allMsgs := append(append([]types.Message{}, work...), postLoopMessages...)
 				deps.OnQueryComplete(ctx, QueryCompleteParams{
 					Messages:       allMsgs,
 					SystemPrompt:   params.SystemPrompt,

@@ -10,6 +10,7 @@ import (
 	"goc/claudemd"
 	"goc/compactquerysource"
 	"goc/compactservice"
+	goccontext "goc/context"
 	"goc/hookexec"
 	"goc/querycontext"
 	"goc/types"
@@ -89,7 +90,10 @@ func NewCompactAdapter(trySMCompact compactservice.TrySessionMemoryCompactFn) fu
 			QuerySource:     string(in.QuerySource),
 			Tracking:        tracking,
 			SnipTokensFreed: snip,
-			Thresholds:      compactservice.CompactThresholds{},
+			Thresholds: compactservice.CompactThresholds{
+				ResolveContextWindow:   goccontext.GetContextWindowForModel,
+				ResolveMaxOutputTokens: goccontext.GetMaxOutputTokensForModel,
+			},
 			Deps:            deps,
 			ToolUseContext:  in.ToolUseContext,
 		})
