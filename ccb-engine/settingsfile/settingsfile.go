@@ -1,5 +1,5 @@
 // Package settingsfile loads Claude Code-style settings `env` blocks for Go binaries:
-// [GoProjectSettingsEnvDefaults] (lowest; embedded), user ~/.claude/settings.json, project
+// [GoProjectSettingsEnvDefaults] (lowest; embedded), user ~/.claude/settings.go.json, project
 // settings.go.json, project settings.local.json (highest for duplicate keys in the merged map).
 // Project .claude/settings.json is consumed by the TypeScript CLI only — not merged here.
 package settingsfile
@@ -13,20 +13,20 @@ import (
 	"strings"
 )
 
-// UserClaudeSettingsPath matches TS getClaudeConfigHomeDir + settings.json:
-// $CLAUDE_CONFIG_DIR/settings.json, or $HOME/.claude/settings.json.
+// UserClaudeSettingsPath returns the Go-side user settings path:
+// $CLAUDE_CONFIG_DIR/settings.go.json, or $HOME/.claude/settings.go.json.
 func UserClaudeSettingsPath() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
-		return filepath.Join(d, "settings.json")
+		return filepath.Join(d, "settings.go.json")
 	}
 	h, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(h) == "" {
 		return ""
 	}
-	return filepath.Join(h, ".claude", "settings.json")
+	return filepath.Join(h, ".claude", "settings.go.json")
 }
 
-// ReadUserSettingsEnv returns the "env" map from user settings.json only (no project merge).
+// ReadUserSettingsEnv returns the "env" map from user settings.go.json only (no project merge).
 func ReadUserSettingsEnv() (map[string]string, error) {
 	return readEnvFromSettingsPath(UserClaudeSettingsPath())
 }
@@ -118,7 +118,7 @@ func mergeEnvMany(maps ...map[string]string) map[string]string {
 
 // ApplyMergedClaudeSettingsEnv merges env from (later entries override earlier for duplicate keys):
 // 1) [GoProjectSettingsEnvDefaults] — embedded Go baseline
-// 2) UserClaudeSettingsPath() — CLAUDE_CONFIG_DIR/settings.json or ~/.claude/settings.json
+// 2) UserClaudeSettingsPath() — CLAUDE_CONFIG_DIR/settings.go.json or ~/.claude/settings.go.json
 // 3) projectRoot/.claude/settings.go.json (Go / ccb-engine / gou-demo; optional)
 // 4) projectRoot/.claude/settings.local.json (optional)
 //
@@ -151,13 +151,13 @@ func ApplyUserAndProjectClaudeEnv(home, projectRoot string) error {
 	return ApplyMergedClaudeSettingsEnv(projectRoot)
 }
 
-// ApplyProjectClaudeEnv reads root/.claude/settings.json and applies the top-level "env"
+// ApplyProjectClaudeEnv reads root/.claude/settings.go.json and applies the top-level "env"
 // map to the process environment. Variables that are already set in the environment
 // (non-empty) are left unchanged so the shell and parent process keep precedence.
 //
 // If the file is missing, returns nil. If the file exists but is invalid JSON, returns an error.
 func ApplyProjectClaudeEnv(root string) error {
-	path := filepath.Join(root, ".claude", "settings.json")
+	path := filepath.Join(root, ".claude", "settings.go.json")
 	m, err := readEnvFromSettingsPath(path)
 	if err != nil {
 		return err

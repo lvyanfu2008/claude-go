@@ -56,7 +56,7 @@ func userSettingsFileName() string {
 	if claudebase.Truthy(os.Getenv("CLAUDE_CODE_USE_COWORK_PLUGINS")) {
 		return "cowork_settings.json"
 	}
-	return "settings.json"
+	return "settings.go.json"
 }
 
 func readUserClaudeMdExcludes() []string {

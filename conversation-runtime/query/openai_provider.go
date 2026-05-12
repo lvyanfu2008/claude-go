@@ -10,7 +10,7 @@ import (
 )
 
 // UseOpenAIChatProvider mirrors TS getAPIProvider() === 'openai':
-// CLAUDE_CODE_USE_OPENAI, or settings.json modelType "openai" (user + project, TS-shaped paths).
+// CLAUDE_CODE_USE_OPENAI, or settings.go.json modelType "openai" (user + project).
 func UseOpenAIChatProvider() bool {
 	if envTruthy("CLAUDE_CODE_USE_OPENAI") {
 		return true
@@ -23,7 +23,7 @@ func UseOpenAIChatProvider() bool {
 	if err != nil {
 		return false
 	}
-	proj := filepath.Join(cwd, ".claude", "settings.json")
+	proj := filepath.Join(cwd, ".claude", "settings.go.json")
 	return modelTypeOpenAI(proj)
 }
 

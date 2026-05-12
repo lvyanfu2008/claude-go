@@ -28,7 +28,7 @@ func MergeEnabledPlugins(cwd string) (map[string]bool, error) {
 		return nil, err
 	}
 	cl := filepath.Join(projRoot, ".claude")
-	if err := mergeEnabledPluginsFile(filepath.Join(cl, "settings.json"), merged); err != nil {
+	if err := mergeEnabledPluginsFile(filepath.Join(cl, "settings.go.json"), merged); err != nil {
 		return nil, err
 	}
 	if err := mergeEnabledPluginsFile(filepath.Join(cl, "settings.local.json"), merged); err != nil {

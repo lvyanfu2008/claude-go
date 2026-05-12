@@ -55,7 +55,7 @@ func mergeHooksTable(dst HooksTable, src HooksTable) HooksTable {
 }
 
 // MergedHooksFromPaths loads and concatenates hook matcher groups in merge order:
-// user settings.json, then project settings.go.json, then project settings.local.json.
+// user settings.go.json, then project settings.go.json, then project settings.local.json.
 // Project .claude/settings.json (TS-only) is not read.
 func MergedHooksFromPaths(projectRoot string) (HooksTable, error) {
 	var merged HooksTable
