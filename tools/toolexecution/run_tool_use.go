@@ -14,6 +14,10 @@ import (
 	"goc/types"
 )
 
+// MCPToolDispatcher is called with (toolName, inputJSON) when the tool name
+// starts with "mcp__". Set by the MCP package during init.
+var MCPToolDispatcher func(ctx context.Context, toolName string, input json.RawMessage) (string, error)
+
 // RunToolUseChan streams [streamingtool.ToolRunUpdate] for one tool_use (mirrors runToolUse yields).
 // It closes the returned channel when finished.
 func RunToolUseChan(
@@ -77,6 +81,24 @@ func RunToolUseChan(
 		}
 
 		if applyRuleBasedDecisionInRun(ctx, deps, block.Name, block.ID, block.Input, assistant.UUID, ch) {
+			return
+		}
+
+		// MCP tool dispatch: route mcp__* tools to the MCP connection manager.
+		if MCPToolDispatcher != nil && strings.HasPrefix(block.Name, "mcp__") {
+			content, err := MCPToolDispatcher(ctx, block.Name, block.Input)
+			if ctx.Err() != nil {
+				m := syntheticAborted(deps, block.ID, assistant.UUID)
+				ch <- streamingtool.ToolRunUpdate{Message: &m}
+				return
+			}
+			if err != nil {
+				m := syntheticToolResultWithName(deps, block.Name, block.ID, err.Error(), true, assistant.UUID)
+				ch <- streamingtool.ToolRunUpdate{Message: &m}
+				return
+			}
+			m := syntheticToolResultWithName(deps, block.Name, block.ID, content, false, assistant.UUID)
+			ch <- streamingtool.ToolRunUpdate{Message: &m}
 			return
 		}
 

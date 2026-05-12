@@ -34,7 +34,7 @@ func HandleHelpCommand() ([]byte, error) {
 		name, desc string
 	}{
 		{"clear", "Clear conversation history"},
-		{"compact", "Compact conversation (not yet implemented in gou-demo)"},
+		{"compact", "Compact conversation to free context space"},
 		{"context", "Show context usage summary"},
 		{"cost", "Show session token usage"},
 		{"doctor", "Diagnose and verify your Claude Code installation"},

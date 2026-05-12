@@ -24,6 +24,9 @@ type ExecutionDeps struct {
 	// PreToolUseHook mirrors executePreToolHooks deny path: non-nil return blocks the tool with a synthetic tool_result.
 	PreToolUseHook func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) error
 	// PreToolHookPermission optional hook-phase decision (toolHooks.ts hookPermissionResult) before resolve.
+		// PostToolUseHookRunner mirrors executePostToolHooks: runs after a tool completes.
+		// When nil, post-tool-use hooks are skipped.
+		PostToolUseHookRunner PostToolUseHookRunner
 	PreToolHookPermission *PermissionDecision
 	// ToolPermission optional deny/ask rules for [RuleBasedDecisionForTool] after the query gate.
 	ToolPermission *types.ToolPermissionContextData

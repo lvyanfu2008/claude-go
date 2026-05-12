@@ -12,6 +12,7 @@ type LocalCommandHandler func(args string) ([]byte, error)
 // Handlers with an Args suffix (e.g. args string) receive the raw argument string.
 var localCommandHandlers = map[string]LocalCommandHandler{
 	"keybindings":    func(args string) ([]byte, error) { return HandleKeybindingsCommand() },
+		"compact":        func(args string) ([]byte, error) { return HandleCompactCommand() },
 	"cost":           func(args string) ([]byte, error) { return HandleCostCommand() },
 	"version":        func(args string) ([]byte, error) { return HandleVersionCommand() },
 	"release-notes":  func(args string) ([]byte, error) { return HandleReleaseNotesCommand() },
