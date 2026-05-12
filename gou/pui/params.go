@@ -13,8 +13,10 @@ import (
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/gou/conversation"
+	"goc/hookexec"
 	"goc/mcpcommands"
 	"goc/modelenv"
+	"goc/sessiontranscript"
 	"goc/tools/toolpool"
 	"goc/tscontext"
 	"goc/types"
@@ -226,5 +228,28 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		s := *cfg.PreExpansionInput
 		out.PreExpansionInput = &s
 	}
+
+	// Wire UserPromptSubmit hooks (mirrors TS executeUserPromptSubmitHooks inside processUserInput).
+	cwdHooks, _ := os.Getwd()
+	sid := cfg.SessionID
+	if sid == "" {
+		sid = "gou-demo"
+	}
+	transcriptPath := sessiontranscript.TranscriptPath(sid, cwdHooks, "", sessiontranscript.ConfigHomeDir())
+	baseHookInput := hookexec.BaseHookInput{
+		SessionID:      sid,
+		TranscriptPath: transcriptPath,
+		Cwd:            cwdHooks,
+		PermissionMode: string(perm),
+		HookEventName:  "UserPromptSubmit",
+	}
+	mergedHooks, _ := hookexec.MergedHooksForCwd(cwdHooks)
+	baseRunner := hookexec.MakeUserPromptSubmitHookRunner(mergedHooks, cwdHooks, baseHookInput)
+	if baseRunner != nil {
+		out.ExecuteUserPromptSubmitHooks = func(ctx context.Context, _ *processuserinput.ProcessUserInputParams, inputMessage string) ([]types.AggregatedHookResult, error) {
+			return baseRunner(ctx, inputMessage)
+		}
+	}
+
 	return out, nil
 }
