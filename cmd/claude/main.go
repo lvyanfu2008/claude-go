@@ -17,6 +17,8 @@ import (
 
 	"goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
+	"goc/hookexec"
+	"goc/sessiontranscript"
 	"goc/types"
 )
 
@@ -306,16 +308,60 @@ func runHeadless(prompt string) error {
 		defer ShutdownMCP()
 	}
 
-	// Process the prompt text into messages.
-	result, err := processuserinput.ProcessTextPrompt(
-		prompt, nil, nil, nil, nil, nil, nil, nil,
-		func(name string, payload map[string]any) {},
-	)
+	// Resolve working directory and session ID for hook execution.
+	cwd, _ := os.Getwd()
+	sessionID := GetSessionID()
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
+	transcriptPath := sessiontranscript.TranscriptPath(sessionID, cwd, "", sessiontranscript.ConfigHomeDir())
+
+	// Build base hook input (mirrors TS toolUseContext injection).
+	pm := flagPermissionMode
+	if pm == "" {
+		pm = string(types.PermissionDefault)
+	}
+	baseHookInput := hookexec.BaseHookInput{
+		SessionID:      sessionID,
+		TranscriptPath: transcriptPath,
+		Cwd:            cwd,
+		PermissionMode: pm,
+		HookEventName:  "UserPromptSubmit",
+	}
+
+	// Load merged hooks and wire UserPromptSubmit hook runner (mirrors TS processUserInput internals).
+	mergedHooks, _ := hookexec.MergedHooksForCwd(cwd)
+	baseRunner := hookexec.MakeUserPromptSubmitHookRunner(mergedHooks, cwd, baseHookInput)
+
+	inputJSON, _ := json.Marshal(prompt)
+	p := &processuserinput.ProcessUserInputParams{
+		Input:          json.RawMessage(inputJSON),
+		Mode:           types.PromptInputModePrompt,
+		PermissionMode: types.PermissionMode(pm),
+	}
+	// Adapter: hookexec returns func(ctx, inputMessage); ExecuteUserPromptSubmitHooks expects func(ctx, *ProcessUserInputParams, inputMessage).
+	if baseRunner != nil {
+		p.ExecuteUserPromptSubmitHooks = func(ctx context.Context, _ *processuserinput.ProcessUserInputParams, inputMessage string) ([]types.AggregatedHookResult, error) {
+			return baseRunner(ctx, inputMessage)
+		}
+	}
+
+	// Process user input (includes hook execution inline, mirrors TS processUserInput flow).
+	result, err := processuserinput.ProcessUserInput(ctx, p)
 	if err != nil {
 		return fmt.Errorf("process prompt: %w", err)
 	}
 	if !result.ShouldQuery {
-		fmt.Println("(no query needed)")
+		// Hook may have blocked the query — print hook messages if any.
+		for _, msg := range result.Messages {
+			if msg.Type == "system" {
+				var sys struct{ Content string }
+				json.Unmarshal([]byte(msg.Content), &sys)
+				if sys.Content != "" {
+					fmt.Println(sys.Content)
+				}
+			}
+		}
 		return nil
 	}
 

@@ -16,6 +16,21 @@ type userPromptSubmitHookInput struct {
 	Prompt string `json:"prompt"`
 }
 
+// MakeUserPromptSubmitHookRunner returns a func suitable for use as
+// processuserinput.ProcessUserInputParams.ExecuteUserPromptSubmitHooks.
+// It mirrors the hook wiring that TS does internally inside processUserInput.
+// Returns nil when no UserPromptSubmit hooks are configured (fast path).
+func MakeUserPromptSubmitHookRunner(table HooksTable, cwd string, base BaseHookInput) func(ctx context.Context, inputMessage string) ([]types.AggregatedHookResult, error) {
+	if len(table[hookEventUserPromptSubmit]) == 0 {
+		return nil
+	}
+	wd := trimOrDot(cwd)
+	base.HookEventName = hookEventUserPromptSubmit
+	return func(ctx context.Context, inputMessage string) ([]types.AggregatedHookResult, error) {
+		return RunUserPromptSubmitHooks(ctx, table, wd, base, inputMessage, DefaultHookTimeoutMs)
+	}
+}
+
 // RunUserPromptSubmitHooks runs UserPromptSubmit **command** hooks (TS executeUserPromptSubmitHooks → executeHooks command branch)
 // and returns [types.AggregatedHookResult] slices suitable for [processuserinput.ProcessUserInputParams.ExecuteUserPromptSubmitHooks].
 //
