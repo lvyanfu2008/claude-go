@@ -21,9 +21,9 @@
 //
 // # Screen / transcript (TS Screen, ctrl+o, frozen tail)
 //
-//   - gou-demo: gouDemoScreenPrompt | gouDemoScreenTranscript (cmd/gou-demo/transcript_screen.go)
+//   - gou-demo: gouDemoScreenPrompt | gouDemoScreenTranscript (gou/app/transcript_screen.go)
 //   - Enter/exit transcript, frozen snapshot: enterTranscriptScreen, exitTranscriptScreen, transcriptFrozen (*frozenTranscriptSnapshot); streaming tail length from conversation.Store.StreamingToolUses (TS streamingToolUses), filled during HTTP streaming via query.QueryDeps.OnStreamingToolUses → gou-demo Bubble Tea msg; transcript list appends frozen-prefix streaming tool rows (scroll keys gou-st-tool:*, search/export)
-//   - View split: cmd/gou-demo/main.go View, listViewportH, scrollItemKeys
+//   - View split: gou/app/main.go View, listViewportH, scrollItemKeys
 //   - Parity checklist: docs/plans/gou-demo-transcript-ts-parity.md
 //
 // # Message list / virtual scroll
@@ -33,7 +33,7 @@
 //   - TS scrollRef (ScrollBoxHandle: scrollTo, scrollToBottom, sticky, …) → gou-demo model fields
 //     (scrollTop, sticky, pendingDelta) updated in Update/keys; next View pass renders — no separate ref type.
 //   - Prompt message list defaults to bubbles/viewport (go-tui-style) on top of the new message renderer (gou/message.VirtualList); opt out with GOU_DEMO_BUBBLES_VIEWPORT=0 to render the visible slice directly from m.scrollTop; ctrl+y fold. go-tui shares goc/gou/viewportfold for section toggles.
-//   - Wheel / plain left-drag scroll on the message list: cmd/gou-demo/mouse_message_list.go (tea.WithMouseCellMotion when enabled).
+//   - Wheel / plain left-drag scroll on the message list: gou/app/mouse_message_list.go (tea.WithMouseCellMotion when enabled).
 //     Bubbles viewport prompt pane: keyboard scroll is delegated through viewport.Update with a gou-demo KeyMap (go-tui/main pattern);
 //     at viewport top, wheel-up in-pane can tea.DisableMouse for host scrollback (test.go); GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE=0 disables.
 //     TS CLAUDE_CODE_DISABLE_MOUSE / GOU_DEMO_DISABLE_MOUSE omits SGR mouse so the host terminal can select/copy natively;
@@ -41,7 +41,7 @@
 //     Default: normal terminal buffer (no tea.WithAltScreen) to keep shell scrollback. Optional GOU_DEMO_ALT_SCREEN=1
 //     enables tea.WithAltScreen for in-pane wheel focus.
 //   - Row body: goc/gou/messagerow (SegmentsFromMessage*, tool chrome, collapsed_read_search)
-//   - Render/stitch: cmd/gou-demo/main.go formatMessageSegments, renderMessageRow (messagerow); heightCache / measureMessageRows use goc/gou/message Dispatcher.Measure (same stack as VirtualList / ComputeVisibleRange)
+//   - Render/stitch: gou/app/main.go formatMessageSegments, renderMessageRow (messagerow); heightCache / measureMessageRows use goc/gou/message Dispatcher.Measure (same stack as VirtualList / ComputeVisibleRange)
 //
 // # Stream apply (assistant_delta, tool_use, tool_result, turn_complete)
 //
@@ -50,29 +50,29 @@
 //     instead skips full rebuildHeightCache on ccbstream assistant_delta (Apply only appends StreamingText;
 //     prompt View draws streaming markdown outside virtual-scroll keys). gouStreamingToolUsesMsg skips full
 //     rebuild on prompt (live tools outside scroll keys); transcript mode still rebuilds for gou-st-tool:* keys.
-//     See cmd/gou-demo/stream_ui_height.go and Update ccbstream.Msg / gouStreamingToolUsesMsg branches.
+//     See gou/app/stream_ui_height.go and Update ccbstream.Msg / gouStreamingToolUsesMsg branches.
 //   - Optional Read/Grep/Glob tail merge: env GOU_DEMO_COLLAPSE_READ_SEARCH_TAIL (gou/ccbstream/apply.go)
 //
 // # Prompt input (multiline, submit, newline keys)
 //
 //   - TS PromptInput → goc/gou/prompt (Bubble Tea model)
-//   - gou-demo wiring: cmd/gou-demo/main.go (pr field, Update)
+//   - gou-demo wiring: gou/app/main.go (pr field, Update)
 //
 // # Query / tools (local parity, not remote ReplBridge)
 //
 //   - TS query engine + tool runner → goc/conversation-runtime/query, goc/tools/skilltools
-//   - gou-demo turn: processuserinput.ProcessUserInput, pui.BuildDemoParams / ApplyBaseResult (cmd/gou-demo/main.go)
+//   - gou-demo turn: processuserinput.ProcessUserInput, pui.BuildDemoParams / ApplyBaseResult (gou/app/main.go)
 //   - ReplBridge / remote REPL: explicitly non-goal — docs/plans/gou-demo-repl-bridge-scope.md
 //
 // # Transcript pager / search / dump / editor (modal layer)
 //
-//   - TS ScrollKeybindingHandler, search bar, [ dump, v editor → cmd/gou-demo/transcript_search.go,
+//   - TS ScrollKeybindingHandler, search bar, [ dump, v editor → gou/app/transcript_search.go,
 //     transcript_dump_editor.go, transcript_screen.go helpers
 //
 // # Loading / tool row chrome (⏺ / ⎿ / ctrl+o expand hints)
 //
 //   - TS MessageRow / AssistantToolUseMessage → docs/plans/gou-demo-loading-ui-parity.md,
-//     cmd/gou-demo/main.go toolRowLeadPrefix / formatMessageSegments, gou/messagerow/tool_*.go
+//     gou/app/main.go toolRowLeadPrefix / formatMessageSegments, gou/messagerow/tool_*.go
 //
 // # What is not ported here (use TS / other services)
 //
@@ -82,5 +82,5 @@
 //
 // When adding a REPL.tsx behavior, extend this comment and the relevant *_parity.md
 // under docs/plans/, then implement in the Go package listed above (keep files small;
-// do not grow a second monolith in cmd/gou-demo/main.go if a new goc/gou/ package fits).
+// do not grow a second monolith in gou/app/main.go if a new goc/gou/ package fits).
 package replparity

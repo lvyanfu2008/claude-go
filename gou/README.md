@@ -68,7 +68,7 @@ cd goc && go test ./gou/...
 Bubble Tea 最小界面：虚拟列表区间 + `conversation.Store` + 模拟 `StreamingText` 流式。
 
 ```bash
-cd goc && go run ./cmd/gou-demo
+cd goc && go run ./cmd/claude
 ```
 
 操作：**主 prompt 消息区**用 **↑↓** / PgUp / PgDn 滚动（**`j`/`k` 留给输入框打字**，与空格、`b` 一致）；`End` 粘底，`Enter` 发送（**`Ctrl+J` / `Alt+Enter`** 换行，**`Shift+↑↓`** 行间移动光标），**`F2`** slash 列表（打开后可直接输入缩小候选；首行 `/foo` 会作为初始 filter）。**`Ctrl+o`** 进入/退出 **transcript**（冻结历史；transcript 内 **`Esc` / `q` / `Ctrl+c`** 在无 **搜索条** 时仅退出 transcript；搜索条打开时 **`Esc`** 清空搜索留在 transcript；**`/`** 打开搜索、**`Enter`** 收起搜索条并保留查询以便 **`n`/`N`** 跳匹配；列宽变化会清空搜索）。无搜索条且非 **dump** 时 transcript 内 **`j`/`k`** 逐行、**`g`** 顶、**`G`/`Shift+g`** 底、**`Ctrl+u`/`Ctrl+d`** 半屏、**`Ctrl+b`/`Ctrl+f`**、**`b`** 与 **空格** 整屏下翻（**`modalPagerAction`**）、**`Ctrl+n`/`Ctrl+p`** 逐行下/上（与 TS 一致；搜索条打开时这些键不滚动，对齐 **`isModal={!searchOpen}`**）。**`[`**（无搜索条）：TS 风格 **dump**。**`v`**：临时文件 + **`$VISUAL`/`$EDITOR`**。**`Ctrl+e`** 在 dump 下禁用。在 **prompt** 界面 **`q` / `Esc`** 仍退出 demo。未设置 `GOU_QUERY_ASK_STRATEGY=allow` 时，工具权限 **ask** 在 TUI 内以 **Y/N** 模态处理。
@@ -83,16 +83,16 @@ cd goc && go run ./cmd/gou-demo
 
 ```bash
 # 从 JSON 载入历史（跳过内置 seed）
-cd goc && go run ./cmd/gou-demo -transcript=/path/to/messages.json
+cd goc && go run ./cmd/claude -transcript=/path/to/messages.json
 
 # 回放已录制的 ccb-engine NDJSON 事件文件，再进入 TUI
-cd goc && go run ./cmd/gou-demo -replay-cc=/path/to/stream.ndjson
+cd goc && go run ./cmd/claude -replay-cc=/path/to/stream.ndjson
 
 # 管道读 stdin 上的 NDJSON（Unix 下会尝试打开 /dev/tty 供键盘）
-cd goc && cat /path/to/stream.ndjson | go run ./cmd/gou-demo -stream-stdin
+cd goc && cat /path/to/stream.ndjson | go run ./cmd/claude -stream-stdin
 
 # 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json
-cd goc && go run ./cmd/gou-demo
+cd goc && go run ./cmd/claude
 ```
 
 **`execute_tool`**：`ccbstream.Apply` 不会执行客户端工具，但会追加一条 **system** 占位说明（工具名、`tool_use_id`），便于管道/回放时看见流里曾有过待执行工具；完整对话形状仍需在同一条 NDJSON 流中提供对应的 **`tool_result`**（或由宿主注入）。

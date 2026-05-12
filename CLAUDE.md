@@ -4,7 +4,7 @@ This file orients contributors and automation when working in **`claude-go/`** (
 
 ## No TypeScript runtime dependency
 
-**`goc` builds and tests must not spawn Bun, Node, or `claude-code` `.ts` entrypoints** to implement product behavior (no `exec` of those in `go test`, `go run ./cmd/gou-demo`, or library defaults). Embedded JSON, markdown, and generated literals copied from the TS product are **static assets**, not a runtime dependency. Comments may cite TS paths for parity. Optional **manual** comparisons (e.g. a sibling checkout running `dump-init-state`) are out of band and not required for CI.
+**`goc` builds and tests must not spawn Bun, Node, or `claude-code` `.ts` entrypoints** to implement product behavior (no `exec` of those in `go test`, `go run ./cmd/claude`, or library defaults). Embedded JSON, markdown, and generated literals copied from the TS product are **static assets**, not a runtime dependency. Comments may cite TS paths for parity. Optional **manual** comparisons (e.g. a sibling checkout running `dump-init-state`) are out of band and not required for CI.
 
 ## Layout
 
@@ -35,7 +35,7 @@ Env gates are assembled in **`query.BuildQueryConfig`** (`query_config_build.go`
 ```bash
 cd claude-go
 go test ./...
-go build -o /dev/null ./cmd/gou-demo
+go build -o /dev/null ./cmd/claude
 ```
 
 ## Related docs
