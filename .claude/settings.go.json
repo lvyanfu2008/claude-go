@@ -4,18 +4,5 @@
     "OPENAI_ENABLE_THINKING": "1",
     "CLAUDE_CODE_LOG_API_REQUEST_BODY": "1",
     "CLAUDE_CODE_LOG_API_RESPONSE_BODY": "1"
-  },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '爱我中华'"
-          }
-        ]
-      }
-    ]
   }
 }
