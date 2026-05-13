@@ -518,6 +518,8 @@ type model struct {
 	msgScrollbarW int
 
 	permAsk           *permissionAskOverlay
+	questionUI        *questionModel // non-nil when interactive AskUserQuestion UI is active
+	askAutoFirst      bool           // cached from runner config, used by installAskResolver
 	slashCommands     []types.Command
 	slashCommandsOnce bool
 	// slashListUser: F2 toggles the command list when not in TS auto-suggest (e.g. empty input).
@@ -1049,6 +1051,33 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// When the interactive question UI is active, delegate all updates to it.
+	if m.questionUI != nil {
+		qm, _ := m.questionUI.Update(msg)
+		m.questionUI = qm.(*questionModel) // questionModel.Update always returns *questionModel, nil cmd
+		if m.questionUI.IsDone() {
+			reply := permissionAskReply{}
+			if m.questionUI.IsCancelled() {
+				reply.dec = toolexecution.DenyDecision("User declined to answer questions")
+			} else {
+				updatedInput := m.questionUI.BuildUpdatedInput(m.questionUI.originalInput)
+				reply.dec = toolexecution.PermissionDecision{
+					Behavior:     toolexecution.PermissionAllow,
+					UpdatedInput: updatedInput,
+				}
+			}
+			// Send reply through the questionUI's own channel (not permAsk).
+			if m.questionUI.replyCh != nil {
+				select {
+				case m.questionUI.replyCh <- reply:
+				default:
+				}
+			}
+			m.questionUI = nil
+		}
+		return m, nil
+	}
+
 	if m.manualRenderMode {
 		switch msg.(type) {
 		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg:
@@ -1062,6 +1091,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleUpdateWindowSize(msg)
 
 	case gouPermissionAskMsg:
+		if len(msg.questions) > 0 {
+			// AskUserQuestion: switch to interactive question UI.
+			m.questionUI = newQuestionModel(msg.questions, msg.replyCh, m.width, m.height)
+			// Store the original input for building updatedInput on submit.
+			m.questionUI.originalInput = msg.input
+			return m, nil
+		}
 		m.permAsk = &permissionAskOverlay{
 			toolName:  msg.toolName,
 			toolUseID: msg.toolUseID,
@@ -1433,6 +1469,11 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 }
 
 func (m *model) View() tea.View {
+	// When the interactive question UI is active, render it instead of the normal view.
+	if m.questionUI != nil {
+		return m.wrapRootView(m.questionUI.View().Content)
+	}
+
 	if m.width == 0 {
 		return m.wrapRootView("Loading…")
 	}
@@ -2550,6 +2591,12 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							ReadToolRoots:           runner.ToolReadMappingRoots(),
 							ReadToolMemCWD:          runner.ToolReadMappingMemCWD(),
 							MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(params.Commands, m.store.ConversationID),
+							QueryCanUseTool: func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
+								if toolName == "AskUserQuestion" {
+									return toolexecution.AskDecision("Answer questions?"), nil
+								}
+								return toolexecution.AllowDecision(), nil
+							},
 						}
 						// Opt-in TS permissions.ts 1b: whole-tool alwaysAsk on Bash skipped when input looks sandboxed (see toolexecution.BashSandboxRule1b).
 						if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
@@ -2568,7 +2615,8 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 								ContentReplacementState: m.toolResultState,
 							}
 						}
-						m.installAskResolver(&te)
+						m.askAutoFirst = !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST")
+							m.installAskResolver(&te, m.askAutoFirst)
 						qdeps.ToolexecutionDeps = te
 						// Wire tool result budget enforcement when persistence is enabled.
 						// The closure captures the live Go *ContentReplacementState so mutations

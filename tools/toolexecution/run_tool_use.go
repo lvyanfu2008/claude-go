@@ -43,6 +43,7 @@ func RunToolUseChan(
 			return
 		}
 
+		effectiveInput := block.Input
 		if deps.QueryCanUseTool != nil {
 			dec, err := deps.QueryCanUseTool(ctx, block.Name, block.ID, block.Input)
 			if err != nil {
@@ -75,18 +76,23 @@ func RunToolUseChan(
 					ch <- streamingtool.ToolRunUpdate{Message: &m}
 					return
 				}
+				if final.UpdatedInput != nil {
+					effectiveInput = final.UpdatedInput
+				}
 			case PermissionAllow:
-				// continue to InvokeTool / Registry
+				if dec.UpdatedInput != nil {
+					effectiveInput = dec.UpdatedInput
+				}
 			}
 		}
 
-		if applyRuleBasedDecisionInRun(ctx, deps, block.Name, block.ID, block.Input, assistant.UUID, ch) {
+		if applyRuleBasedDecisionInRun(ctx, deps, block.Name, block.ID, effectiveInput, assistant.UUID, ch) {
 			return
 		}
 
 		// MCP tool dispatch: route mcp__* tools to the MCP connection manager.
 		if MCPToolDispatcher != nil && strings.HasPrefix(block.Name, "mcp__") {
-			content, err := MCPToolDispatcher(ctx, block.Name, block.Input)
+			content, err := MCPToolDispatcher(ctx, block.Name, effectiveInput)
 			if ctx.Err() != nil {
 				m := syntheticAborted(deps, block.ID, assistant.UUID)
 				ch <- streamingtool.ToolRunUpdate{Message: &m}
@@ -105,14 +111,14 @@ func RunToolUseChan(
 		if deps.InvokeTool != nil {
 			// Multi-message handler takes precedence over single-result InvokeTool
 			if deps.MultiMessageToolHandler != nil {
-				if msgs, handled := deps.MultiMessageToolHandler(ctx, block.Name, block.ID, block.Input, assistant.UUID); handled {
+				if msgs, handled := deps.MultiMessageToolHandler(ctx, block.Name, block.ID, effectiveInput, assistant.UUID); handled {
 					for _, msg := range msgs {
 						ch <- streamingtool.ToolRunUpdate{Message: &msg}
 					}
 					return
 				}
 			}
-			content, isErr, err := deps.InvokeTool(ctx, block.Name, block.ID, block.Input)
+			content, isErr, err := deps.InvokeTool(ctx, block.Name, block.ID, effectiveInput)
 			if ctx.Err() != nil {
 				m := syntheticAborted(deps, block.ID, assistant.UUID)
 				ch <- streamingtool.ToolRunUpdate{Message: &m}
@@ -122,7 +128,7 @@ func RunToolUseChan(
 				content = err.Error()
 				isErr = true
 			}
-			m := syntheticToolMessageAfterInvoke(deps, block.Name, block.ID, block.Input, content, isErr, assistant.UUID)
+			m := syntheticToolMessageAfterInvoke(deps, block.Name, block.ID, effectiveInput, content, isErr, assistant.UUID)
 			ch <- streamingtool.ToolRunUpdate{Message: &m}
 			return
 		}
@@ -138,7 +144,7 @@ func RunToolUseChan(
 				ToolPermission:    deps.ToolPermission,
 				BashSandboxRule1b: bashSandboxRule1bFromExecutionDeps(deps),
 			}
-			res, err := tool.Call(ctx, block.ID, block.Input, tcx, nil, AssistantMeta{UUID: assistant.UUID}, nil)
+			res, err := tool.Call(ctx, block.ID, effectiveInput, tcx, nil, AssistantMeta{UUID: assistant.UUID}, nil)
 			if ctx.Err() != nil {
 				m := syntheticAborted(deps, block.ID, assistant.UUID)
 				ch <- streamingtool.ToolRunUpdate{Message: &m}

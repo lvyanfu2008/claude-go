@@ -106,6 +106,25 @@ func ToolChromeParts(toolName string, input json.RawMessage) (facing, paren, hin
 		}
 		t := truncateToolSummary(d)
 		return toolName, t, t
+	case "AskUserQuestion":
+		qs := m["questions"]
+		if qs == nil {
+			return "Ask", "", ""
+		}
+		qarr, ok := qs.([]any)
+		if !ok || len(qarr) == 0 {
+			return "Ask", "", ""
+		}
+		firstQ, _ := qarr[0].(map[string]any)
+		if firstQ == nil {
+			return "Ask", "", ""
+		}
+		qtext := strFromMap(firstQ, "question")
+		if qtext == "" {
+			return "Ask", "", ""
+		}
+		t := truncateToolSummary(qtext)
+		return "Ask", t, t
 	default:
 		return "", "", ""
 	}

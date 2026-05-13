@@ -100,9 +100,13 @@ func CheckPermissionsAndCallTool(
 		return nil, err
 	}
 	allowProceed := false
+	effectiveInput := input
 	switch dec.Behavior {
 	case PermissionAllow:
 		allowProceed = true
+		if dec.UpdatedInput != nil {
+			effectiveInput = dec.UpdatedInput
+		}
 	case PermissionDeny:
 		msg := dec.Message
 		if msg == "" {
@@ -124,13 +128,16 @@ func CheckPermissionsAndCallTool(
 			return []types.Message{um}, nil
 		}
 		allowProceed = true
+		if final.UpdatedInput != nil {
+			effectiveInput = final.UpdatedInput
+		}
 	default:
 		return nil, fmt.Errorf("toolexecution: unknown permission behavior %q", dec.Behavior)
 	}
 	if !allowProceed {
 		return nil, fmt.Errorf("toolexecution: internal permission state")
 	}
-	return finishCheckPermissionsWithToolCall(ctx, deps, tool, toolUseID, input, tcxUse, canUseTool, assistant)
+	return finishCheckPermissionsWithToolCall(ctx, deps, tool, toolUseID, effectiveInput, tcxUse, canUseTool, assistant)
 }
 
 // finishCheckPermissionsWithToolCall runs [ExecutionDeps.InvokeTool] when set (same order as [RunToolUseChan]), else [Tool.Call], then one user row with tool_result.

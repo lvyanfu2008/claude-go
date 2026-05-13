@@ -30,11 +30,13 @@ type permissionAskOverlay struct {
 
 // gouPermissionAskMsg is sent from [toolexecution.ExecutionDeps.AskResolver] to the Bubble Tea Update loop.
 type gouPermissionAskMsg struct {
-	toolName  string
-	toolUseID string
-	input     json.RawMessage
-	prompt    string
-	replyCh   chan permissionAskReply
+	toolName     string
+	toolUseID    string
+	input        json.RawMessage
+	prompt       string
+	replyCh      chan permissionAskReply
+	questions    []ParsedQuestion // set for AskUserQuestion
+	askAutoFirst bool             // if true, auto-allow AskUserQuestion instead of showing UI
 }
 
 // slashFilterFromPrompt returns the text after the leading "/" on the first line (for filtering),
@@ -126,7 +128,7 @@ func sortedSlashDisplayNames(commands []types.Command) []string {
 	return names
 }
 
-func (m *model) installAskResolver(te *toolexecution.ExecutionDeps) {
+func (m *model) installAskResolver(te *toolexecution.ExecutionDeps, askAutoFirst bool) {
 	if m.ccbSend == nil {
 		return
 	}
@@ -140,12 +142,38 @@ func (m *model) installAskResolver(te *toolexecution.ExecutionDeps) {
 	send := m.ccbSend
 	te.AskResolver = func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {
 		ch := make(chan permissionAskReply, 1)
+
+		// AskUserQuestion: parse questions and either auto-allow or show interactive UI.
+		var questions []ParsedQuestion
+		if toolName == "AskUserQuestion" {
+			qs, err := parseAskUserQuestionInput(input)
+			if err != nil {
+				return toolexecution.DenyDecision("invalid AskUserQuestion input: " + err.Error()), nil
+			}
+			questions = qs
+			if askAutoFirst {
+				// Auto-select first option for each question, matching TS AskAutoFirst behavior.
+				answers := make(map[string]string)
+				for _, q := range questions {
+					answers[q.Question] = q.Options[0].Label
+				}
+				// Build updatedInput with auto-answers so the tool handler returns them.
+				updated := buildUpdatedInputWithAnswers(input, answers, nil)
+				return toolexecution.PermissionDecision{
+					Behavior:     toolexecution.PermissionAllow,
+					UpdatedInput: updated,
+				}, nil
+			}
+		}
+
 		send(gouPermissionAskMsg{
-			toolName:  toolName,
-			toolUseID: toolUseID,
-			input:     input,
-			prompt:    prompt,
-			replyCh:   ch,
+			toolName:     toolName,
+			toolUseID:    toolUseID,
+			input:        input,
+			prompt:       prompt,
+			replyCh:      ch,
+			questions:    questions,
+			askAutoFirst: askAutoFirst,
 		})
 		select {
 		case r := <-ch:
@@ -154,6 +182,20 @@ func (m *model) installAskResolver(te *toolexecution.ExecutionDeps) {
 			return toolexecution.DenyDecision("cancelled"), ctx.Err()
 		}
 	}
+}
+
+// buildUpdatedInputWithAnswers merges user answers into the original tool input JSON.
+func buildUpdatedInputWithAnswers(original json.RawMessage, answers map[string]string, annotations map[string]any) json.RawMessage {
+	var in map[string]any
+	if err := json.Unmarshal(original, &in); err != nil {
+		in = make(map[string]any)
+	}
+	in["answers"] = answers
+	if len(annotations) > 0 {
+		in["annotations"] = annotations
+	}
+	b, _ := json.Marshal(in)
+	return b
 }
 
 func (m *model) finishPermissionAsk(r permissionAskReply) {

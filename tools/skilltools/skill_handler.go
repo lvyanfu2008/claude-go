@@ -15,11 +15,13 @@ import (
 )
 
 // NewSkillMultiMessageHandler returns a MultiMessageToolHandler that expands
-// Skill tool invocations into a metadata user message + content user message
-// (mirrors TS processPromptSlashCommand → getMessagesForPromptSlashCommand).
+// Skill tool invocations into a synthetic tool_result + metadata user message +
+// content user message (mirrors TS processPromptSlashCommand → getMessagesForPromptSlashCommand).
 //
-// The metadata message carries <command-message>/<command-name>/<command-args>
-// XML tags; the content message carries the resolved skill text with isMeta: true.
+// The tool_result consumes the Skill tool_use_id so that OpenAI-compatible APIs
+// see a matching tool message for every assistant tool_call. The metadata message
+// carries <command-message>/<command-name>/<command-args> XML tags; the content
+// message carries the resolved skill text with isMeta: true.
 func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string) func(
 	ctx context.Context,
 	name, toolUseID string,
@@ -93,6 +95,11 @@ func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string)
 			return nil, false
 		}
 
+		// Synthetic tool_result to consume the Skill tool_use_id.
+		// OpenAI-compatible APIs require every assistant tool_call to be followed
+		// by a tool message with matching tool_call_id.
+		toolResultMsg := newToolResultMessage(toolUseID, "Skill loaded: "+normalized)
+
 		// Build metadata user message (XML tags, mirrors TS formatSlashCommandLoadingMetadata).
 		metadataParts := []string{
 			fmt.Sprintf("<command-message>%s</command-message>", normalized),
@@ -116,7 +123,34 @@ func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string)
 			return nil, false
 		}
 
-		return []types.Message{metadataMsg, contentMsg}, true
+		return []types.Message{toolResultMsg, metadataMsg, contentMsg}, true
+	}
+}
+
+// newToolResultMessage creates a user message whose content block is a tool_result
+// responding to the given tool_use_id. This consumes the tool call so that
+// OpenAI-compatible APIs accept the conversation.
+func newToolResultMessage(toolUseID, content string) types.Message {
+	id := randomUUID()
+	inner := map[string]any{
+		"role": "user",
+		"content": []map[string]any{{
+			"type":        "tool_result",
+			"tool_use_id": toolUseID,
+			"content":     content,
+			"is_error":    false,
+		}},
+	}
+	msgInner, err := json.Marshal(inner)
+	if err != nil {
+		return types.Message{}
+	}
+	contentRaw, _ := json.Marshal(inner["content"])
+	return types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    id,
+		Message: json.RawMessage(msgInner),
+		Content: contentRaw,
 	}
 }
 

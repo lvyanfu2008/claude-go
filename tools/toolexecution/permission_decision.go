@@ -29,6 +29,10 @@ type PermissionDecision struct {
 	Message  string             `json:"message,omitempty"`
 	// AskKind is set for [PermissionAsk] when the decision must surface through [CheckRuleBasedPermissions] (1f–1g). Ignored for deny/allow.
 	AskKind PermissionAskKind `json:"ask_kind,omitempty"`
+	// UpdatedInput, when non-nil, replaces the original tool input for the tool call.
+	// Used by interactive tools (e.g. AskUserQuestion) where the user's answers are
+	// merged into the input before execution.
+	UpdatedInput json.RawMessage `json:"updated_input,omitempty"`
 }
 
 // AllowDecision returns an allow decision (TS allow).
