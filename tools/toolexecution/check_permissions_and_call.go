@@ -134,6 +134,8 @@ func CheckPermissionsAndCallTool(
 }
 
 // finishCheckPermissionsWithToolCall runs [ExecutionDeps.InvokeTool] when set (same order as [RunToolUseChan]), else [Tool.Call], then one user row with tool_result.
+// When [ExecutionDeps.PostToolUseHookRunner] is set, post-tool-use hooks are executed and
+// their messages are appended to the result (TS parity: runPostToolUseHooks in toolHooks.ts).
 func finishCheckPermissionsWithToolCall(
 	ctx context.Context,
 	deps ExecutionDeps,
@@ -144,6 +146,9 @@ func finishCheckPermissionsWithToolCall(
 	canUseTool CanUseToolFn,
 	assistant AssistantMeta,
 ) ([]types.Message, error) {
+	var toolResponse string
+	var msgs []types.Message
+
 	if deps.InvokeTool != nil {
 		content, isErr, ierr := deps.InvokeTool(ctx, tool.Name(), toolUseID, input)
 		if ctx.Err() != nil {
@@ -154,19 +159,44 @@ func finishCheckPermissionsWithToolCall(
 			um := syntheticToolResult(deps, toolUseID, ierr.Error(), true, assistant.UUID)
 			return []types.Message{um}, nil
 		}
+		toolResponse = content
 		um := syntheticToolMessageAfterInvoke(deps, tool.Name(), toolUseID, input, content, isErr, assistant.UUID)
-		return []types.Message{um}, nil
+		msgs = []types.Message{um}
+	} else {
+		res, err := tool.Call(ctx, toolUseID, input, tcxUse, canUseTool, assistant, nil)
+		if ctx.Err() != nil {
+			um := syntheticAborted(deps, toolUseID, assistant.UUID)
+			return []types.Message{um}, nil
+		}
+		if err != nil {
+			um := syntheticToolResult(deps, toolUseID, err.Error(), true, assistant.UUID)
+			return []types.Message{um}, nil
+		}
+		body, isErr := toolRunResultString(res)
+		toolResponse = body
+		um := syntheticToolResult(deps, toolUseID, body, isErr, assistant.UUID)
+		msgs = []types.Message{um}
 	}
-	res, err := tool.Call(ctx, toolUseID, input, tcxUse, canUseTool, assistant, nil)
-	if ctx.Err() != nil {
-		um := syntheticAborted(deps, toolUseID, assistant.UUID)
-		return []types.Message{um}, nil
+
+	// Run PostToolUse hooks if configured (TS parity: runPostToolUseHooks).
+	if deps.PostToolUseHookRunner != nil {
+		hookResults, err := deps.PostToolUseHookRunner(ctx, PostToolUseHookInput{
+			ToolName:     tool.Name(),
+			ToolUseID:    toolUseID,
+			ToolInput:    input,
+			ToolResponse: toolResponse,
+		}, deps)
+		if err == nil {
+			for _, r := range hookResults {
+				if len(r.Message) > 0 {
+					var msg types.Message
+					if json.Unmarshal(r.Message, &msg) == nil {
+						msgs = append(msgs, msg)
+					}
+				}
+			}
+		}
 	}
-	if err != nil {
-		um := syntheticToolResult(deps, toolUseID, err.Error(), true, assistant.UUID)
-		return []types.Message{um}, nil
-	}
-	body, isErr := toolRunResultString(res)
-	um := syntheticToolResult(deps, toolUseID, body, isErr, assistant.UUID)
-	return []types.Message{um}, nil
+
+	return msgs, nil
 }

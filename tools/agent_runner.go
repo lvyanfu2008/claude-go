@@ -312,6 +312,11 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	}
 	pretoolHook := hookexec.AgentPreToolUseHookFromSession(s.ID, s.WorkDir)
 	invokeReadFileState := localtools.NewReadFileState()
+
+	// Build PostToolUse hook runner wired to the agent's merged hooks table
+	// (settings + session hooks). TS parity: runPostToolUseHooks in toolHooks.ts.
+	postToolHookRunner := agentPostToolUseHookRunner(cfg, s)
+
 	qdeps.ToolexecutionDeps = toolexecution.ExecutionDeps{
 		InvokeTool: func(ctx context.Context, name, _ string, input json.RawMessage) (string, bool, error) {
 			s, isErr, perr := Run(ctx, name, input, toolCfg)
@@ -338,8 +343,9 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			}
 			return s, isErr, perr
 		},
-		MainLoopModel:  tc.Options.MainLoopModel,
-		PreToolUseHook: pretoolHook,
+		MainLoopModel:           tc.Options.MainLoopModel,
+		PreToolUseHook:          pretoolHook,
+		PostToolUseHookRunner:   postToolHookRunner,
 	}
 
 	// Wrap Autocompact to capture updated ContentReplacementState so it can be
@@ -463,6 +469,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			if stopSummary != nil {
 				stopSummary()
 			}
+			runAgentStopHooks(ctx, cfg, s, "")
 			return runAgentNow(s, msg)
 		}
 		if y.Message == nil {
@@ -525,6 +532,11 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	if stopSummary != nil {
 		stopSummary()
 	}
+
+	// Run Stop (or SubagentStop) hooks after the agent query loop completes.
+	// TS parity: executeStopHooks in hooks.ts.
+	runAgentStopHooks(ctx, cfg, s, strings.Join(assistantChunks, "\n"))
+
 	// Persist updated ContentReplacementState for next resume.
 	if len(captureCRS) > 0 {
 		s.ContentReplacementState = captureCRS
@@ -537,6 +549,65 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	s.LastOutput = out
 	s.UpdatedAt = time.Now().UTC()
 	return out
+}
+
+// agentPostToolUseHookRunner creates a PostToolUseHookRunner closure wired to the agent's
+// merged hooks table (settings + session hooks). TS parity: runPostToolUseHooks in toolHooks.ts.
+func agentPostToolUseHookRunner(cfg AgentRuntimeConfig, s *AgentSession) toolexecution.PostToolUseHookRunner {
+	return func(ctx context.Context, input toolexecution.PostToolUseHookInput, deps toolexecution.ExecutionDeps) ([]types.AggregatedHookResult, error) {
+		table, err := hookexec.AgentMergedHooksTable(cfg.ProjectRoot, s.ID)
+		if err != nil || len(table) == 0 {
+			return nil, nil
+		}
+
+		toolInputJSON := ""
+		if len(input.ToolInput) > 0 {
+			toolInputJSON = string(input.ToolInput)
+		}
+
+		transcriptPath := sessiontranscript.AgentTranscriptPath(cfg.SessionID, cfg.ProjectRoot, "", sessiontranscript.ConfigHomeDir(), s.ID, "")
+		base := hookexec.BaseHookInput{
+			SessionID:      cfg.SessionID,
+			TranscriptPath: transcriptPath,
+			Cwd:            s.WorkDir,
+			PermissionMode: s.PermissionMode,
+			AgentID:        s.ID,
+			AgentType:      s.AgentType,
+		}
+
+		return hookexec.RunPostToolUseHooks(ctx, table, s.WorkDir, base, input.ToolName, input.ToolUseID, toolInputJSON, hookexec.DefaultHookTimeoutMs)
+	}
+}
+
+// runAgentStopHooks executes Stop (or SubagentStop) hooks for an agent.
+// TS parity: executeStopHooks in hooks.ts.
+func runAgentStopHooks(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession, lastAssistantText string) {
+	table, err := hookexec.AgentMergedHooksTable(cfg.ProjectRoot, s.ID)
+	if err != nil || len(table) == 0 {
+		return
+	}
+
+	transcriptPath := sessiontranscript.AgentTranscriptPath(cfg.SessionID, cfg.ProjectRoot, "", sessiontranscript.ConfigHomeDir(), s.ID, "")
+	base := hookexec.BaseHookInput{
+		SessionID:      cfg.SessionID,
+		TranscriptPath: transcriptPath,
+		Cwd:            s.WorkDir,
+		PermissionMode: s.PermissionMode,
+		AgentID:        s.ID,
+		AgentType:      s.AgentType,
+	}
+
+	results, err := hookexec.RunStopHooks(ctx, table, s.WorkDir, base, true, s.ID, s.AgentType, lastAssistantText, transcriptPath, hookexec.DefaultHookTimeoutMs)
+	if err != nil {
+		return
+	}
+	for _, r := range results {
+		if r.BlockingError != nil {
+			if apilog.DebugModeEnabled() {
+				diaglog.LineOrStderr("[agent] stop hook blocked: %s", r.BlockingError.BlockingError)
+			}
+		}
+	}
 }
 
 func assistantMessageText(m types.Message) string {

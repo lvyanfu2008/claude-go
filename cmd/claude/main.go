@@ -347,12 +347,21 @@ func runHeadless(prompt string) error {
 		}
 	}
 
+	// Defer SessionEnd hooks for cleanup on shutdown (TS parity: executeSessionEndHooks).
+	sessionEndReason := "error"
+	defer func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), time.Duration(hookexec.SessionEndHookTimeoutMs)*time.Millisecond)
+		defer bgCancel()
+		hookexec.RunSessionEndHooks(bgCtx, mergedHooks, cwd, baseHookInput, sessionEndReason, sessionID)
+	}()
+
 	// Process user input (includes hook execution inline, mirrors TS processUserInput flow).
 	result, err := processuserinput.ProcessUserInput(ctx, p)
 	if err != nil {
 		return fmt.Errorf("process prompt: %w", err)
 	}
 	if !result.ShouldQuery {
+		sessionEndReason = "normal"
 		// Hook may have blocked the query — print hook messages if any.
 		for _, msg := range result.Messages {
 			if msg.Type == "system" {
@@ -439,5 +448,25 @@ func runInteractive(args []string) error {
 		CWD:            cwd,
 	}
 
-	return app.Run(cfg)
+	// Load merged hooks and defer SessionEnd hooks for interactive mode.
+	mergedHooks, _ := hookexec.MergedHooksForCwd(cwd)
+	transcriptPath := sessiontranscript.TranscriptPath(sessionID, cwd, "", sessiontranscript.ConfigHomeDir())
+	baseHookInput := hookexec.BaseHookInput{
+		SessionID:      sessionID,
+		TranscriptPath: transcriptPath,
+		Cwd:            cwd,
+		PermissionMode: pm,
+	}
+	sessionEndReason := "error"
+	defer func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), time.Duration(hookexec.SessionEndHookTimeoutMs)*time.Millisecond)
+		defer bgCancel()
+		hookexec.RunSessionEndHooks(bgCtx, mergedHooks, cwd, baseHookInput, sessionEndReason, sessionID)
+	}()
+
+	err := app.Run(cfg)
+	if err == nil {
+		sessionEndReason = "normal"
+	}
+	return err
 }
