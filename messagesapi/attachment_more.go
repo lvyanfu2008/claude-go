@@ -660,8 +660,8 @@ func normalizeAttachmentHookBlockingError(att json.RawMessage, uuidGen func() st
 	var a struct {
 		HookName      string `json:"hookName"`
 		BlockingError struct {
-			Command        string `json:"command"`
-			BlockingError  string `json:"blockingError"`
+			Command       string `json:"command"`
+			BlockingError string `json:"blockingError"`
 		} `json:"blockingError"`
 	}
 	if err := json.Unmarshal(att, &a); err != nil {
@@ -688,8 +688,8 @@ func normalizeAttachmentHookSuccess(att json.RawMessage, uuidGen func() string) 
 	if strings.TrimSpace(a.Content) == "" {
 		return nil, nil
 	}
-	text := fmt.Sprintf("%s hook success: %s", a.HookName, a.Content)
-	m := createUserMessageString(wrapInSystemReminder(text), uuidGen(), "", true)
+	//text := fmt.Sprintf("%s hook success: %s", a.HookName, a.Content)
+	m := createUserMessageString(wrapInSystemReminder(a.Content), uuidGen(), "", true)
 	return []types.Message{m}, nil
 }
 
