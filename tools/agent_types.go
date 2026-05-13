@@ -61,6 +61,22 @@ type AgentDefinition struct {
 	// Hooks mirrors TS custom agent frontmatter hooks — parsed from agent markdown frontmatter hooks field.
 	// Stored as json.RawMessage to round-trip through JSON serialization for settings/tool API schemas.
 	Hooks json.RawMessage `json:"hooks,omitempty"`
+	// SystemPromptFn is an optional closure that generates the system prompt dynamically.
+	// When non-nil, it takes precedence over the static SystemPrompt field.
+	// Mirrors TS BuiltInAgentDefinition.getSystemPrompt(params).
+	SystemPromptFn func(params AgentSystemPromptParams) string `json:"-"`
+}
+
+// AgentSystemPromptParams carries runtime context for dynamic agent system prompt generation.
+// Mirrors TS getSystemPrompt params in loadAgentsDir.ts.
+type AgentSystemPromptParams struct {
+	SessionID           string
+	MemoryContent       string
+	TeamMembers         []string
+	AvailableMCPServers []string
+	Model               string
+	SkillsContent       string
+	WorkDir             string
 }
 
 type AgentSession struct {

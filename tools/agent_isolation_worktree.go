@@ -45,6 +45,78 @@ func removeWorktree(projectRoot, worktreePath string) error {
 	return nil
 }
 
+// CleanupStaleAgentWorktrees removes worktrees whose last modification time exceeds maxAge.
+// Mirrors TS cleanupStaleAgentWorktrees in worktree.ts.
+func CleanupStaleAgentWorktrees(projectRoot string, maxAge time.Duration) {
+	root := strings.TrimSpace(projectRoot)
+	if root == "" {
+		return
+	}
+	base := filepath.Join(root, ".claude", "worktrees")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-maxAge)
+	for _, ent := range entries {
+		if !ent.IsDir() {
+			continue
+		}
+		wp := filepath.Join(base, ent.Name())
+		info, err := ent.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(cutoff) {
+			continue
+		}
+		// Verify it's a git worktree before removing.
+		if !isGitWorktree(root, wp) {
+			continue
+		}
+		if HasWorktreeChanges(wp) {
+			continue
+		}
+		_ = removeWorktree(root, wp)
+	}
+}
+
+// HasWorktreeChanges checks if a worktree has uncommitted changes.
+// Mirrors TS hasWorktreeChanges in worktree.ts.
+func HasWorktreeChanges(worktreePath string) bool {
+	wp := strings.TrimSpace(worktreePath)
+	if wp == "" {
+		return false
+	}
+	cmd := exec.Command("git", "-C", wp, "status", "--porcelain")
+	out, err := cmd.Output()
+	if err != nil {
+		return true // err on side of caution
+	}
+	return len(strings.TrimSpace(string(out))) > 0
+}
+
+// BumpWorktreeMtime touches a marker file to update the worktree's effective age.
+// Mirrors TS bumpWorktreeMtime in worktree.ts.
+func BumpWorktreeMtime(worktreePath string) {
+	wp := strings.TrimSpace(worktreePath)
+	if wp == "" {
+		return
+	}
+	marker := filepath.Join(wp, ".claude", "worktree-marker")
+	_ = os.MkdirAll(filepath.Dir(marker), 0o700)
+	_ = os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600)
+}
+
+func isGitWorktree(projectRoot, worktreePath string) bool {
+	cmd := exec.Command("git", "-C", projectRoot, "worktree", "list", "--porcelain")
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), worktreePath)
+}
+
 func sanitizeName(s string) string {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if s == "" {

@@ -79,6 +79,14 @@ func wholeToolAlwaysDenyAsk(toolName string, input json.RawMessage, perm *types.
 		d := DenyDecision(fmt.Sprintf("Permission to use %s has been denied.", toolName))
 		return &d
 	}
+	// Content-based deny (mirrors getRuleByContentsForTool in permissions.ts).
+	// Skip Agent tool — subagent-type filtering is handled by GetDenyRuleForAgent below.
+	if len(input) > 0 && !strings.EqualFold(toolName, "Agent") {
+		if dr := permissionrules.GetRuleByContentsForToolName(pc, toolName, string(input)); dr != nil {
+			d := DenyDecision(fmt.Sprintf("Permission to use %s has been denied by content rule %q from %s.", toolName, fmt.Sprintf("%s(%s)", toolName, *dr.RuleValue.RuleContent), dr.Source))
+			return &d
+		}
+	}
 	// Per-subagent alwaysDeny, e.g. alwaysDenyRules Agent(Explore) (mirrors getDenyRuleForAgent; resumeAgent.ts skips re-gating).
 	if strings.EqualFold(toolName, "Agent") && len(input) > 0 {
 		var partial struct {

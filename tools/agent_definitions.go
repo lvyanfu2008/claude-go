@@ -104,6 +104,11 @@ func AgentMeetsRequiredMCPServers(a AgentDefinition, availableServers []string) 
 }
 
 func ResolveAllowedTools(a AgentDefinition, available []string) []string {
+	result := resolveAllowedToolsImpl(a, available)
+	return FilterToolsForAgent(result)
+}
+
+func resolveAllowedToolsImpl(a AgentDefinition, available []string) []string {
 	if len(a.Tools) == 0 && len(a.DisallowedTools) == 0 {
 		return append([]string(nil), available...)
 	}

@@ -135,7 +135,7 @@ func availableAgentToolNames() []string {
 	return append([]string(nil), agentToolNames...)
 }
 
-func filterToolsForAgent(raw json.RawMessage, allowed []string) json.RawMessage {
+func filterToolsJSONForAgent(raw json.RawMessage, allowed []string) json.RawMessage {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -190,6 +190,9 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	}
 	// Cleanup session hooks when agent finishes (TS clearSessionHooks).
 	defer hookexec.ClearAgentSessionHooks(s.ID)
+
+	// Run SubagentStart hooks after frontmatter registration (TS executeSubagentStartHooks).
+	runAgentSubagentStartHooks(ctx, cfg, s)
 
 	// Reapply tool_result content replacements to sidechain history on resume,
 	// restoring tool_result content that was compacted during the prior execution.
@@ -286,7 +289,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	tc.Options.MainLoopModel = strings.TrimSpace(s.Model)
 	tc.Options.IsNonInteractiveSession = true
 	if tj := loadAgentToolsJSON(); len(tj) > 0 {
-		tc.Options.Tools = filterToolsForAgent(json.RawMessage(tj), s.AllowedTools)
+		tc.Options.Tools = filterToolsJSONForAgent(json.RawMessage(tj), FilterToolsForAgent(s.AllowedTools))
 	}
 	if s.ID != "" {
 		id := s.ID
@@ -581,6 +584,27 @@ func agentPostToolUseHookRunner(cfg AgentRuntimeConfig, s *AgentSession) toolexe
 
 // runAgentStopHooks executes Stop (or SubagentStop) hooks for an agent.
 // TS parity: executeStopHooks in hooks.ts.
+
+// runAgentSubagentStartHooks executes SubagentStart hooks for an agent.
+// TS parity: executeSubagentStartHooks in hooks.ts.
+func runAgentSubagentStartHooks(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession) {
+	table, err := hookexec.AgentMergedHooksTable(cfg.ProjectRoot, s.ID)
+	if err != nil || len(table) == 0 {
+		return
+	}
+
+	transcriptPath := sessiontranscript.AgentTranscriptPath(cfg.SessionID, cfg.ProjectRoot, "", sessiontranscript.ConfigHomeDir(), s.ID, "")
+	base := hookexec.BaseHookInput{
+		SessionID:      cfg.SessionID,
+		TranscriptPath: transcriptPath,
+		Cwd:            s.WorkDir,
+		PermissionMode: s.PermissionMode,
+		AgentID:        s.ID,
+		AgentType:      s.AgentType,
+	}
+
+	_, _ = hookexec.RunSubagentStartHooks(ctx, table, s.WorkDir, base, s.AgentType, hookexec.DefaultHookTimeoutMs)
+}
 func runAgentStopHooks(ctx context.Context, cfg AgentRuntimeConfig, s *AgentSession, lastAssistantText string) {
 	table, err := hookexec.AgentMergedHooksTable(cfg.ProjectRoot, s.ID)
 	if err != nil || len(table) == 0 {

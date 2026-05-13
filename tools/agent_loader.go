@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"goc/agents/builtin"
 	"goc/claudemd"
 	"goc/commands"
 	"goc/tools/agentcolor"
@@ -84,7 +85,21 @@ func LoadAgentDefinitionsBuiltins() []AgentDefinition {
 			Background:                         b.Background,
 			SystemPrompt:                       b.SystemPrompt,
 			OmitClaudeMd:                       b.OmitClaudeMd,
-			Hooks:                             b.Hooks,
+			Hooks:                              b.Hooks,
+			SystemPromptFn: func(params AgentSystemPromptParams) string {
+				if b.SystemPromptFn != nil {
+					return b.SystemPromptFn(builtin.SystemPromptParams{
+						SessionID:           params.SessionID,
+						MemoryContent:       params.MemoryContent,
+						TeamMembers:         params.TeamMembers,
+						AvailableMCPServers: params.AvailableMCPServers,
+						Model:               params.Model,
+						SkillsContent:       params.SkillsContent,
+						WorkDir:             params.WorkDir,
+					})
+				}
+				return ""
+			},
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].AgentType < out[j].AgentType })

@@ -123,6 +123,17 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		s.TeamName = strings.TrimSpace(cfg.TeamName)
 	}
 
+	// Resolve dynamic system prompt via closure if available (TS getSystemPrompt(params)).
+	if selected.SystemPromptFn != nil {
+		params := AgentSystemPromptParams{
+			SessionID:           cfg.SessionID,
+			WorkDir:             s.WorkDir,
+			Model:               s.Model,
+			AvailableMCPServers: s.AvailableMcpServers,
+		}
+		s.SystemPrompt = selected.SystemPromptFn(params)
+	}
+
 	// Append agent memory prompt if memory scope is configured and auto-memory is enabled.
 	if s.Memory != "" && memdir.IsAutoMemoryEnabled() {
 		scope := memdir.AgentMemoryScope(s.Memory)

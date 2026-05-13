@@ -2,6 +2,7 @@ package permissionrules
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	"goc/types"
@@ -201,4 +202,44 @@ func FilterToolsByDenyRules(tools []types.ToolSpec, ctx types.ToolPermissionCont
 		}
 	}
 	return out
+}
+
+// GetRuleByContentsForToolName returns the first deny rule whose RuleContent matches
+// the tool input JSON. Mirrors TS getRuleByContentsForTool / getRuleByContentsForToolName.
+// When RuleContent starts with "/" it is treated as a regex; otherwise substring match.
+func GetRuleByContentsForToolName(ctx types.ToolPermissionContextData, toolName, toolInputJSON string) *PermissionRule {
+	toolName = NormalizeLegacyToolName(toolName)
+	for _, rule := range GetDenyRules(ctx) {
+		if rule.RuleValue.ToolName != toolName {
+			continue
+		}
+		if rule.RuleValue.RuleContent == nil {
+			continue
+		}
+		pattern := *rule.RuleValue.RuleContent
+		if contentMatchesPattern(toolInputJSON, pattern) {
+			r := rule
+			return &r
+		}
+	}
+	return nil
+}
+
+// GetRuleByContentsForTool is a convenience wrapper that extracts the tool name.
+func GetRuleByContentsForTool(ctx types.ToolPermissionContextData, tool types.ToolSpec, toolInputJSON string) *PermissionRule {
+	name := GetToolNameForPermissionCheck(tool)
+	return GetRuleByContentsForToolName(ctx, name, toolInputJSON)
+}
+
+// contentMatchesPattern checks if s matches pattern. If pattern starts with "/" it is
+// treated as a regex; otherwise substring containment is used.
+func contentMatchesPattern(s, pattern string) bool {
+	if strings.HasPrefix(pattern, "/") {
+		re, err := regexp.Compile(strings.TrimSuffix(strings.TrimPrefix(pattern, "/"), "/"))
+		if err != nil {
+			return false
+		}
+		return re.MatchString(s)
+	}
+	return strings.Contains(s, pattern)
 }

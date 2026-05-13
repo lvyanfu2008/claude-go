@@ -15,6 +15,7 @@ import (
 
 	"github.com/gofrs/flock"
 	"goc/commands"
+	"goc/hookexec"
 )
 
 // TS parity reference: claude-code/src/utils/tasks.ts (layout, locks, high water mark, CRUD).
@@ -508,7 +509,7 @@ func broadcastTaskEvent(taskID, subject, event string) {
 	if err != nil || tf == nil {
 		return
 	}
-	msg := fmt.Sprintf("Task #%s \"%s\" %s", taskID, subject, event)
+	msg := fmt.Sprintf("<task-notification>\n  <event>%s</event>\n  <task-id>%s</task-id>\n  <subject>%s</subject>\n</task-notification>", event, taskID, xmlEscape(subject))
 	for _, m := range tf.Members {
 		if m.AgentID == agentID || m.Name == agentName {
 			continue
@@ -545,6 +546,7 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		return "", true, err
 	}
 	broadcastTaskEvent(id, in.Subject, "created")
+	runTaskCreatedHook(cfg, id, TaskListID(cfg), in.Subject, in.Description)
 	out := map[string]any{
 		"data": map[string]any{
 			"task": map[string]any{"id": id, "subject": in.Subject},
@@ -773,6 +775,7 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 					}
 				}
 				broadcastTaskEvent(in.TaskID, existing.Subject, "completed")
+				runTaskCompletedHook(cfg, in.TaskID, TaskListID(cfg))
 			}
 		}
 	}
@@ -841,4 +844,44 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
+}
+
+// runTaskCreatedHook fires TaskCreated hooks asynchronously.
+// Mirrors TS executeTaskCreatedHooks in hooks.ts.
+func runTaskCreatedHook(cfg Config, taskID, taskListID, subject, description string) {
+	table, err := hookexec.MergedHooksForCwd(cfg.ProjectRoot)
+	if err != nil || len(table) == 0 {
+		return
+	}
+	base := hookexec.BaseHookInput{
+		SessionID: cfg.SessionID,
+		Cwd:       cfg.WorkDir,
+	}
+	go func() {
+		_, _ = hookexec.RunTaskCreatedHooks(
+			context.Background(), table, cfg.WorkDir, base,
+			taskID, taskListID, subject, description,
+			hookexec.DefaultHookTimeoutMs,
+		)
+	}()
+}
+
+// runTaskCompletedHook fires TaskCompleted hooks asynchronously.
+// Mirrors TS executeTaskCompletedHooks in hooks.ts.
+func runTaskCompletedHook(cfg Config, taskID, taskListID string) {
+	table, err := hookexec.MergedHooksForCwd(cfg.ProjectRoot)
+	if err != nil || len(table) == 0 {
+		return
+	}
+	base := hookexec.BaseHookInput{
+		SessionID: cfg.SessionID,
+		Cwd:       cfg.WorkDir,
+	}
+	go func() {
+		_, _ = hookexec.RunTaskCompletedHooks(
+			context.Background(), table, cfg.WorkDir, base,
+			taskID, taskListID,
+			hookexec.DefaultHookTimeoutMs,
+		)
+	}()
 }

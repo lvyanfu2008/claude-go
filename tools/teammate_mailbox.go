@@ -16,6 +16,18 @@ import (
 
 var pathSanitize = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
 
+// Teammate message type constants (TS structured protocol messages).
+const (
+	TeammateMsgTypePermissionRequest  = "permission_request"
+	TeammateMsgTypePermissionResponse = "permission_response"
+	TeammateMsgTypeShutdown           = "shutdown"
+	TeammateMsgTypePlanApproval       = "plan_approval"
+	TeammateMsgTypeIdleNotification   = "idle_notification"
+	TeammateMsgTypeTaskAssignment     = "task_assignment"
+	TeammateMsgTypeModeSet            = "mode_set"
+	TeammateMsgTypeTaskNotification   = "task_notification"
+)
+
 func sanitizePathComponent(s string) string {
 	return pathSanitize.ReplaceAllString(s, "-")
 }
@@ -29,12 +41,14 @@ func xmlEscape(s string) string {
 
 // TeammateMessage mirrors TS TeammateMessage type.
 type TeammateMessage struct {
-	From      string `json:"from"`
-	Text      string `json:"text"`
-	Timestamp string `json:"timestamp"`
-	Read      bool   `json:"read"`
-	Color     string `json:"color,omitempty"`
-	Summary   string `json:"summary,omitempty"`
+	From      string          `json:"from"`
+	Text      string          `json:"text"`
+	Timestamp string          `json:"timestamp"`
+	Read      bool            `json:"read"`
+	Color     string          `json:"color,omitempty"`
+	Summary   string          `json:"summary,omitempty"`
+	MsgType   string          `json:"msgType,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
 }
 
 // getTeamsDir returns the teams directory under Claude config home (TS getTeamsDir).
@@ -144,6 +158,54 @@ func writeToMailbox(agentName, teamName, from, text string) error {
 		return fmt.Errorf("marshal messages: %w", err)
 	}
 	return os.WriteFile(p, append(out, '\n'), 0o600)
+}
+
+// WriteStructuredMessage writes a typed message to a teammate's inbox (TS writeToMailbox with type).
+func WriteStructuredMessage(agentName, teamName, from, msgType string, payload json.RawMessage) error {
+	if err := ensureInboxDir(teamName); err != nil {
+		return fmt.Errorf("ensure inbox dir: %w", err)
+	}
+	p := getInboxPath(agentName, teamName)
+	lock := flock.New(p + ".lock")
+	if err := lock.Lock(); err != nil {
+		return fmt.Errorf("lock inbox: %w", err)
+	}
+	defer func() { _ = lock.Unlock() }()
+
+	var msgs []TeammateMessage
+	b, err := os.ReadFile(p)
+	if err == nil {
+		_ = json.Unmarshal(b, &msgs)
+	}
+	if msgs == nil {
+		msgs = []TeammateMessage{}
+	}
+
+	msg := TeammateMessage{
+		From:      from,
+		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		Read:      false,
+		MsgType:   msgType,
+		Payload:   payload,
+	}
+	msgs = append(msgs, msg)
+
+	out, err := json.MarshalIndent(msgs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal messages: %w", err)
+	}
+	return os.WriteFile(p, append(out, '\n'), 0o600)
+}
+
+// FilterMessagesByType returns messages matching the given type discriminator.
+func FilterMessagesByType(msgs []TeammateMessage, msgType string) []TeammateMessage {
+	var out []TeammateMessage
+	for _, m := range msgs {
+		if m.MsgType == msgType {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // clearMailbox clears all messages from a teammate's inbox (TS clearMailbox).

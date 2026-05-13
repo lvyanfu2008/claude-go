@@ -39,6 +39,21 @@ type AgentQueryParams struct {
 	TimeoutMs    int    // timeout in milliseconds
 }
 
+// NewSingleTurnAgentHookRunner creates a RunAgentQuery implementation that uses
+// CallModel for a single-turn call (no tool loop). For full multi-turn agentic
+// verification, wire a custom RunAgentQuery that invokes tools.executeAgent.
+func NewSingleTurnAgentHookRunner(callModel PromptHookDeps) AgentHookDeps {
+	return AgentHookDeps{
+		RunAgentQuery: func(ctx context.Context, params AgentQueryParams) (*hookResponseParsed, error) {
+			resp, err := callModel.CallModel(ctx, params.SystemPrompt, params.UserPrompt, params.Model)
+			if err != nil {
+				return nil, err
+			}
+			return parseHookResponseJSON(resp)
+		},
+	}
+}
+
 // RunAgentHook executes an agent hook: multi-turn agentic verification.
 // Mirrors TS execAgentHook in execAgentHook.ts.
 //

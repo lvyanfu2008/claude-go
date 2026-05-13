@@ -21,6 +21,19 @@ type BuiltinAgent struct {
 	SystemPrompt                       string `json:"systemPrompt"`
 	// Hooks mirrors TS frontmatter hooks field; nil for built-in agents.
 	Hooks json.RawMessage `json:"hooks,omitempty"`
+	// SystemPromptFn is an optional closure that generates the system prompt dynamically.
+	SystemPromptFn func(SystemPromptParams) string `json:"-"`
+}
+
+// SystemPromptParams mirrors AgentSystemPromptParams in the tools package.
+type SystemPromptParams struct {
+	SessionID           string
+	MemoryContent       string
+	TeamMembers         []string
+	AvailableMCPServers []string
+	Model               string
+	SkillsContent       string
+	WorkDir             string
 }
 
 const (
@@ -63,6 +76,9 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 		Source:       "built-in",
 		BaseDir:      "built-in",
 		SystemPrompt: generalPurposeSystemPrompt(),
+		SystemPromptFn: func(params SystemPromptParams) string {
+			return generalPurposeSystemPrompt()
+		},
 	})
 
 	out = append(out, BuiltinAgent{
@@ -74,6 +90,9 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 		Model:        "sonnet",
 		Color:        "orange",
 		SystemPrompt: StatuslineSystemPrompt(),
+		SystemPromptFn: func(params SystemPromptParams) string {
+			return StatuslineSystemPrompt()
+		},
 	})
 
 	if AreExplorePlanAgentsEnabled() {
@@ -90,6 +109,9 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 			Model:           exploreModel,
 			OmitClaudeMd:    true,
 			SystemPrompt:    exploreSystemPrompt(cfg.EmbeddedSearchTools),
+			SystemPromptFn: func(params SystemPromptParams) string {
+				return exploreSystemPrompt(cfg.EmbeddedSearchTools)
+			},
 		})
 		out = append(out, BuiltinAgent{
 			AgentType:       "Plan",
@@ -100,6 +122,9 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 			Model:           "inherit",
 			OmitClaudeMd:    true,
 			SystemPrompt:    planSystemPrompt(cfg.EmbeddedSearchTools),
+			SystemPromptFn: func(params SystemPromptParams) string {
+				return planSystemPrompt(cfg.EmbeddedSearchTools)
+			},
 		})
 	}
 
@@ -113,6 +138,9 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 			Model:          "haiku",
 			PermissionMode: "dontAsk",
 			SystemPrompt:   ClaudeCodeGuideSystemPrompt(cfg, guideCtx),
+			SystemPromptFn: func(params SystemPromptParams) string {
+				return ClaudeCodeGuideSystemPrompt(cfg, guideCtx)
+			},
 		})
 	}
 
@@ -134,6 +162,9 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 			Background:                         true,
 			CriticalSystemReminderExperimental: verificationCriticalReminder,
 			SystemPrompt:                       VerificationSystemPrompt(),
+			SystemPromptFn: func(params SystemPromptParams) string {
+				return VerificationSystemPrompt()
+			},
 		})
 	}
 
