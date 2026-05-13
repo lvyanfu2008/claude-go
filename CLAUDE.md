@@ -1,44 +1,40 @@
 # CLAUDE.md
 
-This file orients contributors and automation when working in **`claude-go/`** (Go module **`goc`**).
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## No TypeScript runtime dependency
+## Hard constraint
 
-**`goc` builds and tests must not spawn Bun, Node, or `claude-code` `.ts` entrypoints** to implement product behavior (no `exec` of those in `go test`, `go run ./cmd/claude`, or library defaults). Embedded JSON, markdown, and generated literals copied from the TS product are **static assets**, not a runtime dependency. Comments may cite TS paths for parity. Optional **manual** comparisons (e.g. a sibling checkout running `dump-init-state`) are out of band and not required for CI.
-
-## Layout
-
-- **`tools/toolparity/`** — Curated TS built-in list vs Go parity: edit **`catalog.json`**, then run **`go run ./cmd/gen-tool-parity`** (or **`go generate ./tools/toolparity`**) to refresh **`TS_GO_TOOL_PARITY.md`**.
-- **Todo v2 (`TaskCreate` / `TaskGet` / `TaskList` / `TaskUpdate`)** — Implemented under **`tools/tasks_v2.go`** (config-home `tasks/<listId>/`, same layout as TS `tasks.ts`). Omitted vs TS: task-created/completed hooks, teammate mailbox, verification nudge, and in-process teammate task-list resolution (see `TODO(ts parity)` in that file). Enable in non-interactive runs with **`CLAUDE_CODE_ENABLE_TASKS=1`**. **`commands.TodoV2Enabled`** gates the model-facing list: the embedded built-in tool registry includes both `TodoWrite` and the four `Task*` tools; **`toolpool.FilterToolsByPerToolEnabled`** hides `TodoWrite` and shows `Task*` when v2 is on (mirrors TS `getTools` + `isEnabled`). **`toolpool.GetTools`** also mirrors TS **`getAllBaseTools` / `isEnabled`** for Cron (`CLAUDE_CODE_DISABLE_CRON`), plan mode under Kairos+channels, `TaskOutput` when `USER_TYPE=ant`, **`tstenv.ToolSearchEnabledOptimistic`**, agent-swarm tools, and strips **Glob/Grep** when **`EMBEDDED_SEARCH_TOOLS`** matches **`hasEmbeddedSearchTools`**. Streaming parity / gou-demo with **`GOU_DEMO_USE_EMBEDDED_TOOLS_API`** (see **`gou/pui/params.go`**) uses that path.
-- **`anthropicmessages/`** — HTTP SSE client for Anthropic Messages (`PostStream`, stream parsing). **`BetasForToolsJSON`** mirrors the ToolSearch `anthropic-beta` gate from TS / `internal/toolsearch` without importing that package.
-- **`conversation-runtime/query/`** — Port of `src/conversation-runtime/query.ts`: compaction, `Query`, optional host **`QueryDeps.CallModel`**, and optional **streaming parity** (`runStreamingParityModelLoop`: Anthropic SSE + `streamingtool` + `toolexecution`). Streaming uses **`goc/anthropicmessages.PostStream`**, which honors **`CLAUDE_CODE_LOG_API_REQUEST_BODY`** / **`CLAUDE_CODE_LOG_API_RESPONSE_BODY`** via **`ccb-engine/apilog`** (request JSON + raw SSE body, capped for response size).
-- **`conversation-runtime/process-user-input/`** — `processUserInput` port; **`ApplyQueryHostEnvGates`** / **`WireToolexecutionFromProcessUserInput`** hook hosts that call `query.Query` after `ShouldQuery`.
-- **`tools/toolexecution/`** — Tool execution aligned toward `toolExecution.ts`: **`PermissionDecision`** + **`QueryCanUseTool`**, **`ResolveHookPermissionDecision`**, **`CheckRuleBasedPermissions`** (alwaysDeny / alwaysAsk via **`goc/permissionrules`** when **`ToolPermission`** / **`ExecutionDeps.ToolPermission`** is set), **`RunToolUseChan`** (rules after query gate), **`CheckPermissionsAndCallTool`** (pre-hook + optional **`PreToolHookPermission`** + early **JSON schema** validation for registry tools), **`AskResolver`** for headless `ask`.
-- **`query.QueryParams.ToolPermissionContext`** — copied into **`ToolexecutionDeps.ToolPermission`** on streaming parity ([`streaming_loop.go`](claude-go/conversation-runtime/query/streaming_loop.go)); gou-demo forwards **`ProcessUserInputContextData.ToolPermissionContext`** when set.
-## Permissions / `canUseTool` (vs TS)
-
-- **`query.CanUseToolFn`** is **`toolexecution.QueryCanUseToolFn`**: returns **`PermissionDecision`** (`allow` / `deny` / `ask`) + `error`. Legacy `(bool, error)` hosts use **`toolexecution.LegacyBoolQueryGate`** (see **`process-user-input/query_wire.go`**).
-- **`ask`**: the library does not render UI. Set **`ExecutionDeps.AskResolver`** to map `ask` → allow/deny, or rely on the default headless deny. **gou-demo** sets **`AskResolver` → allow** when **`GOU_QUERY_ASK_STRATEGY=allow`** (streaming parity path only).
-- **`NewStreamingToolExecutor`** receives the same **`QueryCanUseToolFn`** as **`QueryParams.CanUseTool`** so the executor’s `canUseTool` slot is no longer always nil (**`run_tool_use_runner`** overlays the executor argument onto deps for each tool run).
-
-## Model paths (important)
-
-| Path | When | Notes |
-|------|------|--------|
-| **Streaming parity** (`query.Query` with `StreamingParity` + host gate) | [StreamingParityPathEnabled](conversation-runtime/query/query_config_build.go) is always true; set `QueryParams.StreamingParity`, plus provider keys (e.g. Anthropic) for real HTTP. `GOU_QUERY_STREAMING_PARITY=1` still sets [QueryConfigGates.StreamingParityPath](conversation-runtime/query/config.go) for diagnostics. | Inside **`queryLoop`**, if `useStream` is true it **runs before** `CallModel`. **gou-demo** uses this for real turns when the gate and key are set; otherwise it shows a system notice (no HTTP). **`GOU_DEMO_CCB_INLINE=0`** disables the streaming parity path. |
-| **CallModel** (`QueryDeps.CallModel` set) | Host supplies a non-streaming or custom model loop | Runs when streaming parity is off or not selected. |
-
-Env gates are assembled in **`query.BuildQueryConfig`** (`query_config_build.go`). Project **`.claude/settings.go.json`** `env` block is merged at runtime (see **`ccb-engine/settingsfile`**, gou-demo init).
+**No TypeScript runtime dependency**: builds/tests must not spawn Bun, Node, or `claude-code` `.ts` entrypoints. Embedded JSON/markdown from the TS codebase are static assets only.
 
 ## Commands
 
 ```bash
-cd claude-go
 go test ./...
+go vet ./...
 go build -o /dev/null ./cmd/claude
+golangci-lint run ./...
 ```
 
-## Related docs
+## go:generate
 
-- Plan: streaming parity + toolexecution roadmap (repo `.cursor/plans/`, do not edit plan files from automation unless asked).
-- TS mirror rule: `.cursor/rules/claude-go-mirror-typescript.mdc` when porting behavior.
+After syncing TS JSON exports (out-of-band, not CI), regenerate:
+
+```bash
+go generate ./tools/toolparity
+go generate ./commands/handwritten
+```
+
+## Key details
+
+- Module name is `goc` (not `claude-go`).
+- `canUseTool` / `QueryCanUseToolFn` returns `PermissionDecision` (`allow` / `deny` / `ask`) — 3-state, not a bool.
+- Branch naming uses conventional prefixes (e.g., `feature/`, `fix/`, `base-`).
+
+## Key env vars
+
+| Var | Effect |
+|-----|--------|
+| `CLAUDE_CODE_ENABLE_TASKS=1` | Enable Todo v2 (TaskCreate/Get/List/Update) |
+| `OPENAI_ENABLE_THINKING=1` | Enable thinking mode for OpenAI-compatible providers |
+| `GO_TOOL_INPUT_VALIDATOR=zog` | Use zog-validated Bash (BashZog) |
+| `CCB_ENGINE_MODEL` | Model ID (e.g., `deepseek-v4-pro`) |

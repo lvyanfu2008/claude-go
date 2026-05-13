@@ -12,9 +12,10 @@ type SlashResolveSource string
 
 const (
 	SlashResolveDisk        SlashResolveSource = "disk"
-	SlashResolveBundledEmbed SlashResolveSource = "bundled_embed"
-	SlashResolveTSBridge    SlashResolveSource = "ts_bridge"
-	SlashResolveUnknown     SlashResolveSource = "unknown"
+	SlashResolveBundledEmbed   SlashResolveSource = "bundled_embed"
+	SlashResolveBuiltinPrompt SlashResolveSource = "builtin_prompt"
+	SlashResolveTSBridge      SlashResolveSource = "ts_bridge"
+	SlashResolveUnknown       SlashResolveSource = "unknown"
 )
 
 // SlashBridgeMeta is required when Source is ts_bridge (observability).

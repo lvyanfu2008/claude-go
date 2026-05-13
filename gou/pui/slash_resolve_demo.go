@@ -122,7 +122,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 					ShouldQuery: false,
 				}, nil
 			}
-			return slashResultToBase(res, attachmentMessages, uuid, p), nil
+			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
 		}
 
 		if slashresolve.IsBundledPrompt(*cmd) {
@@ -134,7 +134,18 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 					ShouldQuery: false,
 				}, nil
 			}
-			return slashResultToBase(res, attachmentMessages, uuid, p), nil
+			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
+		}
+
+		if slashresolve.IsBuiltinPrompt(*cmd) {
+			res, err := slashresolve.ResolveBuiltinPrompt(*cmd, parsed.Args)
+			if err != nil {
+				return &processuserinput.ProcessUserInputBaseResult{
+					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (builtin) for /%s: %v", cmd.Name, err))},
+					ShouldQuery: false,
+				}, nil
+			}
+			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
 		}
 
 		return &processuserinput.ProcessUserInputBaseResult{
@@ -290,6 +301,78 @@ func permissionModePtrPI(p *processuserinput.ProcessUserInputParams) *types.Perm
 	}
 	pm := p.PermissionMode
 	return &pm
+}
+
+// slashPromptResultToBase mirrors SkillMultiMessageHandler / TS processPromptSlashCommand:
+// produces two messages — a short visible metadata message with <command-message>/<command-name>/<command-args>
+// XML tags, and a hidden (isMeta: true) content message containing the resolved prompt text.
+func slashPromptResultToBase(
+	cmd types.Command,
+	args string,
+	res types.SlashResolveResult,
+	attachmentMessages []types.Message,
+	uuid *string,
+	p *processuserinput.ProcessUserInputParams,
+) *processuserinput.ProcessUserInputBaseResult {
+	// Build metadata message (visible, mirrors TS getMessagesForPromptSlashCommand).
+	metadataParts := []string{
+		fmt.Sprintf("<command-message>%s</command-message>", cmd.Name),
+		fmt.Sprintf("<command-name>/%s</command-name>", cmd.Name),
+	}
+	if trimmed := strings.TrimSpace(args); trimmed != "" {
+		metadataParts = append(metadataParts, fmt.Sprintf("<command-args>%s</command-args>", trimmed))
+	}
+	metadataContent := strings.Join(metadataParts, "\n")
+
+	tp, err := processuserinput.ProcessTextPrompt(
+		metadataContent,
+		nil, nil, nil,
+		nil,
+		uuid,
+		permissionModePtrPI(p),
+		nil, // visible metadata — not meta
+		nil,
+	)
+	if err != nil {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("build slash metadata message: %v", err))},
+			ShouldQuery: false,
+		}
+	}
+
+	// Content message: resolved prompt text, hidden from UI (isMeta: true).
+	trueVal := true
+	ct, err := processuserinput.ProcessTextPrompt(
+		res.UserText,
+		nil, nil, nil,
+		nil,
+		nil, // new UUID for content row
+		permissionModePtrPI(p),
+		&trueVal, // isMeta: true → hidden by ShouldShowUserMessage
+		nil,
+	)
+	if err != nil {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("build slash content message: %v", err))},
+			ShouldQuery: false,
+		}
+	}
+
+	allMsgs := append(tp.Messages, ct.Messages...)
+	allMsgs = append(allMsgs, attachmentMessages...)
+
+	out := &processuserinput.ProcessUserInputBaseResult{
+		Messages:     allMsgs,
+		ShouldQuery:  ct.ShouldQuery,
+		AllowedTools: append([]string(nil), res.AllowedTools...),
+	}
+	if res.Model != nil {
+		out.Model = *res.Model
+	}
+	if res.Effort != nil {
+		out.Effort = res.Effort
+	}
+	return out
 }
 
 func slashResultToBase(
