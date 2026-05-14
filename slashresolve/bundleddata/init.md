@@ -2,17 +2,26 @@ Set up a minimal CLAUDE.md (and optionally skills and hooks) for this repo. CLAU
 
 ## Phase 1: Ask what to set up
 
-Use AskUserQuestion to find out what the user wants:
+Call AskUserQuestion with exactly 2 questions structured as follows:
 
-- "Which CLAUDE.md files should /init set up?"
-  Options: "Project CLAUDE.md" | "Personal CLAUDE.local.md" | "Both project + personal"
-  Description for project: "Team-shared instructions checked into source control — architecture, coding standards, common workflows."
-  Description for personal: "Your private preferences for this project (gitignored, not shared) — your role, sandbox URLs, preferred test data, workflow quirks."
+**Question 1:**
+- question: "Which CLAUDE.md files should /init set up?"
+- header: "CLAUDE.md scope"
+- multiSelect: false
+- options:
+  - label: "Project CLAUDE.md", description: "Team-shared instructions checked into source control — architecture, coding standards, common workflows."
+  - label: "Personal CLAUDE.local.md", description: "Your private preferences for this project (gitignored, not shared) — your role, sandbox URLs, preferred test data, workflow quirks."
+  - label: "Both project + personal", description: "Both team-shared file and personal file."
 
-- "Also set up skills and hooks?"
-  Options: "Skills + hooks" | "Skills only" | "Hooks only" | "Neither, just CLAUDE.md"
-  Description for skills: "On-demand capabilities you or Claude invoke with `/skill-name` — good for repeatable workflows and reference knowledge."
-  Description for hooks: "Deterministic shell commands that run on tool events (e.g., format after every edit). Claude can't skip them."
+**Question 2:**
+- question: "Also set up skills and hooks?"
+- header: "Skills + hooks"
+- multiSelect: false
+- options:
+  - label: "Skills + hooks", description: "Both on-demand capabilities and deterministic automation."
+  - label: "Skills only", description: "On-demand capabilities you or Claude invoke with `/skill-name` — good for repeatable workflows and reference knowledge."
+  - label: "Hooks only", description: "Deterministic shell commands that run on tool events (e.g., format after every edit). Claude can't skip them."
+  - label: "Neither, just CLAUDE.md", description: "Skip skills and hooks for now."
 
 ## Phase 2: Explore the codebase
 
