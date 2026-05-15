@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"goc/modelregistry"
 	"goc/utils"
 )
 
@@ -19,10 +20,8 @@ func isDeepSeekV4FlashModel(model string) bool {
 	return strings.Contains(m, "deepseek-v4-flash") || strings.Contains(m, "v4-flash")
 }
 
-// IsOpenAIThinkingEnabled mirrors claude-code src/api-client/openai/openaiThinking.ts
-// (and legacy re-exports under services/api/openai).
-// DeepSeek-V4-Pro (and API ids containing deepseek-v4-pro) request chain-of-thought params;
-// DeepSeek-V4-Flash is treated as a fast non-thinking path unless OPENAI_ENABLE_THINKING=1.
+// IsOpenAIThinkingEnabled mirrors claude-code src/api-client/openai/openaiThinking.ts.
+// Uses the model family registry for capability detection.
 func IsOpenAIThinkingEnabled(model string) bool {
 	if isOpenAIEnableThinkingEnvFalsy() {
 		return false
@@ -30,14 +29,11 @@ func IsOpenAIThinkingEnabled(model string) bool {
 	if utils.IsEnvTruthy("OPENAI_ENABLE_THINKING") {
 		return true
 	}
-	m := strings.ToLower(model)
-	if isDeepSeekV4FlashModel(model) {
+	caps, ok := modelregistry.Lookup(model)
+	if !ok || !caps.SupportsThinking {
 		return false
 	}
-	return strings.Contains(m, "deepseek-reasoner") ||
-		strings.Contains(m, "deepseek-r1-671b") ||
-		strings.Contains(m, "deepseek-v3.2") ||
-		strings.Contains(m, "deepseek-v4-pro")
+	return caps.DefaultThinkingEnabled
 }
 
 // mergeOpenAIThinkingBodyFields injects DeepSeek-style thinking flags into the chat.completions JSON body

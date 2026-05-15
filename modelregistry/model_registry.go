@@ -30,7 +30,7 @@ var registry = []modelFamilyEntry{
 			SupportsThinking:            true,
 			DefaultThinkingEnabled:      true,
 			EnforcesReasoningInThinking: true,
-			ThinkingDisabledVariants:    []string{"v4-flash"},
+			ThinkingDisabledVariants:    []string{"v4-flash", "v3-671b"},
 			MaxOutputTokens:             32768,
 		},
 		Matchers: []string{"deepseek"},
