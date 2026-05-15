@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"goc/modelregistry"
 	"goc/types"
 )
 
@@ -31,11 +32,11 @@ func OpenAIEnforcesReasoningInThinkingMode(openaiModel string, enableThinking bo
 	if !IsDeepSeekStrictThinkingGuardEnabled() || !enableThinking {
 		return false
 	}
-	m := strings.ToLower(openaiModel)
-	if isDeepSeekV4FlashModel(openaiModel) {
-		return true
+	caps, ok := modelregistry.Lookup(openaiModel)
+	if !ok {
+		return false
 	}
-	return strings.Contains(m, "deepseek-v4-pro")
+	return caps.EnforcesReasoningInThinking
 }
 
 // GetDeepSeekStrictThinkingMaxAttempts mirrors TS getDeepSeekStrictThinkingMaxAttempts (default 2, range 1–5).
