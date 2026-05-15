@@ -12,6 +12,7 @@ type ModelCapabilities struct {
 	DefaultThinkingEnabled      bool
 	EnforcesReasoningInThinking bool
 	ThinkingDisabledVariants    []string // variant substrings where DefaultThinkingEnabled flips to false
+	ThinkingEnabledVariants     []string // allowlist: when non-empty, only these variants get thinking
 
 	// Token limits
 	MaxOutputTokens int
@@ -28,9 +29,9 @@ var registry = []modelFamilyEntry{
 		Family: "deepseek",
 		Capabilities: ModelCapabilities{
 			SupportsThinking:            true,
-			DefaultThinkingEnabled:      true,
+			DefaultThinkingEnabled:      false,
 			EnforcesReasoningInThinking: true,
-			ThinkingDisabledVariants:    []string{"v4-flash", "v3-671b"},
+			ThinkingEnabledVariants:     []string{"reasoner", "r1-671b", "v3.2", "v4-pro"},
 			MaxOutputTokens:             32768,
 		},
 		Matchers: []string{"deepseek"},
@@ -75,6 +76,17 @@ func Lookup(modelID string) (ModelCapabilities, bool) {
 		for _, m := range entry.Matchers {
 			if strings.Contains(low, m) {
 				caps := entry.Capabilities
+				// Apply allowlist first (if set, thinking defaults to false)
+				if len(caps.ThinkingEnabledVariants) > 0 {
+					caps.DefaultThinkingEnabled = false
+					for _, variant := range caps.ThinkingEnabledVariants {
+						if strings.Contains(low, variant) {
+							caps.DefaultThinkingEnabled = true
+							break
+						}
+					}
+				}
+				// Then apply denylist overrides
 				for _, variant := range caps.ThinkingDisabledVariants {
 					if strings.Contains(low, variant) {
 						caps.DefaultThinkingEnabled = false

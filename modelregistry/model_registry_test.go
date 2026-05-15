@@ -28,6 +28,16 @@ func TestLookup_DeepSeekV4Flash(t *testing.T) {
 	}
 }
 
+func TestLookup_DeepSeekChat(t *testing.T) {
+	caps, ok := Lookup("deepseek-chat")
+	if !ok {
+		t.Fatal("expected deepseek-chat to match deepseek family")
+	}
+	if caps.DefaultThinkingEnabled {
+		t.Fatal("expected DefaultThinkingEnabled=false for deepseek-chat (not in allowlist)")
+	}
+}
+
 func TestLookup_DeepSeekReasoner(t *testing.T) {
 	caps, ok := Lookup("deepseek-reasoner")
 	if !ok {
