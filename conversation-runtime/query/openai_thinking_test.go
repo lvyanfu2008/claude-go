@@ -50,6 +50,33 @@ func TestIsOpenAIThinkingEnabled_envDisablesPro(t *testing.T) {
 	}
 }
 
+func TestIsOpenAIThinkingEnabled_Qwen(t *testing.T) {
+	t.Setenv("OPENAI_ENABLE_THINKING", "")
+	if !IsOpenAIThinkingEnabled("qwen3-32b") {
+		t.Fatal("expected qwen3-32b to enable thinking")
+	}
+	if !IsOpenAIThinkingEnabled("Qwen/Qwen3-32B-Instruct") {
+		t.Fatal("expected Qwen/Qwen3-32B-Instruct to enable thinking")
+	}
+	if !IsOpenAIThinkingEnabled("qwen2.5-coder-32b") {
+		t.Fatal("expected qwen2.5-coder to enable thinking")
+	}
+}
+
+func TestIsOpenAIThinkingEnabled_Qwen_envOff(t *testing.T) {
+	t.Setenv("OPENAI_ENABLE_THINKING", "0")
+	if IsOpenAIThinkingEnabled("qwen3-32b") {
+		t.Fatal("expected OPENAI_ENABLE_THINKING=0 to disable for qwen")
+	}
+}
+
+func TestOpenAIEnforcesReasoningInThinkingMode_Qwen(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_DEEPSEEK_STRICT_THINKING", "")
+	if OpenAIEnforcesReasoningInThinkingMode("qwen3-32b", true) {
+		t.Fatal("expected qwen to NOT enforce reasoning")
+	}
+}
+
 func TestMergeOpenAIThinkingBodyFields(t *testing.T) {
 	t.Setenv("OPENAI_ENABLE_THINKING", "")
 	req := map[string]any{"model": "deepseek-v4-pro", "max_tokens": 100}
