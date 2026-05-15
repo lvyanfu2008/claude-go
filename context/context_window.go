@@ -4,6 +4,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"goc/modelregistry"
 )
 
 // ModelContextWindowDefault 默认上下文窗口大小（100k令牌）
@@ -138,6 +140,11 @@ func GetMaxOutputTokensForModel(model string) int {
 		return 8_192
 	} else if strings.Contains(modelLower, "3-7-sonnet") {
 		return 32_000
+	}
+
+	// Fallback to model registry for non-Claude models
+	if caps, ok := modelregistry.Lookup(model); ok && caps.MaxOutputTokens > 0 {
+		return caps.MaxOutputTokens
 	}
 
 	return MaxOutputTokensDefault
