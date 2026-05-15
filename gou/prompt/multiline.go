@@ -102,6 +102,14 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 	repl := m.enterSubmits
 	key := msg.Key()
 
+	// Skip modifier-only key events (Ctrl, Shift, Alt, etc. pressed alone).
+	// On Windows with the Kitty keyboard protocol enabled, bare modifier
+	// presses can generate events that would otherwise insert null runes
+	// or trigger unexpected cursor movement.
+	if isModifierOnlyKey(key.Code) {
+		return nil
+	}
+
 	// Ctrl+J is LF (\n). Many terminals send Shift+Enter as LF; macOS Option+Enter
 	// often arrives as ESC+LF (alt+ctrl+j), not alt+enter — handle before msg.String().
 	if key.Code == 'j' && key.Mod.Contains(tea.ModCtrl) {
@@ -384,4 +392,23 @@ func (m Model) LineCount() int {
 // RuneCount returns utf8 rune count of Value.
 func (m Model) RuneCount() int {
 	return utf8.RuneCountInString(m.Value())
+}
+
+// isModifierOnlyKey reports whether the key code represents a bare modifier
+// or lock key (Ctrl, Shift, Alt, CapsLock, etc.) pressed without an
+// accompanying non-modifier key. These should be ignored in the prompt.
+func isModifierOnlyKey(code rune) bool {
+	switch code {
+	case tea.KeyLeftCtrl, tea.KeyRightCtrl,
+		tea.KeyLeftShift, tea.KeyRightShift,
+		tea.KeyLeftAlt, tea.KeyRightAlt,
+		tea.KeyLeftSuper, tea.KeyRightSuper,
+		tea.KeyLeftHyper, tea.KeyRightHyper,
+		tea.KeyLeftMeta, tea.KeyRightMeta,
+		tea.KeyIsoLevel3Shift, tea.KeyIsoLevel5Shift,
+		tea.KeyCapsLock, tea.KeyNumLock, tea.KeyScrollLock:
+		return true
+	default:
+		return false
+	}
 }
