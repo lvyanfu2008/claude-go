@@ -1009,6 +1009,9 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	}
 	switch msg.String() {
 	case "ctrl+c":
+		if m.suggestionEngine != nil {
+			m.suggestionEngine.FileIndex().Stop()
+		}
 		return m, tea.Quit
 	case "esc":
 		if m.slashListUser {
@@ -1022,6 +1025,9 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 		if m.uiScreen == gouDemoScreenTranscript {
 			return m, m.exitTranscriptScreenWithPostCmd()
+		}
+		if m.suggestionEngine != nil {
+			m.suggestionEngine.FileIndex().Stop()
 		}
 		return m, tea.Quit
 	case "f2":

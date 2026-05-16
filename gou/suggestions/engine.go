@@ -71,6 +71,11 @@ func (e *SuggestionEngine) SetMcpResources(resources []McpResource) {
 	e.mcpResources = resources
 }
 
+// FileIndex returns the underlying file index (for lifecycle management like Stop).
+func (e *SuggestionEngine) FileIndex() *FileIndex {
+	return e.fileIndex
+}
+
 // CompletionRange describes the token range to replace in the input.
 type CompletionRange struct {
 	Start int // rune index (inclusive)
