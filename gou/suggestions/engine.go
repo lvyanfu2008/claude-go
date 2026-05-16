@@ -2,6 +2,7 @@ package suggestions
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -43,6 +44,8 @@ type McpResource struct {
 var hasAtSymbolRe = regexp.MustCompile(`(\s|^)@([\p{L}\p{N}_\-./\\()[\]~:]*|"[^"]*"?)$`)
 
 // SuggestionEngine detects @ tokens in the prompt and generates ranked suggestions.
+// All methods are designed for single-goroutine use (Bubble Tea TUI event loop).
+// SetAgents and SetMcpResources should be called from the same goroutine as Update.
 type SuggestionEngine struct {
 	fileIndex    *FileIndex
 	agents       []AgentDef
@@ -253,11 +256,7 @@ func searchMcpResources(resources []McpResource, query string) []ScoredItem {
 }
 
 func sortScoredItems(items []ScoredItem) {
-	for i := 0; i < len(items); i++ {
-		for j := i + 1; j < len(items); j++ {
-			if items[i].Score > items[j].Score {
-				items[i], items[j] = items[j], items[i]
-			}
-		}
-	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].Score < items[j].Score
+	})
 }
