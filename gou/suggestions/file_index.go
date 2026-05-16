@@ -235,12 +235,6 @@ func scoredSearch(entries []string, query string, limit int) []ScoredItem {
 		}
 		seen[entry] = true
 		icon := "F"
-<<<<<<< HEAD
-=======
-		if strings.HasSuffix(entry, "/") || filepath.Ext(entry) == "" {
-			// could be a directory entry without trailing slash
-		}
->>>>>>> worktree-agent-aacd7beff0ac1ab5a
 		out = append(out, ScoredItem{
 			Type:  SuggestionTypeFile,
 			Label: entry,
