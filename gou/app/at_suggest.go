@@ -96,10 +96,7 @@ func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
 func (m *model) applySuggestion(item suggestions.ScoredItem) {
 	value := m.pr.Value()
 	cursor := m.pr.CursorRuneIndex()
-	token, rng := extractCompletionTokenForApply(value, cursor)
-	if token == "" {
-		return
-	}
+	_, rng := extractCompletionTokenForApply(value, cursor)
 	rs := []rune(value)
 	rep := item.Value + " "
 	var b strings.Builder

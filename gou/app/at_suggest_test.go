@@ -56,10 +56,7 @@ func TestApplySuggestion_ReplacesToken(t *testing.T) {
 	// Test the core replacement logic (simulates applySuggestion behavior)
 	value := "@foo bar"
 	rs := []rune(value)
-	token, rng := extractCompletionTokenForApply(value, 4)
-	if token != "foo" {
-		t.Fatalf("expected 'foo', got %q", token)
-	}
+	_, rng := extractCompletionTokenForApply(value, 4)
 	rep := "foobar.go "
 	var b strings.Builder
 	b.WriteString(string(rs[:rng.Start]))
@@ -67,6 +64,26 @@ func TestApplySuggestion_ReplacesToken(t *testing.T) {
 	b.WriteString(string(rs[rng.End:]))
 	result := b.String()
 	expected := "foobar.go  bar"
+	if result != expected {
+		t.Errorf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestApplySuggestion_BareAt(t *testing.T) {
+	// Bare @ (no filter text) should still replace @ with the selected path
+	value := "@"
+	rs := []rune(value)
+	_, rng := extractCompletionTokenForApply(value, 1)
+	if rng.Start != 0 || rng.End != 1 {
+		t.Fatalf("expected range [0,1] for bare @, got [%d,%d]", rng.Start, rng.End)
+	}
+	rep := "src/ "
+	var b strings.Builder
+	b.WriteString(string(rs[:rng.Start]))
+	b.WriteString(rep)
+	b.WriteString(string(rs[rng.End:]))
+	result := b.String()
+	expected := "src/ "
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
