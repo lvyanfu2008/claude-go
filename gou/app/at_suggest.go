@@ -84,10 +84,10 @@ func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
 			return 1
 		}
 	}
-	// Enter: apply suggestion, caller does submit
+	// Enter: apply suggestion without submitting (user continues typing)
 	if isPromptEnterKey(msg) {
 		m.applySuggestion(m.suggestions[m.selectedSuggIdx])
-		return 2
+		return 1
 	}
 	return 0
 }
@@ -165,7 +165,7 @@ func (m *model) renderAtSuggestions() string {
 	var b strings.Builder
 	// Title line
 	title := lipgloss.NewStyle().Bold(true).Render("Suggestions  ") +
-		lipgloss.NewStyle().Faint(true).Render("Tab accept  Enter submit  Esc dismiss")
+		lipgloss.NewStyle().Faint(true).Render("Tab/Enter accept  Esc dismiss")
 	b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(title))
 	b.WriteByte('\n')
 
