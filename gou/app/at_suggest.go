@@ -36,7 +36,7 @@ func (m *model) syncAtSuggestions() {
 }
 
 // handleAtSuggestKeys handles keyboard input when the @ suggestion list is visible.
-// Returns: 0 = not handled, 1 = handled (no submit), 2 = handled + submit pending.
+// Returns: 0 = not handled, 1 = handled.
 func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
 	if m.uiScreen != gouDemoScreenPrompt || !m.suggVisible || len(m.suggestions) == 0 {
 		return 0
