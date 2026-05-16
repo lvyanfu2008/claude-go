@@ -74,6 +74,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 			TeamName:            cfg.TeamName,
 			AgentName:           cfg.AgentName,
 			AgentID:             cfg.AgentID,
+			MainLoopModel:       cfg.MainLoopModel,
 		ProgressCallback:    cfg.ProgressCallback,
 	})
 	case "SendMessage":
@@ -86,6 +87,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 			TeamName:            cfg.TeamName,
 			AgentName:           cfg.AgentName,
 			AgentID:             cfg.AgentID,
+			MainLoopModel:       cfg.MainLoopModel,
 		})
 	case "SendUserMessage", "Brief":
 		return BriefFromJSON(raw)

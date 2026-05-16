@@ -879,7 +879,7 @@ func nativeAgentToolSpec() types.ToolSpec {
 		"model": map[string]any{
 			"type":        "string",
 			"description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.",
-			"enum":        []string{"sonnet", "opus", "haiku"},
+			"enum":        []string{"sonnet", "opus", "haiku", "inherit"},
 		},
 		"name": map[string]any{
 			"type":        "string",

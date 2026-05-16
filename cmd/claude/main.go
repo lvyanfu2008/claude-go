@@ -336,9 +336,10 @@ func runHeadless(prompt string) error {
 
 	inputJSON, _ := json.Marshal(prompt)
 	p := &processuserinput.ProcessUserInputParams{
-		Input:          json.RawMessage(inputJSON),
-		Mode:           types.PromptInputModePrompt,
-		PermissionMode: types.PermissionMode(pm),
+		Input:                 json.RawMessage(inputJSON),
+		Mode:                  types.PromptInputModePrompt,
+		PermissionMode:        types.PermissionMode(pm),
+		GetAttachmentMessages: processuserinput.NewDefaultGetAttachmentMessages(cwd),
 	}
 	// Adapter: hookexec returns func(ctx, inputMessage); ExecuteUserPromptSubmitHooks expects func(ctx, *ProcessUserInputParams, inputMessage).
 	if baseRunner != nil {

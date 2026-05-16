@@ -174,9 +174,6 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	}
 	model, _ := fm["model"].(string)
 	model = strings.TrimSpace(model)
-	if strings.EqualFold(model, "inherit") {
-		model = ""
-	}
 	background := false
 	switch v := fm["background"].(type) {
 	case bool:

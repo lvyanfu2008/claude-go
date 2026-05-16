@@ -17,6 +17,9 @@ type Config struct {
 	AgentName string
 	AgentID   string
 	TeamName  string
+	// MainLoopModel is the parent session's model, passed through to AgentRuntimeConfig
+	// for subagent model resolution via GetAgentModel().
+	MainLoopModel string
 	// ProgressCallback forwards agent progress messages in real time to the UI.
 	ProgressCallback func(*types.Message)
 }

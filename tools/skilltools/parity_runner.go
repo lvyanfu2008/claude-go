@@ -111,6 +111,7 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		AskAutoFirst:      r.AskAutoFirst,
 		Messages:          msgs,
 		SystemPrompt:      r.SystemPrompt,
+		MainLoopModel:     r.MainLoopModel,
 		ProgressCallback:  r.ProgressCallback,
 	}
 	s, isErr, perr := tools.Run(ctx, name, input, cfg)

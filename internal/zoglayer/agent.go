@@ -20,9 +20,10 @@ var agentAllowedKeys = map[string]struct{}{
 }
 
 var agentValidModels = map[string]bool{
-	"sonnet": true,
-	"opus":   true,
-	"haiku":  true,
+	"sonnet":  true,
+	"opus":    true,
+	"haiku":   true,
+	"inherit": true,
 }
 
 var agentValidModes = map[string]bool{

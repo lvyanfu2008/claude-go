@@ -109,7 +109,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		uuidPtr = &u
 	}
 
-	skipAtt := true
+	skipAtt := false
 	var loaded []types.Command
 	if cfg.TSContextBridge != nil && len(bytes.TrimSpace(cfg.TSContextBridge.Commands)) > 2 {
 		if err := json.Unmarshal(cfg.TSContextBridge.Commands, &loaded); err != nil {
@@ -249,6 +249,10 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 		out.ExecuteUserPromptSubmitHooks = func(ctx context.Context, _ *processuserinput.ProcessUserInputParams, inputMessage string) ([]types.AggregatedHookResult, error) {
 			return baseRunner(ctx, inputMessage)
 		}
+	}
+
+	if out.GetAttachmentMessages == nil {
+		out.GetAttachmentMessages = processuserinput.NewDefaultGetAttachmentMessages(cwdHooks)
 	}
 
 	return out, nil

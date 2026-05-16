@@ -76,10 +76,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		})
 		return string(resp), false, nil
 	}
-	model := strings.TrimSpace(in.Model)
-	if model == "" {
-		model = selected.Model
-	}
+	model := GetAgentModel(selected.Model, cfg.MainLoopModel, strings.TrimSpace(in.Model))
 	agentID := fmt.Sprintf("agent-%d", time.Now().UnixNano())
 	name := strings.TrimSpace(in.Name)
 	if name == "" {

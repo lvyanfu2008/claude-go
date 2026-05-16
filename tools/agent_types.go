@@ -33,6 +33,9 @@ type AgentRuntimeConfig struct {
 	TeamName  string
 	AgentName string
 	AgentID   string
+	// MainLoopModel is the parent session's model, passed to GetAgentModel()
+	// for subagent model resolution (including "inherit" support).
+	MainLoopModel string
 	// ProgressCallback forwards progress messages (MessageTypeProgress) from the
 	// inner agent's query loop in real time so the UI can render them while the
 	// agent is still executing, matching TS AgentTool/UI.tsx streaming behavior.
