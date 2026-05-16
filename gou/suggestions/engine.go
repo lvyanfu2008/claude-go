@@ -93,8 +93,8 @@ type SuggestionResult struct {
 // Update processes the current prompt value and cursor position, returning suggestions.
 // Returns nil if no @ token is detected at cursor or suggestions are dismissed.
 func (e *SuggestionEngine) Update(value string, cursor int) *SuggestionResult {
-	token, rng := extractCompletionToken(value, cursor)
-	if token == "" {
+	token, rng, matched := extractCompletionToken(value, cursor)
+	if !matched {
 		e.prevToken = ""
 		e.dismissed = false
 		return nil
@@ -112,10 +112,11 @@ func (e *SuggestionEngine) Update(value string, cursor int) *SuggestionResult {
 	if isPathLike {
 		dirPath := resolvePathToken(token)
 		items = e.fileIndex.GetTopLevelPaths(dirPath)
-		// Also search index for deeper matches within the path
 		if len(items) == 0 {
 			items = e.fileIndex.Search(token)
 		}
+	} else if token == "" {
+		items = e.fileIndex.GetTopLevelPaths(".")
 	} else {
 		items = e.fileIndex.Search(token)
 	}
@@ -159,28 +160,27 @@ func (e *SuggestionEngine) ResetDismissed() {
 }
 
 // extractCompletionToken finds the @token at the cursor position.
-// Returns the token text (without @) and its rune range in value.
-func extractCompletionToken(value string, cursor int) (string, CompletionRange) {
+// Returns the token text (without @), its rune range in value, and whether @ was matched.
+// When @ is matched but no filter text follows, token is "" and matched is true.
+func extractCompletionToken(value string, cursor int) (string, CompletionRange, bool) {
 	rs := []rune(value)
 	if cursor < 0 || cursor > len(rs) {
-		return "", CompletionRange{}
+		return "", CompletionRange{}, false
 	}
-	// The text from start up to cursor must match hasAtSymbolRe
 	before := string(rs[:cursor])
 	loc := hasAtSymbolRe.FindStringSubmatchIndex(before)
 	if loc == nil {
-		return "", CompletionRange{}
+		return "", CompletionRange{}, false
 	}
 	// loc[4:5] is the token capture group (after @). Groups: 0=full, 1=prefix, 2=@, 3=@, 4=token start, 5=token end
 	if len(loc) < 6 || loc[4] < 0 {
-		return "", CompletionRange{}
+		return "", CompletionRange{}, false
 	}
 	token := before[loc[4]:loc[5]]
-	// The token text starts at group 2 (the @ is not captured)
 	tokenStartByte := loc[4]
 	atRune := utf8.RuneCountInString(before[:tokenStartByte])
 	tokenEnd := cursor
-	return token, CompletionRange{Start: atRune, End: tokenEnd}
+	return token, CompletionRange{Start: atRune, End: tokenEnd}, true
 }
 
 func isPathLikeToken(token string) bool {

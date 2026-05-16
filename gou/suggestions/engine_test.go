@@ -5,7 +5,10 @@ import (
 )
 
 func TestExtractCompletionToken_SimpleAt(t *testing.T) {
-	token, rng := extractCompletionToken("hello @foo", 10)
+	token, rng, matched := extractCompletionToken("hello @foo", 10)
+	if !matched {
+		t.Fatal("expected matched=true")
+	}
 	if token != "foo" {
 		t.Errorf("expected token 'foo', got %q", token)
 	}
@@ -15,7 +18,10 @@ func TestExtractCompletionToken_SimpleAt(t *testing.T) {
 }
 
 func TestExtractCompletionToken_PathLike(t *testing.T) {
-	token, rng := extractCompletionToken("@./src/comp", 11)
+	token, rng, matched := extractCompletionToken("@./src/comp", 11)
+	if !matched {
+		t.Fatal("expected matched=true")
+	}
 	if token != "./src/comp" {
 		t.Errorf("expected token './src/comp', got %q", token)
 	}
@@ -25,14 +31,20 @@ func TestExtractCompletionToken_PathLike(t *testing.T) {
 }
 
 func TestExtractCompletionToken_NoAtSymbol(t *testing.T) {
-	token, _ := extractCompletionToken("hello world", 11)
+	token, _, matched := extractCompletionToken("hello world", 11)
+	if matched {
+		t.Fatal("expected matched=false for text without @")
+	}
 	if token != "" {
 		t.Errorf("expected empty token, got %q", token)
 	}
 }
 
 func TestExtractCompletionToken_AtLineStart(t *testing.T) {
-	token, rng := extractCompletionToken("@foo bar", 4)
+	token, rng, matched := extractCompletionToken("@foo bar", 4)
+	if !matched {
+		t.Fatal("expected matched=true")
+	}
 	if token != "foo" {
 		t.Errorf("expected token 'foo', got %q", token)
 	}
@@ -42,12 +54,28 @@ func TestExtractCompletionToken_AtLineStart(t *testing.T) {
 }
 
 func TestExtractCompletionToken_MidLineAt(t *testing.T) {
-	token, rng := extractCompletionToken("run @test.go now", 12)
+	token, rng, matched := extractCompletionToken("run @test.go now", 12)
+	if !matched {
+		t.Fatal("expected matched=true")
+	}
 	if token != "test.go" {
 		t.Errorf("expected token 'test.go', got %q", token)
 	}
 	if rng.Start != 5 || rng.End != 12 {
 		t.Errorf("expected range [5,12], got [%d,%d]", rng.Start, rng.End)
+	}
+}
+
+func TestExtractCompletionToken_BareAt(t *testing.T) {
+	token, rng, matched := extractCompletionToken("@", 1)
+	if !matched {
+		t.Fatal("expected matched=true for bare @")
+	}
+	if token != "" {
+		t.Errorf("expected empty token for bare @, got %q", token)
+	}
+	if rng.Start != 1 || rng.End != 1 {
+		t.Errorf("expected range [1,1] for bare @, got [%d,%d]", rng.Start, rng.End)
 	}
 }
 
