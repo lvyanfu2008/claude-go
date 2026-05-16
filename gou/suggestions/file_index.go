@@ -254,9 +254,6 @@ func scoredSearch(entries []string, query string, limit int) []ScoredItem {
 		}
 		seen[entry] = true
 		icon := "F"
-		if strings.HasSuffix(entry, "/") || filepath.Ext(entry) == "" {
-			// could be a directory entry without trailing slash
-		}
 		out = append(out, ScoredItem{
 			Type:  SuggestionTypeFile,
 			Label: entry,
