@@ -979,21 +979,8 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m, cmd
 	}
 	// @-mention autocomplete: Tab/Enter/↑/↓/Esc (must run before slash list nav).
-	if m.uiScreen == gouDemoScreenPrompt {
-		switch m.handleAtSuggestKeys(msg) {
-		case 2: // Enter: apply + submit
-			fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
-			m.pr.SetValue("")
-			m.suggVisible = false
-			m.syncAtSuggestions()
-			line := strings.TrimSpace(fullPrompt)
-			if line == "" {
-				return m, nil
-			}
-			return m.gouSubmitFromPromptText(fullPrompt, line)
-		case 1: // handled (Tab/↑/↓/Esc)
-			return m, nil
-		}
+	if m.uiScreen == gouDemoScreenPrompt && m.handleAtSuggestKeys(msg) == 1 {
+		return m, nil
 	}
 
 	// Slash command list: ↑/↓/Tab must win over message-pane scroll (see isListViewportScrollKey).
