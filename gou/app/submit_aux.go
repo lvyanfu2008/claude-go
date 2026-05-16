@@ -235,6 +235,7 @@ func (m *model) loadSlashCommandsOnce() {
 		return
 	}
 	m.slashCommands = lc
+	m.refreshAgentSuggestions()
 }
 
 // slashListVisible is true when the command list should show: leading "/" (TS), mid-input

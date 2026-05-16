@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"goc/gou/suggestions"
+	"goc/types"
 )
 
 // syncAtSuggestions runs after every prompt Update to refresh the @ suggestion list.
@@ -191,4 +192,22 @@ func (m *model) renderAtSuggestions() string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// refreshAgentSuggestions updates the suggestion engine's agent list from the loaded slash commands.
+func (m *model) refreshAgentSuggestions() {
+	if m.suggestionEngine == nil {
+		return
+	}
+	var agents []suggestions.AgentDef
+	for _, cmd := range m.slashCommands {
+		if cmd.Agent != nil {
+			agents = append(agents, suggestions.AgentDef{
+				Name:        types.GetCommandName(cmd),
+				DisplayName: types.GetCommandName(cmd),
+				Description: cmd.Description,
+			})
+		}
+	}
+	m.suggestionEngine.SetAgents(agents)
 }

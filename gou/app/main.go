@@ -71,6 +71,7 @@ import (
 	"goc/gou/pui"
 	"goc/gou/segdiff"
 	"goc/gou/textutil"
+	"goc/gou/suggestions"
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/growthbook"
@@ -529,6 +530,12 @@ type model struct {
 	// slashResultPanel is local slash text output shown below the input until Esc (prompt screen only).
 	slashResultPanel *string
 
+	// @-mention autocomplete suggestions (see at_suggest.go)
+	suggestionEngine *suggestions.SuggestionEngine
+	suggestions      []suggestions.ScoredItem
+	selectedSuggIdx  int
+	suggVisible      bool
+
 	scrollTop    int
 	pendingDelta int
 	sticky       bool
@@ -768,6 +775,11 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	pr.SetEnterSubmits(gouDemoPromptEnterSubmits())
 
 	cwd, _ := os.Getwd()
+
+	// Initialize @-mention autocomplete file index and engine.
+	suggFI := suggestions.NewFileIndex(cwd)
+	suggEngine := suggestions.NewSuggestionEngine(suggFI)
+
 	fhSnap := !gouDemoEnvTruthy("GOU_DEMO_SKIP_FILE_HISTORY_SNAPSHOT")
 	fhEachUser := gouDemoEnvTruthy("GOU_DEMO_FILE_HISTORY_SNAPSHOT_EACH_USER")
 	tr := &sessiontranscript.Store{
@@ -807,6 +819,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		extractMemState:     extractmemories.NewState(),
 		sessionMemState:     sessionMemState,
 		sessionMemHook:      sessionmemory.Hook(sessionMemState, st.ConversationID, cwd),
+		suggestionEngine:   suggEngine,
 		taskList:            newTaskListModel(st.ConversationID),
 		toolResultState:     toolResultState,
 	}
@@ -855,23 +868,27 @@ func teaGlobalRedrawCmd() tea.Cmd {
 }
 
 func (m *model) inputAreaHeight() int {
-	n := m.pr.LineCount()
+	h := m.pr.LineCount()
+	if m.suggVisible && len(m.suggestions) > 0 {
+		visibleRows := min(6, len(m.suggestions))
+		h += 1 + visibleRows // title line + suggestion rows
+	}
 	if m.uiScreen != gouDemoScreenTranscript {
-		n++ // horizontal rule above input
+		h++ // horizontal rule above input
 	}
 	if m.uiScreen != gouDemoScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
 		s := m.builtinStatusLineView()
 		if s != "" {
-			n += strings.Count(s, "\n") + 1
+			h += strings.Count(s, "\n") + 1
 		}
 	}
-	if n < 2 {
-		n = 2
+	if h < 2 {
+		h = 2
 	}
-	if n > 16 {
-		n = 16
+	if h > 16 {
+		h = 16
 	}
-	return n
+	return h
 }
 
 // promptAboveInputRuleLine is a faint full-width line between the context row and the multiline prompt.
@@ -961,6 +978,24 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	if handled, cmd := m.handleTranscriptKey(msg); handled {
 		return m, cmd
 	}
+	// @-mention autocomplete: Tab/Enter/↑/↓/Esc (must run before slash list nav).
+	if m.uiScreen == gouDemoScreenPrompt {
+		switch m.handleAtSuggestKeys(msg) {
+		case 2: // Enter: apply + submit
+			fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
+			m.pr.SetValue("")
+			m.suggVisible = false
+			m.syncAtSuggestions()
+			line := strings.TrimSpace(fullPrompt)
+			if line == "" {
+				return m, nil
+			}
+			return m.gouSubmitFromPromptText(fullPrompt, line)
+		case 1: // handled (Tab/↑/↓/Esc)
+			return m, nil
+		}
+	}
+
 	// Slash command list: ↑/↓/Tab must win over message-pane scroll (see isListViewportScrollKey).
 	if m.uiScreen == gouDemoScreenPrompt && m.handleSlashListNavKey(msg) {
 		return m, nil
@@ -1037,6 +1072,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 	}
 	m.pr.Update(prompt.NormalizeTTYNewlineKey(msg))
+	m.syncAtSuggestions()
 	m.syncSlashListAfterPrompt()
 	if m.pr.Submitted() {
 		fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
@@ -1561,6 +1597,11 @@ func (m *model) View() tea.View {
 		foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
 		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))
 	} else {
+		// @-mention autocomplete suggestions (above input footer area)
+		if s := m.renderAtSuggestions(); s != "" {
+			b.WriteString(s)
+			b.WriteByte('\n')
+		}
 		if s := m.builtinStatusLineView(); s != "" {
 			b.WriteString(s)
 			b.WriteByte('\n')
