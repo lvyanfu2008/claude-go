@@ -11,25 +11,6 @@ import (
 	"time"
 )
 
-// SuggestionType is the kind of autocomplete suggestion (full enum in engine.go).
-type SuggestionType int
-
-const (
-	SuggestionTypeFile      SuggestionType = iota
-	SuggestionTypeDirectory
-	SuggestionTypeAgent
-	SuggestionTypeMcpResource
-)
-
-// ScoredItem is a single suggestion result (full definition in engine.go).
-type ScoredItem struct {
-	Type  SuggestionType
-	Label string
-	Value string
-	Score float64
-	Icon  string
-}
-
 // FileIndex maintains an in-memory list of project files with background refresh.
 type FileIndex struct {
 	entries         []string
@@ -254,6 +235,12 @@ func scoredSearch(entries []string, query string, limit int) []ScoredItem {
 		}
 		seen[entry] = true
 		icon := "F"
+<<<<<<< HEAD
+=======
+		if strings.HasSuffix(entry, "/") || filepath.Ext(entry) == "" {
+			// could be a directory entry without trailing slash
+		}
+>>>>>>> worktree-agent-aacd7beff0ac1ab5a
 		out = append(out, ScoredItem{
 			Type:  SuggestionTypeFile,
 			Label: entry,
