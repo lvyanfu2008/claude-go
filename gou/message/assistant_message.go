@@ -13,7 +13,7 @@ import (
 const maxAPIErrorChars = 1000
 
 // AssistantMessageRenderer renders assistant messages.
-type AssistantMessageRenderer struct{
+type AssistantMessageRenderer struct {
 	toolUseRenderer *ToolUseMessageRenderer
 }
 
@@ -132,7 +132,7 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 
 	// Regular assistant text
 	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
-	
+
 	// Add "⏺ " prefix to assistant messages and indent all lines by 2 spaces
 	for i, line := range lines {
 		if i == 0 {
@@ -141,7 +141,7 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 			lines[i] = "    " + line
 		}
 	}
-	
+
 	return lines, nil
 }
 
@@ -158,13 +158,10 @@ func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}
 
 // renderThinkingBlock renders a thinking block.
 func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
-	// Similar to TS AssistantThinkingMessage
-	// Thinking blocks show a simple indicator
-	thinkingText := "[Thinking...]"
+	thinkingBody := thinkingBlockString(block)
 
-	// In verbose mode or transcript, we might show more detail
+	// In verbose mode or transcript, show full thinking content.
 	if ctx.Verbose || ctx.IsTranscript {
-		thinkingBody := thinkingBlockString(block)
 		if thinkingBody != "" {
 			lines := renderMarkdown(thinkingBody, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
 			if len(lines) > 0 {
@@ -172,9 +169,53 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 			}
 			return lines, nil
 		}
+		return []string{"💭 [Thinking...]"}, nil
 	}
 
-	return []string{"💭 " + thinkingText}, nil
+	// Normal mode: show at most the first sentence of the thinking content.
+	if thinkingBody != "" {
+		first := firstSentenceOf(thinkingBody)
+		if first == "" {
+			first = thinkingBody
+		}
+		w := getContainerWidth(ctx)
+		if w > 0 && len(first) > w {
+			first = first[:w] + "..."
+		}
+		return []string{"💭 " + first}, nil
+	}
+
+	return []string{"💭 [Thinking...]"}, nil
+}
+
+// sentenceEnd checks whether r is a sentence-ending rune.
+func sentenceEnd(r rune) bool {
+	switch r {
+	case '.', '!', '?', '。', '！', '？':
+		return true
+	}
+	return false
+}
+
+// firstSentenceOf returns the first sentence of s. A sentence ends at `.`, `!`,
+// `?`, `。`, `！`, `？` followed by a space, newline, or end-of-string.
+// If the entire string is one sentence, returns "" to signal "no further text".
+func firstSentenceOf(s string) string {
+	runes := []rune(s)
+	for i, r := range runes {
+		if sentenceEnd(r) {
+			// Check what follows the punctuation.
+			if i+1 >= len(runes) {
+				// End of string — this is the only sentence.
+				return ""
+			}
+			next := runes[i+1]
+			if next == ' ' || next == '\n' || next == '\r' {
+				return string(runes[:i+1]) + "..."
+			}
+		}
+	}
+	return ""
 }
 
 // measureThinkingBlock measures a thinking block.
