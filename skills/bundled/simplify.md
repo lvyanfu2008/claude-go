@@ -1,4 +1,11 @@
-# Simplify: Code Review and Cleanup
+---
+name: simplify
+description: Review changed code for reuse, quality, and efficiency. Fix any issues found.
+engine: starlark
+---
+
+def resolve(args):
+    prompt = """# Simplify: Code Review and Cleanup
 
 Review all changed files for reuse, quality, and efficiency. Fix any issues found.
 
@@ -47,3 +54,7 @@ Review the same changes for efficiency:
 Wait for all three agents to complete. Aggregate their findings and fix each issue directly. If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
 
 When done, briefly summarize what was fixed (or confirm the code was already clean).
+"""
+    if args:
+        prompt += "\n\n## Additional Focus\n\n" + args
+    return prompt

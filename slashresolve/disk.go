@@ -30,6 +30,7 @@ type skillFileYAML struct {
 	Hooks                  interface{} `yaml:"hooks"`
 	Shell                  string      `yaml:"shell"`
 	Arguments              interface{} `yaml:"arguments"`
+	Engine                 string      `yaml:"engine"`
 }
 
 // ResolveDiskSkill builds SlashResolveResult from a disk skill Command (prompt + SkillRoot).
@@ -58,6 +59,31 @@ func ResolveDiskSkill(cmd types.Command, args string, sessionID string) (types.S
 		return types.SlashResolveResult{}, fmt.Errorf("slashresolve: yaml %s: %w", mdPath, err)
 	}
 	argNames := ParseArgumentNames(fm.Arguments)
+
+		// Starlark engine path: execute the script body directly.
+		if fm.Engine == "starlark" {
+			sctx := &StarlarkContext{
+				SessionID: sessionID,
+				SkillRoot: root,
+			}
+			result, err := ExecuteStarlarkSkill(string(body), args, sctx, mdPath)
+			text := result
+			if err != nil {
+				text = fmt.Sprintf("## Starlark Error\n\n%v\n\n---\n\n%s", err, string(body))
+			}
+			if root != "" {
+				text = fmt.Sprintf("Base directory for this skill: %s\n\n%s", root, text)
+			}
+			text = strings.ReplaceAll(text, "${CLAUDE_SKILL_DIR}", strings.ReplaceAll(root, "\\", "/"))
+			text = strings.ReplaceAll(text, "${CLAUDE_SESSION_ID}", sessionID)
+			allowedTools := parseAllowedToolsFromFM(fm.AllowedTools)
+			res := types.SlashResolveResult{
+				UserText:     text,
+				AllowedTools: allowedTools,
+				Source:       types.SlashResolveDisk,
+			}
+			return res, nil
+		}
 
 	markdown := string(body)
 	final := markdown

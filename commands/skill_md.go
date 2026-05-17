@@ -39,6 +39,7 @@ type skillFrontmatter struct {
 	Hooks                  interface{} `yaml:"hooks"`
 	Shell                  string      `yaml:"shell"`
 	Arguments              interface{} `yaml:"arguments"`
+	Engine                 string      `yaml:"engine"`
 }
 
 func SplitYAMLFrontmatter(raw []byte) (yamlBytes []byte, body []byte, ok bool) {

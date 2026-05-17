@@ -22,6 +22,7 @@ require (
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.8.2
+	go.starlark.net v0.0.0-20260326113308-fadfc96def35
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.20.0
 	gopkg.in/yaml.v3 v3.0.1

@@ -11,7 +11,7 @@ import (
 const updateConfigHooksOnlyPrefix = "[hooks-only]"
 
 // resolveUpdateConfig mirrors TS registerUpdateConfigSkill → getPromptForCommand.
-// Body text is embedded under bundleddata/ (from scripts/dump-bundled-prompts-for-go.ts).
+// Body text is embedded under skills/bundled/ (from scripts/dump-bundled-prompts-for-go.ts).
 func resolveUpdateConfig(args string) (types.SlashResolveResult, error) {
 	if strings.HasPrefix(args, updateConfigHooksOnlyPrefix) {
 		body, err := readBundledText("update-config-hooks.md")

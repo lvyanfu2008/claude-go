@@ -65,10 +65,6 @@ func init() {
 		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveRemember(args) },
 	})
 	RegisterBundledSkill(BundledSkillDefinition{
-		Name:     "simplify",
-		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveSimplify(args) },
-	})
-	RegisterBundledSkill(BundledSkillDefinition{
 		Name:     "stuck",
 		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveStuck(args) },
 	})

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"goc/commands/featuregates"
+
+	"gopkg.in/yaml.v3"
 	"goc/types"
 )
 
@@ -68,7 +70,7 @@ func ResolveBundledSkill(cmd types.Command, args, sessionID string, opt *Bundled
 
 	def, ok := bundledSkillRegistry[cmd.Name]
 	if !ok {
-		return resolveDefaultBundledEmbed(cmd.Name, args)
+		return resolveDefaultBundledEmbed(cmd.Name, args, opt)
 	}
 	if def.FeatureGate != "" && !featuregates.Feature(def.FeatureGate) {
 		return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate %s disabled)", cmd.Name, def.FeatureGate)
@@ -108,13 +110,41 @@ func bundledMarkdownName(cmdName string) string {
 	return cmdName + ".md"
 }
 
-func resolveDefaultBundledEmbed(cmdName, args string) (types.SlashResolveResult, error) {
+func resolveDefaultBundledEmbed(cmdName, args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) {
 	rel := bundledMarkdownName(cmdName)
 	body, err := readBundledText(rel)
 	if err != nil {
 		return types.SlashResolveResult{}, fmt.Errorf("bundled embed %s: %w", rel, err)
 	}
-	return types.SlashResolveResult{UserText: body, Source: types.SlashResolveBundledEmbed}, nil
+	// Check if the embedded markdown has Starlark frontmatter.
+	yamlBytes, mdBody, hasFM := splitYAMLFrontmatter([]byte(body))
+	if hasFM {
+		var fm skillFileYAML
+		if yamlErr := yaml.Unmarshal(yamlBytes, &fm); yamlErr == nil && fm.Engine == "starlark" {
+			sctx := starlarkContextFromOpt(opt)
+			result, execErr := ExecuteStarlarkSkill(string(mdBody), args, sctx, "")
+			text := result
+			if execErr != nil {
+				text = fmt.Sprintf("## Starlark Error\n\n%v\n\n---\n\n%s", execErr, string(mdBody))
+			}
+			text = appendUserSection(text, args)
+			return types.SlashResolveResult{UserText: text, Source: types.SlashResolveBundledEmbed}, nil
+		}
+	}
+	text := string(body)
+	text = appendUserSection(text, args)
+	return types.SlashResolveResult{UserText: text, Source: types.SlashResolveBundledEmbed}, nil
+}
+
+func starlarkContextFromOpt(opt *BundledResolveOptions) *StarlarkContext {
+	if opt == nil {
+		return &StarlarkContext{}
+	}
+	return &StarlarkContext{
+		Cwd:           opt.Cwd,
+		SessionMemory: opt.SessionMemory,
+		SessionID:     opt.SessionID,
+	}
 }
 
 func resolveVerifyBundled(args string) (types.SlashResolveResult, error) {

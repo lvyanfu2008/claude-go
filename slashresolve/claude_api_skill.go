@@ -12,7 +12,7 @@ import (
 )
 
 // ClaudeAPISkillFiles when non-nil is merged like TS claudeApiContent.SKILL_FILES (path -> markdown).
-// Populate via codegen from claude-code (see claudeApiContent.ts). When nil, resolveClaudeAPI uses bundleddata/claude-api.md stub.
+// Populate via codegen from claude-code (see claudeApiContent.ts). When nil, resolveClaudeAPI uses skills/bundled/claude-api.md stub.
 var ClaudeAPISkillFiles map[string]string
 
 // ClaudeAPISkillPrompt when set overrides embedded SKILL.md body (prefix before "## Reading Guide").

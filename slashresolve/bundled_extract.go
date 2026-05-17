@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"goc/skills"
 )
 
 // Memoize extracted reference dirs per process (matches TS bundledSkills closure memoization).
@@ -31,7 +33,7 @@ func materializeVerifySkillDir() (string, error) {
 		return "", err
 	}
 	for _, fe := range verifyBundledFiles {
-		b, err := fs.ReadFile(bundledData, filepath.Join("bundleddata", fe.name))
+		b, err := fs.ReadFile(skills.Bundled, fe.name)
 		if err != nil {
 			os.RemoveAll(base)
 			return "", fmt.Errorf("bundled verify %s: %w", fe.name, err)
@@ -51,9 +53,17 @@ func materializeVerifySkillDir() (string, error) {
 }
 
 func readVerifySkillBody() (string, error) {
-	b, err := fs.ReadFile(bundledData, filepath.Join("bundleddata", "verify", "SKILL.md"))
+	b, err := fs.ReadFile(skills.Bundled, "verify/SKILL.md")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(b)), nil
+}
+
+func readBundledText(rel string) (string, error) {
+	b, err := fs.ReadFile(skills.Bundled, rel)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
