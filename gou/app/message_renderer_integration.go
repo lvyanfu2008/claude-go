@@ -251,6 +251,16 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 	if m.uiScreen != gouDemoScreenTranscript {
 		hasStreamingElements := false
 
+		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
+		if strings.TrimSpace(m.store.StreamingText) != "" {
+			hasStreamingElements = true
+			if content != "" {
+				content += "\n"
+			}
+			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
+			content += applyMessagePaneGutter(md, m.messageBodyColsForLayout())
+		}
+
 		// Add streaming tools
 		streamingToolUses := m.store.StreamingToolUses
 
@@ -338,18 +348,6 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 				}
 				content += applyMessagePaneGutter(sb.String(), m.messageBodyColsForLayout())
 			}
-		}
-
-		// Add streaming text
-		if strings.TrimSpace(m.store.StreamingText) != "" {
-			hasStreamingElements = true
-			if content != "" {
-				content += "\n"
-			}
-			// Simpler approach: just add the streaming text as assistant content
-			// TS side integrates this as part of the ongoing assistant message
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
-			content += applyMessagePaneGutter(md, m.messageBodyColsForLayout())
 		}
 
 		// If we added streaming elements but there's no assistant message yet,
@@ -399,6 +397,16 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 	if m.uiScreen != gouDemoScreenTranscript {
 		hasStreamingElements := false
 
+		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
+		if strings.TrimSpace(m.store.StreamingText) != "" {
+			hasStreamingElements = true
+			if content != "" {
+				content += "\n"
+			}
+			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
+			content += applyMessagePaneGutter(md, m.messageBodyColsForLayout())
+		}
+
 		// Add streaming tools
 		streamingToolUses := m.store.StreamingToolUses
 
@@ -486,18 +494,6 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 				}
 				content += applyMessagePaneGutter(sb.String(), m.messageBodyColsForLayout())
 			}
-		}
-
-		// Add streaming text
-		if strings.TrimSpace(m.store.StreamingText) != "" {
-			hasStreamingElements = true
-			if content != "" {
-				content += "\n"
-			}
-			// Simpler approach: just add the streaming text as assistant content
-			// TS side integrates this as part of the ongoing assistant message
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
-			content += applyMessagePaneGutter(md, m.messageBodyColsForLayout())
 		}
 
 		// If we added streaming elements but there's no assistant message yet,

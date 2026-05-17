@@ -486,34 +486,7 @@ func (m *model) promptBottomStreamRows() []string {
 	if h < 1 {
 		h = 1
 	}
-	w := m.width - 2
-	if w < 8 {
-		w = m.cols
-	}
-	if m.queryBusy {
-		var streamTail string
-		if strings.TrimSpace(m.store.StreamingText) != "" {
-			toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-			streamTail = styleMarkdownTokens(toks, m.cols, false)
-		} else {
-			streamTail = ""
-		}
-		if streamTail == "" {
-			return padStreamRows(nil, h)
-		}
-		wrapped := applyMessagePaneGutter(streamTail, w)
-		tailLines := strings.Split(wrapped, "\n")
-		return padStreamRows(tailLines, h)
-	}
-	if strings.TrimSpace(m.store.StreamingText) == "" {
-		return padStreamRows(nil, h)
-	}
-	streamLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("stream: ")
-	toks := markdown.CachedLexerStreaming(m.store.StreamingText)
-	streamBody := styleMarkdownTokens(toks, m.cols, false)
-	streamWrapped := applyMessagePaneGutter(streamLabel+streamBody, w)
-	streamRows := strings.Split(streamWrapped, "\n")
-	return padStreamRows(streamRows, h)
+	return padStreamRows(nil, h)
 }
 
 type model struct {
