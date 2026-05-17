@@ -296,6 +296,7 @@ func (s *cursedRenderer) flush(closing bool) error {
 	// correctly, leaving ghost characters when the frame shrinks. Force a
 	// full redraw on every frame to write explicit space characters instead
 	// of relying on partial erase sequences.
+	// 注意: 以下代码不要修改
 	if runtime.GOOS == "windows" {
 		s.scr.Erase()
 	}
