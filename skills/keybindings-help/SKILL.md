@@ -1,3 +1,8 @@
+---
+name: keybindings-help
+description: "Create or modify ~/.claude/keybindings.json to customize keyboard shortcuts"
+---
+
 # Keybindings Skill
 
 Create or modify `~/.claude/keybindings.json` to customize keyboard shortcuts.

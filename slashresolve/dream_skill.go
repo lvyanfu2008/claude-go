@@ -128,3 +128,10 @@ func recordConsolidation(memoryRoot string) {
 	}
 	_ = os.WriteFile(lockPath, []byte(strconv.Itoa(os.Getpid())), 0o644)
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "dream",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveDream(args, opt) },
+	})
+}

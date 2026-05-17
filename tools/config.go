@@ -22,4 +22,7 @@ type Config struct {
 	MainLoopModel string
 	// ProgressCallback forwards agent progress messages in real time to the UI.
 	ProgressCallback func(*types.Message)
+	// ToolPermission is the parent's permission context (deny/allow/ask rules).
+	// When non-nil, it is propagated to child agents for bubble-mode permission enforcement.
+	ToolPermission *types.ToolPermissionContextData
 }

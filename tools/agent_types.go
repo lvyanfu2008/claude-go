@@ -40,6 +40,9 @@ type AgentRuntimeConfig struct {
 	// inner agent's query loop in real time so the UI can render them while the
 	// agent is still executing, matching TS AgentTool/UI.tsx streaming behavior.
 	ProgressCallback func(*types.Message)
+	// ToolPermission is the parent's permission context (deny/allow/ask rules).
+	// When non-nil, it is propagated to child agents for bubble-mode permission enforcement.
+	ToolPermission *types.ToolPermissionContextData
 }
 
 type AgentDefinition struct {

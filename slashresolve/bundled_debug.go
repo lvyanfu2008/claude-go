@@ -149,3 +149,10 @@ func enableDebugLogging() bool {
 	}
 	return wasActive
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "debug",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveDebugBundled(args, opt.SessionID), nil },
+	})
+}

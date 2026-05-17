@@ -1,3 +1,8 @@
+---
+name: update-config
+description: "Modify Claude Code configuration by updating settings.json files"
+---
+
 # Update Config Skill
 
 Modify Claude Code configuration by updating settings.json files.

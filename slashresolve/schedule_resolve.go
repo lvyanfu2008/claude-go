@@ -151,3 +151,11 @@ func resolveSchedule(args string, opt *BundledResolveOptions) (types.SlashResolv
 		Source:   types.SlashResolveBundledEmbed,
 	}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "schedule",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveSchedule(args, opt) },
+		FeatureGate: "AGENT_TRIGGERS_REMOTE",
+	})
+}

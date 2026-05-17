@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"goc/commands"
+	"goc/hookexec"
 	"goc/slashresolve"
 	"goc/types"
 )
@@ -22,7 +23,11 @@ import (
 // see a matching tool message for every assistant tool_call. The metadata message
 // carries <command-message>/<command-name>/<command-args> XML tags; the content
 // message carries the resolved skill text with isMeta: true.
-func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string) func(
+//
+// When runForkAgent is non-nil and the resolved command has context: fork, the skill
+// executes in a background sub-agent instead of inline. The agent output is returned
+// as the tool_result content.
+func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string, runForkAgent func(ctx context.Context, userMessage types.Message, allowedTools []string, model string, agentType string) (string, error)) func(
 	ctx context.Context,
 	name, toolUseID string,
 	input json.RawMessage,
@@ -93,6 +98,36 @@ func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string)
 			}
 		} else {
 			return nil, false
+		}
+
+		// Register skill hooks from frontmatter for the session.
+		if found.Hooks != nil && len(found.Hooks) > 0 {
+			hookexec.RegisterFrontmatterHooks(assistantUUID, found.Hooks, false)
+		}
+
+		// Fork execution: when the skill has context: fork, run a sub-agent.
+		isFork := res.Context != nil && *res.Context == "fork"
+		if !isFork && found.Context != nil {
+			isFork = *found.Context == "fork"
+		}
+		if isFork && runForkAgent != nil {
+			agentType := "general-purpose"
+			if found.Agent != nil && *found.Agent != "" {
+				agentType = *found.Agent
+			}
+			model := ""
+			if found.Model != nil {
+				model = *found.Model
+			}
+			forkMsg := newUserMessage(res.UserText, &assistantUUID, nil)
+			result, err := runForkAgent(ctx, forkMsg, res.AllowedTools, model, agentType)
+			if err != nil {
+				toolResultMsg := newToolResultMessage(toolUseID, fmt.Sprintf("Skill fork failed: %v", err))
+				return []types.Message{toolResultMsg}, true
+			}
+			output := fmt.Sprintf("Skill forked: %s\n\n%s", normalized, result)
+			toolResultMsg := newToolResultMessage(toolUseID, output)
+			return []types.Message{toolResultMsg}, true
 		}
 
 		// Synthetic tool_result to consume the Skill tool_use_id.

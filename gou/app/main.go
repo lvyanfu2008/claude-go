@@ -2570,6 +2570,9 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							},
 						},
 					}
+					if params.RuntimeContext != nil && params.RuntimeContext.ToolPermissionContext != nil {
+						runner.ToolPermission = params.RuntimeContext.ToolPermissionContext
+					}
 					if gouDemoPreferQueryStreamingParity() {
 						var userCtx map[string]string
 						var systemCtx map[string]string
@@ -2624,7 +2627,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							MainLoopModel:           mainLoopModel,
 							ReadToolRoots:           runner.ToolReadMappingRoots(),
 							ReadToolMemCWD:          runner.ToolReadMappingMemCWD(),
-							MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(params.Commands, m.store.ConversationID),
+							MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(params.Commands, m.store.ConversationID, nil),
 							QueryCanUseTool: func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
 								if toolName == "AskUserQuestion" {
 									return toolexecution.AskDecision("Answer questions?"), nil

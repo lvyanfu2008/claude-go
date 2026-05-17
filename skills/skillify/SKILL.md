@@ -1,3 +1,8 @@
+---
+name: skillify
+description: "Capture this session's repeatable process as a reusable skill"
+---
+
 # Skillify 
 
 You are capturing this session's repeatable process as a reusable skill.

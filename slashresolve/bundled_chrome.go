@@ -67,3 +67,11 @@ func resolveClaudeInChrome(args string) types.SlashResolveResult {
 	}
 	return types.SlashResolveResult{UserText: body, Source: types.SlashResolveBundledEmbed}
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "claude-in-chrome",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveClaudeInChrome(args), nil },
+		FeatureGate: "CHICAGO_MCP",
+	})
+}

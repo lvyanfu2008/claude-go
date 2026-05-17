@@ -1,3 +1,8 @@
+---
+name: loop
+description: "Run a prompt or slash command on a recurring interval"
+---
+
 # /loop
 
 Run a prompt or slash command on a recurring interval.

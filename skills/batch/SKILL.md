@@ -1,3 +1,8 @@
+---
+name: batch
+description: "Research and plan a large-scale change, then execute it in parallel across 5-30 isolated worktree agents that each open a PR"
+---
+
 # /batch
 
 Research and plan a large-scale change, then execute it in parallel across 5-30 isolated worktree agents that each open a PR.

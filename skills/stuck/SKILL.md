@@ -1,3 +1,8 @@
+---
+name: stuck
+description: "Diagnose frozen or slow Claude Code sessions"
+---
+
 # /stuck — diagnose frozen/slow Claude Code sessions
 
 The user thinks another Claude Code session on this machine is frozen, stuck, or very slow. Investigate and post a report to #claude-code-feedback.

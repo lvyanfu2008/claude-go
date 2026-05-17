@@ -58,3 +58,22 @@ func resolveKeybindingsHelp(args string) (types.SlashResolveResult, error) {
 		Source:   types.SlashResolveBundledEmbed,
 	}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "remember",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveRemember(args) },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "simplify",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveSimplify(args) },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "stuck",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveStuck(args) },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "keybindings-help",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveKeybindingsHelp(args) },
+	})
+}

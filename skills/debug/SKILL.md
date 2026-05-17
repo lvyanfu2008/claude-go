@@ -1,3 +1,8 @@
+---
+name: debug
+description: "Help the user debug an issue they're encountering in this current Claude Code session"
+---
+
 # Debug Skill
 
 Help the user debug an issue they're encountering in this current Claude Code session.

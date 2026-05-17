@@ -203,3 +203,14 @@ func resolveLoop(args string) (types.SlashResolveResult, error) {
 	}
 	return types.SlashResolveResult{UserText: buildLoopPrompt(trimmed), Source: types.SlashResolveBundledEmbed}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "batch",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveBatch(args, opt.Cwd) },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "loop",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveLoop(args) },
+	})
+}

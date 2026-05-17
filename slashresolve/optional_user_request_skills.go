@@ -20,3 +20,16 @@ func resolveBundledMarkdownUserRequest(mdName string, args string) (types.SlashR
 		Source:   types.SlashResolveBundledEmbed,
 	}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "hunter",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveBundledMarkdownUserRequest("hunter.md", args) },
+		FeatureGate: "REVIEW_ARTIFACT",
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "run-skill-generator",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveBundledMarkdownUserRequest("run-skill-generator.md", args) },
+		FeatureGate: "RUN_SKILL_GENERATOR",
+	})
+}

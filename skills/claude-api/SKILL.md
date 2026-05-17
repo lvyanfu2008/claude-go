@@ -1,3 +1,8 @@
+---
+name: claude-api
+description: "Build apps with the Claude API or Anthropic SDK"
+---
+
 # Claude API skill
 
 Build apps with the Claude API or Anthropic SDK.

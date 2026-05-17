@@ -1,3 +1,8 @@
+---
+name: simplify
+description: "Review all changed files for reuse, quality, and efficiency"
+---
+
 # Simplify: Code Review and Cleanup
 
 Review all changed files for reuse, quality, and efficiency. Fix any issues found.

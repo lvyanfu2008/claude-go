@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -285,4 +286,58 @@ func unreadMailboxCount(agentName, teamName string) int {
 		}
 	}
 	return n
+}
+
+// MailboxEvent is emitted by pollMailbox when new messages arrive.
+type MailboxEvent struct {
+	Messages []TeammateMessage
+	NewCount int
+}
+
+// PollMailbox polls an agent's inbox at the given interval, sending events on the
+// returned channel when new unread messages are detected. The poller stops when
+// ctx is cancelled or the channel is closed by the caller.
+//
+// Interval defaults to 2s if <= 0. For in_process_teammate tasks, the event
+// channel feeds into the task execution loop so the agent can react to
+// permission requests, shutdown signals, and task assignments without blocking.
+func PollMailbox(ctx context.Context, agentName, teamName string, interval time.Duration) <-chan MailboxEvent {
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ch := make(chan MailboxEvent, 8)
+	go func() {
+		defer close(ch)
+		lastCount := 0
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				msgs, err := readMailbox(agentName, teamName)
+				if err != nil {
+					continue
+				}
+				unread := 0
+				for _, m := range msgs {
+					if !m.Read {
+						unread++
+					}
+				}
+				if unread > lastCount {
+					evt := MailboxEvent{Messages: msgs, NewCount: unread - lastCount}
+					select {
+					case ch <- evt:
+						lastCount = unread
+					case <-ctx.Done():
+						return
+					}
+				}
+				lastCount = unread
+			}
+		}
+	}()
+	return ch
 }

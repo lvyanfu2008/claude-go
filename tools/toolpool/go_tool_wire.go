@@ -1147,6 +1147,269 @@ func nativeSleepToolSpec() types.ToolSpec {
 	}
 }
 
+func nativeConfigToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"setting": map[string]any{
+				"type":        "string",
+				"description": "The setting name to get or set. Reads the setting if no value is provided.",
+			},
+			"value": map[string]any{
+				"description": "The value to set for the setting. If omitted, returns the current value.",
+			},
+			"operation": map[string]any{
+				"type":        "string",
+				"enum":        []string{"get", "set"},
+				"description": "Operation type: get (read setting) or set (write setting). Defaults to get if value is omitted, set if value is provided.",
+			},
+		},
+		"required":             []string{"setting"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "Config",
+		Description:     "Get or set configuration settings. Use this to read or write tool settings and preferences.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeTungstenToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"task": map[string]any{
+				"type":        "string",
+				"description": "The task description to execute via Tungsten.",
+			},
+			"model": map[string]any{
+				"type":        "string",
+				"description": "Model to use for Tungsten execution.",
+			},
+			"mode": map[string]any{
+				"type":        "string",
+				"enum":        []string{"default", "creative", "precise"},
+				"description": "Execution mode: default, creative, or precise.",
+			},
+		},
+		"required":             []string{"task"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "Tungsten",
+		Description:     "Invoke the Tungsten execution engine for advanced AI-driven tasks.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeSuggestBackgroundPRToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"title": map[string]any{
+				"type":        "string",
+				"description": "The title for the pull request.",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "A description of the changes for the pull request body.",
+			},
+			"base_branch": map[string]any{
+				"type":        "string",
+				"description": "The base branch to target. Defaults to main.",
+			},
+		},
+		"required":             []string{"title"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "SuggestBackgroundPR",
+		Description:     "Suggest a background pull request workflow. Creates a PR in the background with the given details.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeWebBrowserToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"url": map[string]any{
+				"type":        "string",
+				"description": "The URL to navigate to or interact with.",
+			},
+			"action": map[string]any{
+				"type":        "string",
+				"enum":        []string{"navigate", "screenshot", "extract"},
+				"description": "Action to perform: navigate to a URL, take a screenshot, or extract content.",
+			},
+			"selector": map[string]any{
+				"type":        "string",
+				"description": "CSS selector for the element to extract or interact with.",
+			},
+			"timeout": map[string]any{
+				"type":        "integer",
+				"description": "Timeout in milliseconds. Defaults to 30000.",
+			},
+		},
+		"required":             []string{"url"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "WebBrowser",
+		Description:     "Automate web browser interactions: navigate to URLs, take screenshots, or extract page content.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeOverflowTestToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"size_mb": map[string]any{
+				"type":        "integer",
+				"description": "Size of test data in megabytes. Defaults to 10.",
+			},
+			"duration_s": map[string]any{
+				"type":        "integer",
+				"description": "Duration of the stress test in seconds. Defaults to 30.",
+			},
+			"mode": map[string]any{
+				"type":        "string",
+				"enum":        []string{"memory", "cpu", "disk"},
+				"description": "Type of stress to apply: memory, cpu, or disk.",
+			},
+		},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "OverflowTest",
+		Description:     "Internal overflow stress-test tool for performance and resource testing.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeREPLToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"tool": map[string]any{
+				"type":        "string",
+				"description": "The internal tool name to execute in REPL mode.",
+			},
+			"input": map[string]any{
+				"type":        "object",
+				"description": "The input parameters to pass to the internal tool.",
+			},
+			"batch": map[string]any{
+				"type":        "array",
+				"description": "Array of {tool, input} objects for batch execution.",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"tool":  map[string]any{"type": "string", "description": "Tool name."},
+						"input": map[string]any{"type": "object", "description": "Tool input parameters."},
+					},
+					"required": []string{"tool", "input"},
+				},
+			},
+		},
+		"required":             []string{"tool", "input"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "REPL",
+		Description:     "Run command(s) in REPL mode. Execute internal tools with structured input, or batch multiple tool calls together.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeSubscribePRToolSpec() types.ToolSpec {
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"repository": map[string]any{
+				"type":        "string",
+				"description": "Repository name in owner/repo format.",
+			},
+			"pr_number": map[string]any{
+				"type":        "integer",
+				"description": "The pull request number to subscribe to.",
+			},
+			"events": map[string]any{
+				"type":        "array",
+				"description": "Event types to subscribe to (e.g., comments, reviews, status_changes).",
+				"items":       map[string]any{"type": "string"},
+			},
+		},
+		"required":             []string{"repository", "pr_number"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "SubscribePR",
+		Description:     "Subscribe to pull request updates. Receive notifications when the specified PR changes.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
+func nativeReviewArtifactToolSpec() types.ToolSpec {
+	annotationSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"line": map[string]any{
+				"type":        "integer",
+				"description": "Line number for the annotation (1-based).",
+			},
+			"message": map[string]any{
+				"type":        "string",
+				"description": "The annotation or feedback message.",
+			},
+			"severity": map[string]any{
+				"type":        "string",
+				"enum":        []string{"info", "warning", "error", "suggestion"},
+				"description": "Severity level of the annotation.",
+			},
+		},
+		"required": []string{"message"},
+	}
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"artifact": map[string]any{
+				"type":        "string",
+				"description": "The content of the artifact to review (code snippet, document text, etc.).",
+			},
+			"title": map[string]any{
+				"type":        "string",
+				"description": "Optional title or file path for the artifact being reviewed.",
+			},
+			"annotations": map[string]any{
+				"type":        "array",
+				"description": "List of annotations/comments on the artifact.",
+				"items":       annotationSchema,
+			},
+			"summary": map[string]any{
+				"type":        "string",
+				"description": "An overall summary of the review.",
+			},
+		},
+		"required":             []string{"artifact"},
+		"additionalProperties": false,
+	}
+	return types.ToolSpec{
+		Name:            "ReviewArtifact",
+		Description:     "Review an artifact (code snippet, document, or other content) with inline annotations and feedback.",
+		InputJSONSchema: mustMarshalJSONRaw(schema),
+	}
+}
+
 func nativeCtxInspectToolSpec() types.ToolSpec {
 	schema := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1411,15 +1674,15 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "PowerShell":
 		return nativePowerShellToolSpec(), true, nil
 	case "Config":
-		return nativeEmptyObjectSchemaToolSpec("Config", "Config tool settings management."), true, nil
+		return nativeConfigToolSpec(), true, nil
 	case "Tungsten":
-		return nativeEmptyObjectSchemaToolSpec("Tungsten", "Tungsten tool invocation."), true, nil
+		return nativeTungstenToolSpec(), true, nil
 	case "SuggestBackgroundPR":
-		return nativeEmptyObjectSchemaToolSpec("SuggestBackgroundPR", "Suggest background pull-request workflow."), true, nil
+		return nativeSuggestBackgroundPRToolSpec(), true, nil
 	case "WebBrowser":
-		return nativeEmptyObjectSchemaToolSpec("WebBrowser", "Web browser automation tool."), true, nil
+		return nativeWebBrowserToolSpec(), true, nil
 	case "OverflowTest":
-		return nativeEmptyObjectSchemaToolSpec("OverflowTest", "Internal overflow stress-test tool."), true, nil
+		return nativeOverflowTestToolSpec(), true, nil
 	case "CtxInspect":
 		return nativeCtxInspectToolSpec(), true, nil
 	case "TerminalCapture":
@@ -1439,7 +1702,7 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "VerifyPlanExecution":
 		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result."), true, nil
 	case "REPL":
-		return nativeEmptyObjectSchemaToolSpec("REPL", "Run command(s) in REPL mode."), true, nil
+		return nativeREPLToolSpec(), true, nil
 	case "workflow":
 		return nativeWorkflowToolSpec(), true, nil
 	case "RemoteTrigger":
@@ -1451,9 +1714,9 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "PushNotification":
 		return nativePushNotificationToolSpec(), true, nil
 	case "SubscribePR":
-		return nativeEmptyObjectSchemaToolSpec("SubscribePR", "Subscribe to PR updates."), true, nil
+		return nativeSubscribePRToolSpec(), true, nil
 	case "ReviewArtifact":
-		return nativeEmptyObjectSchemaToolSpec("ReviewArtifact", "Review generated artifact content."), true, nil
+		return nativeReviewArtifactToolSpec(), true, nil
 	case "Snip":
 		return nativeSnipToolSpec(), true, nil
 	default:

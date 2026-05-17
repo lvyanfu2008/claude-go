@@ -36,4 +36,6 @@ type SlashResolveResult struct {
 	BridgeMeta        *SlashBridgeMeta    `json:"bridgeMeta,omitempty"`
 	SkippedReason     string              `json:"skippedReason,omitempty"`
 	CommandJSON       json.RawMessage     `json:"commandJson,omitempty"` // optional echo of types.Command for TS bridge
+	Context           *string             `json:"context,omitempty"`     // "fork" for fork execution
+	Agent             *string             `json:"agent,omitempty"`       // agent type for fork execution
 }

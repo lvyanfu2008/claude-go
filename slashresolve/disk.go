@@ -12,9 +12,24 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// skillFileYAML is frontmatter for SKILL.md (arguments extend skill_md.go).
+// skillFileYAML is frontmatter for SKILL.md (mirrors commands.skillFrontmatter for richer parsing).
 type skillFileYAML struct {
-	Arguments interface{} `yaml:"arguments"`
+	Name                   string      `yaml:"name"`
+	Description            string      `yaml:"description"`
+	AllowedTools           interface{} `yaml:"allowed-tools"`
+	UserInvocable          *bool       `yaml:"user-invocable"`
+	WhenToUse              string      `yaml:"when_to_use"`
+	DisableModelInvocation *bool       `yaml:"disable-model-invocation"`
+	Model                  string      `yaml:"model"`
+	Version                string      `yaml:"version"`
+	ArgumentHint           string      `yaml:"argument-hint"`
+	Context                string      `yaml:"context"`
+	Agent                  string      `yaml:"agent"`
+	Effort                 interface{} `yaml:"effort"`
+	Paths                  interface{} `yaml:"paths"`
+	Hooks                  interface{} `yaml:"hooks"`
+	Shell                  string      `yaml:"shell"`
+	Arguments              interface{} `yaml:"arguments"`
 }
 
 // ResolveDiskSkill builds SlashResolveResult from a disk skill Command (prompt + SkillRoot).
@@ -66,20 +81,78 @@ func ResolveDiskSkill(cmd types.Command, args string, sessionID string) (types.S
 		final = shellResult
 	}
 
+	// Merge frontmatter overrides from SKILL.md into the result.
+	allowedTools := append([]string(nil), cmd.AllowedTools...)
+	if len(allowedTools) == 0 && fm.AllowedTools != nil {
+		allowedTools = parseAllowedToolsFromFM(fm.AllowedTools)
+	}
 	res := types.SlashResolveResult{
 		UserText:     final,
-		AllowedTools: append([]string(nil), cmd.AllowedTools...),
+		AllowedTools: allowedTools,
 		Source:       types.SlashResolveDisk,
 	}
+	// Model: prefer Command (already parsed by skill_md.go), fallback to frontmatter.
 	if cmd.Model != nil {
 		m := *cmd.Model
+		res.Model = &m
+	} else if fm.Model != "" && !strings.EqualFold(fm.Model, "inherit") {
+		m := fm.Model
 		res.Model = &m
 	}
 	if cmd.Effort != nil {
 		ev := *cmd.Effort
 		res.Effort = &ev
 	}
+	// Context / Agent for fork execution.
+	if cmd.Context != nil {
+		c := *cmd.Context
+		res.Context = &c
+	} else if fm.Context == "fork" {
+		c := "fork"
+		res.Context = &c
+	}
+	if cmd.Agent != nil {
+		a := *cmd.Agent
+		res.Agent = &a
+	} else if fm.Agent != "" {
+		a := fm.Agent
+		res.Agent = &a
+	}
 	return res, nil
+}
+
+// parseAllowedToolsFromFM is a local copy to avoid import cycle with commands package.
+func parseAllowedToolsFromFM(v interface{}) []string {
+	if v == nil {
+		return nil
+	}
+	switch t := v.(type) {
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" {
+			return nil
+		}
+		if strings.Contains(s, ",") {
+			var out []string
+			for _, p := range strings.Split(s, ",") {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			return out
+		}
+		return strings.Fields(s)
+	case []interface{}:
+		var out []string
+		for _, x := range t {
+			if s, ok := x.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func splitYAMLFrontmatter(raw []byte) (yamlBytes []byte, body []byte, ok bool) {

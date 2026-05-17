@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -35,6 +36,9 @@ type skillFrontmatter struct {
 	Agent                  string      `yaml:"agent"`
 	Effort                 interface{} `yaml:"effort"`
 	Paths                  interface{} `yaml:"paths"`
+	Hooks                  interface{} `yaml:"hooks"`
+	Shell                  string      `yaml:"shell"`
+	Arguments              interface{} `yaml:"arguments"`
 }
 
 func SplitYAMLFrontmatter(raw []byte) (yamlBytes []byte, body []byte, ok bool) {
@@ -211,6 +215,16 @@ func commandFromSkillMarkdown(
 			cmd.Paths = p
 		}
 	}
+	// Hooks from frontmatter.
+	if fm.Hooks != nil {
+		if b, err := yamlToJSONRaw(fm.Hooks); err == nil && len(b) > 0 {
+			cmd.Hooks = b
+		}
+	}
+	// ArgNames from frontmatter arguments field (for $1, $ARGUMENTS substitution).
+	if fm.Arguments != nil {
+		cmd.ArgNames = parseArgumentNames(fm.Arguments)
+	}
 	return cmd, nil
 }
 
@@ -275,4 +289,48 @@ func loadSkillsFromDir(baseDir, source string) ([]SkillLoadEntry, error) {
 		out = append(out, SkillLoadEntry{Cmd: cmd, MarkdownPath: absPath})
 	}
 	return out, nil
+}
+
+// yamlToJSONRaw converts a YAML-decoded value to json.RawMessage.
+func yamlToJSONRaw(v interface{}) (json.RawMessage, error) {
+	// re-marshal through JSON to normalize
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// parseArgumentNames mirrors slashresolve.ParseArgumentNames to avoid import cycles.
+func parseArgumentNames(v interface{}) []string {
+	if v == nil {
+		return nil
+	}
+	switch t := v.(type) {
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" {
+			return nil
+		}
+		if strings.Contains(s, ",") {
+			var out []string
+			for _, p := range strings.Split(s, ",") {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			return out
+		}
+		return strings.Fields(s)
+	case []interface{}:
+		var out []string
+		for _, x := range t {
+			if s, ok := x.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	}
+	return nil
 }

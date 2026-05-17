@@ -72,3 +72,10 @@ func resolveLoremIpsum(args string) (types.SlashResolveResult, error) {
 	}
 	return types.SlashResolveResult{UserText: generateLoremIpsum(10_000), Source: types.SlashResolveBundledEmbed}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "lorem-ipsum",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveLoremIpsum(args) },
+	})
+}

@@ -49,6 +49,9 @@ type ParityToolRunner struct {
 	// EditDeps holds optional callbacks for Edit tool parity features.
 	// When nil or individual callbacks are nil, the corresponding TS feature is skipped.
 	EditDeps *localtools.EditDeps
+	// ToolPermission is the parent's permission context propagated to child agents
+	// for bubble-mode permission enforcement (TS PermissionUpdate parity).
+	ToolPermission *types.ToolPermissionContextData
 }
 
 func (r *ParityToolRunner) roots() []string {
@@ -113,6 +116,7 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		SystemPrompt:      r.SystemPrompt,
 		MainLoopModel:     r.MainLoopModel,
 		ProgressCallback:  r.ProgressCallback,
+		ToolPermission:    r.ToolPermission,
 	}
 	s, isErr, perr := tools.Run(ctx, name, input, cfg)
 	if perr == nil || !tools.IsNotHandled(perr) {
@@ -140,7 +144,7 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		return localtools.BashFromJSON(ctx, input, wd, r.LocalBashDefault, tasksDir)
 	}
 	if dn := DiscoverSkillsToolNameFromEnv(); dn != "" && name == dn {
-		return `{"note":"Go local runner: discover-skills is not implemented; use the Skill tool with a skill name, or enable the TS socket worker for full tool parity."}`, false, nil
+		return discoverSkillsFromJSON(input, r.Commands)
 	}
 	return r.DemoToolRunner.Run(ctx, name, toolUseID, input)
 }
@@ -161,6 +165,64 @@ func (r *ParityToolRunner) ToolReadMappingMemCWD() string {
 		return rs[0]
 	}
 	return ""
+}
+
+// discoverSkillsFromJSON lists loaded prompt-type commands (skills) with name, description, and
+// argument hint, optionally filtered by the input description field. Returns JSON matching TS
+// DiscoverSkills tool output shape.
+func discoverSkillsFromJSON(raw json.RawMessage, commands []types.Command) (string, bool, error) {
+	var in struct {
+		Description string `json:"description"`
+	}
+	_ = json.Unmarshal(raw, &in)
+	query := strings.ToLower(strings.TrimSpace(in.Description))
+
+	type skillEntry struct {
+		Name         string `json:"name"`
+		Description  string `json:"description"`
+		ArgumentHint string `json:"argumentHint,omitempty"`
+	}
+	var skills []skillEntry
+	for _, cmd := range commands {
+		if cmd.Type != "prompt" {
+			continue
+		}
+		if cmd.DisableModelInvocation != nil && *cmd.DisableModelInvocation {
+			continue
+		}
+		name := strings.TrimSpace(cmd.Name)
+		if name == "" {
+			continue
+		}
+		desc := strings.TrimSpace(cmd.Description)
+		argHint := ""
+		if cmd.ArgumentHint != nil {
+			argHint = strings.TrimSpace(*cmd.ArgumentHint)
+		}
+		if query != "" {
+			if !strings.Contains(strings.ToLower(name), query) &&
+				!strings.Contains(strings.ToLower(desc), query) &&
+				!strings.Contains(strings.ToLower(argHint), query) {
+				continue
+			}
+		}
+		skills = append(skills, skillEntry{
+			Name:         name,
+			Description:  desc,
+			ArgumentHint: argHint,
+		})
+	}
+	if skills == nil {
+		skills = make([]skillEntry, 0)
+	}
+	out := map[string]any{
+		"data": map[string]any{
+			"skills": skills,
+			"count":  len(skills),
+		},
+	}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
 }
 
 // computeTasksDir derives the background-task directory from project root and session ID.

@@ -95,7 +95,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		Model:               model,
 		PermissionMode:      pm,
 		MaxTurns:            selected.MaxTurns,
-		AllowedTools:        ResolveAllowedTools(selected, availableAgentToolNames()),
+		AllowedTools:        resolveAgentTools(selected, in.RunInBackground, availableAgentToolNames()),
 		Skills:              append([]string(nil), selected.Skills...),
 		RequiredMcpServers:  append([]string(nil), selected.RequiredMcpServers...),
 		AvailableMcpServers: append([]string(nil), cfg.AvailableMCPServers...),
@@ -279,6 +279,14 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 			} else {
 				output = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
 			}
+			// Handoff classifier: review sub-agent transcript before returning to parent.
+			if hc, _ := ClassifyHandoffIfNeeded(context.Background(), HandoffParams{
+				PermissionMode:        pm,
+				SubagentType:          selected.AgentType,
+				ToolPermissionContext: cfg.ToolPermission,
+			}); hc != nil && hc.ShouldBlock {
+				output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
+			}
 			_, _ = writeBackgroundOutput(cfg.TasksDir, s.ID, output)
 			persistAgentMetadata(cfg, s)
 			if isTaskStopRequested(cfg.TasksDir, s.ID) {
@@ -308,6 +316,14 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		output = executeAgentWithOpts(context.Background(), cfg, s, in.Prompt, nil, *forkOpts)
 	} else {
 		output = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
+	}
+	// Handoff classifier: review sub-agent transcript before returning to parent.
+	if hc, _ := ClassifyHandoffIfNeeded(context.Background(), HandoffParams{
+		PermissionMode:        pm,
+		SubagentType:          selected.AgentType,
+		ToolPermissionContext: cfg.ToolPermission,
+	}); hc != nil && hc.ShouldBlock {
+		output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
 	}
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{
@@ -396,6 +412,14 @@ func ResumeAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		})
 	} else {
 		output = executeAgent(context.Background(), cfg, s, in.Prompt, history)
+	}
+	// Handoff classifier: review sub-agent transcript before returning to parent.
+	if hc, _ := ClassifyHandoffIfNeeded(context.Background(), HandoffParams{
+		PermissionMode:        s.PermissionMode,
+		SubagentType:          s.AgentType,
+		ToolPermissionContext: cfg.ToolPermission,
+	}); hc != nil && hc.ShouldBlock {
+		output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
 	}
 	persistAgentMetadata(cfg, s)
 	resp, _ := json.Marshal(AgentToolResponse{

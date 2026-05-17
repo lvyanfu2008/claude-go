@@ -237,3 +237,11 @@ func resolveClaudeAPI(args string, cwd string) (types.SlashResolveResult, error)
 		Source:   types.SlashResolveBundledEmbed,
 	}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "claude-api",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveClaudeAPI(args, opt.Cwd) },
+		FeatureGate: "BUILDING_CLAUDE_APPS",
+	})
+}

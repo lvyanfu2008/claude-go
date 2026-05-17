@@ -1,3 +1,8 @@
+---
+name: remember
+description: "Review the user's memory landscape and produce a clear report of proposed changes"
+---
+
 # Memory Review
 
 ## Goal

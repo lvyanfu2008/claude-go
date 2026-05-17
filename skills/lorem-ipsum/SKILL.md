@@ -1,3 +1,8 @@
+---
+name: lorem-ipsum
+description: "Generate Lorem Ipsum placeholder text"
+---
+
 young able public right out make much time he right large saw with same. was she have make work there off file like when though text about. little away find may such great must with even man I have look under us like part well. 
 
 can file what shall there start big for might her last get ask take young very since without be. 

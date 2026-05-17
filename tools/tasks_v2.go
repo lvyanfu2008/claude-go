@@ -20,6 +20,95 @@ import (
 
 // TS parity reference: claude-code/src/utils/tasks.ts (layout, locks, high water mark, CRUD).
 
+// TaskType constants mirror TS task type definitions (src/tasks/taskDefinitions.ts).
+const (
+	TaskTypeLocalBash          = "local_bash"
+	TaskTypeLocalAgent         = "local_agent"
+	TaskTypeRemoteAgent        = "remote_agent"
+	TaskTypeInProcessTeammate  = "in_process_teammate"
+	TaskTypeLocalWorkflow      = "local_workflow"
+	TaskTypeMonitorMCP         = "monitor_mcp"
+	TaskTypeDream              = "dream"
+)
+
+// taskTypeToPrefix maps task types to single-character ID prefixes (TS: TASK_TYPE_TO_PREFIX).
+var taskTypeToPrefix = map[string]string{
+	TaskTypeLocalBash:         "b",
+	TaskTypeLocalAgent:        "a",
+	TaskTypeRemoteAgent:       "r",
+	TaskTypeInProcessTeammate: "t",
+	TaskTypeLocalWorkflow:     "w",
+	TaskTypeMonitorMCP:        "m",
+	TaskTypeDream:             "d",
+}
+
+// prefixToTaskType maps ID prefixes back to task types.
+var prefixToTaskType = map[string]string{
+	"b": TaskTypeLocalBash,
+	"a": TaskTypeLocalAgent,
+	"r": TaskTypeRemoteAgent,
+	"t": TaskTypeInProcessTeammate,
+	"w": TaskTypeLocalWorkflow,
+	"m": TaskTypeMonitorMCP,
+	"d": TaskTypeDream,
+}
+
+// validTaskTypes is the set of all valid task type strings.
+var validTaskTypes = map[string]bool{
+	TaskTypeLocalBash:         true,
+	TaskTypeLocalAgent:        true,
+	TaskTypeRemoteAgent:       true,
+	TaskTypeInProcessTeammate: true,
+	TaskTypeLocalWorkflow:     true,
+	TaskTypeMonitorMCP:        true,
+	TaskTypeDream:             true,
+}
+
+// Task status constants (extended with failed/killed for state machine).
+const (
+	TaskStatusPending    = "pending"
+	TaskStatusInProgress = "in_progress"
+	TaskStatusCompleted  = "completed"
+	TaskStatusFailed     = "failed"
+	TaskStatusKilled     = "killed"
+)
+
+// terminalTaskStatus is the set of statuses from which no further transitions are allowed.
+var terminalTaskStatus = map[string]bool{
+	TaskStatusCompleted: true,
+	TaskStatusFailed:    true,
+	TaskStatusKilled:    true,
+}
+
+// validTaskStatus is the set of all valid task statuses.
+var validTaskStatus = map[string]bool{
+	TaskStatusPending:    true,
+	TaskStatusInProgress: true,
+	TaskStatusCompleted:  true,
+	TaskStatusFailed:     true,
+	TaskStatusKilled:     true,
+}
+
+// isValidTransition checks whether a status transition is valid.
+// Transitions: pending → in_progress → completed/failed/killed.
+// Same-status transitions are idempotent (allowed).
+// Terminal statuses (completed/failed/killed) cannot be transitioned from.
+func isValidTransition(from, to string) bool {
+	if from == to {
+		return true
+	}
+	if terminalTaskStatus[from] {
+		return false
+	}
+	if from == TaskStatusPending && to == TaskStatusInProgress {
+		return true
+	}
+	if from == TaskStatusInProgress && terminalTaskStatus[to] {
+		return true
+	}
+	return false
+}
+
 const (
 	v2HighWaterMarkFile = ".highwatermark"
 	v2LockRetries       = 30
@@ -194,6 +283,7 @@ func findHighestTaskIDV2(taskListID string) int {
 
 type v2Task struct {
 	ID          string         `json:"id"`
+	Type        string         `json:"type"`
 	Subject     string         `json:"subject"`
 	Description string         `json:"description"`
 	ActiveForm  string         `json:"activeForm,omitempty"`
@@ -208,9 +298,11 @@ func validateV2Task(t *v2Task) bool {
 	if t == nil {
 		return false
 	}
-	switch t.Status {
-	case "pending", "in_progress", "completed":
-	default:
+	if !validTaskStatus[t.Status] {
+		return false
+	}
+	// Type is optional when reading legacy tasks, but must be valid if present.
+	if t.Type != "" && !validTaskTypes[t.Type] {
 		return false
 	}
 	if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Subject) == "" {
@@ -256,7 +348,13 @@ func v2WriteTask(taskListID string, t *v2Task) error {
 	return writeFileAtomic(v2TaskPath(taskListID, t.ID), b, 0o644)
 }
 
-func v2CreateTask(taskListID string, subject, description, activeForm string, metadata map[string]any) (string, error) {
+func v2CreateTask(taskListID, taskType, subject, description, activeForm string, metadata map[string]any) (string, error) {
+	if taskType == "" {
+		taskType = TaskTypeLocalAgent
+	}
+	if !validTaskTypes[taskType] {
+		return "", fmt.Errorf("invalid task type: %q", taskType)
+	}
 	lockPath := v2ListLockPath(taskListID)
 	var newID string
 	err := withListExclusiveLock(lockPath, func() error {
@@ -275,6 +373,7 @@ func v2CreateTask(taskListID string, subject, description, activeForm string, me
 		}
 		t := &v2Task{
 			ID:          newID,
+			Type:        taskType,
 			Subject:     subject,
 			Description: description,
 			ActiveForm:  activeForm,
@@ -529,6 +628,7 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		return "", true, errTodoV2Disabled("TaskCreate")
 	}
 	var in struct {
+		Type        string         `json:"type"`
 		Subject     string         `json:"subject"`
 		Description string         `json:"description"`
 		ActiveForm  string         `json:"activeForm"`
@@ -541,7 +641,7 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		return "", true, fmt.Errorf("subject is required")
 	}
 	tid := TaskListID(cfg)
-	id, err := v2CreateTask(tid, in.Subject, in.Description, in.ActiveForm, in.Metadata)
+	id, err := v2CreateTask(tid, in.Type, in.Subject, in.Description, in.ActiveForm, in.Metadata)
 	if err != nil {
 		return "", true, err
 	}
@@ -746,9 +846,12 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 			return string(b), false, nil
 		}
 		switch st {
-		case "pending", "in_progress", "completed":
+		case "pending", "in_progress", "completed", "failed", "killed":
 		default:
 			return "", true, fmt.Errorf("invalid status %q", st)
+		}
+		if !isValidTransition(existing.Status, st) {
+			return "", true, fmt.Errorf("invalid status transition from %q to %q", existing.Status, st)
 		}
 		if st != existing.Status {
 			updates["status"] = st
@@ -774,8 +877,13 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 						return "", true, fmt.Errorf("cannot complete task: blocked by unresolved task(s): %s", strings.Join(unresolved, ", "))
 					}
 				}
-				broadcastTaskEvent(in.TaskID, existing.Subject, "completed")
-				runTaskCompletedHook(cfg, in.TaskID, TaskListID(cfg))
+				if st == "completed" || st == "failed" || st == "killed" {
+					event := st
+					broadcastTaskEvent(in.TaskID, existing.Subject, event)
+					if st == "completed" {
+						runTaskCompletedHook(cfg, in.TaskID, TaskListID(cfg))
+					}
+				}
 			}
 		}
 	}

@@ -34,3 +34,10 @@ func resolveUpdateConfig(args string) (types.SlashResolveResult, error) {
 		Source:   types.SlashResolveBundledEmbed,
 	}, nil
 }
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "update-config",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveUpdateConfig(args) },
+	})
+}

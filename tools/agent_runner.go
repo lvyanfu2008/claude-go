@@ -422,6 +422,10 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		StreamingParity: true,
 		Deps:            &qdeps,
 	}
+	// Propagate parent's permission context to child agent for bubble-mode enforcement.
+	if cfg.ToolPermission != nil {
+		qp.ToolPermissionContext = cfg.ToolPermission
+	}
 	if s.MaxTurns > 0 {
 		mt := s.MaxTurns
 		qp.MaxTurns = &mt

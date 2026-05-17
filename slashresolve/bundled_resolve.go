@@ -16,6 +16,30 @@ type BundledResolveOptions struct {
 	Cwd           string
 	SessionMemory string
 	UserMessages  []string
+	SessionID     string
+}
+
+// BundledSkillResolver is the function signature for resolving a bundled skill to user text.
+type BundledSkillResolver func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error)
+
+// BundledSkillDefinition registers one bundled skill.
+type BundledSkillDefinition struct {
+	Name        string
+	Resolver    BundledSkillResolver
+	FeatureGate string // optional; when non-empty the gate must be enabled
+}
+
+var bundledSkillRegistry = map[string]BundledSkillDefinition{}
+
+// RegisterBundledSkill adds a bundled skill definition. Call from init() in bundled_*.go files.
+func RegisterBundledSkill(def BundledSkillDefinition) {
+	if def.Name == "" || def.Resolver == nil {
+		panic("slashresolve: RegisterBundledSkill requires Name and Resolver")
+	}
+	if _, ok := bundledSkillRegistry[def.Name]; ok {
+		panic("slashresolve: duplicate bundled skill registration: " + def.Name)
+	}
+	bundledSkillRegistry[def.Name] = def
 }
 
 // IsBundledPrompt mirrors listing metadata: prompt command with source or loadedFrom "bundled".
@@ -40,67 +64,17 @@ func ResolveBundledSkill(cmd types.Command, args, sessionID string, opt *Bundled
 	if opt == nil {
 		opt = &BundledResolveOptions{}
 	}
+	opt.SessionID = sessionID
 
-	var res types.SlashResolveResult
-	var err error
-
-	switch cmd.Name {
-	case "update-config":
-		res, err = resolveUpdateConfig(args)
-	case "remember":
-		res, err = resolveRemember(args)
-	case "simplify":
-		res, err = resolveSimplify(args)
-	case "stuck":
-		res, err = resolveStuck(args)
-	case "dream":
-		res, err = resolveDream(args, opt)
-	case "keybindings-help":
-		res, err = resolveKeybindingsHelp(args)
-	case "hunter":
-		if !featuregates.Feature("REVIEW_ARTIFACT") {
-			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate REVIEW_ARTIFACT disabled)", cmd.Name)
-		}
-		res, err = resolveBundledMarkdownUserRequest("hunter.md", args)
-	case "schedule":
-		if !featuregates.Feature("AGENT_TRIGGERS_REMOTE") {
-			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate AGENT_TRIGGERS_REMOTE disabled)", cmd.Name)
-		}
-		res, err = resolveSchedule(args, opt)
-	case "claude-api":
-		if !featuregates.Feature("BUILDING_CLAUDE_APPS") {
-			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate BUILDING_CLAUDE_APPS disabled)", cmd.Name)
-		}
-		res, err = resolveClaudeAPI(args, opt.Cwd)
-	case "run-skill-generator":
-		if !featuregates.Feature("RUN_SKILL_GENERATOR") {
-			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate RUN_SKILL_GENERATOR disabled)", cmd.Name)
-		}
-		res, err = resolveBundledMarkdownUserRequest("run-skill-generator.md", args)
-	case "loop":
-		res, err = resolveLoop(args)
-	case "batch":
-		res, err = resolveBatch(args, opt.Cwd)
-	case "lorem-ipsum":
-		res, err = resolveLoremIpsum(args)
-	case "debug":
-		res = resolveDebugBundled(args, sessionID)
-	case "verify":
-		res, err = resolveVerifyBundled(args)
-	case "claude-in-chrome":
-		if !featuregates.BundledChromeSkillEnabled() {
-			return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate CHICAGO_MCP disabled)", cmd.Name)
-		}
-		res = resolveClaudeInChrome(args)
-	case "skillify":
-		res, err = resolveSkillifyBundled(args, opt.SessionMemory, opt.UserMessages)
-	case "cron-list":
-		res = resolveCronList(args)
-	case "cron-delete":
-		res, err = resolveCronDelete(args)
-	default:
-		res, err = resolveDefaultBundledEmbed(cmd.Name, args)
+	def, ok := bundledSkillRegistry[cmd.Name]
+	if !ok {
+		return resolveDefaultBundledEmbed(cmd.Name, args)
 	}
+	if def.FeatureGate != "" && !featuregates.Feature(def.FeatureGate) {
+		return types.SlashResolveResult{}, fmt.Errorf("skill %q is not available (feature gate %s disabled)", cmd.Name, def.FeatureGate)
+	}
+
+	res, err := def.Resolver(args, opt)
 	if err != nil {
 		return types.SlashResolveResult{}, err
 	}
@@ -223,4 +197,23 @@ func resolveCronDelete(args string) (types.SlashResolveResult, error) {
 		UserText: text,
 		Source:   types.SlashResolveBundledEmbed,
 	}, nil
+}
+
+func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "verify",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveVerifyBundled(args) },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "skillify",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveSkillifyBundled(args, opt.SessionMemory, opt.UserMessages) },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "cron-list",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveCronList(args), nil },
+	})
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "cron-delete",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveCronDelete(args) },
+	})
 }
