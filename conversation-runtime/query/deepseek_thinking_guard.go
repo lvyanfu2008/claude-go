@@ -107,7 +107,7 @@ func assistantWireMessageHasNonEmptyThinkingBlock(inner json.RawMessage) bool {
 		typ, _ := b["type"].(string)
 		switch typ {
 		case "thinking":
-			if s, ok := b["thinking"].(string); ok && strings.TrimSpace(s) != "" {
+			if _, ok := b["thinking"].(string); ok {
 				return true
 			}
 		case "redacted_thinking":

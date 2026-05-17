@@ -180,9 +180,7 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 			if !preserveReasoning {
 				break
 			}
-			if s := thinkingBlockReasoningPayload(b); s != "" {
-				reasoningParts = append(reasoningParts, s)
-			}
+			reasoningParts = append(reasoningParts, thinkingBlockReasoningPayload(b))
 		case "tool_use":
 			id, _ := b["id"].(string)
 			name, _ := b["name"].(string)
@@ -242,7 +240,7 @@ func thinkingBlockReasoningPayload(b map[string]any) string {
 	typ, _ := b["type"].(string)
 	switch typ {
 	case "thinking":
-		if th, ok := b["thinking"].(string); ok && strings.TrimSpace(th) != "" {
+		if th, ok := b["thinking"].(string); ok {
 			return th
 		}
 	case "redacted_thinking":

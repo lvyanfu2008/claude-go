@@ -200,14 +200,16 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	// Some gateways only attach chain-of-thought to choices[0].message (same as non-stream),
 	// with an empty or omitted delta. Mirror src/services/api/openai/streamAdapter.ts.
 	if (delta.ReasoningContent == nil || *delta.ReasoningContent == "") && ch0.Message != nil && ch0.Message.ReasoningContent != nil {
-		if s := strings.TrimSpace(*ch0.Message.ReasoningContent); s != "" {
-			c := s
-			delta.ReasoningContent = &c
-		}
+		c := *ch0.Message.ReasoningContent
+		delta.ReasoningContent = &c
 	}
 
 	// reasoning_content → thinking
-	if delta.ReasoningContent != nil && *delta.ReasoningContent != "" {
+	// Empty string is a valid signal: DeepSeek v4 thinking mode sometimes
+	// returns reasoning_content: "" when the model answers directly. The
+	// empty thinking block must round-trip back to the API in subsequent
+	// requests, otherwise DeepSeek rejects with 400.
+	if delta.ReasoningContent != nil {
 		if !a.thinkingBlockOpen {
 			a.currentContentIndex++
 			a.thinkingBlockOpen = true
@@ -222,14 +224,16 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 				return err
 			}
 		}
-		if err := emitStreamObj(map[string]any{
-			"type":  "content_block_delta",
-			"index": a.currentContentIndex,
-			"delta": map[string]any{
-				"type": "thinking_delta", "thinking": *delta.ReasoningContent,
-			},
-		}, emit); err != nil {
-			return err
+		if *delta.ReasoningContent != "" {
+			if err := emitStreamObj(map[string]any{
+				"type":  "content_block_delta",
+				"index": a.currentContentIndex,
+				"delta": map[string]any{
+					"type": "thinking_delta", "thinking": *delta.ReasoningContent,
+				},
+			}, emit); err != nil {
+				return err
+			}
 		}
 	}
 
