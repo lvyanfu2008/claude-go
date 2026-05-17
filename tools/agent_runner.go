@@ -342,7 +342,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			case "Grep":
 				return localtools.GrepFromJSON(ctx, input, roots)
 			case "Bash", bashzog.ZogToolName:
-				return localtools.BashFromJSON(ctx, input, wd, true)
+				return localtools.BashFromJSON(ctx, input, wd, true, toolCfg.TasksDir())
 			}
 			return s, isErr, perr
 		},

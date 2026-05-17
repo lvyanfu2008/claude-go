@@ -18,6 +18,9 @@ import (
 )
 
 func openAIBaseURLFromEnv() string {
+	if UseGrokProvider() {
+		return grokBaseURL()
+	}
 	b := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 	if b == "" {
 		return "https://api.openai.com/v1"
@@ -39,14 +42,20 @@ func runOpenAIStreamingParityModelLoop(
 		return fmt.Errorf("query: nil deps")
 	}
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if UseGrokProvider() {
+		apiKey = grokAPIKey()
+	}
 	if apiKey == "" && deps.OpenAIPostStream != nil {
 		apiKey = "test-key"
 	}
 	if apiKey == "" {
-		return fmt.Errorf("query openai streaming: set OPENAI_API_KEY or inject QueryDeps.OpenAIPostStream")
+		return fmt.Errorf("query openai streaming: set OPENAI_API_KEY (or GROK_API_KEY) or inject QueryDeps.OpenAIPostStream")
 	}
 	base := openAIBaseURLFromEnv()
 	model := ResolveOpenAIModel(strings.TrimSpace(in.ModelID))
+	if UseGrokProvider() {
+		model = resolveGrokModel(strings.TrimSpace(in.ModelID))
+	}
 
 	httpClient := http.DefaultClient
 	if deps.HTTPClient != nil {

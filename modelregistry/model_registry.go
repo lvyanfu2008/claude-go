@@ -66,6 +66,26 @@ var registry = []modelFamilyEntry{
 		},
 		Matchers: []string{"gpt-", "o1", "o3", "o4"},
 	},
+	{
+		Family: "grok",
+		Capabilities: ModelCapabilities{
+			SupportsThinking:            false,
+			DefaultThinkingEnabled:      false,
+			EnforcesReasoningInThinking: false,
+			MaxOutputTokens:             16384,
+		},
+		Matchers: []string{"grok"},
+	},
+	{
+		Family: "gemini",
+		Capabilities: ModelCapabilities{
+			SupportsThinking:            true,
+			DefaultThinkingEnabled:      true,
+			EnforcesReasoningInThinking: false,
+			MaxOutputTokens:             65536,
+		},
+		Matchers: []string{"gemini"},
+	},
 }
 
 // Lookup finds the ModelCapabilities for a model ID. Returns zero value and

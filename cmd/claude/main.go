@@ -307,10 +307,15 @@ func runHeadless(prompt string) error {
 			fmt.Fprintf(os.Stderr, "[claude] MCP init warning: %v\n", err)
 		}
 		defer ShutdownMCP()
+		defer StopCronScheduler()
 	}
 
 	// Resolve working directory and session ID for hook execution.
 	cwd, _ := os.Getwd()
+	// Start cron scheduler for background cron jobs.
+	StartCronScheduler(ctx, cwd, func(fireCtx context.Context, prompt string) {
+		fmt.Fprintf(os.Stderr, "[claude] cron fire: %s\n", prompt)
+	})
 	sessionID := GetSessionID()
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
@@ -448,6 +453,12 @@ func runInteractive(args []string) error {
 		PermissionMode: types.PermissionMode(pm),
 		CWD:            cwd,
 	}
+
+	// Start cron scheduler for background cron jobs.
+	StartCronScheduler(context.Background(), cwd, func(fireCtx context.Context, prompt string) {
+		fmt.Fprintf(os.Stderr, "[claude] cron fire: %s\n", prompt)
+	})
+	defer StopCronScheduler()
 
 	// Load merged hooks and defer SessionEnd hooks for interactive mode.
 	mergedHooks, _ := hookexec.MergedHooksForCwd(cwd)

@@ -128,6 +128,9 @@ func IsSessionPersistenceEnabled() bool {
 // mcpConnMgr is the global MCP connection manager for the CLI process.
 var mcpConnMgr *mcp.ConnectionManager
 
+// cronScheduler is the global cron job scheduler for the CLI process.
+var cronScheduler *tools.CronScheduler
+
 // InitMCP initializes the MCP connection manager and wires it into the tool execution pipeline.
 func InitMCP(ctx context.Context) error {
 	clientMgr := mcp.NewClientManager()
@@ -175,6 +178,24 @@ func InitMCP(ctx context.Context) error {
 func ShutdownMCP() {
 	if mcpConnMgr != nil {
 		mcpConnMgr.Shutdown()
+	}
+}
+
+// StartCronScheduler creates and starts the cron scheduler for the given project root.
+// The onFire callback is called when a cron job fires.
+func StartCronScheduler(ctx context.Context, projectRoot string, onFire func(context.Context, string)) {
+	if cronScheduler != nil {
+		cronScheduler.Stop()
+	}
+	cronScheduler = tools.NewCronScheduler(projectRoot, onFire)
+	cronScheduler.Start(ctx)
+}
+
+// StopCronScheduler stops the cron scheduler if running.
+func StopCronScheduler() {
+	if cronScheduler != nil {
+		cronScheduler.Stop()
+		cronScheduler = nil
 	}
 }
 

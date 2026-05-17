@@ -68,8 +68,18 @@ func (cm *ClientManager) ConnectToServer(ctx context.Context, name string, scfg 
 		c, err = cm.connectStdio(cfg)
 	case McpSSEServerConfig:
 		c, err = cm.connectSSE(ctx, cfg)
+	case McpSSEIDEServerConfig:
+		c, err = cm.connectSSEIDE(ctx, cfg)
+	case McpWebSocketIDEServerConfig:
+		c, err = cm.connectWSIDE(cfg)
+	case McpWebSocketServerConfig:
+		c, err = cm.connectWebSocket(ctx, cfg)
 	case McpHTTPServerConfig:
 		c, err = cm.connectStreamableHTTP(ctx, cfg)
+	case McpSdkServerConfig:
+		c, err = cm.connectSDK(cfg)
+	case McpClaudeAIProxyServerConfig:
+		c, err = cm.connectClaudeAIProxy(ctx, cfg)
 	default:
 		return nil, fmt.Errorf("unsupported MCP transport type: %T", cfg)
 	}
@@ -238,4 +248,73 @@ func ParseMcpToolName(fullName string) (serverName, toolName string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
+}
+
+// connectSSEIDE connects to an SSE-IDE MCP server (SSE transport without auth).
+func (cm *ClientManager) connectSSEIDE(ctx context.Context, cfg McpSSEIDEServerConfig) (*client.Client, error) {
+	opts := []transport.ClientOption{}
+	opts = append(opts, client.WithHeaders(map[string]string{
+		"User-Agent": "claude-code-go",
+	}))
+	c, err := client.NewSSEMCPClient(cfg.URL, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("sse-ide transport: %w", err)
+	}
+	return c, nil
+}
+
+// connectWSIDE connects to a WS-IDE MCP server (WebSocket transport with IDE auth).
+func (cm *ClientManager) connectWSIDE(cfg McpWebSocketIDEServerConfig) (*client.Client, error) {
+	headers := map[string]string{
+		"User-Agent": "claude-code-go",
+	}
+	if cfg.AuthToken != "" {
+		headers["X-Claude-Code-Ide-Authorization"] = cfg.AuthToken
+	}
+	wsTransport := NewWebSocketTransport(cfg.URL, headers)
+	c := client.NewClient(wsTransport)
+	return c, nil
+}
+
+// connectWebSocket connects to a WebSocket MCP server.
+func (cm *ClientManager) connectWebSocket(ctx context.Context, cfg McpWebSocketServerConfig) (*client.Client, error) {
+	headers := make(map[string]string)
+	for k, v := range cfg.Headers {
+		headers[k] = v
+	}
+	headers["User-Agent"] = "claude-code-go"
+	wsTransport := NewWebSocketTransport(cfg.URL, headers)
+	c := client.NewClient(wsTransport)
+	return c, nil
+}
+
+// connectClaudeAIProxy connects to a claude.ai proxy MCP server using streamable HTTP.
+func (cm *ClientManager) connectClaudeAIProxy(ctx context.Context, cfg McpClaudeAIProxyServerConfig) (*client.Client, error) {
+	proxyURL := buildClaudeAIProxyURL(cfg.ID)
+	opts := []transport.StreamableHTTPCOption{}
+	headers := map[string]string{
+		"User-Agent":              "claude-code-go",
+		"X-Mcp-Client-Session-Id": cm.getSessionID(),
+	}
+	// Add OAuth bearer token if available.
+	if token := getClaudeAIOAuthToken(); token != "" {
+		headers["Authorization"] = "Bearer " + token
+	}
+	opts = append(opts, transport.WithHTTPHeaders(headers))
+	c, err := client.NewStreamableHttpClient(proxyURL, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("claudeai-proxy transport: %w", err)
+	}
+	return c, nil
+}
+
+// getSessionID returns a session ID string for the client manager.
+func (cm *ClientManager) getSessionID() string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	for _, state := range cm.clients {
+		// Return first connected client's name as a proxy for session ID.
+		return state.Name
+	}
+	return ""
 }

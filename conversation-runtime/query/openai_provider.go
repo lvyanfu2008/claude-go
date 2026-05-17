@@ -10,9 +10,12 @@ import (
 )
 
 // UseOpenAIChatProvider mirrors TS getAPIProvider() === 'openai':
-// CLAUDE_CODE_USE_OPENAI, or settings.go.json modelType "openai" (user + project).
+// CLAUDE_CODE_USE_OPENAI, CLAUDE_CODE_USE_GROK, or settings.go.json modelType "openai" (user + project).
 func UseOpenAIChatProvider() bool {
 	if envTruthy("CLAUDE_CODE_USE_OPENAI") {
+		return true
+	}
+	if envTruthy("CLAUDE_CODE_USE_GROK") {
 		return true
 	}
 	home := filepath.Join(commands.ClaudeConfigHome(), "settings.json")

@@ -10,6 +10,11 @@ func StreamingUsesOpenAIChat() bool {
 	return UseOpenAIChatProvider()
 }
 
+// StreamingUsesGemini is true when the Gemini provider is active.
+func StreamingUsesGemini() bool {
+	return envTruthy("CLAUDE_CODE_USE_GEMINI")
+}
+
 // OpenAIChatNoStreamEnabled is true when GOU_QUERY_OPENAI_CHAT_NO_STREAM is truthy: OpenAI-compatible
 // parity uses one POST /v1/chat/completions (stream:false) per round instead of SSE streaming.
 func OpenAIChatNoStreamEnabled() bool {

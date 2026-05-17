@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"goc/tools/procregistry"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -17,8 +19,10 @@ func PowerShellAllowed() bool {
 }
 
 // PowerShellFromJSON runs pwsh (Unix) or powershell.exe (Windows) with -NoProfile -NonInteractive -Command.
-// Mirrors TS PowerShellTool subset: timeout ms, no run_in_background. Set CCB_ENGINE_LOCAL_POWERSHELL=1 to allow.
-func PowerShellFromJSON(ctx context.Context, raw []byte, workDir string) (string, bool, error) {
+// Mirrors TS PowerShellTool subset: timeout ms, run_in_background support.
+// Set CCB_ENGINE_LOCAL_POWERSHELL=1 to allow.
+// tasksDir is the directory for background-task output/status/stop files.
+func PowerShellFromJSON(ctx context.Context, raw []byte, workDir string, tasksDir string) (string, bool, error) {
 	if !PowerShellAllowed() {
 		return "", true, fmt.Errorf("PowerShell disabled in Go runner (set CCB_ENGINE_LOCAL_POWERSHELL=1)")
 	}
@@ -30,13 +34,25 @@ func PowerShellFromJSON(ctx context.Context, raw []byte, workDir string) (string
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
 	}
-	if in.RunInBackground != nil && *in.RunInBackground {
-		return "", true, fmt.Errorf("run_in_background is not supported in the Go parity runner")
-	}
 	cmd := strings.TrimSpace(in.Command)
 	if cmd == "" {
 		return "", true, fmt.Errorf("empty command")
 	}
+
+	wd := strings.TrimSpace(workDir)
+	if wd == "" {
+		wd = "."
+	}
+
+	// Background path.
+	if in.RunInBackground != nil && *in.RunInBackground {
+		if tasksDir == "" {
+			return "", true, fmt.Errorf("run_in_background is not supported in the Go parity runner")
+		}
+		return runPowerShellBackground(cmd, wd, tasksDir)
+	}
+
+	// Synchronous path.
 	ms := int(in.Timeout)
 	if ms <= 0 {
 		ms = 120_000
@@ -53,10 +69,6 @@ func PowerShellFromJSON(ctx context.Context, raw []byte, workDir string) (string
 	cctx, cancel = context.WithTimeout(cctx, d)
 	defer cancel()
 
-	wd := strings.TrimSpace(workDir)
-	if wd == "" {
-		wd = "."
-	}
 	exe, args := powershellExeAndArgs(cmd)
 	//nolint:gosec // Gated by CCB_ENGINE_LOCAL_POWERSHELL.
 	ex := exec.CommandContext(cctx, exe, args...)
@@ -79,6 +91,51 @@ func PowerShellFromJSON(ctx context.Context, raw []byte, workDir string) (string
 		return "", true, err
 	}
 	return out, false, nil
+}
+
+func runPowerShellBackground(command, workDir, tasksDir string) (string, bool, error) {
+	taskID := fmt.Sprintf("ps-%d", time.Now().UTC().UnixNano())
+	outputFile := filepath.Join(tasksDir, taskID+".output")
+
+	writeBackgroundStatus(tasksDir, taskID, "running", "PowerShell command started", true)
+
+	exe, args := powershellExeAndArgs(command)
+	//nolint:gosec // Gated by CCB_ENGINE_LOCAL_POWERSHELL.
+	ex := exec.Command(exe, args...)
+	ex.Dir = workDir
+	ex.Env = os.Environ()
+	procregistry.SetProcessGroup(ex)
+	procregistry.StoreProcess(taskID, ex)
+
+	go func() {
+		defer procregistry.RemoveProcess(taskID)
+		f, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			writeBackgroundStatus(tasksDir, taskID, "failed", "Failed to open output file: "+err.Error(), false)
+			return
+		}
+		defer f.Close()
+		ex.Stdout = f
+		ex.Stderr = f
+		if err := ex.Run(); err != nil {
+			if isTaskStopRequested(tasksDir, taskID) {
+				writeBackgroundStatus(tasksDir, taskID, "stopped", "Task was stopped", false)
+				return
+			}
+			writeBackgroundStatus(tasksDir, taskID, "failed", err.Error(), false)
+			return
+		}
+		writeBackgroundStatus(tasksDir, taskID, "completed", "Command completed", true)
+	}()
+
+	out := map[string]any{
+		"data": map[string]any{
+			"taskId":     taskID,
+			"outputFile": outputFile,
+		},
+	}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
 }
 
 func powershellExeAndArgs(script string) (exe string, args []string) {

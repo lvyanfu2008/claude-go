@@ -21,12 +21,14 @@ const (
 type Transport string
 
 const (
-	TransportStdio  Transport = "stdio"
-	TransportSSE    Transport = "sse"
-	TransportSSEIDE Transport = "sse-ide"
-	TransportHTTP   Transport = "http"
-	TransportWS     Transport = "ws"
-	TransportSDK    Transport = "sdk"
+	TransportStdio         Transport = "stdio"
+	TransportSSE           Transport = "sse"
+	TransportSSEIDE        Transport = "sse-ide"
+	TransportWSIDE         Transport = "ws-ide"
+	TransportHTTP          Transport = "http"
+	TransportWS            Transport = "ws"
+	TransportSDK           Transport = "sdk"
+	TransportClaudeAIProxy Transport = "claudeai-proxy"
 )
 
 // McpOAuthConfig mirrors src/services/mcp/types.ts McpOAuthConfig.

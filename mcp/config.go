@@ -154,7 +154,7 @@ func GetServerConfigName(cfg McpServerConfig) string {
 	switch c := cfg.(type) {
 	case McpStdioServerConfig:
 		return c.Command
-	case McpSSEServerConfig, McpSSEIDEServerConfig, McpHTTPServerConfig, McpWebSocketServerConfig:
+	case McpSSEServerConfig, McpSSEIDEServerConfig, McpWebSocketIDEServerConfig, McpHTTPServerConfig, McpWebSocketServerConfig:
 		return ""
 	case McpSdkServerConfig:
 		return c.Name

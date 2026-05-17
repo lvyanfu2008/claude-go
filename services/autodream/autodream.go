@@ -281,7 +281,7 @@ func buildRestrictedExecutionDeps(memoryDir string) toolexecution.ExecutionDeps 
 			case "Grep":
 				return localtools.GrepFromJSON(ctx, input, nil)
 			case "Bash":
-				return localtools.BashFromJSON(ctx, input, "", true)
+				return localtools.BashFromJSON(ctx, input, "", true, "")
 			case "Write":
 				if memDir != "" {
 					if fp := filePathFromInput(input); fp == "" || !memdir.IsAutoMemPath(fp) {

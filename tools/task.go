@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"goc/tools/procregistry"
 )
 
 const maxTaskOutputRead = 8 << 20 // 8MB, matches TS DEFAULT_MAX_READ_BYTES
@@ -190,7 +192,7 @@ func TaskOutputFromJSON(ctx context.Context, raw []byte, c Config) (string, bool
 	}
 }
 
-// TaskStopFromJSON writes a stop sentinel file (best-effort; no process kill in Go runner).
+// TaskStopFromJSON kills the running process (if registered) and writes a stop sentinel file.
 func TaskStopFromJSON(raw []byte, c Config) (string, bool, error) {
 	var in struct {
 		TaskID  string `json:"task_id"`
@@ -209,6 +211,7 @@ func TaskStopFromJSON(raw []byte, c Config) (string, bool, error) {
 	if strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
 		return "", true, fmt.Errorf("invalid task_id")
 	}
+	procregistry.KillProcess(id)
 	tasksDir := c.TasksDir()
 	if err := ensureDir(tasksDir); err != nil {
 		return "", true, err

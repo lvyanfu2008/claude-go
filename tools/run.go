@@ -49,7 +49,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "WebSearch":
 		return WebSearchFromJSON(ctx, raw)
 	case "PowerShell":
-		return localtools.PowerShellFromJSON(ctx, raw, cfg.WorkDir)
+		return localtools.PowerShellFromJSON(ctx, raw, cfg.WorkDir, cfg.TasksDir())
 	case "EnterPlanMode":
 		return EnterPlanModeFromJSON(raw, cfg)
 	case "ExitPlanMode":

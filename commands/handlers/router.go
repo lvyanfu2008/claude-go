@@ -12,7 +12,7 @@ type LocalCommandHandler func(args string) ([]byte, error)
 // Handlers with an Args suffix (e.g. args string) receive the raw argument string.
 var localCommandHandlers = map[string]LocalCommandHandler{
 	"keybindings":    func(args string) ([]byte, error) { return HandleKeybindingsCommand() },
-		"compact":        func(args string) ([]byte, error) { return HandleCompactCommand() },
+	"compact":        func(args string) ([]byte, error) { return HandleCompactCommand() },
 	"cost":           func(args string) ([]byte, error) { return HandleCostCommand() },
 	"version":        func(args string) ([]byte, error) { return HandleVersionCommand() },
 	"release-notes":  func(args string) ([]byte, error) { return HandleReleaseNotesCommand() },
@@ -31,6 +31,34 @@ var localCommandHandlers = map[string]LocalCommandHandler{
 	"reload-plugins": func(args string) ([]byte, error) { return HandleReloadPluginsCommand() },
 	"extra-usage":    func(args string) ([]byte, error) { return HandleExtraUsageCommand() },
 	"rewind":         func(args string) ([]byte, error) { return HandleRewindCommand(args) },
+	// P1 Phase 1 additions
+	"permissions":  func(args string) ([]byte, error) { return HandlePermissionsCommand(args) },
+	"theme":        func(args string) ([]byte, error) { return HandleThemeCommand(args) },
+	"color":        func(args string) ([]byte, error) { return HandleColorCommand(args) },
+	"output-style": func(args string) ([]byte, error) { return HandleOutputStyleCommand(args) },
+	"statusline":   func(args string) ([]byte, error) { return HandleStatuslineCommand(args) },
+	"fast":         func(args string) ([]byte, error) { return HandleFastCommand(args) },
+	"ide":          func(args string) ([]byte, error) { return HandleIDECommand(args) },
+	"add-dir":      func(args string) ([]byte, error) { return HandleAddDirCommand(args) },
+	"stats":        func(args string) ([]byte, error) { return HandleStatsCommand(args) },
+	"usage":        func(args string) ([]byte, error) { return HandleUsageCommand(args) },
+	"logout":       func(args string) ([]byte, error) { return HandleLogoutCommand(args) },
+	"login":        func(args string) ([]byte, error) { return HandleLoginCommand(args) },
+	"export":       func(args string) ([]byte, error) { return HandleExportCommand(args) },
+	"tasks":        func(args string) ([]byte, error) { return HandleTasksCommand(args) },
+	"memory":       func(args string) ([]byte, error) { return HandleMemoryCommand(args) },
+	// P1 Phase 3 additions
+	"rename":      func(args string) ([]byte, error) { return HandleRenameCommand(args) },
+	"resume":      func(args string) ([]byte, error) { return HandleResumeCommand(args) },
+	"clear":       func(args string) ([]byte, error) { return HandleClearCommand(args) },
+	"config":      func(args string) ([]byte, error) { return HandleConfigCommand(args) },
+	"hooks":       func(args string) ([]byte, error) { return HandleHooksCommand(args) },
+	"mcp":         func(args string) ([]byte, error) { return HandleMcpCommand(args) },
+	"skills":      func(args string) ([]byte, error) { return HandleSkillsCommand(args) },
+	"tag":         func(args string) ([]byte, error) { return HandleTagCommand(args) },
+	"plan":        func(args string) ([]byte, error) { return HandlePlanCommand(args) },
+	"review":      func(args string) ([]byte, error) { return HandleReviewCommand(args) },
+	"pr-comments": func(args string) ([]byte, error) { return HandlePRCommentsCommand(args) },
 }
 
 // HandleLocalCommand routes local commands to their appropriate handlers

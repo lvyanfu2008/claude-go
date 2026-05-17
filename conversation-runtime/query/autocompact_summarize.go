@@ -71,6 +71,9 @@ func isFirstPartyAnthropicBaseURL() bool {
 // When ANTHROPIC_BASE_URL points to DeepSeek, DeepSeek users store their key in
 // ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN), not OPENAI_API_KEY.
 func openAIAutocompactAPIKey() string {
+	if UseGrokProvider() {
+		return grokAPIKey()
+	}
 	if anthropicBaseURLIsDeepSeek() {
 		if k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")); k != "" {
 			return k

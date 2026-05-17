@@ -136,7 +136,8 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 	case "Grep":
 		return localtools.GrepFromJSON(ctx, input, roots)
 	case "Bash", bashzog.ZogToolName:
-		return localtools.BashFromJSON(ctx, input, wd, r.LocalBashDefault)
+		tasksDir := computeTasksDir(pr, r.SessionID)
+		return localtools.BashFromJSON(ctx, input, wd, r.LocalBashDefault, tasksDir)
 	}
 	if dn := DiscoverSkillsToolNameFromEnv(); dn != "" && name == dn {
 		return `{"note":"Go local runner: discover-skills is not implemented; use the Skill tool with a skill name, or enable the TS socket worker for full tool parity."}`, false, nil
@@ -160,4 +161,17 @@ func (r *ParityToolRunner) ToolReadMappingMemCWD() string {
 		return rs[0]
 	}
 	return ""
+}
+
+// computeTasksDir derives the background-task directory from project root and session ID.
+func computeTasksDir(projectRoot, sessionID string) string {
+	pr := strings.TrimSpace(projectRoot)
+	if pr == "" {
+		return ""
+	}
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		sid = "default-session"
+	}
+	return filepath.Join(pr, ".claude", ".gou-tasks", sid, "tasks")
 }

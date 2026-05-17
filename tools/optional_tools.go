@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"goc/tools/procregistry"
 )
 
 // TestingPermissionFromJSON matches TS TestingPermissionTool.call output shape.
@@ -871,6 +873,7 @@ func MonitorFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 	outputFile := filepath.Join(tasksDir, taskID+".output")
 	writeBackgroundStatus(tasksDir, taskID, "running", "Monitor started", true)
 	go func() {
+		defer procregistry.RemoveProcess(taskID)
 		f, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
 			writeBackgroundStatus(tasksDir, taskID, "failed", "Failed opening output file", false)
@@ -883,7 +886,13 @@ func MonitorFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 		}
 		cmd.Stdout = f
 		cmd.Stderr = f
+		procregistry.SetProcessGroup(cmd)
+		procregistry.StoreProcess(taskID, cmd)
 		if err := cmd.Run(); err != nil {
+			if isTaskStopRequested(tasksDir, taskID) {
+				writeBackgroundStatus(tasksDir, taskID, "stopped", "Monitor stopped", false)
+				return
+			}
 			writeBackgroundStatus(tasksDir, taskID, "failed", "Monitor exited with error: "+err.Error(), false)
 			return
 		}

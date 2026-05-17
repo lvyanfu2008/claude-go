@@ -185,10 +185,13 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		if useStream {
 			openAI := StreamingUsesOpenAIChat()
 			openAINoStream := openAI && OpenAIChatNoStreamEnabled()
+			gemini := StreamingUsesGemini()
 			var streamPath string
 			switch {
 			case openAINoStream:
 				streamPath = "openai chat/completions JSON (GOU_QUERY_OPENAI_CHAT_NO_STREAM)"
+			case gemini:
+				streamPath = "gemini generateContent SSE"
 			case openAI:
 				streamPath = "openai chat/completions SSE"
 			default:
@@ -205,6 +208,8 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			switch {
 			case openAINoStream:
 				streamErr = runOpenAINonStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
+			case gemini:
+				streamErr = runGeminiStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			case openAI:
 				streamErr = runOpenAIStreamingParityModelLoop(ctx, params, msgs, in, deps, capYield)
 			default:
