@@ -27,20 +27,28 @@ func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.
 }
 
 // handleUpdateGouStreamEvent processes raw SSE stream events (content_block_delta) for incremental
-// streaming text display. Mirrors TS handleMessageFromStream content_block_delta → text_delta path
-// where onStreamingText appends delta text character by character.
+// streaming text display. Mirrors TS handleMessageFromStream content_block_delta → text_delta /
+// thinking_delta paths where onStreamingText appends delta text character by character.
 func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, tea.Cmd) {
 	var wrap struct {
 		Delta struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			Thinking string `json:"thinking"`
 		} `json:"delta"`
 	}
 	if err := json.Unmarshal(msg.Raw, &wrap); err != nil {
 		return m, nil
 	}
-	if wrap.Delta.Type == "text_delta" && wrap.Delta.Text != "" {
-		m.store.AppendStreamingChunk(wrap.Delta.Text)
+	delta := ""
+	switch wrap.Delta.Type {
+	case "text_delta":
+		delta = wrap.Delta.Text
+	case "thinking_delta":
+		delta = wrap.Delta.Thinking
+	}
+	if delta != "" {
+		m.store.AppendStreamingChunk(delta)
 		if m.uiScreen != gouDemoScreenTranscript {
 			m.sticky = true
 			m.scrollTop = 1 << 30

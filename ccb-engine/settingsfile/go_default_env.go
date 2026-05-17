@@ -21,7 +21,7 @@ func GoProjectSettingsEnvDefaults() map[string]string {
 		"GOU_TOOLEXEC_BASH_SANDBOX_1B":             "1",
 		"GO_TOOL_INPUT_VALIDATOR":                  "zog",
 		"GOU_QUERY_STREAMING_FORCE_ANTHROPIC":      "0",
-		"GOU_QUERY_OPENAI_CHAT_NO_STREAM":          "1",
+		"GOU_QUERY_OPENAI_CHAT_NO_STREAM":          "0",
 		"GOU_DEMO_DISALLOW_DISABLE_MOUSE":          "1",
 		"GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS":       "1000",
 		"GOU_DEMO_ALT_SCREEN":                      "1",
