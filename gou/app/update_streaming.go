@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"goc/gou/ccbstream"
@@ -13,11 +14,37 @@ import (
 // Streaming / query-parity / NDJSON stream UI updates (extracted from [model.Update] for navigation).
 
 func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.Cmd) {
+	// Clear streaming text when a complete message arrives (mirrors TS handleMessageFromStream:
+	// onStreamingText(() => null) for all non-stream_event message types).
+	m.store.ClearStreaming()
 	m.store.AppendMessage(msg.Message)
 	m.rebuildHeightCache()
 	if m.uiScreen != gouDemoScreenTranscript {
 		m.sticky = true
 		m.scrollTop = 1 << 30
+	}
+	return m, nil
+}
+
+// handleUpdateGouStreamEvent processes raw SSE stream events (content_block_delta) for incremental
+// streaming text display. Mirrors TS handleMessageFromStream content_block_delta → text_delta path
+// where onStreamingText appends delta text character by character.
+func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, tea.Cmd) {
+	var wrap struct {
+		Delta struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	}
+	if err := json.Unmarshal(msg.Raw, &wrap); err != nil {
+		return m, nil
+	}
+	if wrap.Delta.Type == "text_delta" && wrap.Delta.Text != "" {
+		m.store.AppendStreamingChunk(wrap.Delta.Text)
+		if m.uiScreen != gouDemoScreenTranscript {
+			m.sticky = true
+			m.scrollTop = 1 << 30
+		}
 	}
 	return m, nil
 }

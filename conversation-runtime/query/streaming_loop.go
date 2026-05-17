@@ -156,6 +156,13 @@ func runStreamingParityModelLoop(
 				case "message_stop":
 					notifyStreamingToolUsesClear(ctx, deps)
 				}
+				// Yield stream_event to UI for incremental display (mirrors TS claude.ts
+				// which yields { type: 'stream_event', event: part } for every SSE event).
+				if ev.Type == "content_block_delta" {
+					if !yieldStreamingParity(ctx, deps, QueryYield{StreamEvent: ev.Raw}, yield) {
+						return context.Canceled
+					}
+				}
 				return nil
 			},
 		}); err != nil {

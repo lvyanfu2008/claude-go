@@ -18,7 +18,7 @@ func UseOpenAIChatProvider() bool {
 	if envTruthy("CLAUDE_CODE_USE_GROK") {
 		return true
 	}
-	home := filepath.Join(commands.ClaudeConfigHome(), "settings.json")
+	home := filepath.Join(commands.ClaudeConfigHome(), "settings.go.json")
 	if modelTypeOpenAI(home) {
 		return true
 	}

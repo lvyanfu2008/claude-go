@@ -162,7 +162,7 @@ func ClaudeCodeGuideSystemPrompt(cfg Config, ctx GuideContext) string {
 		sections = append(sections, "**Available plugin skills:**\n"+strings.Join(pluginLines, "\n"))
 	}
 	if strings.TrimSpace(ctx.SettingsJSON) != "" {
-		sections = append(sections, "**User's settings.json:**\n```json\n"+strings.TrimSpace(ctx.SettingsJSON)+"\n```")
+		sections = append(sections, "**User's settings.go.json:**\n```json\n"+strings.TrimSpace(ctx.SettingsJSON)+"\n```")
 	}
 	if len(sections) == 0 {
 		return baseWithFeedback

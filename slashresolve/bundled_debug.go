@@ -47,7 +47,7 @@ func resolveDebugBundled(args, sessionID string) types.SlashResolveResult {
 		logInfo = tail
 	}
 
-	cfgUser := filepath.Join(commands.ClaudeConfigHome(), "settings.json")
+	cfgUser := filepath.Join(commands.ClaudeConfigHome(), "settings.go.json")
 	cfgProj := ".claude/settings.go.json"
 	cfgLocal := ".claude/settings.local.json"
 

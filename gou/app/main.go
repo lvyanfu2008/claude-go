@@ -346,6 +346,12 @@ type gouQueryYieldMsg struct {
 	Message types.Message
 }
 
+// gouStreamEventMsg carries a raw SSE stream event (content_block_delta) for incremental streaming text display.
+// Mirrors TS stream_event yields in handleMessageFromStream → onStreamingText.
+type gouStreamEventMsg struct {
+	Raw json.RawMessage
+}
+
 // gouStreamingToolUsesMsg carries in-flight tool_use snapshots from [query.QueryDeps.OnStreamingToolUses].
 // Uses==nil clears the store (Anthropic message_stop); non-nil replaces the live list (may be empty).
 type gouStreamingToolUsesMsg struct {
@@ -424,6 +430,9 @@ func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams
 					programSend(gouQueryDoneMsg{Err: err})
 				}
 				return
+			}
+			if y.StreamEvent != nil && programSend != nil {
+				programSend(gouStreamEventMsg{Raw: y.StreamEvent})
 			}
 			if y.Message != nil && programSend != nil {
 				programSend(gouQueryYieldMsg{Message: *y.Message})
@@ -1109,7 +1118,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.manualRenderMode {
 		switch msg.(type) {
-		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg:
+		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouStreamEventMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg:
 			m.pendingEvents = append(m.pendingEvents, msg)
 			return m, nil
 		}
@@ -1156,6 +1165,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gouQueryYieldMsg:
 		return m.handleUpdateGouQueryYield(msg)
+
+	case gouStreamEventMsg:
+		return m.handleUpdateGouStreamEvent(msg)
 
 	case gouStreamingToolUsesMsg:
 		return m.handleUpdateGouStreamingToolUses(msg)

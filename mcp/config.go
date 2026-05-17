@@ -43,8 +43,8 @@ func SaveMcpJsonConfig(cwd string, cfg *McpJsonConfig) error {
 type ConfigSource int
 
 const (
-	SourceUserSettings   ConfigSource = iota // ~/.claude/settings.json
-	SourceProjectSettings                     // .claude/settings.json
+	SourceUserSettings   ConfigSource = iota // ~/.claude/settings.go.json
+	SourceProjectSettings                     // .claude/settings.go.json
 	SourceLocalSettings                       // .claude/settings.local.json
 	SourceMcpJson                             // .mcp.json
 	SourceEnterprise                          // managed-mcp.json
@@ -206,21 +206,21 @@ func IsMcpServerDisabled(name string, disabledServers []string) bool {
 
 // path helpers
 
-// UserSettingsPath returns ~/.claude/settings.json or $CLAUDE_CONFIG_DIR/settings.json.
+// UserSettingsPath returns ~/.claude/settings.go.json or $CLAUDE_CONFIG_DIR/settings.go.json.
 func UserSettingsPath() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
-		return filepath.Join(d, "settings.json")
+		return filepath.Join(d, "settings.go.json")
 	}
 	h, _ := os.UserHomeDir()
 	if h == "" {
 		return ""
 	}
-	return filepath.Join(h, ".claude", "settings.json")
+	return filepath.Join(h, ".claude", "settings.go.json")
 }
 
-// ProjectSettingsPath returns <cwd>/.claude/settings.json (not settings.go.json).
+// ProjectSettingsPath returns <cwd>/.claude/settings.go.json.
 func ProjectSettingsPath(cwd string) string {
-	return filepath.Join(cwd, ".claude", "settings.json")
+	return filepath.Join(cwd, ".claude", "settings.go.json")
 }
 
 // LocalSettingsPath returns <cwd>/.claude/settings.local.json.

@@ -348,7 +348,7 @@ func (mh *MemoryHierarchy) loadProjectRulesFiles(
 // isSettingSourceEnabled 检查设置源是否启用
 func isSettingSourceEnabled(source string) bool {
 	// 简化实现：检查环境变量
-	// 完整的实现应该解析 settings.json 文件
+	// 完整的实现应该解析 settings.go.json 文件
 	envVar := fmt.Sprintf("CLAUDE_CODE_SETTING_SOURCES_%s", strings.ToUpper(source))
 	if val := strings.TrimSpace(os.Getenv(envVar)); val != "" {
 		return claudebase.Truthy(val)

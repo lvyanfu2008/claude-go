@@ -40,13 +40,13 @@ func MergeEnabledPlugins(cwd string) (map[string]bool, error) {
 
 func userClaudeSettingsPath() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
-		return filepath.Join(d, "settings.json")
+		return filepath.Join(d, "settings.go.json")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".", ".claude", "settings.json")
+		return filepath.Join(".", ".claude", "settings.go.json")
 	}
-	return filepath.Join(home, ".claude", "settings.json")
+	return filepath.Join(home, ".claude", "settings.go.json")
 }
 
 func mergeEnabledPluginsFile(path string, merged map[string]bool) error {

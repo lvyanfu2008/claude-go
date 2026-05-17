@@ -12,11 +12,11 @@
 //   - Hard opt-out: CLAUDE_CODE_DISABLE_USER_MEMORY, CLAUDE_CODE_DISABLE_PROJECT_MEMORY, CLAUDE_CODE_DISABLE_LOCAL_MEMORY
 //     (applied on top of setting-source gates).
 //
-// Settings: project .claude/settings.json is TS-only. Go uses ~/.claude/settings.json (user),
+// Settings: project .claude/settings.json is TS-only. Go uses ~/.claude/settings.go.json (user),
 // <cwd>/.claude/settings.go.json, and settings.local.json for env (settingsfile) and claudeMdExcludes (MergedClaudeMdExcludes).
 //   - CLAUDE_CODE_SETTING_SOURCES: comma list user, project, local, flag, policy (default: all).
 //     Use value "isolated" for allow-list empty → only policy+flag merge (SDK-style).
-//   - User ~/.claude/settings.json or cowork_settings.json (CLAUDE_CODE_USE_COWORK_PLUGINS=1).
+//   - User ~/.claude/settings.go.json or cowork_settings.json (CLAUDE_CODE_USE_COWORK_PLUGINS=1).
 //   - CLAUDE_CODE_FLAG_SETTINGS_PATH for flagSettings file.
 //   - Policy: managed-settings.json + managed-settings.d/*.json under ManagedFilePath().
 //   - claudeMdExcludes arrays merge with concat + first-wins dedupe per lodash mergeArrays; matching uses

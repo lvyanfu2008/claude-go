@@ -29,7 +29,7 @@ type EditDeps struct {
 	CheckSecrets func(filePath, content string) string
 
 	// CheckEditSettings mirrors TS validateSettingsJsonOnEdit (call).
-	// Called before writing to disk; validates settings.json edits.
+	// Called before writing to disk; validates settings.go.json edits.
 	// Returned error string denies the edit.
 	CheckEditSettings func(filePath, oldContent, newContent string) string
 

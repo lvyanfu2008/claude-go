@@ -90,7 +90,7 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 	if m := strings.TrimSpace(cfg.MainLoopModel); m != "" {
 		model = m
 	} else {
-		// Live process env (including values merged from ~/.claude/settings.json and project
+		// Live process env (including values merged from ~/.claude/settings.go.json and project
 		// .claude/settings.go.json by settingsfile) beats TS bridge snapshot for API/model line parity.
 		if envModel := modelenv.FirstNonEmpty(); envModel != "" {
 			model = envModel
