@@ -1,5 +1,9 @@
 Set up a minimal CLAUDE.md (and optionally skills and hooks) for this repo. CLAUDE.md is loaded into every Claude Code session, so it must be concise — only include what Claude would get wrong without it.
 
+## Phase 0: Ensure AskUserQuestion is available
+
+AskUserQuestion is a deferred tool — it may not be in your initial tool list. Before Phase 1, check your available tools. If AskUserQuestion is missing, call ToolSearch with query "AskUserQuestion" to discover and load it. Then proceed.
+
 ## Phase 1: Ask what to set up
 
 Call AskUserQuestion with exactly 2 questions structured as follows:
