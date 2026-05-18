@@ -57,12 +57,12 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 	// Build the tool use line
 	var lineBuilder strings.Builder
 
-	// Add loader or status indicator
+	// Add 2-space gutter + loader or status indicator
 	if isInProgress {
-		lineBuilder.WriteString("⟳ ") // Loading symbol
+		lineBuilder.WriteString("  ⟳ ") // Loading symbol
 		diaglog.Line("[tool-use] Showing loading symbol (in progress)")
 	} else {
-		lineBuilder.WriteString("✓ ") // Completed symbol
+		lineBuilder.WriteString("  ✓ ") // Completed symbol
 		diaglog.Line("[tool-use] Showing completed symbol")
 	}
 
@@ -86,7 +86,7 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 
 	// Add hint line if in progress and hint available
 	if isInProgress && hint != "" && ctx.ShouldAnimate {
-		hintLine := fmt.Sprintf("  ⎿ %s", hint)
+		hintLine := fmt.Sprintf("    ⎿ %s", hint)
 		if len(hintLine) > width && width > 10 {
 			hintLine = hintLine[:width-3] + "..."
 		}

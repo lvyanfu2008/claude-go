@@ -164,12 +164,16 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 	if ctx.Verbose || ctx.IsTranscript {
 		if thinkingBody != "" {
 			lines := renderMarkdown(thinkingBody, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
-			if len(lines) > 0 {
-				lines[0] = "💭 " + lines[0]
+			for i := range lines {
+				if i == 0 {
+					lines[i] = "  💭 " + lines[i]
+				} else {
+					lines[i] = "    " + lines[i]
+				}
 			}
 			return lines, nil
 		}
-		return []string{"💭 [Thinking...]"}, nil
+		return []string{"  💭 [Thinking...]"}, nil
 	}
 
 	// Normal mode: show at most the first sentence of the thinking content.
@@ -182,10 +186,10 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 		if w > 0 && len(first) > w {
 			first = first[:w] + "..."
 		}
-		return []string{"💭 " + first}, nil
+		return []string{"  💭 " + first}, nil
 	}
 
-	return []string{"💭 [Thinking...]"}, nil
+	return []string{"  💭 [Thinking...]"}, nil
 }
 
 // sentenceEnd checks whether r is a sentence-ending rune.
@@ -211,7 +215,7 @@ func FirstSentenceOf(s string) string {
 				return ""
 			}
 			next := runes[i+1]
-			if next == ' ' || next == '\n' || next == '\r' {
+			if next == '\n' || next == '\r' {
 				// Skip numbered-list prefixes (e.g. "1.", "12.") — treat them
 				// as part of the first sentence, not a sentence boundary.
 				if r == '.' && isOnlyDigits(runes[:i]) {
