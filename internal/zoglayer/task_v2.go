@@ -7,9 +7,14 @@ import (
 )
 
 var taskCreateAllowedKeys = map[string]struct{}{
+	"type":        {},
 	"subject":     {},
 	"description": {},
 	"activeForm":  {},
+	"status":      {},
+	"owner":       {},
+	"blocks":      {},
+	"blockedBy":   {},
 	"metadata":    {},
 }
 
@@ -73,6 +78,34 @@ func validateTaskCreateZog(input json.RawMessage) error {
 		if v != nil {
 			if _, ok := v.(map[string]any); !ok {
 				return fmt.Errorf("task_create: metadata must be an object")
+			}
+		}
+	}
+	// type, status, owner: optional strings
+	for _, k := range []string{"type", "status", "owner"} {
+		if br, ok := raw[k]; ok {
+			var v any
+			if err := json.Unmarshal(br, &v); err != nil {
+				return fmt.Errorf("task_create: %s: %w", k, err)
+			}
+			if v != nil {
+				if _, ok := v.(string); !ok {
+					return fmt.Errorf("task_create: %s must be a string", k)
+				}
+			}
+		}
+	}
+	// blocks, blockedBy: optional string arrays
+	for _, k := range []string{"blocks", "blockedBy"} {
+		if br, ok := raw[k]; ok {
+			var arr []any
+			if err := json.Unmarshal(br, &arr); err != nil {
+				return fmt.Errorf("task_create: %s must be an array of strings: %w", k, err)
+			}
+			for i, v := range arr {
+				if _, ok := v.(string); !ok {
+					return fmt.Errorf("task_create: %s[%d] must be a string", k, i)
+				}
 			}
 		}
 	}
@@ -176,8 +209,16 @@ func validateTaskUpdateZog(input json.RawMessage) error {
 				return fmt.Errorf("task_update: %s: %w", k, err)
 			}
 			if v != nil {
-				if _, ok := v.(string); !ok {
+				s, ok := v.(string)
+				if !ok {
 					return fmt.Errorf("task_update: %s must be a string", k)
+				}
+				if k == "status" {
+					switch s {
+					case "pending", "in_progress", "completed", "failed", "killed", "deleted":
+					default:
+						return fmt.Errorf("task_update: invalid status %q (must be pending, in_progress, completed, failed, killed, or deleted)", s)
+					}
 				}
 			}
 		}

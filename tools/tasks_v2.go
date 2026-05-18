@@ -349,11 +349,21 @@ func v2WriteTask(taskListID string, t *v2Task) error {
 }
 
 func v2CreateTask(taskListID, taskType, subject, description, activeForm string, metadata map[string]any) (string, error) {
+	return v2CreateTaskFull(taskListID, taskType, subject, description, activeForm, "", "", nil, nil, metadata)
+}
+
+func v2CreateTaskFull(taskListID, taskType, subject, description, activeForm, status, owner string, blocks, blockedBy []string, metadata map[string]any) (string, error) {
 	if taskType == "" {
 		taskType = TaskTypeLocalAgent
 	}
 	if !validTaskTypes[taskType] {
 		return "", fmt.Errorf("invalid task type: %q", taskType)
+	}
+	if status != "" && !validTaskStatus[status] {
+		return "", fmt.Errorf("invalid status: %q", status)
+	}
+	if status == "" {
+		status = "pending"
 	}
 	lockPath := v2ListLockPath(taskListID)
 	var newID string
@@ -364,12 +374,19 @@ func v2CreateTask(taskListID, taskType, subject, description, activeForm string,
 		if len(md) == 0 {
 			md = nil
 		}
-		owner := ""
-		if commands.AgentSwarmsEnabled() {
+		if owner == "" && commands.AgentSwarmsEnabled() {
 			owner = strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME"))
 			if owner == "" {
 				owner = strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_ID"))
 			}
+		}
+		b := blocks
+		if b == nil {
+			b = []string{}
+		}
+		bb := blockedBy
+		if bb == nil {
+			bb = []string{}
 		}
 		t := &v2Task{
 			ID:          newID,
@@ -378,9 +395,9 @@ func v2CreateTask(taskListID, taskType, subject, description, activeForm string,
 			Description: description,
 			ActiveForm:  activeForm,
 			Owner:       owner,
-			Status:      "pending",
-			Blocks:      []string{},
-			BlockedBy:   []string{},
+			Status:      status,
+			Blocks:      b,
+			BlockedBy:   bb,
 			Metadata:    md,
 		}
 		return v2WriteTask(taskListID, t)
@@ -621,7 +638,7 @@ func broadcastTaskEvent(taskID, subject, event string) {
 	}
 }
 
-// TaskCreateFromJSON implements TaskCreate (TS TaskCreateTool); skips executeTaskCreatedHooks.
+// TaskCreateFromJSON implements TaskCreate (TS TaskCreateTool) with synchronous hook execution.
 func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
 	if !commands.TodoV2Enabled() {
@@ -632,6 +649,10 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		Subject     string         `json:"subject"`
 		Description string         `json:"description"`
 		ActiveForm  string         `json:"activeForm"`
+		Status      string         `json:"status"`
+		Owner       string         `json:"owner"`
+		Blocks      []string       `json:"blocks"`
+		BlockedBy   []string       `json:"blockedBy"`
 		Metadata    map[string]any `json:"metadata"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
@@ -641,12 +662,19 @@ func TaskCreateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		return "", true, fmt.Errorf("subject is required")
 	}
 	tid := TaskListID(cfg)
-	id, err := v2CreateTask(tid, in.Type, in.Subject, in.Description, in.ActiveForm, in.Metadata)
+	id, err := v2CreateTaskFull(tid, in.Type, in.Subject, in.Description, in.ActiveForm, in.Status, in.Owner, in.Blocks, in.BlockedBy, in.Metadata)
 	if err != nil {
 		return "", true, err
 	}
+
+	// Run hooks synchronously — if any block, delete the task and return error (TS: throws Error).
+	blockingErrors := runTaskCreatedHook(cfg, id, tid, in.Subject, in.Description)
+	if len(blockingErrors) > 0 {
+		_, _ = v2DeleteTask(tid, id)
+		return "", true, fmt.Errorf("%s", strings.Join(blockingErrors, "\n"))
+	}
+
 	broadcastTaskEvent(id, in.Subject, "created")
-	runTaskCreatedHook(cfg, id, TaskListID(cfg), in.Subject, in.Description)
 	out := map[string]any{
 		"data": map[string]any{
 			"task": map[string]any{"id": id, "subject": in.Subject},
@@ -746,7 +774,7 @@ func TaskListFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool
 	return string(b), false, nil
 }
 
-// TaskUpdateFromJSON implements TaskUpdate (TS TaskUpdateTool) without hooks, mailbox, or verification nudge.
+// TaskUpdateFromJSON implements TaskUpdate (TS TaskUpdateTool) with sync hooks, owner auto-assignment, mailbox notification.
 func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool, error) {
 	_ = ctx
 	if !commands.TodoV2Enabled() {
@@ -802,6 +830,19 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		updates["activeForm"] = *in.ActiveForm
 		updatedFields = append(updatedFields, "activeForm")
 	}
+
+	// Auto-set owner when transitioning to in_progress without explicit owner (TS lines 185-199).
+	if in.Status != nil && *in.Status == "in_progress" && in.Owner == nil && existing.Owner == "" && commands.AgentSwarmsEnabled() {
+		agentName := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME"))
+		if agentName == "" {
+			agentName = strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_ID"))
+		}
+		if agentName != "" {
+			updates["owner"] = agentName
+			updatedFields = append(updatedFields, "owner")
+		}
+	}
+
 	if in.Owner != nil && *in.Owner != existing.Owner {
 		updates["owner"] = *in.Owner
 		updatedFields = append(updatedFields, "owner")
@@ -854,9 +895,6 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 			return "", true, fmt.Errorf("invalid status transition from %q to %q", existing.Status, st)
 		}
 		if st != existing.Status {
-			updates["status"] = st
-			updatedFields = append(updatedFields, "status")
-			statusChange = map[string]string{"from": existing.Status, "to": st}
 			if st == "completed" {
 				// Block completion if any blockers are still unresolved.
 				if len(existing.BlockedBy) > 0 {
@@ -877,14 +915,26 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 						return "", true, fmt.Errorf("cannot complete task: blocked by unresolved task(s): %s", strings.Join(unresolved, ", "))
 					}
 				}
-				if st == "completed" || st == "failed" || st == "killed" {
-					event := st
-					broadcastTaskEvent(in.TaskID, existing.Subject, event)
-					if st == "completed" {
-						runTaskCompletedHook(cfg, in.TaskID, TaskListID(cfg))
+
+				// Run hooks synchronously BEFORE applying the update (TS: hooks run first).
+				blockingErrors := runTaskCompletedHook(cfg, in.TaskID, tid, existing.Subject, existing.Description)
+				if len(blockingErrors) > 0 {
+					out := map[string]any{
+						"data": map[string]any{
+							"success":       false,
+							"taskId":        in.TaskID,
+							"updatedFields": []string{},
+							"error":         strings.Join(blockingErrors, "\n"),
+						},
 					}
+					b, _ := json.Marshal(out)
+					return string(b), false, nil
 				}
 			}
+
+			updates["status"] = st
+			updatedFields = append(updatedFields, "status")
+			statusChange = map[string]string{"from": existing.Status, "to": st}
 		}
 	}
 
@@ -892,6 +942,31 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		if _, err := v2UpdateTaskFields(tid, in.TaskID, updates); err != nil {
 			return "", true, err
 		}
+	}
+
+	// Notify new owner via mailbox when ownership changes (TS lines 276-298).
+	// ownerKey tracks the effective owner: explicit input, or auto-assigned above.
+	ownerKey := ""
+	if v, ok := updates["owner"]; ok {
+		ownerKey, _ = v.(string)
+	}
+	if ownerKey != "" && commands.AgentSwarmsEnabled() {
+		senderName := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_NAME"))
+		if senderName == "" {
+			senderName = strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENT_ID"))
+		}
+		if senderName == "" {
+			senderName = "team-lead"
+		}
+		assignmentJSON, _ := json.Marshal(map[string]string{
+			"type":        "task_assignment",
+			"taskId":      in.TaskID,
+			"subject":     existing.Subject,
+			"description": existing.Description,
+			"assignedBy":  senderName,
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		})
+		_ = writeToMailbox(ownerKey, tid, senderName, string(assignmentJSON))
 	}
 
 	if len(in.AddBlocks) > 0 {
@@ -937,6 +1012,14 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 		}
 	}
 
+	// Broadcast events for terminal status transitions.
+	if statusChange != nil {
+		to := statusChange["to"]
+		if to == "completed" || to == "failed" || to == "killed" {
+			broadcastTaskEvent(in.TaskID, existing.Subject, to)
+		}
+	}
+
 	out := map[string]any{
 		"data": map[string]any{
 			"success":       true,
@@ -947,49 +1030,275 @@ func TaskUpdateFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bo
 	if statusChange != nil {
 		out["data"].(map[string]any)["statusChange"] = statusChange
 		if statusChange["to"] == "completed" {
-			out["data"].(map[string]any)["verificationNudge"] = "Task \"" + existing.Subject + "\" is complete. Consider running verification steps to confirm the work is correct."
+			// Verification nudge: matching TS conditions (TaskUpdateTool.ts lines 333-349).
+			nudge := shouldVerificationNudge(tid, cfg)
+			if nudge {
+				out["data"].(map[string]any)["verificationNudgeNeeded"] = true
+			}
 		}
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }
 
-// runTaskCreatedHook fires TaskCreated hooks asynchronously.
-// Mirrors TS executeTaskCreatedHooks in hooks.ts.
-func runTaskCreatedHook(cfg Config, taskID, taskListID, subject, description string) {
-	table, err := hookexec.MergedHooksForCwd(cfg.ProjectRoot)
-	if err != nil || len(table) == 0 {
-		return
+// shouldVerificationNudge mirrors TS verification nudge logic (TaskUpdateTool.ts lines 333-349).
+func shouldVerificationNudge(taskListID string, cfg Config) bool {
+	// In Go, we check: all tasks done, 3+ tasks, none match /verif/i.
+	// We skip the TS compile-time feature('VERIFICATION_AGENT') and GrowthBook checks
+	// since those are TS-specific — the tool result text guides the model regardless.
+	all, err := v2ListTasks(taskListID)
+	if err != nil || len(all) < 3 {
+		return false
 	}
-	base := hookexec.BaseHookInput{
-		SessionID: cfg.SessionID,
-		Cwd:       cfg.WorkDir,
+	for _, t := range all {
+		if t.Status != "completed" {
+			return false
+		}
+		if strings.Contains(strings.ToLower(t.Subject), "verif") {
+			return false
+		}
 	}
-	go func() {
-		_, _ = hookexec.RunTaskCreatedHooks(
-			context.Background(), table, cfg.WorkDir, base,
-			taskID, taskListID, subject, description,
-			hookexec.DefaultHookTimeoutMs,
-		)
-	}()
+	return true
 }
 
-// runTaskCompletedHook fires TaskCompleted hooks asynchronously.
-// Mirrors TS executeTaskCompletedHooks in hooks.ts.
-func runTaskCompletedHook(cfg Config, taskID, taskListID string) {
+// runTaskCreatedHook runs TaskCreated hooks synchronously and returns blocking errors.
+// Mirrors TS executeTaskCreatedHooks in hooks.ts — caller must delete task on blocking error.
+func runTaskCreatedHook(cfg Config, taskID, taskListID, subject, description string) []string {
 	table, err := hookexec.MergedHooksForCwd(cfg.ProjectRoot)
 	if err != nil || len(table) == 0 {
-		return
+		return nil
 	}
 	base := hookexec.BaseHookInput{
 		SessionID: cfg.SessionID,
 		Cwd:       cfg.WorkDir,
 	}
-	go func() {
-		_, _ = hookexec.RunTaskCompletedHooks(
-			context.Background(), table, cfg.WorkDir, base,
-			taskID, taskListID,
-			hookexec.DefaultHookTimeoutMs,
+	results, _ := hookexec.RunTaskCreatedHooks(
+		context.Background(), table, cfg.WorkDir, base,
+		taskID, taskListID, subject, description,
+		hookexec.DefaultHookTimeoutMs,
+	)
+	var blockingErrors []string
+	for _, r := range results {
+		if r.BlockingError != nil {
+			msg := "TaskCreated hook feedback:\n" + r.BlockingError.BlockingError
+			blockingErrors = append(blockingErrors, msg)
+		}
+	}
+	return blockingErrors
+}
+
+// runTaskCompletedHook runs TaskCompleted hooks synchronously and returns blocking errors.
+// Mirrors TS executeTaskCompletedHooks in hooks.ts — caller must reject completion on blocking error.
+func runTaskCompletedHook(cfg Config, taskID, taskListID, subject, description string) []string {
+	table, err := hookexec.MergedHooksForCwd(cfg.ProjectRoot)
+	if err != nil || len(table) == 0 {
+		return nil
+	}
+	base := hookexec.BaseHookInput{
+		SessionID: cfg.SessionID,
+		Cwd:       cfg.WorkDir,
+	}
+	results, _ := hookexec.RunTaskCompletedHooks(
+		context.Background(), table, cfg.WorkDir, base,
+		taskID, taskListID,
+		hookexec.DefaultHookTimeoutMs,
+	)
+	var blockingErrors []string
+	for _, r := range results {
+		if r.BlockingError != nil {
+			msg := "TaskCompleted hook feedback:\n" + r.BlockingError.BlockingError
+			blockingErrors = append(blockingErrors, msg)
+		}
+	}
+	return blockingErrors
+}
+
+// claimTaskResult mirrors TS ClaimTaskResult.
+type claimTaskResult struct {
+	Success         bool     `json:"success"`
+	Reason          string   `json:"reason,omitempty"`
+	Task            *v2Task  `json:"task,omitempty"`
+	BusyWithTasks   []string `json:"busyWithTasks,omitempty"`
+	BlockedByTasks  []string `json:"blockedByTasks,omitempty"`
+}
+
+// claimTask tries to claim a task for an agent. Mirrors TS claimTask in utils/tasks.ts.
+func claimTask(taskListID, taskID, claimantAgentID string) (*claimTaskResult, error) {
+	existing, err := v2GetTask(taskListID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return &claimTaskResult{Success: false, Reason: "task_not_found"}, nil
+	}
+	path := v2TaskPath(taskListID, taskID)
+	var result *claimTaskResult
+	err = withExistingFileExclusiveLock(path, func() error {
+		cur, err := v2GetTask(taskListID, taskID)
+		if err != nil {
+			return err
+		}
+		if cur == nil {
+			result = &claimTaskResult{Success: false, Reason: "task_not_found"}
+			return nil
+		}
+		if cur.Owner != "" && cur.Owner != claimantAgentID {
+			result = &claimTaskResult{Success: false, Reason: "already_claimed", Task: cur}
+			return nil
+		}
+		if cur.Status == "completed" {
+			result = &claimTaskResult{Success: false, Reason: "already_resolved", Task: cur}
+			return nil
+		}
+		all, err := v2ListTasks(taskListID)
+		if err != nil {
+			return err
+		}
+		var unresolved []string
+		for _, bid := range cur.BlockedBy {
+			for _, t := range all {
+				if t.ID == bid && t.Status != "completed" {
+					unresolved = append(unresolved, bid)
+					break
+				}
+			}
+		}
+		if len(unresolved) > 0 {
+			result = &claimTaskResult{Success: false, Reason: "blocked", Task: cur, BlockedByTasks: unresolved}
+			return nil
+		}
+		updated, err := v2UpdateTaskFields(taskListID, taskID, map[string]any{"owner": claimantAgentID})
+		if err != nil {
+			return err
+		}
+		result = &claimTaskResult{Success: true, Task: updated}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// claimTaskWithBusyCheck claims a task and checks if the agent is busy. Uses list-level lock.
+// Mirrors TS claimTaskWithBusyCheck in utils/tasks.ts.
+func claimTaskWithBusyCheck(taskListID, taskID, claimantAgentID string) (*claimTaskResult, error) {
+	existing, err := v2GetTask(taskListID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return &claimTaskResult{Success: false, Reason: "task_not_found"}, nil
+	}
+	lockPath := v2ListLockPath(taskListID)
+	var result *claimTaskResult
+	err = withListExclusiveLock(lockPath, func() error {
+		all, err := v2ListTasks(taskListID)
+		if err != nil {
+			return err
+		}
+		var cur *v2Task
+		for _, t := range all {
+			if t.ID == taskID {
+				cur = t
+				break
+			}
+		}
+		if cur == nil {
+			result = &claimTaskResult{Success: false, Reason: "task_not_found"}
+			return nil
+		}
+		if cur.Owner != "" && cur.Owner != claimantAgentID {
+			result = &claimTaskResult{Success: false, Reason: "already_claimed", Task: cur}
+			return nil
+		}
+		if cur.Status == "completed" {
+			result = &claimTaskResult{Success: false, Reason: "already_resolved", Task: cur}
+			return nil
+		}
+		var unresolved []string
+		for _, bid := range cur.BlockedBy {
+			for _, t := range all {
+				if t.ID == bid && t.Status != "completed" {
+					unresolved = append(unresolved, bid)
+					break
+				}
+			}
+		}
+		if len(unresolved) > 0 {
+			result = &claimTaskResult{Success: false, Reason: "blocked", Task: cur, BlockedByTasks: unresolved}
+			return nil
+		}
+		var busyWith []string
+		for _, t := range all {
+			if t.ID != taskID && t.Status != "completed" && t.Owner == claimantAgentID {
+				busyWith = append(busyWith, t.ID)
+			}
+		}
+		if len(busyWith) > 0 {
+			result = &claimTaskResult{Success: false, Reason: "agent_busy", BusyWithTasks: busyWith}
+			return nil
+		}
+		updated, err := v2UpdateTaskFields(taskListID, taskID, map[string]any{"owner": claimantAgentID})
+		if err != nil {
+			return err
+		}
+		result = &claimTaskResult{Success: true, Task: updated}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// unassignTeammateTasks unassigns all non-completed tasks owned by a teammate and resets them to pending.
+// Mirrors TS unassignTeammateTasks in utils/tasks.ts.
+func unassignTeammateTasks(teamName, teammateID, teammateName, reason string) (json.RawMessage, string, error) {
+	all, err := v2ListTasks(teamName)
+	if err != nil {
+		return nil, "", err
+	}
+	type unassignedItem struct {
+		ID      string `json:"id"`
+		Subject string `json:"subject"`
+	}
+	var unassigned []unassignedItem
+	for _, t := range all {
+		if t.Status == "completed" {
+			continue
+		}
+		if t.Owner == teammateID || t.Owner == teammateName {
+			_, err := v2UpdateTaskFields(teamName, t.ID, map[string]any{
+				"owner":  nil,
+				"status": "pending",
+			})
+			if err != nil {
+				return nil, "", err
+			}
+			unassigned = append(unassigned, unassignedItem{ID: t.ID, Subject: t.Subject})
+		}
+	}
+	var reasonText string
+	switch reason {
+	case "terminated":
+		reasonText = "was terminated"
+	case "shutdown":
+		reasonText = "has shut down"
+	default:
+		reasonText = "is no longer available"
+	}
+	payload, _ := json.Marshal(map[string]any{"unassignedTasks": unassigned})
+	if len(unassigned) > 0 {
+		var ids []string
+		for _, u := range unassigned {
+			ids = append(ids, "#"+u.ID+" \""+u.Subject+"\"")
+		}
+		notification := fmt.Sprintf(
+			"%s %s. %d task(s) were unassigned: %s. Use TaskList to check availability and TaskUpdate with owner to reassign them to idle teammates.",
+			teammateName, reasonText, len(unassigned), strings.Join(ids, ", "),
 		)
-	}()
+		return payload, notification, nil
+	}
+	return payload, "", nil
 }

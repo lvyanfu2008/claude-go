@@ -1068,17 +1068,22 @@ func nativeTaskCreateToolSpec() types.ToolSpec {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"type":    "object",
 		"properties": map[string]any{
+			"type":        map[string]any{"type": "string", "description": "Task type: local_bash, local_agent, remote_agent, in_process_teammate, local_workflow, monitor_mcp, dream. Defaults to local_agent."},
 			"subject":     map[string]any{"type": "string"},
 			"description": map[string]any{"type": "string"},
 			"activeForm":  map[string]any{"type": "string"},
+			"status":      map[string]any{"type": "string", "description": "Initial status. Defaults to pending."},
+			"owner":       map[string]any{"type": "string", "description": "Task owner. Auto-assigned from current agent if swarms enabled."},
+			"blocks":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"blockedBy":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"metadata":    map[string]any{"type": "object", "additionalProperties": map[string]any{}},
 		},
 		"required":             []string{"subject"},
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "TaskCreate",
-		Description:     "Create a task in Todo v2.",
+		Name:        "TaskCreate",
+		Description: "Create a new task in the structured task list (Todo v2). Tasks track progress, dependencies, and ownership. Use this to break complex work into tracked subtasks — each task should be a concrete, verifiable unit of work. Tasks support status tracking (pending -> in_progress -> completed/failed/killed) and can set initial blocks/blockedBy to encode dependencies. Owner auto-assigns from the current agent when swarms are enabled.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1092,14 +1097,14 @@ func nativeTaskGetToolSpec() types.ToolSpec {
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "TaskGet",
-		Description:     "Get a task by ID in Todo v2.",
+		Name:        "TaskGet",
+		Description: "Retrieve a single task by ID from the Todo v2 task list. Returns the full task object including id, subject, description, status, blocks, blockedBy, and owner. Returns null if the task does not exist.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
 
 func nativeTaskListToolSpec() types.ToolSpec {
-	return nativeEmptyObjectSchemaToolSpec("TaskList", "List tasks in Todo v2.")
+	return nativeEmptyObjectSchemaToolSpec("TaskList", "List all tasks in the Todo v2 task list. Returns an array of tasks with id, subject, status, owner, and blockedBy fields. Completed blockers are filtered from blockedBy. Tasks with _internal metadata are hidden. Use this to review progress, find available work, and inspect dependency chains.")
 }
 
 func nativeTaskUpdateToolSpec() types.ToolSpec {
@@ -1111,7 +1116,7 @@ func nativeTaskUpdateToolSpec() types.ToolSpec {
 			"subject":      map[string]any{"type": "string"},
 			"description":  map[string]any{"type": "string"},
 			"activeForm":   map[string]any{"type": "string"},
-			"status":       map[string]any{"type": "string"},
+			"status":       map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed", "failed", "killed", "deleted"}},
 			"owner":        map[string]any{"type": "string"},
 			"addBlocks":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"addBlockedBy": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
@@ -1121,8 +1126,8 @@ func nativeTaskUpdateToolSpec() types.ToolSpec {
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "TaskUpdate",
-		Description:     "Update task fields in Todo v2.",
+		Name:        "TaskUpdate",
+		Description: "Update an existing task in the Todo v2 task list. Supports updating subject, description, status, owner, metadata, and adding dependency links (addBlocks/addBlockedBy). Status transitions: pending -> in_progress -> completed/failed/killed. Set status to \"deleted\" to remove a task (dependency references are cleaned up automatically). When completing a task, blockedBy blockers are validated — all must be resolved first. Use TaskList after completing a task to find newly unblocked work.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }

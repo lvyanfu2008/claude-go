@@ -23,6 +23,7 @@ type taskListEntry struct {
 	ID        string         `json:"id"`
 	Subject   string         `json:"subject"`
 	Status    string         `json:"status"`
+	Owner     string         `json:"owner,omitempty"`
 	BlockedBy []string       `json:"blockedBy"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 }
@@ -385,6 +386,12 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 			subjStyle = subjStyle.Faint(true)
 		}
 		b.WriteString(subjStyle.Render(subject))
+
+		// Show owner for non-completed tasks (mirrors TS TaskListV2 owner display)
+		if t.Owner != "" && t.Status != "completed" && columns >= 60 {
+			ownerStr := " (@" + t.Owner + ")"
+			b.WriteString(lipgloss.NewStyle().Faint(true).Render(ownerStr))
+		}
 
 		if isBlocked {
 			sort.Strings(openBlockers)
