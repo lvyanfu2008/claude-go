@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -61,7 +62,7 @@ func readVerifySkillBody() (string, error) {
 }
 
 func readBundledText(rel string) (string, error) {
-	b, err := fs.ReadFile(skills.Bundled, rel)
+	b, err := fs.ReadFile(skills.Bundled, path.Join("bundled", rel))
 	if err != nil {
 		return "", err
 	}
