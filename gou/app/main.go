@@ -1059,12 +1059,10 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m.gouSubmitFromPromptText(fullPrompt, line)
 	}
 	// On Windows, ConPTY doesn't handle ANSI erase sequences correctly,
-	// leaving ghost characters after Backspace/Delete. Force a full redraw
+	// leaving ghost characters. Force a full redraw on every keypress
 	// so the next frame writes explicit spaces instead of relying on CSI K/J.
 	if runtime.GOOS == "windows" {
-		if msg.Code == tea.KeyBackspace || msg.Code == tea.KeyDelete || msg.String() == "backspace" {
-			return m, teaGlobalRedrawCmd()
-		}
+		return m, teaGlobalRedrawCmd()
 	}
 	return m, nil
 }
