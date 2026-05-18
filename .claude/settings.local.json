@@ -27,7 +27,11 @@
       "Bash(python3:*)",
       "Bash(xxd)",
       "Bash(go vet:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)"
     ]
   }
 }

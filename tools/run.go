@@ -62,7 +62,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return CronDeleteFromJSON(raw, cfg)
 	case "CronList":
 		return CronListFromJSON(raw, cfg)
-	case "Agent":
+	case "Agent", "Task":
 		return RunAgentTool(raw, AgentRuntimeConfig{
 			WorkDir:             cfg.WorkDir,
 			ProjectRoot:         cfg.ProjectRoot,
@@ -151,6 +151,10 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "ReviewArtifact":
 		return ReviewArtifactFromJSON(raw)
 	default:
+		// Dynamic mcp__<server>__authenticate pseudo-tool for MCP OAuth.
+		if strings.HasSuffix(name, "__authenticate") {
+			return McpAuthFromJSON(ctx, name, raw)
+		}
 		return "", false, ErrNotHandled
 	}
 }

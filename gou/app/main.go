@@ -13,7 +13,7 @@
 // Go-side init port (subset of TS init.ts): gou-demo runs [goc/claudeinit.Init] (includes [settingsfile.EnsureProjectClaudeEnvOnce]). See docs/plans/go-init-port.md.
 // Go local tool parity (streaming parity + [skilltools.ParityToolRunner]): Bash is allowed by default (same as TS); set GOU_DEMO_NO_LOCAL_BASH=1 to disable unless CCB_ENGINE_LOCAL_BASH=1. PowerShell is off unless CCB_ENGINE_LOCAL_POWERSHELL=1 (uses pwsh or powershell.exe). AskUserQuestion auto-picks the first option per question unless GOU_DEMO_NO_ASK_AUTO_FIRST=1. WebFetch is allowed by default; set CCB_ENGINE_DISABLE_WEB_FETCH=1 to block network fetches in the Go runner. See docs/plans/go-tools-parity.md.
 //
-// System # Language / # Output Style: merged from ~/.claude/settings.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
+// System # Language / # Output Style: merged from ~/.claude/settings.go.json and project .claude/settings.go.json / settings.local.json (see settingsfile; project settings.go.json is TS-only). CLAUDE_CODE_LANGUAGE and CLAUDE_CODE_OUTPUT_STYLE_* override when set (non-empty); built-in outputStyle keys Explanatory/Learning use prompts from src/constants/outputStyles.ts (embedded).
 // Extra CLAUDE.md roots: optional runtimeContext.toolPermissionContext.additionalWorkingDirectories (JSON) and/or GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS / CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS (comma or PATH-style list). Paths from runtime/env are always scanned when passed (see [querycontext.ExtraClaudeMdRootsForFetch]); CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 is only needed for env-only flows in claudemd that do not pass explicit roots.
 // Debug log (optional): GOU_DEMO_LOG_FILE=/path/to.log, or GOU_DEMO_LOG=1 (default file path matches TS getDebugLogPath via goc/ccb-engine/debugpath when stderr is TTY). GOU_DEMO_LOG_STDERR=1 forces stderr (may corrupt TUI). Lines are prefixed [gou-demo].
 // ToolUseContext dump: CLAUDE_CODE_LOG_TOOL_USE_CONTEXT or GOU_DEMO_LOG_TOOL_USE_CONTEXT = 1|summary|full (with logging enabled) prints JSON after each BuildDemoParams; full includes the entire commands[] snapshot.
@@ -70,8 +70,8 @@ import (
 	"goc/gou/prompt"
 	"goc/gou/pui"
 	"goc/gou/segdiff"
-	"goc/gou/textutil"
 	"goc/gou/suggestions"
+	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/growthbook"
@@ -326,7 +326,7 @@ func gouDemoWarnApilogExpectations(ccbInline bool) {
 	if !gouDemoHasLLMKeys() {
 		fmt.Fprintf(os.Stderr,
 			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but no ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or OPENAI_API_KEY is set.\n"+
-				"           Put keys in ~/.claude/settings.json or project .claude/settings.go.json env, or export them.\n")
+				"           Put keys in ~/.claude/settings.go.json or project .claude/settings.go.json env, or export them.\n")
 	}
 }
 
@@ -801,7 +801,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		extractMemState:     extractmemories.NewState(),
 		sessionMemState:     sessionMemState,
 		sessionMemHook:      sessionmemory.Hook(sessionMemState, st.ConversationID, cwd),
-		suggestionEngine:   suggEngine,
+		suggestionEngine:    suggEngine,
 		taskList:            newTaskListModel(st.ConversationID),
 		toolResultState:     toolResultState,
 	}
@@ -2638,7 +2638,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							}
 						}
 						m.askAutoFirst = !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST")
-							m.installAskResolver(&te, m.askAutoFirst)
+						m.installAskResolver(&te, m.askAutoFirst)
 						qdeps.ToolexecutionDeps = te
 						// Wire tool result budget enforcement when persistence is enabled.
 						// The closure captures the live Go *ContentReplacementState so mutations
@@ -2651,8 +2651,8 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 									in.Messages,
 									statePtr,
 									sessionInfo,
-									0,    // use default MaxToolResultsPerMessageChars
-									nil,  // skipToolNames
+									0,   // use default MaxToolResultsPerMessageChars
+									nil, // skipToolNames
 								), nil
 							}
 						}

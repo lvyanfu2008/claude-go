@@ -933,6 +933,7 @@ func nativeAgentToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Agent",
+		Aliases:         []string{"Task"},
 		Description:     AgentToolDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1024,6 +1025,7 @@ func nativeSendUserMessageToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "SendUserMessage",
+		Aliases:         []string{"Brief"},
 		Description:     "Send a user-visible message with optional attachments.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}

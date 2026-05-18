@@ -8,7 +8,7 @@ import (
 	"goc/claudebase"
 )
 
-// IsAutoMemoryEnabled mirrors src/memdir/paths.ts isAutoMemoryEnabled (env chain; settings.json omitted -> default on).
+// IsAutoMemoryEnabled mirrors src/memdir/paths.ts isAutoMemoryEnabled (env chain; settings.go.json omitted -> default on).
 func IsAutoMemoryEnabled() bool {
 	envVal := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY"))
 	if claudebase.Truthy(envVal) {

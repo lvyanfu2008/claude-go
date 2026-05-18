@@ -107,7 +107,7 @@ func envTruthyGo(k string) bool {
 // EnvModelForSystemPrompt returns the model id used in ComputeSimpleEnvInfo / ComputeEnvInfo (TS computeSimpleEnvInfo modelId).
 // Priority: EnvReportModelID → CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID → same process-env chain as HTTP
 // ([modelenv.FirstNonEmpty]: CCB_ENGINE_MODEL, ANTHROPIC_MODEL, ANTHROPIC_DEFAULT_* — includes values
-// applied from ~/.claude/settings.json and project .claude/settings.go.json when the process env was empty) → ModelID.
+// applied from ~/.claude/settings.go.json and project .claude/settings.go.json when the process env was empty) → ModelID.
 func (o GouDemoSystemOpts) EnvModelForSystemPrompt() string {
 	if v := strings.TrimSpace(o.EnvReportModelID); v != "" {
 		return v
@@ -154,7 +154,7 @@ func ApplyGouDemoRuntimeEnv(o *GouDemoSystemOpts) {
 	o.ExplorePlanAgentsEnabled = GouDemoExplorePlanAgentsFromEnv()
 	o.VerificationAgentGuidance = featuregates.Feature("VERIFICATION_AGENT") && growthBookTenguHiveEvidence()
 	// Default to true to match TypeScript behavior where tengu_moth_copse defaults to true
-	// This skips the manual MEMORY.md maintenance instruction since memory files are 
+	// This skips the manual MEMORY.md maintenance instruction since memory files are
 	// prefetched via attachments instead
 	o.MemorySkipIndex = featuregates.Feature("MOTH_COPSE") || !envTruthyGo("CLAUDE_CODE_GO_DISABLE_MEMORY_SKIP_INDEX")
 	o.MemorySearchPastContext = growthbook.IsTenguCoralFern() || featuregates.Feature("CORAL_FERN") || envTruthyGo("CLAUDE_CODE_GO_MEMORY_SEARCH_PAST_CONTEXT")

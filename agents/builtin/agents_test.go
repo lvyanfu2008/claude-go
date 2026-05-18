@@ -366,8 +366,8 @@ func TestGetBuiltInAgents_basic(t *testing.T) {
 
 	t.Run("minimal set", func(t *testing.T) {
 		cfg := Config{
-			UserTypeAnt:    false,
-			Entrypoint:     "cli",
+			UserTypeAnt:     false,
+			Entrypoint:      "cli",
 			Using3PServices: false,
 		}
 		agents := GetBuiltInAgents(cfg, GuideContext{})
@@ -378,8 +378,8 @@ func TestGetBuiltInAgents_basic(t *testing.T) {
 		}
 		assertAgentType(t, agents, "general-purpose")
 		assertAgentType(t, agents, "statusline-setup")
-			assertAgentType(t, agents, "Explore")
-			assertAgentType(t, agents, "Plan")
+		assertAgentType(t, agents, "Explore")
+		assertAgentType(t, agents, "Plan")
 		assertAgentType(t, agents, "claude-code-guide")
 	})
 
@@ -767,8 +767,8 @@ func TestStatuslineSystemPrompt(t *testing.T) {
 	if !strings.Contains(p, "status line setup agent") {
 		t.Error("prompt should mention status line setup agent")
 	}
-	if !strings.Contains(p, "settings.json") {
-		t.Error("prompt should mention settings.json")
+	if !strings.Contains(p, "settings.go.json") {
+		t.Error("prompt should mention settings.go.json")
 	}
 	if !strings.Contains(p, "PS1") {
 		t.Error("prompt should mention PS1")

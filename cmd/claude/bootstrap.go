@@ -147,6 +147,12 @@ func InitMCP(ctx context.Context) error {
 		return mcpConnMgr.ExecuteMCPTool(dctx, fullToolName, args)
 	}
 
+	// Wire the McpAuthTool OAuth handler so the mcp__*__authenticate pseudo-tool
+	// can start OAuth flows and reconnect servers after authentication.
+	tools.SetMcpAuthToolHandler(func(ctx context.Context, serverName string) (map[string]any, error) {
+		return mcpConnMgr.HandleMcpOAuth(ctx, serverName)
+	})
+
 	// Load MCP configs from --mcp-config CLI flag (JSON arrays).
 	for _, raw := range flagMCPConfig {
 		if err := loadMCPConfigFromJSON(ctx, mcpConnMgr, raw); err != nil {

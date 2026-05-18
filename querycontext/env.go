@@ -49,7 +49,7 @@ func FeatureBreakCacheCommand() bool {
 	return IsEnvTruthy(os.Getenv("FEATURE_BREAK_CACHE_COMMAND"))
 }
 
-// ShouldIncludeGitInstructions mirrors src/utils/gitSettings.ts for env-only Go hosts (settings.json omitted → default true).
+// ShouldIncludeGitInstructions mirrors src/utils/gitSettings.ts for env-only Go hosts (settings.go.json omitted → default true).
 func ShouldIncludeGitInstructions() bool {
 	v, ok := os.LookupEnv("CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS")
 	if !ok {

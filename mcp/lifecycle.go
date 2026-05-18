@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -18,6 +19,11 @@ type ConnectionManager struct {
 	discovery    map[string]*DiscoveryResult // server name → discovered tools/commands/resources
 	mu           sync.RWMutex
 
+	// OAuth support
+	oauthManager  *OAuthManager
+	tokenStore    *TokenStore
+	needsAuthCache map[string]time.Time // server name → cache expiry
+
 	// Reconnect policy
 	maxReconnectAttempts int
 	reconnectBackoff     time.Duration
@@ -29,6 +35,9 @@ func NewConnectionManager(clientMgr *ClientManager) *ConnectionManager {
 		clientMgr:            clientMgr,
 		serverConfigs:        make(map[string]ScopedMcpServerConfig),
 		discovery:            make(map[string]*DiscoveryResult),
+		oauthManager:         NewOAuthManager(),
+		tokenStore:           NewTokenStore(),
+		needsAuthCache:       make(map[string]time.Time),
 		maxReconnectAttempts: 3,
 		reconnectBackoff:     2 * time.Second,
 	}
@@ -87,6 +96,19 @@ func (cmgr *ConnectionManager) StartAll(ctx context.Context) error {
 }
 
 func (cmgr *ConnectionManager) startServer(ctx context.Context, name string, scfg ScopedMcpServerConfig) error {
+	normalized := NormalizeMcpServerName(name)
+
+	// Check if this server needs OAuth authentication.
+	if HasOAuthConfig(scfg.Config) && !cmgr.hasValidToken(normalized) {
+		cmgr.mu.Lock()
+		cmgr.needsAuthCache[normalized] = time.Now().Add(15 * time.Minute)
+		// Inject the McpAuth pseudo-tool into discovery.
+		cmgr.discovery[normalized] = cmgr.buildAuthDiscovery(name, scfg)
+		cmgr.mu.Unlock()
+		log.Printf("[mcp] server %q needs OAuth auth, injected auth pseudo-tool", name)
+		return nil
+	}
+
 	state, err := cmgr.clientMgr.ConnectToServer(ctx, name, scfg)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
@@ -98,7 +120,7 @@ func (cmgr *ConnectionManager) startServer(ctx context.Context, name string, scf
 	}
 
 	cmgr.mu.Lock()
-	cmgr.discovery[NormalizeMcpServerName(name)] = discovery
+	cmgr.discovery[normalized] = discovery
 	cmgr.mu.Unlock()
 
 	return nil
@@ -151,6 +173,7 @@ func (cmgr *ConnectionManager) Shutdown() {
 	cmgr.mu.Lock()
 	cmgr.discovery = make(map[string]*DiscoveryResult)
 	cmgr.serverConfigs = make(map[string]ScopedMcpServerConfig)
+	cmgr.needsAuthCache = make(map[string]time.Time)
 	cmgr.mu.Unlock()
 	cmgr.clientMgr.CloseAll()
 }
@@ -200,3 +223,171 @@ func (cmgr *ConnectionManager) ExecuteMCPToolStreaming(ctx context.Context, full
 	return ProcessMCPResult(result), nil
 }
 
+// HasOAuthConfig reports whether an MCP server config includes OAuth settings.
+func HasOAuthConfig(config McpServerConfig) bool {
+	switch c := config.(type) {
+	case McpSSEServerConfig:
+		return c.OAuth != nil
+	case McpHTTPServerConfig:
+		return c.OAuth != nil
+	default:
+		return false
+	}
+}
+
+// hasValidToken checks whether a non-expired OAuth token exists for the server.
+func (cmgr *ConnectionManager) hasValidToken(serverName string) bool {
+	tok := cmgr.tokenStore.Get(serverName)
+	if tok == nil {
+		return false
+	}
+	return tok.Valid()
+}
+
+// buildAuthDiscovery creates a DiscoveryResult containing only the McpAuth pseudo-tool.
+func (cmgr *ConnectionManager) buildAuthDiscovery(name string, scfg ScopedMcpServerConfig) *DiscoveryResult {
+	config := scfg.Config
+	serverName := NormalizeMcpServerName(name)
+
+	// Build description similar to TS createMcpAuthTool.
+	transport := config.ConfigType()
+	desc := fmt.Sprintf(
+		"The `%s` MCP server (%s) is installed but requires authentication. "+
+			"Call this tool to start the OAuth flow — you'll receive an authorization URL to share with the user. "+
+			"Once the user completes authorization in their browser, the server's real tools will become available automatically.",
+		serverName, transport,
+	)
+
+	schema := json.RawMessage([]byte(
+		`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{},"additionalProperties":false}`,
+	))
+
+	authTool := SerializedTool{
+		Name:             BuildMcpToolName(serverName, "authenticate"),
+		Description:      desc,
+		InputJSONSchema:  schema,
+		IsMcp:            true,
+		OriginalToolName: "authenticate",
+	}
+
+	return &DiscoveryResult{
+		Tools: []SerializedTool{authTool},
+	}
+}
+
+// HandleMcpOAuth starts the OAuth flow for a server and returns the authorization URL.
+// It does NOT block — the flow runs in the background and reconnects on completion.
+func (cmgr *ConnectionManager) HandleMcpOAuth(ctx context.Context, serverName string) (map[string]any, error) {
+	normalized := NormalizeMcpServerName(serverName)
+
+	cmgr.mu.RLock()
+	scfg, ok := cmgr.serverConfigs[normalized]
+	cmgr.mu.RUnlock()
+	if !ok {
+		return map[string]any{
+			"status":  "error",
+			"message": fmt.Sprintf("Server %q not found in configuration.", serverName),
+		}, nil
+	}
+
+	config := scfg.Config
+	if !HasOAuthConfig(config) {
+		return map[string]any{
+			"status":  "unsupported",
+			"message": fmt.Sprintf("Server %q does not support OAuth authentication.", serverName),
+		}, nil
+	}
+
+	// claudeai-proxy uses a separate UI-based auth flow.
+	if _, ok := config.(McpClaudeAIProxyServerConfig); ok {
+		return map[string]any{
+			"status":  "unsupported",
+			"message": fmt.Sprintf("This is a claude.ai MCP connector. Run /mcp and select %q to authenticate.", serverName),
+		}, nil
+	}
+
+	var oauthCfg *McpOAuthConfig
+	switch c := config.(type) {
+	case McpSSEServerConfig:
+		oauthCfg = c.OAuth
+	case McpHTTPServerConfig:
+		oauthCfg = c.OAuth
+	}
+
+	if oauthCfg == nil || oauthCfg.AuthServerMetadataURL == "" {
+		return map[string]any{
+			"status":  "error",
+			"message": fmt.Sprintf("Server %q has incomplete OAuth configuration.", serverName),
+		}, nil
+	}
+
+	clientID := oauthCfg.ClientID
+	callbackPort := oauthCfg.CallbackPort
+	if callbackPort <= 0 {
+		callbackPort = 9876
+	}
+
+	// Start the OAuth flow in a background goroutine. We need to capture the
+	// authorization URL to return it immediately. For now, we start the full
+	// synchronous flow in the background and notify the caller that OAuth has
+	// been initiated. The user will need to watch their browser.
+	go func() {
+		token, err := cmgr.oauthManager.PerformOAuthFlow(
+			context.Background(), serverName, oauthCfg.AuthServerMetadataURL, clientID, callbackPort,
+		)
+		if err != nil {
+			log.Printf("[mcp] OAuth failed for %q: %v", serverName, err)
+			return
+		}
+		cmgr.tokenStore.Set(normalized, token)
+		cmgr.ClearNeedsAuthCache(normalized)
+
+		// Reconnect the server with the new token.
+		if err := cmgr.reconnectAfterOAuth(context.Background(), normalized, scfg); err != nil {
+			log.Printf("[mcp] reconnect after OAuth failed for %q: %v", serverName, err)
+		}
+	}()
+
+	return map[string]any{
+		"status":  "auth_url",
+		"message": fmt.Sprintf("OAuth flow started for %q. A browser window should open. Complete authorization there and the server will reconnect automatically.", serverName),
+	}, nil
+}
+
+// reconnectAfterOAuth reconnects a server after successful OAuth authentication.
+func (cmgr *ConnectionManager) reconnectAfterOAuth(ctx context.Context, normalizedName string, scfg ScopedMcpServerConfig) error {
+	state, err := cmgr.clientMgr.ReconnectServer(ctx, normalizedName)
+	if err != nil {
+		return fmt.Errorf("reconnect: %w", err)
+	}
+
+	discovery, err := FetchAllFromServer(ctx, state)
+	if err != nil {
+		log.Printf("[mcp] partial discovery after OAuth for %q: %v", normalizedName, err)
+	}
+
+	cmgr.mu.Lock()
+	cmgr.discovery[normalizedName] = discovery
+	cmgr.mu.Unlock()
+
+	log.Printf("[mcp] server %q reconnected after OAuth with %d tools", normalizedName, len(discovery.Tools))
+	return nil
+}
+
+// IsNeedsAuthCached reports whether a server is in the needs-auth cache.
+func (cmgr *ConnectionManager) IsNeedsAuthCached(serverName string) bool {
+	cmgr.mu.RLock()
+	defer cmgr.mu.RUnlock()
+	expiry, ok := cmgr.needsAuthCache[NormalizeMcpServerName(serverName)]
+	if !ok {
+		return false
+	}
+	return time.Now().Before(expiry)
+}
+
+// ClearNeedsAuthCache removes a server from the needs-auth cache.
+func (cmgr *ConnectionManager) ClearNeedsAuthCache(serverName string) {
+	cmgr.mu.Lock()
+	defer cmgr.mu.Unlock()
+	delete(cmgr.needsAuthCache, NormalizeMcpServerName(serverName))
+}

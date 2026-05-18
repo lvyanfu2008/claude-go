@@ -11,7 +11,7 @@ import (
 
 // MatcherGroup mirrors one entry in settings "hooks"."EVENT_NAME"[].
 type MatcherGroup struct {
-	Matcher string          `json:"matcher"`
+	Matcher string            `json:"matcher"`
 	Hooks   []json.RawMessage `json:"hooks"`
 }
 

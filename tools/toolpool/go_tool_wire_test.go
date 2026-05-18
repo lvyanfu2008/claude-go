@@ -248,3 +248,63 @@ func toolNames(specs []types.ToolSpec) []string {
 	}
 	return out
 }
+
+func TestAgentToolHasTaskAlias(t *testing.T) {
+	spec := nativeAgentToolSpec()
+	found := false
+	for _, alias := range spec.Aliases {
+		if alias == "Task" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("Agent tool is missing 'Task' legacy alias in ToolSpec.Aliases")
+	}
+}
+
+func TestSendUserMessageToolHasBriefAlias(t *testing.T) {
+	spec := nativeSendUserMessageToolSpec()
+	found := false
+	for _, alias := range spec.Aliases {
+		if alias == "Brief" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("SendUserMessage tool is missing 'Brief' legacy alias in ToolSpec.Aliases")
+	}
+}
+
+func TestTaskAliasInToolSpecsFromGoWire(t *testing.T) {
+	setToolWireExportParityEnv(t)
+	specs := ToolSpecsFromGoWire()
+	for _, spec := range specs {
+		if spec.Name == "Agent" {
+			for _, alias := range spec.Aliases {
+				if alias == "Task" {
+					return // found
+				}
+			}
+			t.Fatal("Agent tool from ToolSpecsFromGoWire is missing 'Task' alias")
+		}
+	}
+	t.Fatal("Agent tool not found in ToolSpecsFromGoWire")
+}
+
+func TestBriefAliasInToolSpecsFromGoWire(t *testing.T) {
+	setToolWireExportParityEnv(t)
+	specs := ToolSpecsFromGoWire()
+	for _, spec := range specs {
+		if spec.Name == "SendUserMessage" {
+			for _, alias := range spec.Aliases {
+				if alias == "Brief" {
+					return // found
+				}
+			}
+			t.Fatal("SendUserMessage tool from ToolSpecsFromGoWire is missing 'Brief' alias")
+		}
+	}
+	t.Fatal("SendUserMessage tool not found in ToolSpecsFromGoWire")
+}

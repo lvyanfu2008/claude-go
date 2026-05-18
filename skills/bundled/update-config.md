@@ -1,10 +1,10 @@
 # Update Config Skill
 
-Modify Claude Code configuration by updating settings.json files.
+Modify Claude Code configuration by updating settings.go.json files.
 
 ## When Hooks Are Required (Not Memory)
 
-If the user wants something to happen automatically in response to an EVENT, they need a **hook** configured in settings.json. Memory/preferences cannot trigger automated actions.
+If the user wants something to happen automatically in response to an EVENT, they need a **hook** configured in settings.go.json. Memory/preferences cannot trigger automated actions.
 
 **These require hooks:**
 - "Before compacting, ask me what to preserve" → PreCompact hook
@@ -32,7 +32,7 @@ When the user's request is ambiguous, use AskUserQuestion to clarify:
 - `language`, `alwaysThinkingEnabled`
 - `permissions.defaultMode`
 
-**Edit settings.json directly** for:
+**Edit settings.go.json directly** for:
 - Hooks (PreToolUse, PostToolUse, etc.)
 - Complex permission rules (allow/deny arrays)
 - Environment variables
@@ -75,8 +75,8 @@ Choose the appropriate file based on scope:
 
 | File | Scope | Git | Use For |
 |------|-------|-----|---------|
-| `~/.claude/settings.json` | Global | N/A | Personal preferences for all projects |
-| `.claude/settings.json` | Project | Commit | Team-wide hooks, permissions, plugins |
+| `~/.claude/settings.go.json` | Global | N/A | Personal preferences for all projects |
+| `.claude/settings.go.json` | Project | Commit | Team-wide hooks, permissions, plugins |
 | `.claude/settings.local.json` | Project | Gitignore | Personal overrides for this project |
 
 Settings load in order: user → project → local (later overrides earlier).
@@ -344,11 +344,11 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 
    `jq -e '.hooks.<event>[] | select(.matcher == "<matcher>") | .hooks[] | select(.type == "command") | .command' <target-file>`
 
-   Exit 0 + prints your command = correct. Exit 4 = matcher doesn't match. Exit 5 = malformed JSON or wrong nesting. A broken settings.json silently disables ALL settings from that file — fix any pre-existing malformation too.
+   Exit 0 + prints your command = correct. Exit 4 = matcher doesn't match. Exit 5 = malformed JSON or wrong nesting. A broken settings.go.json silently disables ALL settings from that file — fix any pre-existing malformation too.
 
 6. **Prove the hook fires** — only for `Pre|PostToolUse` on a matcher you can trigger in-turn (`Write|Edit` via Edit, `Bash` via Bash). `Stop`/`UserPromptSubmit`/`SessionStart` fire outside this turn — skip to step 7.
 
-   For a **formatter** on `PostToolUse`/`Write|Edit`: introduce a detectable violation via Edit (two consecutive blank lines, bad indentation, missing semicolon — something this formatter corrects; NOT trailing whitespace, Edit strips that before writing), re-read, confirm the hook **fixed** it. For **anything else**: temporarily prefix the command in settings.json with `echo "$(date) hook fired" >> /tmp/claude-hook-check.txt; `, trigger the matching tool (Edit for `Write|Edit`, a harmless `true` for `Bash`), read the sentinel file.
+   For a **formatter** on `PostToolUse`/`Write|Edit`: introduce a detectable violation via Edit (two consecutive blank lines, bad indentation, missing semicolon — something this formatter corrects; NOT trailing whitespace, Edit strips that before writing), re-read, confirm the hook **fixed** it. For **anything else**: temporarily prefix the command in settings.go.json with `echo "$(date) hook fired" >> /tmp/claude-hook-check.txt; `, trigger the matching tool (Edit for `Write|Edit`, a harmless `true` for `Bash`), read the sentinel file.
 
    **Always clean up** — revert the violation, strip the sentinel prefix — whether the proof passed or failed.
 
@@ -364,7 +364,7 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 User: "Format my code after Claude writes it"
 
 1. **Clarify**: Which formatter? (prettier, gofmt, etc.)
-2. **Read**: `.claude/settings.json` (or create if missing)
+2. **Read**: `.claude/settings.go.json` (or create if missing)
 3. **Merge**: Add to existing hooks, don't replace
 4. **Result**:
 ```json
@@ -410,7 +410,7 @@ User: "Set DEBUG=true"
 ## Troubleshooting Hooks
 
 If a hook isn't running:
-1. **Check the settings file** - Read ~/.claude/settings.json or .claude/settings.json
+1. **Check the settings file** - Read ~/.claude/settings.go.json or .claude/settings.go.json
 2. **Verify JSON syntax** - Invalid JSON silently fails
 3. **Check the matcher** - Does it match the tool name? (e.g., "Bash", "Write", "Edit")
 4. **Check hook type** - Is it "command", "prompt", or "agent"?
@@ -957,7 +957,7 @@ If a hook isn't running:
       "type": "boolean"
     },
     "strictPluginOnlyCustomization": {
-      "description": "When set in managed settings, blocks non-plugin customization sources for the listed surfaces. Array form locks specific surfaces (e.g. [\"skills\", \"hooks\"]); `true` locks all four; `false` is an explicit no-op. Blocked: ~/.claude/{surface}/, .claude/{surface}/ (project), settings.json hooks, .mcp.json. NOT blocked: managed (policySettings) sources, plugin-provided customizations. Composes with strictKnownMarketplaces for end-to-end admin control — plugins gated by marketplace allowlist, everything else blocked here.",
+      "description": "When set in managed settings, blocks non-plugin customization sources for the listed surfaces. Array form locks specific surfaces (e.g. [\"skills\", \"hooks\"]); `true` locks all four; `false` is an explicit no-op. Blocked: ~/.claude/{surface}/, .claude/{surface}/ (project), settings.go.json hooks, .mcp.json. NOT blocked: managed (policySettings) sources, plugin-provided customizations. Composes with strictKnownMarketplaces for end-to-end admin control — plugins gated by marketplace allowlist, everything else blocked here.",
       "anyOf": [
         {
           "type": "boolean"
@@ -1018,7 +1018,7 @@ If a hook isn't running:
       }
     },
     "extraKnownMarketplaces": {
-      "description": "Additional marketplaces to make available for this repository. Typically used in repository .claude/settings.json to ensure team members have required plugin sources.",
+      "description": "Additional marketplaces to make available for this repository. Typically used in repository .claude/settings.go.json to ensure team members have required plugin sources.",
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -1404,7 +1404,7 @@ If a hook isn't running:
                         "source"
                       ]
                     },
-                    "description": "Plugin entries declared inline in settings.json"
+                    "description": "Plugin entries declared inline in settings.go.json"
                   },
                   "owner": {
                     "type": "object",
@@ -1433,7 +1433,7 @@ If a hook isn't running:
                   "name",
                   "plugins"
                 ],
-                "description": "Inline marketplace manifest defined directly in settings.json. The reconciler writes a synthetic marketplace.json to the cache; diffMarketplaces detects edits via isEqual on the stored source (the plugins array is inside this object, so edits surface as sourceChanged)."
+                "description": "Inline marketplace manifest defined directly in settings.go.json. The reconciler writes a synthetic marketplace.json to the cache; diffMarketplaces detects edits via isEqual on the stored source (the plugins array is inside this object, so edits surface as sourceChanged)."
               }
             ],
             "description": "Where to fetch the marketplace from"
@@ -1833,7 +1833,7 @@ If a hook isn't running:
                     "source"
                   ]
                 },
-                "description": "Plugin entries declared inline in settings.json"
+                "description": "Plugin entries declared inline in settings.go.json"
               },
               "owner": {
                 "type": "object",
@@ -1862,7 +1862,7 @@ If a hook isn't running:
               "name",
               "plugins"
             ],
-            "description": "Inline marketplace manifest defined directly in settings.json. The reconciler writes a synthetic marketplace.json to the cache; diffMarketplaces detects edits via isEqual on the stored source (the plugins array is inside this object, so edits surface as sourceChanged)."
+            "description": "Inline marketplace manifest defined directly in settings.go.json. The reconciler writes a synthetic marketplace.json to the cache; diffMarketplaces detects edits via isEqual on the stored source (the plugins array is inside this object, so edits surface as sourceChanged)."
           }
         ]
       }
@@ -2248,7 +2248,7 @@ If a hook isn't running:
                     "source"
                   ]
                 },
-                "description": "Plugin entries declared inline in settings.json"
+                "description": "Plugin entries declared inline in settings.go.json"
               },
               "owner": {
                 "type": "object",
@@ -2277,7 +2277,7 @@ If a hook isn't running:
               "name",
               "plugins"
             ],
-            "description": "Inline marketplace manifest defined directly in settings.json. The reconciler writes a synthetic marketplace.json to the cache; diffMarketplaces detects edits via isEqual on the stored source (the plugins array is inside this object, so edits surface as sourceChanged)."
+            "description": "Inline marketplace manifest defined directly in settings.go.json. The reconciler writes a synthetic marketplace.json to the cache; diffMarketplaces detects edits via isEqual on the stored source (the plugins array is inside this object, so edits surface as sourceChanged)."
           }
         ]
       }
@@ -2681,7 +2681,7 @@ If a hook isn't running:
       "type": "boolean"
     },
     "autoMemoryDirectory": {
-      "description": "Custom directory path for auto-memory storage. Supports ~/ prefix for home directory expansion. Ignored if set in projectSettings (checked-in .claude/settings.json) for security. When unset, defaults to ~/.claude/projects/<sanitized-cwd>/memory/.",
+      "description": "Custom directory path for auto-memory storage. Supports ~/ prefix for home directory expansion. Ignored if set in projectSettings (checked-in .claude/settings.go.json) for security. When unset, defaults to ~/.claude/projects/<sanitized-cwd>/memory/.",
       "type": "string"
     },
     "autoDreamEnabled": {
@@ -2751,7 +2751,7 @@ If a hook isn't running:
       }
     },
     "pluginTrustMessage": {
-      "description": "Custom message to append to the plugin trust warning shown before installation. Only read from policy settings (managed-settings.json / MDM). Useful for enterprise administrators to add organization-specific context (e.g., \"All plugins from our internal marketplace are vetted and approved.\").",
+      "description": "Custom message to append to the plugin trust warning shown before installation. Only read from policy settings (managed-settings.go.json / MDM). Useful for enterprise administrators to add organization-specific context (e.g., \"All plugins from our internal marketplace are vetted and approved.\").",
       "type": "string"
     }
   },

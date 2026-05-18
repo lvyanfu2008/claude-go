@@ -15,6 +15,7 @@ import (
 	"goc/ccb-engine/bashzog"
 	"goc/ccb-engine/diaglog"
 	"goc/commands"
+	"goc/tools/bashtool"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/hookexec"
@@ -342,7 +343,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 			case "Grep":
 				return localtools.GrepFromJSON(ctx, input, roots)
 			case "Bash", bashzog.ZogToolName:
-				return localtools.BashFromJSON(ctx, input, wd, true, toolCfg.TasksDir())
+				return bashtool.RunBashWithSecurity(ctx, input, wd, toolCfg.TasksDir(), true)
 			}
 			return s, isErr, perr
 		},

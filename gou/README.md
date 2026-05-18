@@ -91,7 +91,7 @@ cd goc && go run ./cmd/claude -replay-cc=/path/to/stream.ndjson
 # 管道读 stdin 上的 NDJSON（Unix 下会尝试打开 /dev/tty 供键盘）
 cd goc && cat /path/to/stream.ndjson | go run ./cmd/claude -stream-stdin
 
-# 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.claude/settings.json 或项目 .claude/settings.go.json
+# 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.claude/settings.go.json 或项目 .claude/settings.go.json
 cd goc && go run ./cmd/claude
 ```
 

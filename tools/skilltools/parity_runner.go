@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"goc/ccb-engine/bashzog"
+	"goc/tools/bashtool"
 	"goc/tools/localtools"
 	"goc/tools"
 	"goc/types"
@@ -141,7 +142,7 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		return localtools.GrepFromJSON(ctx, input, roots)
 	case "Bash", bashzog.ZogToolName:
 		tasksDir := computeTasksDir(pr, r.SessionID)
-		return localtools.BashFromJSON(ctx, input, wd, r.LocalBashDefault, tasksDir)
+		return bashtool.RunBashWithSecurity(ctx, input, wd, tasksDir, r.LocalBashDefault)
 	}
 	if dn := DiscoverSkillsToolNameFromEnv(); dn != "" && name == dn {
 		return discoverSkillsFromJSON(input, r.Commands)
