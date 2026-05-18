@@ -204,15 +204,7 @@ func (r *SystemMessageRenderer) measureStopHookSummary(msg *types.Message, ctx *
 
 // renderMemorySaved renders extract-memories "memory_saved" system rows (TS SystemMemorySavedMessage).
 func (r *SystemMessageRenderer) renderMemorySaved(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	lines := []string{"Saved a memory"}
-	for _, p := range msg.WrittenPaths {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		lines = append(lines, "  · "+p)
-	}
-	return lines, nil
+	return []string{"Saved a memory"}, nil
 }
 
 func (r *SystemMessageRenderer) measureMemorySaved(msg *types.Message, ctx *RenderContext) (int, error) {
