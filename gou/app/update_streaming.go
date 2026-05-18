@@ -40,19 +40,19 @@ func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, te
 	if err := json.Unmarshal(msg.Raw, &wrap); err != nil {
 		return m, nil
 	}
-	delta := ""
 	switch wrap.Delta.Type {
 	case "text_delta":
-		delta = wrap.Delta.Text
-	case "thinking_delta":
-		delta = wrap.Delta.Thinking
-	}
-	if delta != "" {
-		m.store.AppendStreamingChunk(delta)
-		if m.uiScreen != gouDemoScreenTranscript {
-			m.sticky = true
-			m.scrollTop = 1 << 30
+		if wrap.Delta.Text != "" {
+			m.store.AppendStreamingChunk(wrap.Delta.Text)
 		}
+	case "thinking_delta":
+		if wrap.Delta.Thinking != "" {
+			m.store.AppendStreamingThinkingChunk(wrap.Delta.Thinking)
+		}
+	}
+	if (wrap.Delta.Text != "" || wrap.Delta.Thinking != "") && m.uiScreen != gouDemoScreenTranscript {
+		m.sticky = true
+		m.scrollTop = 1 << 30
 	}
 	return m, nil
 }

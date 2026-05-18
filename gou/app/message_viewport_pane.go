@@ -32,7 +32,7 @@ func (m *model) msgViewportWanted() bool {
 // messagePaneContentSig changes when the message list body should be rebuilt for the viewport pane.
 // msgFoldRev bumps on ctrl+y so fold toggles always rebuild even if other fields unchanged.
 func (m *model) messagePaneContentSig() string {
-	chunk := len(m.store.StreamingText) / 32
+	chunk := (len(m.store.StreamingText) + len(m.store.StreamingThinkingText)) / 32
 	return fmt.Sprintf("%d|%d|%d|%v|%d", len(m.store.Messages), len(m.store.StreamingToolUses), chunk, m.msgFoldAll, m.msgFoldRev)
 }
 

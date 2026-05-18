@@ -174,7 +174,7 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 
 	// Normal mode: show at most the first sentence of the thinking content.
 	if thinkingBody != "" {
-		first := firstSentenceOf(thinkingBody)
+		first := FirstSentenceOf(thinkingBody)
 		if first == "" {
 			first = thinkingBody
 		}
@@ -197,10 +197,11 @@ func sentenceEnd(r rune) bool {
 	return false
 }
 
-// firstSentenceOf returns the first sentence of s. A sentence ends at `.`, `!`,
+// FirstSentenceOf returns the first sentence of s. A sentence ends at `.`, `!`,
 // `?`, `。`, `！`, `？` followed by a space, newline, or end-of-string.
 // If the entire string is one sentence, returns "" to signal "no further text".
-func firstSentenceOf(s string) string {
+// Numbered prefixes like "1." or "12." at the start are not treated as sentence ends.
+func FirstSentenceOf(s string) string {
 	runes := []rune(s)
 	for i, r := range runes {
 		if sentenceEnd(r) {
@@ -211,11 +212,29 @@ func firstSentenceOf(s string) string {
 			}
 			next := runes[i+1]
 			if next == ' ' || next == '\n' || next == '\r' {
+				// Skip numbered-list prefixes (e.g. "1.", "12.") — treat them
+				// as part of the first sentence, not a sentence boundary.
+				if r == '.' && isOnlyDigits(runes[:i]) {
+					continue
+				}
 				return string(runes[:i+1]) + "..."
 			}
 		}
 	}
 	return ""
+}
+
+// isOnlyDigits reports whether runes consists entirely of ASCII digits.
+func isOnlyDigits(runes []rune) bool {
+	if len(runes) == 0 {
+		return false
+	}
+	for _, r := range runes {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // measureThinkingBlock measures a thinking block.

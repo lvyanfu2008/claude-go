@@ -168,8 +168,8 @@ func (m *model) renderMessagesWithNewRenderer() string {
 	width := m.messageBodyColsForLayout()
 	isTranscript := m.uiScreen == gouDemoScreenTranscript
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.StreamingText != ""
-	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && len(m.store.StreamingText) > 0
+	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
+	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
 
 	// Use RenderVisibleRange to render all messages with proper processing
 	// This ensures messages are processed (grouped, collapsed) before rendering
@@ -217,8 +217,8 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 	width := m.messageBodyColsForLayout()
 	isTranscript := m.uiScreen == gouDemoScreenTranscript
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.StreamingText != ""
-	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && len(m.store.StreamingText) > 0
+	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
+	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
 
 	// Get viewport height
 	vpH := listViewportH(m)
@@ -250,6 +250,19 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 	// In TS side, streaming elements appear as part of the ongoing assistant response
 	if m.uiScreen != gouDemoScreenTranscript {
 		hasStreamingElements := false
+
+		// Add streaming thinking text (truncated like post-completion renderThinkingBlock)
+		if strings.TrimSpace(m.store.StreamingThinkingText) != "" {
+			hasStreamingElements = true
+			if content != "" {
+				content += "\n\n"
+			}
+			first := message.FirstSentenceOf(m.store.StreamingThinkingText)
+			if first == "" {
+				first = m.store.StreamingThinkingText
+			}
+			content += applyMessagePaneGutter("💭 "+first, m.messageBodyColsForLayout())
+		}
 
 		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
 		if strings.TrimSpace(m.store.StreamingText) != "" {
@@ -377,8 +390,8 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 	width := m.messageBodyColsForLayout()
 	isTranscript := m.uiScreen == gouDemoScreenTranscript
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.StreamingText != ""
-	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && len(m.store.StreamingText) > 0
+	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
+	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
 
 	// Render all messages using the new renderer
 	content := m.msgRenderer.RenderVisibleRange(
@@ -396,6 +409,19 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 	// Add streaming tools and streaming text if needed (similar to renderMessagePaneWithNewRenderer)
 	if m.uiScreen != gouDemoScreenTranscript {
 		hasStreamingElements := false
+
+		// Add streaming thinking text (truncated like post-completion renderThinkingBlock)
+		if strings.TrimSpace(m.store.StreamingThinkingText) != "" {
+			hasStreamingElements = true
+			if content != "" {
+				content += "\n\n"
+			}
+			first := message.FirstSentenceOf(m.store.StreamingThinkingText)
+			if first == "" {
+				first = m.store.StreamingThinkingText
+			}
+			content += applyMessagePaneGutter("💭 "+first, m.messageBodyColsForLayout())
+		}
 
 		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
 		if strings.TrimSpace(m.store.StreamingText) != "" {

@@ -1291,7 +1291,7 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 			len(m.store.Messages) > 0 &&
 			m.store.Messages[len(m.store.Messages)-1].UUID == msg.UUID &&
 			msg.Type == types.MessageTypeCollapsedReadSearch &&
-			strings.TrimSpace(m.store.StreamingText) == ""
+			!m.store.HasStreaming()
 		return &messagerow.RenderOpts{
 			FoldToolResultBody:         true,
 			CollapsedReadSearchActive:  active,
@@ -1511,7 +1511,7 @@ func (m *model) View() tea.View {
 
 	var b strings.Builder
 	narrow := m.cols > 0 && m.cols < 80
-	plainTitle := replChromeComposeTerminalTitle(m.store.ConversationID, m.queryBusy, strings.TrimSpace(m.store.StreamingText) != "")
+	plainTitle := replChromeComposeTerminalTitle(m.store.ConversationID, m.queryBusy, m.store.HasStreaming())
 	if !gouDemoTerminalTitleDisabled() && plainTitle != m.lastEmittedTitlePlain {
 		m.lastEmittedTitlePlain = plainTitle
 		if osc := oscSetWindowTitle(plainTitle); osc != "" {
@@ -2265,7 +2265,18 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 			}
 		}
 	}
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	var b strings.Builder
+	for i, part := range parts {
+		if i > 0 {
+			if toks[i-1].Type == "list_item" {
+				b.WriteByte('\n')
+			} else {
+				b.WriteString("\n\n")
+			}
+		}
+		b.WriteString(part)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // handleTraditionalScrollKey handles scroll keys when not using viewport (traditional virtual scrolling).

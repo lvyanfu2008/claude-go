@@ -2,6 +2,8 @@
 package conversation
 
 import (
+	"strings"
+
 	"goc/types"
 )
 
@@ -10,6 +12,10 @@ type Store struct {
 	ConversationID string
 	Messages       []types.Message
 	StreamingText  string
+
+	// StreamingThinkingText tracks in-flight thinking deltas separately so we can
+	// apply firstSentenceOf truncation during streaming (matching post-completion behavior).
+	StreamingThinkingText string
 
 	// StreamingToolUses mirrors REPL.tsx streamingToolUses (in-flight tool_use rows before the turn finalizes).
 	// NDJSON ccbstream typically keeps this empty (atomic tool_use lines); HTTP SSE wiring can append deltas later.
@@ -40,15 +46,22 @@ func (s *Store) AppendStreamingChunk(text string) {
 	s.StreamingText += text
 }
 
+// AppendStreamingThinkingChunk appends raw thinking delta text.
+func (s *Store) AppendStreamingThinkingChunk(text string) {
+	s.StreamingThinkingText += text
+}
+
 // ClearStreaming resets the live stream buffer (e.g. after turn finalized).
 func (s *Store) ClearStreaming() {
 	s.StreamingText = ""
+	s.StreamingThinkingText = ""
 }
 
 // ClearMessages removes all conversation messages and resets usage counters.
 func (s *Store) ClearMessages() {
 	s.Messages = nil
 	s.StreamingText = ""
+	s.StreamingThinkingText = ""
 	s.StreamingToolUses = nil
 	s.UsageInputTotal = 0
 	s.UsageOutputTotal = 0
@@ -69,6 +82,11 @@ func (s *Store) AddUsage(inputTokens, outputTokens int) {
 	}
 	s.UsageInputTotal += inputTokens
 	s.UsageOutputTotal += outputTokens
+}
+
+// HasStreaming returns true when any streaming text or thinking text is being accumulated.
+func (s *Store) HasStreaming() bool {
+	return strings.TrimSpace(s.StreamingText) != "" || strings.TrimSpace(s.StreamingThinkingText) != ""
 }
 
 // TotalUsageTokens returns input+output totals for status UI.
