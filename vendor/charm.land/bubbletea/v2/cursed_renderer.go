@@ -293,11 +293,13 @@ func (s *cursedRenderer) flush(closing bool) error {
 	s.starting = false
 
 	// On Windows, ConPTY doesn't handle ANSI erase sequences (CSI K / CSI J)
-	// correctly, leaving ghost characters when the frame shrinks. Instead of
-	// erasing the entire screen (which causes flickering), the fix is applied
-	// in ultraviolet's renderer: clearToEnd, clearToBottom, and transformLine
-	// always use explicit space characters on Windows instead of CSI sequences.
-	// We no longer call s.scr.Erase() here — see terminal_renderer.go changes.
+	// correctly, leaving ghost characters when the frame shrinks. Force a
+	// full redraw on every frame to write explicit space characters instead
+	// of relying on partial erase sequences.
+	// 注意: 以下代码不要修改
+	if runtime.GOOS == "windows" {
+		s.scr.Erase()
+	}
 
 	if frameArea != s.cellbuf.Bounds() {
 		s.scr.Erase() // Force a full redraw to avoid artifacts.

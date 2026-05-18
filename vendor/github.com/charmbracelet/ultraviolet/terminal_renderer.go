@@ -5,7 +5,6 @@ import (
 	"errors"
 	"hash/maphash"
 	"io"
-	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/colorprofile"
@@ -730,9 +729,7 @@ func (s *TerminalRenderer) clearToEnd(newbuf *RenderBuffer, blank *Cell, force b
 	if force {
 		s.updatePen(blank)
 		count := newbuf.Width() - s.cur.X
-		// On Windows, ConPTY does not handle CSI K correctly — always
-		// write explicit spaces to avoid ghost text.
-		if runtime.GOOS != "windows" && s.el0Cost() <= count {
+		if s.el0Cost() <= count {
 			_, _ = s.buf.WriteString(ansi.EraseLineRight)
 		} else {
 			for i := 0; i < count; i++ {
@@ -818,25 +815,21 @@ func (s *TerminalRenderer) transformLine(newbuf *RenderBuffer, y int) {
 			firstCell = nFirstCell
 		} else if oFirstCell < nFirstCell {
 			firstCell = oFirstCell
-			// On Windows, ConPTY does not handle CSI K correctly — skip
-			// EraseLineLeft/Right and fall through to explicit cell writes.
-			if runtime.GOOS != "windows" {
-				el1Cost := len(ansi.EraseLineLeft)
-				if el1Cost < nFirstCell-oFirstCell {
-					if nFirstCell >= newbuf.Width() {
-						s.move(newbuf, 0, y)
-						s.updatePen(blank)
-						_, _ = s.buf.WriteString(ansi.EraseLineRight)
-					} else {
-						s.move(newbuf, nFirstCell-1, y)
-						s.updatePen(blank)
-						_, _ = s.buf.WriteString(ansi.EraseLineLeft)
-					}
+			el1Cost := len(ansi.EraseLineLeft)
+			if el1Cost < nFirstCell-oFirstCell {
+				if nFirstCell >= newbuf.Width() {
+					s.move(newbuf, 0, y)
+					s.updatePen(blank)
+					_, _ = s.buf.WriteString(ansi.EraseLineRight)
+				} else {
+					s.move(newbuf, nFirstCell-1, y)
+					s.updatePen(blank)
+					_, _ = s.buf.WriteString(ansi.EraseLineLeft)
+				}
 
-					for firstCell < nFirstCell {
-						oldLine.Set(firstCell, blank)
-						firstCell++
-					}
+				for firstCell < nFirstCell {
+					oldLine.Set(firstCell, blank)
+					firstCell++
 				}
 			}
 		}
@@ -992,30 +985,14 @@ func (s *TerminalRenderer) deleteCells(count int) {
 
 // clearToBottom clears the screen from the current cursor position to the end
 // of the screen.
-func (s *TerminalRenderer) clearToBottom(newbuf *RenderBuffer, blank *Cell) {
+func (s *TerminalRenderer) clearToBottom(blank *Cell) {
 	row, col := s.cur.Y, s.cur.X
 	if row < 0 {
 		row = 0
 	}
 
 	s.updatePen(blank)
-	// On Windows, ConPTY does not handle CSI J correctly — write explicit
-	// spaces to overwrite old content instead of relying on EraseScreenBelow.
-	if runtime.GOOS == "windows" {
-		// Clear the rest of the current line with explicit spaces
-		for x := col; x < s.curbuf.Width(); x++ {
-			s.putCell(newbuf, blank)
-		}
-		// Clear all lines below with explicit spaces
-		for y := row + 1; y < s.curbuf.Height(); y++ {
-			s.move(newbuf, 0, y)
-			for x := 0; x < s.curbuf.Width(); x++ {
-				s.putCell(newbuf, blank)
-			}
-		}
-	} else {
-		_, _ = s.buf.WriteString(ansi.EraseScreenBelow)
-	}
+	_, _ = s.buf.WriteString(ansi.EraseScreenBelow)
 	// Clear the rest of the current line
 	s.curbuf.ClearArea(Rect(col, row, s.curbuf.Width()-col, 1))
 	// Clear everything below the current line
@@ -1061,7 +1038,7 @@ func (s *TerminalRenderer) clearBottom(newbuf *RenderBuffer, total int) (top int
 
 		if top < total {
 			s.move(newbuf, 0, max(0, top-1)) // top is 1-based
-			s.clearToBottom(newbuf, blank)
+			s.clearToBottom(blank)
 			if s.oldhash != nil && s.newhash != nil &&
 				row < len(s.oldhash) && row < len(s.newhash) {
 				for row := top; row < newbuf.Height(); row++ {
@@ -1086,7 +1063,7 @@ func (s *TerminalRenderer) clearScreen(blank *Cell) {
 // clearBelow clears everything below and including the row.
 func (s *TerminalRenderer) clearBelow(newbuf *RenderBuffer, blank *Cell, row int) {
 	s.move(newbuf, 0, row)
-	s.clearToBottom(newbuf, blank)
+	s.clearToBottom(blank)
 }
 
 // clearUpdate forces a screen redraw.
