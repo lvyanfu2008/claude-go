@@ -217,8 +217,6 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 	msg := map[string]any{"role": "assistant"}
 	if len(textParts) > 0 {
 		msg["content"] = strings.Join(textParts, "\n")
-	} else {
-		msg["content"] = nil
 	}
 	if len(reasoningParts) > 0 {
 		msg["reasoning_content"] = strings.Join(reasoningParts, "\n")

@@ -15,9 +15,9 @@ go test ./ccb-engine/...
 
 ### Project `.claude/settings.go.json` (`env`)
 
-On startup, packages here and **`gou-demo`** call [`settingsfile.EnsureProjectClaudeEnvOnce()`](settingsfile/ensure.go), which merges `env` from (later wins on duplicate keys; **Go never reads project `.claude/settings.json`** — that file is **TypeScript CLI only**):
+On startup, packages here and **`gou-demo`** call [`settingsfile.EnsureProjectClaudeEnvOnce()`](settingsfile/ensure.go), which merges `env` from (later wins on duplicate keys; **Go never reads project `.claude/settings.go.json`** — that file is **TypeScript CLI only**):
 
-1. **User:** `$CLAUDE_CONFIG_DIR/settings.json` if **`CLAUDE_CONFIG_DIR`** is set, else **`~/.claude/settings.json`**.
+1. **User:** `$CLAUDE_CONFIG_DIR/settings.go.json` if **`CLAUDE_CONFIG_DIR`** is set, else **`~/.claude/settings.go.json`**.
 2. **Project root for Go:** **`CCB_ENGINE_PROJECT_ROOT`** if set; otherwise the **nearest ancestor of cwd** whose `.claude/` contains **`settings.go.json`** or **`settings.local.json`**.
 3. **Project files merged into env:** `<projectRoot>/.claude/settings.go.json`, then `<projectRoot>/.claude/settings.local.json`.
 
