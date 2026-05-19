@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"goc/tools/tool"
 	"goc/types"
 )
 
@@ -100,8 +101,15 @@ func strFromMap(m map[string]any, key string) string {
 }
 
 // ActivityLineForToolUse returns a single-line user-facing activity string, or "" if unknown.
+// Checks the tool behavior registry first, then falls back to the hardcoded switch.
 func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 	name := strings.TrimSpace(toolName)
+
+	// Check registered ActivityDescriber first.
+	if desc := tool.GetActivityDescription(name, input); desc != "" {
+		return desc
+	}
+
 	m := decodeToolInputMap(input)
 	switch name {
 	case "Read":

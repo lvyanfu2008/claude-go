@@ -2,8 +2,11 @@
 package messagerow
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
+
+	"goc/tools/tool"
 )
 
 const replToolName = "REPL"
@@ -44,8 +47,24 @@ func mcpServerNameFromToolName(name string) string {
 }
 
 // getToolSearchOrReadInfoGo mirrors TS getToolSearchOrReadInfo for collapse eligibility and categorization.
+// Checks the tool behavior registry first, then falls back to the hardcoded switch.
 func getToolSearchOrReadInfoGo(toolName string, toolInput map[string]any) searchOrReadResult {
 	name := strings.TrimSpace(toolName)
+
+	// Check registered SearchOrReadChecker first.
+	if toolInput != nil {
+		if raw, err := json.Marshal(toolInput); err == nil {
+			if res := tool.IsSearchOrReadCommand(name, raw); res != nil {
+				return searchOrReadResult{
+					isCollapsible: res.IsSearch || res.IsRead || res.IsList,
+					isSearch:      res.IsSearch,
+					isRead:        res.IsRead,
+					isList:        res.IsList,
+				}
+			}
+		}
+	}
+
 	if name == replToolName {
 		return searchOrReadResult{
 			isCollapsible:      true,

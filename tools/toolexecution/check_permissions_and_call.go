@@ -8,6 +8,7 @@ import (
 	"iter"
 
 	"goc/internal/toolvalidator"
+	toolregistry "goc/tools/tool"
 	"goc/types"
 )
 
@@ -57,6 +58,15 @@ func CheckPermissionsAndCallTool(
 	assistant AssistantMeta,
 ) ([]types.Message, error) {
 	deps := DepsFromContext(ctx)
+
+	// Backfill observable input before hooks/observers see it (TS: query.ts L996, toolExecution.ts L827).
+	if inputMap := make(map[string]any); json.Unmarshal(input, &inputMap) == nil {
+		toolregistry.BackfillObservableInput(tool.Name(), inputMap)
+		if backfilled, err := json.Marshal(inputMap); err == nil {
+			input = backfilled
+		}
+	}
+
 	if err := RunPreToolUseHooks(ctx, deps, tool.Name(), toolUseID, input); err != nil {
 		um := syntheticPreToolHookDenied(deps, toolUseID, assistant.UUID, err.Error())
 		return []types.Message{um}, nil

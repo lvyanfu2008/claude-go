@@ -5,18 +5,16 @@ package toolexecution
 import (
 	"context"
 	"encoding/json"
+
+	"goc/tools/tool"
 )
 
-// toolRequiresUserInteraction is true when the tool opts into TS requiresUserInteraction.
-type toolInteraction interface {
-	RequiresUserInteraction() bool
-}
-
-func toolRequiresInteraction(tool Tool) bool {
-	if t, ok := tool.(toolInteraction); ok {
+// toolRequiresInteraction checks the local interface first, then falls back to the registry.
+func toolRequiresInteraction(t Tool) bool {
+	if t, ok := t.(interface{ RequiresUserInteraction() bool }); ok {
 		return t.RequiresUserInteraction()
 	}
-	return false
+	return tool.RequiresUserInteraction(t.Name())
 }
 
 // ResolveHookPermissionInput carries the reduced state needed to mirror resolveHookPermissionDecision.
