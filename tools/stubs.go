@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-// EchoStubFromJSON is a tiny echo tool for Go tests and demos (not a TS built-in).
-func EchoStubFromJSON(raw []byte) (string, bool, error) {
-	var in struct {
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(raw, &in); err != nil {
-		return "", true, err
-	}
-	return in.Message, false, nil
-}
-
 // BriefFromJSON records a user-visible message path: returns JSON echo (headless transcript hint).
 func BriefFromJSON(raw []byte) (string, bool, error) {
 	var in struct {

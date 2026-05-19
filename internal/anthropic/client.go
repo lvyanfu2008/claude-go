@@ -173,18 +173,7 @@ func ParseContentBlocks(raw json.RawMessage) ([]ContentBlock, error) {
 }
 
 // DefaultStubTools returns tools used by the engine for stub tool-use loops.
+// Currently empty; echo_stub was removed. Kept as a hook point for test-only tool injection.
 func DefaultStubTools() []ToolDefinition {
-	return []ToolDefinition{
-		{
-			Name:        "echo_stub",
-			Description: "Echo a short message; the engine answers with a stub tool_result for wiring tests.",
-			InputSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"message": map[string]any{"type": "string", "description": "Text to echo"},
-				},
-				"required": []string{"message"},
-			},
-		},
-	}
+	return nil
 }

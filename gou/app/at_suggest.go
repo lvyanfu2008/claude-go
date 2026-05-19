@@ -98,7 +98,7 @@ func (m *model) applySuggestion(item suggestions.ScoredItem) {
 	cursor := m.pr.CursorRuneIndex()
 	_, rng := extractCompletionTokenForApply(value, cursor)
 	rs := []rune(value)
-	rep := item.Value + " "
+	rep := "@" + item.Value + " "
 	var b strings.Builder
 	b.WriteString(string(rs[:rng.Start]))
 	b.WriteString(rep)

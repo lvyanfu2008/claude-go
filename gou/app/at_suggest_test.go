@@ -57,13 +57,13 @@ func TestApplySuggestion_ReplacesToken(t *testing.T) {
 	value := "@foo bar"
 	rs := []rune(value)
 	_, rng := extractCompletionTokenForApply(value, 4)
-	rep := "foobar.go "
+	rep := "@foobar.go "
 	var b strings.Builder
 	b.WriteString(string(rs[:rng.Start]))
 	b.WriteString(rep)
 	b.WriteString(string(rs[rng.End:]))
 	result := b.String()
-	expected := "foobar.go  bar"
+	expected := "@foobar.go  bar"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
@@ -77,13 +77,13 @@ func TestApplySuggestion_BareAt(t *testing.T) {
 	if rng.Start != 0 || rng.End != 1 {
 		t.Fatalf("expected range [0,1] for bare @, got [%d,%d]", rng.Start, rng.End)
 	}
-	rep := "src/ "
+	rep := "@src/ "
 	var b strings.Builder
 	b.WriteString(string(rs[:rng.Start]))
 	b.WriteString(rep)
 	b.WriteString(string(rs[rng.End:]))
 	result := b.String()
-	expected := "src/ "
+	expected := "@src/ "
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}

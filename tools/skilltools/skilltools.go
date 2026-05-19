@@ -20,7 +20,7 @@ func SkillToolName() string {
 	return anthropic.SkillToolName
 }
 
-// GouDemoDefaultToolsJSON marshals Skill + echo_stub for gou-demo parity.
+// GouDemoDefaultToolsJSON marshals Skill tool for gou-demo parity.
 func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 	return anthropic.GouDemoDefaultToolsJSON()
 }

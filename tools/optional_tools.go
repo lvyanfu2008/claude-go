@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"goc/tools/procregistry"
+	"goc/types"
 )
 
 // TestingPermissionFromJSON matches TS TestingPermissionTool.call output shape.
@@ -111,27 +112,158 @@ func VerifyPlanExecutionFromJSON(raw []byte) (string, bool, error) {
 	return string(b), false, nil
 }
 
-// OverflowTestFromJSON feature tool not wired in Go runner.
+// OverflowTestFromJSON runs a resource stress test. It generates output of
+// configurable size to exercise overflow / token-budget boundaries in the
+// conversation loop, and can optionally run cpu / disk stress for a limited
+// duration.
 func OverflowTestFromJSON(raw []byte) (string, bool, error) {
-	_ = raw
+	var in struct {
+		SizeMB    int    `json:"size_mb"`
+		DurationS int    `json:"duration_s"`
+		Mode      string `json:"mode"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return "", true, err
+	}
+	if in.SizeMB <= 0 {
+		in.SizeMB = 10
+	}
+	if in.SizeMB > 100 {
+		in.SizeMB = 100
+	}
+	if in.DurationS <= 0 {
+		in.DurationS = 30
+	}
+	if in.DurationS > 60 {
+		in.DurationS = 60
+	}
+	if in.Mode == "" {
+		in.Mode = "memory"
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("OverflowTest: mode=%s size=%dMB duration=%ds\n", in.Mode, in.SizeMB, in.DurationS))
+
+	switch in.Mode {
+	case "memory":
+		// Generate a payload of in.SizeMB * 1024 * 1024 bytes (roughly).
+		// Cap individual output to avoid stalling the conversation loop.
+		chars := in.SizeMB * 1024 * 1024
+		if chars > 10*1024*1024 {
+			chars = 10 * 1024 * 1024
+		}
+		chunk := strings.Repeat("0123456789", 100) + "\n"
+		written := 0
+		for written < chars {
+			result.WriteString(chunk)
+			written += len(chunk)
+		}
+		result.WriteString(fmt.Sprintf("\nGenerated %d bytes", written))
+	case "cpu":
+		// Simple CPU-bound loop bounded by duration_s (max 60s, capped to 10s actual work).
+		workSec := in.DurationS
+		if workSec > 10 {
+			workSec = 10
+		}
+		deadline := time.Now().Add(time.Duration(workSec) * time.Second)
+		iterations := 0
+		for time.Now().Before(deadline) {
+			_ = fibonacciMod(40)
+			iterations++
+		}
+		result.WriteString(fmt.Sprintf("CPU work: %d fibonacci(40) iterations in %ds", iterations, workSec))
+	case "disk":
+		f, err := os.CreateTemp("", "overflow-test-*.dat")
+		if err != nil {
+			return "", true, fmt.Errorf("disk mode: %w", err)
+		}
+		defer os.Remove(f.Name())
+		defer f.Close()
+		chunk := make([]byte, 1024*1024)
+		for i := range chunk {
+			chunk[i] = byte(i % 256)
+		}
+		mb := in.SizeMB
+		if mb > 50 {
+			mb = 50
+		}
+		for i := 0; i < mb; i++ {
+			if _, err := f.Write(chunk); err != nil {
+				return "", true, fmt.Errorf("disk write: %w", err)
+			}
+		}
+		result.WriteString(fmt.Sprintf("Disk write: %dMB to %s", mb, f.Name()))
+	default:
+		return "", true, fmt.Errorf("unknown mode: %s (valid: memory, cpu, disk)", in.Mode)
+	}
+
 	out := map[string]any{
 		"data": map[string]any{
-			"ok":      false,
-			"message": "OverflowTest runtime is not available in this build.",
+			"ok":      true,
+			"message": result.String(),
 		},
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }
 
-// CtxInspectFromJSON mirrors TS fallback when CONTEXT_COLLAPSE runtime is absent.
-func CtxInspectFromJSON(raw []byte) (string, bool, error) {
+func fibonacciMod(n int) int {
+	if n <= 1 {
+		return n
+	}
+	return fibonacciMod(n-1) + fibonacciMod(n-2)
+}
+
+// CtxInspectFromJSON returns context stats computed from the live conversation
+// (message count by type, rough token estimate). When Config has no messages,
+// it falls back to the TS-compatible stub.
+func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	_ = raw
+	if len(cfg.Messages) == 0 {
+		out := map[string]any{
+			"data": map[string]any{
+				"total_tokens":  0,
+				"message_count": 0,
+				"summary":       "Context inspection requires the CONTEXT_COLLAPSE runtime.",
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	counts := map[types.MessageType]int{}
+	totalChars := 0
+	for _, m := range cfg.Messages {
+		counts[m.Type]++
+		if len(m.Content) > 0 {
+			totalChars += len(string(m.Content))
+		}
+		if len(m.Message) > 0 {
+			totalChars += len(string(m.Message))
+		}
+	}
+	estTokens := totalChars / 4
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Message count: %d total", len(cfg.Messages)))
+	for _, t := range []types.MessageType{
+		types.MessageTypeUser,
+		types.MessageTypeAssistant,
+		types.MessageTypeSystem,
+		types.MessageTypeProgress,
+	} {
+		if n := counts[t]; n > 0 {
+			sb.WriteString(fmt.Sprintf(", %d %s", n, t))
+		}
+	}
+	sb.WriteString(fmt.Sprintf("\nEstimated tokens: ~%d (chars/4 heuristic)", estTokens))
+	sb.WriteString("\nNOTE: This is a rough estimate from the Go runner. Exact token counts require the CONTEXT_COLLAPSE runtime (not available).")
+
 	out := map[string]any{
 		"data": map[string]any{
-			"total_tokens":  0,
-			"message_count": 0,
-			"summary":       "Context inspection requires the CONTEXT_COLLAPSE runtime.",
+			"total_tokens":  estTokens,
+			"message_count": len(cfg.Messages),
+			"summary":       sb.String(),
 		},
 	}
 	b, _ := json.Marshal(out)
@@ -236,7 +368,7 @@ func lspOperationResult(operation, content string, line, character int) string {
 		}
 		return "Hover for `" + sym + "`"
 	case "documentSymbol", "workspaceSymbol":
-		symbols := collectGoLikeSymbols(lines)
+		symbols := collectSymbols(lines)
 		if len(symbols) == 0 {
 			return "No symbols found."
 		}
@@ -250,7 +382,7 @@ func lspOperationResult(operation, content string, line, character int) string {
 			return "No definition found."
 		}
 		for i, l := range lines {
-			if strings.Contains(l, "func "+sym+"(") || strings.Contains(l, "type "+sym+" ") || strings.Contains(l, "var "+sym+" ") || strings.Contains(l, "const "+sym+" ") {
+			if findDefinition(l, sym) {
 				return fmt.Sprintf("%s:%d: definition of %s", "file", i+1, sym)
 			}
 		}
@@ -263,9 +395,10 @@ func lspOperationResult(operation, content string, line, character int) string {
 		if sym == "" {
 			return "No references found."
 		}
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(sym) + `\b`)
 		count := 0
 		for _, l := range lines {
-			count += strings.Count(l, sym)
+			count += len(re.FindAllString(l, -1))
 		}
 		if count == 0 {
 			return "No references found."
@@ -274,6 +407,42 @@ func lspOperationResult(operation, content string, line, character int) string {
 	default:
 		return "Unsupported operation: " + operation
 	}
+}
+
+// findDefinition checks if a line contains a definition for sym across common languages.
+func findDefinition(line, sym string) bool {
+	patterns := []string{
+		// Go
+		"func " + sym + "(",
+		"type " + sym + " ",
+		"var " + sym + " ",
+		"const " + sym + " ",
+		// Python
+		"def " + sym + "(",
+		"class " + sym + "(",
+		"class " + sym + ":",
+		// Rust
+		"fn " + sym + "(",
+		"struct " + sym,
+		"enum " + sym,
+		"trait " + sym,
+		"impl " + sym,
+		"mod " + sym,
+		// JS/TS
+		"function " + sym + "(",
+		"class " + sym,
+		sym + " = function",
+		sym + " = (",
+		sym + " = async",
+		// C/C++
+		sym + "::" + sym,
+	}
+	for _, p := range patterns {
+		if strings.Contains(line, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func wordAt(line string, character int) string {
@@ -303,13 +472,25 @@ func wordAt(line string, character int) string {
 	return line[start : end+1]
 }
 
-func collectGoLikeSymbols(lines []string) []string {
-	re := regexp.MustCompile(`^\s*(func|type|var|const)\s+([A-Za-z_][A-Za-z0-9_]*)`)
+func collectSymbols(lines []string) []string {
+	patterns := []*regexp.Regexp{
+		// Go
+		regexp.MustCompile(`^\s*(func|type|var|const)\s+([A-Za-z_][A-Za-z0-9_]*)`),
+		// Python
+		regexp.MustCompile(`^\s*(def|class)\s+([A-Za-z_][A-Za-z0-9_]*)`),
+		// Rust
+		regexp.MustCompile(`^\s*(fn|struct|enum|trait|impl|mod)\s+([A-Za-z_][A-Za-z0-9_]*)`),
+		// JS/TS
+		regexp.MustCompile(`^\s*(function|class|const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)`),
+	}
 	out := make([]string, 0)
 	for i, l := range lines {
-		m := re.FindStringSubmatch(l)
-		if len(m) == 3 {
-			out = append(out, fmt.Sprintf("L%d: %s %s", i+1, m[1], m[2]))
+		for _, re := range patterns {
+			m := re.FindStringSubmatch(l)
+			if len(m) == 3 {
+				out = append(out, fmt.Sprintf("L%d: %s %s", i+1, m[1], m[2]))
+				break
+			}
 		}
 	}
 	return out
@@ -908,7 +1089,9 @@ func MonitorFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 	return string(b), false, nil
 }
 
-// WorkflowFromJSON mirrors TS fallback when workflow runtime is absent.
+// WorkflowFromJSON executes a user-defined workflow file from .claude/workflows/.
+// Supports .yml, .yaml, and .md files. YAML workflows define steps with name + run;
+// Markdown workflows extract shell code blocks and numbered task items.
 func WorkflowFromJSON(raw []byte) (string, bool, error) {
 	var in struct {
 		Workflow string `json:"workflow"`
@@ -917,13 +1100,192 @@ func WorkflowFromJSON(raw []byte) (string, bool, error) {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
 	}
-	out := map[string]any{
+	if strings.TrimSpace(in.Workflow) == "" {
+		return "", true, fmt.Errorf("workflow name is required")
+	}
+
+	cwd, _ := os.Getwd()
+	workflowDir := filepath.Join(cwd, ".claude", "workflows")
+	exts := []string{".yml", ".yaml", ".md"}
+
+	var workflowPath string
+	for _, ext := range exts {
+		candidate := filepath.Join(workflowDir, in.Workflow+ext)
+		if _, err := os.Stat(candidate); err == nil {
+			workflowPath = candidate
+			break
+		}
+	}
+	if workflowPath == "" {
+		out := map[string]any{
+			"data": map[string]any{
+				"output": fmt.Sprintf("Error: workflow %q not found in %s (looked for .yml/.yaml/.md)", in.Workflow, workflowDir),
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	data, err := os.ReadFile(workflowPath)
+	if err != nil {
+		return "", true, fmt.Errorf("reading workflow file: %w", err)
+	}
+
+	steps := parseWorkflowSteps(string(data), filepath.Ext(workflowPath))
+	if len(steps) == 0 {
+		out := map[string]any{
+			"data": map[string]any{
+				"output": fmt.Sprintf("No executable steps found in %s", workflowPath),
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Executing workflow %q from %s (%d steps)\n", in.Workflow, workflowPath, len(steps)))
+	for i, step := range steps {
+		sb.WriteString(fmt.Sprintf("\n[Step %d/%d] %s\n", i+1, len(steps), step.Name))
+		cmd := exec.Command("bash", "-lc", step.Run)
+		cmd.Dir = cwd
+		if in.Args != "" {
+			cmd.Env = append(os.Environ(), "WORKFLOW_ARGS="+in.Args)
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			sb.WriteString(fmt.Sprintf("ERROR: %v\n%s", err, string(out)))
+			break
+		}
+		if len(out) > 0 {
+			sb.WriteString(strings.TrimSpace(string(out)))
+			sb.WriteString("\n")
+		} else {
+			sb.WriteString("(ok)\n")
+		}
+	}
+	sb.WriteString("\nWorkflow complete.")
+
+	res := map[string]any{
 		"data": map[string]any{
-			"output": "Error: Workflow execution requires the WORKFLOW_SCRIPTS runtime.",
+			"output": sb.String(),
 		},
 	}
-	b, _ := json.Marshal(out)
+	b, _ := json.Marshal(res)
 	return string(b), false, nil
+}
+
+// workflowStep is a single step parsed from a workflow definition.
+type workflowStep struct {
+	Name string
+	Run  string
+}
+
+// parseWorkflowSteps extracts executable steps from YAML or Markdown.
+func parseWorkflowSteps(content, ext string) []workflowStep {
+	if ext == ".md" {
+		return parseMarkdownWorkflow(content)
+	}
+	return parseYAMLWorkflow(content)
+}
+
+// parseYAMLWorkflow does a simple line-based parse of YAML workflow files.
+// Expected format:
+//
+//	steps:
+//	  - name: Build
+//	    run: go build ./...
+//	  - run: go test ./...
+func parseYAMLWorkflow(content string) []workflowStep {
+	var steps []workflowStep
+	var current *workflowStep
+	inSteps := false
+	lines := strings.Split(content, "\n")
+
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		// Detect steps: section
+		if strings.HasPrefix(trimmed, "steps:") {
+			inSteps = true
+			continue
+		}
+		if !inSteps {
+			continue
+		}
+		// New step entry: "- name:" or "- run:"
+		if strings.HasPrefix(trimmed, "- ") {
+			if current != nil {
+				steps = append(steps, *current)
+			}
+			current = &workflowStep{}
+			rest := strings.TrimPrefix(trimmed, "- ")
+			if strings.HasPrefix(rest, "name:") {
+				current.Name = strings.TrimSpace(strings.TrimPrefix(rest, "name:"))
+			} else if strings.HasPrefix(rest, "run:") {
+				current.Run = strings.TrimSpace(strings.TrimPrefix(rest, "run:"))
+				if current.Name == "" {
+					current.Name = current.Run
+				}
+			}
+			continue
+		}
+		// Continuation of current step
+		if current != nil {
+			if strings.HasPrefix(trimmed, "name:") {
+				current.Name = strings.TrimSpace(strings.TrimPrefix(trimmed, "name:"))
+			} else if strings.HasPrefix(trimmed, "run:") {
+				current.Run = strings.TrimSpace(strings.TrimPrefix(trimmed, "run:"))
+				if current.Name == "" {
+					current.Name = current.Run
+				}
+			}
+		}
+	}
+	if current != nil && current.Run != "" {
+		steps = append(steps, *current)
+	}
+	return steps
+}
+
+// parseMarkdownWorkflow extracts shell commands from markdown code blocks and numbered task items.
+func parseMarkdownWorkflow(content string) []workflowStep {
+	var steps []workflowStep
+	lines := strings.Split(content, "\n")
+	inCodeBlock := false
+	codeLines := []string{}
+
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if strings.HasPrefix(trimmed, "```") {
+			if inCodeBlock {
+				if len(codeLines) > 0 {
+					cmd := strings.Join(codeLines, "\n")
+					name := codeLines[0]
+					if len(name) > 60 {
+						name = name[:60] + "..."
+					}
+					steps = append(steps, workflowStep{Name: name, Run: cmd})
+					codeLines = nil
+				}
+				inCodeBlock = false
+			} else {
+				inCodeBlock = true
+				codeLines = nil
+			}
+			continue
+		}
+		if inCodeBlock {
+			codeLines = append(codeLines, trimmed)
+			continue
+		}
+		// Numbered task items with backtick commands: "1. Build: `go build ./...`"
+		if matched := regexp.MustCompile(`^\d+[\.\)]\s*(.+?):\s*` + "`" + `(.+?)` + "`").FindStringSubmatch(trimmed); len(matched) == 3 {
+			steps = append(steps, workflowStep{Name: matched[1], Run: matched[2]})
+		}
+	}
+	return steps
 }
 
 // SnipFromJSON — feature import not in Go runner.

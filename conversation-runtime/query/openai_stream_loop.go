@@ -74,7 +74,15 @@ func runOpenAIStreamingParityModelLoop(
 		if err != nil {
 			return err
 		}
-		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(in.SystemPrompt), model)
+		var sysPrompts SystemPrompt
+			sysPrompts = append(sysPrompts, in.SystemPrompt...)
+			if HasAdvisorModel() {
+				sysPrompts = append(sysPrompts, ADVISOR_TOOL_INSTRUCTIONS)
+			}
+			if HasChromeTools(in.Tools) {
+				sysPrompts = append(sysPrompts, CHROME_TOOL_SEARCH_INSTRUCTIONS)
+			}
+			openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(sysPrompts), model)
 		if err != nil {
 			return err
 		}

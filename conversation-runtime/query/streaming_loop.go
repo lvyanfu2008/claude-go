@@ -94,8 +94,34 @@ func runStreamingParityModelLoop(
 			"messages":   msgsWire,
 			"stream":     true,
 		}
-		if sys := strings.TrimSpace(strings.Join([]string(in.SystemPrompt), "\n\n")); sys != "" {
-			req["system"] = sys
+		// Build system prompt with attribution header, CLI prefix, and cache_control blocks (TS splitSysPromptPrefix).
+		var sysArr SystemPrompt
+		if h := GetAttributionHeader(); h != "" {
+			sysArr = append(sysArr, h)
+		}
+		sysArr = append(sysArr, GetCLISyspromptPrefix())
+		sysArr = append(sysArr, in.SystemPrompt...)
+		if HasAdvisorModel() {
+			sysArr = append(sysArr, ADVISOR_TOOL_INSTRUCTIONS)
+		}
+		if HasChromeTools(in.Tools) {
+			sysArr = append(sysArr, CHROME_TOOL_SEARCH_INSTRUCTIONS)
+		}
+		blocks := SplitSysPromptPrefix(sysArr)
+		if len(blocks) > 0 {
+			var sysBlocks []map[string]any
+			for _, b := range blocks {
+				m := map[string]any{"type": "text", "text": b.Text}
+				if b.CacheScope != nil {
+					cc := map[string]any{"type": "ephemeral"}
+					if *b.CacheScope == CacheScopeGlobal {
+						cc["scope"] = "global"
+					}
+					m["cache_control"] = cc
+				}
+				sysBlocks = append(sysBlocks, m)
+			}
+			req["system"] = sysBlocks
 		}
 		if len(toolsForWire) > 0 {
 			var toolsWire any

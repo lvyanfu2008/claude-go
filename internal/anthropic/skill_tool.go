@@ -22,7 +22,7 @@ func SkillToolDefinition() ToolDefinition {
 	}
 }
 
-// GouDemoDefaultTools is Skill + echo_stub (stub keeps engine wiring tests familiar).
+// GouDemoDefaultTools returns Skill tool for gou-demo.
 func GouDemoDefaultTools() []ToolDefinition {
 	out := make([]ToolDefinition, 0, 2)
 	out = append(out, SkillToolDefinition())
@@ -36,7 +36,7 @@ func GouDemoDefaultToolsJSON() (json.RawMessage, error) {
 }
 
 // GouParityToolsJSON returns model-facing tools[]: Go tool wire (see [toolpool.AssembleToolPoolFromGoWire]) + built-in
-// agent description patch, optional DiscoverSkills ([toolpool.DiscoverSkillsToolSpecFromEnv]), and [DefaultStubTools] stubs.
+// agent description patch and optional DiscoverSkills ([toolpool.DiscoverSkillsToolSpecFromEnv]).
 func GouParityToolsJSON() (json.RawMessage, error) {
 	assembled, err := toolpool.AssembleToolPoolFromGoWire(types.EmptyToolPermissionContextData(), nil)
 	if err != nil {

@@ -36,6 +36,8 @@ type FetchOpts struct {
 	// HooksSessionID / HooksTranscriptPath feed BaseHookInput for hook stdin JSON (optional).
 	HooksSessionID      string
 	HooksTranscriptPath string
+	// McpClientNames optional list of connected MCP server names for coordinator workerToolsContext.
+	McpClientNames []string
 }
 
 // FetchResult mirrors the Promise return type of fetchSystemPromptParts.
@@ -75,10 +77,30 @@ func cloneStringMap(m map[string]string) map[string]string {
 	return out
 }
 
+// enrichUserContext adds coordinator workerToolsContext and terminalFocus (when applicable)
+// to the user context map. Mirrors TS user context assembly in REPL.tsx.
+func enrichUserContext(uc map[string]string, opts FetchOpts) {
+	if coordCtx := GetCoordinatorUserContext(opts.McpClientNames, opts.Gou.ScratchpadDir); len(coordCtx) > 0 {
+		for k, v := range coordCtx {
+			uc[k] = v
+		}
+	}
+	if IsEnvTruthy(os.Getenv("CLAUDE_CODE_GO_PROACTIVE_ACTIVE")) {
+		if tf := TerminalFocusContextValue(); tf != "" {
+			uc["terminalFocus"] = tf
+		}
+	}
+}
+
 // userContextLikeTS is the Go equivalent of TS getUserContext() in src/utils/queryContext.ts
 // fetchSystemPromptParts: always live from cwd/CLAUDE.md, never merged from tscontext.Snapshot.
 func userContextLikeTS(opts FetchOpts) (map[string]string, error) {
-	return BuildUserContext(opts.Gou.Cwd, opts.ExtraClaudeMdRoots)
+	uc, err := BuildUserContext(opts.Gou.Cwd, opts.ExtraClaudeMdRoots)
+	if err != nil {
+		return nil, err
+	}
+	enrichUserContext(uc, opts)
+	return uc, nil
 }
 
 func sessionStartHookMessages(ctx context.Context, opts FetchOpts) ([]types.Message, error) {
@@ -193,6 +215,9 @@ func FetchSystemPromptParts(ctx context.Context, opts FetchOpts) (FetchResult, e
 	go func() {
 		defer wg.Done()
 		uc, err := BuildUserContext(opts.Gou.Cwd, opts.ExtraClaudeMdRoots)
+		if err == nil {
+			enrichUserContext(uc, opts)
+		}
 		mu.Lock()
 		userCtx = uc
 		errUC = err

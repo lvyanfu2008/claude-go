@@ -102,6 +102,8 @@ func (m *model) handleUpdateGouMemoryAppend(msg gouMemoryAppendMsg) (tea.Model, 
 
 func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cmd) {
 	m.queryBusy = false
+	m.queryCancel = nil
+	m.ctrlCPending = false
 	m.endQuerySpinner()
 	m.store.ClearStreamingToolUses()
 	if msg.Err != nil {

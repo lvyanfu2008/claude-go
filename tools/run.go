@@ -96,8 +96,6 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 		return ListMcpResourcesFromJSON(raw)
 	case "ReadMcpResourceTool":
 		return ReadMcpResourceFromJSON(raw)
-	case "echo_stub":
-		return EchoStubFromJSON(raw)
 	case "TestingPermission":
 		return TestingPermissionFromJSON(raw)
 	case "Sleep":
@@ -109,7 +107,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "OverflowTest":
 		return OverflowTestFromJSON(raw)
 	case "CtxInspect":
-		return CtxInspectFromJSON(raw)
+		return CtxInspectFromJSON(raw, cfg)
 	case "TerminalCapture":
 		return TerminalCaptureFromJSON(raw)
 	case "LSP":

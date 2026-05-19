@@ -421,9 +421,8 @@ func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string {
 }
 
 // runQueryStreamingParityTurn runs [query.Query] in a goroutine and forwards whole messages to the Bubble Tea program.
-func runQueryStreamingParityTurn(programSend func(tea.Msg), qp query.QueryParams) {
+func runQueryStreamingParityTurn(ctx context.Context, programSend func(tea.Msg), qp query.QueryParams) {
 	go func() {
-		ctx := context.Background()
 		for y, err := range query.Query(ctx, qp) {
 			if err != nil {
 				if programSend != nil {
@@ -558,6 +557,11 @@ type model struct {
 	spinnerVerb           string
 	spinnerFrame          int
 	lastEmittedTitlePlain string
+
+	// Ctrl+C interrupt support (TS app:interrupt → CancelRequestHandler + useExitOnCtrlCD).
+	queryCancel   context.CancelFunc
+	lastCtrlC     time.Time
+	ctrlCPending  bool
 
 	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozenTranscriptState).
 	uiScreen           gouDemoScreen
@@ -916,7 +920,11 @@ func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.permAsk != nil && msg.String() == "ctrl+c" {
 		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
-		return m, tea.Quit
+		if m.queryCancel != nil {
+			m.queryCancel()
+			m.queryCancel = nil
+		}
+		return m, nil
 	}
 	if m.handlePermissionKey(msg) {
 		return m, nil
@@ -978,10 +986,22 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	}
 	switch msg.String() {
 	case "ctrl+c":
-		if m.suggestionEngine != nil {
-			m.suggestionEngine.FileIndex().Stop()
+		if m.queryBusy && m.queryCancel != nil {
+			m.queryCancel()
+			m.queryCancel = nil
+			return m, nil
 		}
-		return m, tea.Quit
+		now := time.Now()
+		if now.Sub(m.lastCtrlC) < 800*time.Millisecond && m.ctrlCPending {
+			m.ctrlCPending = false
+			if m.suggestionEngine != nil {
+				m.suggestionEngine.FileIndex().Stop()
+			}
+			return m, tea.Quit
+		}
+		m.lastCtrlC = now
+		m.ctrlCPending = true
+		return m, nil
 	case "esc":
 		if m.slashListUser {
 			m.slashListUser = false
@@ -2748,7 +2768,9 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						m.beginQuerySpinner()
 						m.queryBusy = true
 						m.store.ClearStreamingToolUses()
-						runQueryStreamingParityTurn(m.ccbSend, qp)
+						ctx, cancel := context.WithCancel(context.Background())
+						m.queryCancel = cancel
+						runQueryStreamingParityTurn(ctx, m.ccbSend, qp)
 						usedCCB = true
 					} else {
 						m.store.AppendMessage(pui.SystemNotice(
