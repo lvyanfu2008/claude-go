@@ -91,3 +91,63 @@ type PermissionChecker interface {
 type PathProvider interface {
 	GetPath(input json.RawMessage) string
 }
+
+// SearchOrReadChecker mirrors Tool.isSearchOrReadCommand? (src/Tool.ts).
+// Returns whether this tool use is a search/read/list operation for condensed UI display.
+type SearchOrReadChecker interface {
+	IsSearchOrReadCommand(input json.RawMessage) *types.SearchOrReadCollapse
+}
+
+// SearchTextExtractor mirrors Tool.extractSearchText? (src/Tool.ts).
+// Returns the flattened text content of the tool result for transcript search indexing.
+type SearchTextExtractor interface {
+	ExtractSearchText(output json.RawMessage) string
+}
+
+// ResultTruncationChecker mirrors Tool.isResultTruncated? (src/Tool.ts).
+// Returns true when the non-verbose rendering of this output is truncated.
+type ResultTruncationChecker interface {
+	IsResultTruncated(output json.RawMessage) bool
+}
+
+// ActivityDescriber mirrors Tool.getActivityDescription? (src/Tool.ts).
+// Returns a human-readable present-tense activity description (e.g. "Reading src/foo.ts").
+// Returns "" to fall back to the tool name.
+type ActivityDescriber interface {
+	GetActivityDescription(input json.RawMessage) string
+}
+
+// ToolUseSummarizer mirrors Tool.getToolUseSummary? (src/Tool.ts).
+// Returns a short summary of this tool use for compact views, or "" for none.
+type ToolUseSummarizer interface {
+	GetToolUseSummary(input json.RawMessage) string
+}
+
+// OpenWorldChecker mirrors Tool.isOpenWorld? (src/Tool.ts).
+type OpenWorldChecker interface {
+	IsOpenWorld(input json.RawMessage) bool
+}
+
+// UserInteractionChecker mirrors Tool.requiresUserInteraction? (src/Tool.ts).
+type UserInteractionChecker interface {
+	RequiresUserInteraction() bool
+}
+
+// AutoClassifierInputProvider mirrors Tool.toAutoClassifierInput (src/Tool.ts).
+// Returns a compact representation for the auto-mode security classifier.
+// Returns "" to skip this tool in the classifier transcript.
+type AutoClassifierInputProvider interface {
+	ToAutoClassifierInput(input json.RawMessage) string
+}
+
+// PermissionMatcherPreparer mirrors Tool.preparePermissionMatcher? (src/Tool.ts).
+// Returns a closure that tests whether a hook permission-rule pattern matches this tool input.
+type PermissionMatcherPreparer interface {
+	PreparePermissionMatcher(input json.RawMessage) (func(pattern string) bool, error)
+}
+
+// BackfillObservableInputProvider mirrors Tool.backfillObservableInput? (src/Tool.ts).
+// Mutates input in-place to add legacy/derived fields before observers see it.
+type BackfillObservableInputProvider interface {
+	BackfillObservableInput(input map[string]any)
+}
