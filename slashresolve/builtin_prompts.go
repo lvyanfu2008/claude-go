@@ -2,6 +2,8 @@ package slashresolve
 
 import (
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 
 	"goc/types"
@@ -26,6 +28,10 @@ func resolveInit(args string) (types.SlashResolveResult, error) {
 	body, err := readBundledText("init.md")
 	if err != nil {
 		return types.SlashResolveResult{}, fmt.Errorf("builtin prompt init: %w", err)
+	}
+	if os.Getenv("CLAUDE_CODE_SKIP_INIT_PHASE0") == "1" {
+		re := regexp.MustCompile(`(?s)## Phase 0:.*?\n## Phase 1:`)
+		body = re.ReplaceAllString(body, "## Phase 1:")
 	}
 	text := body
 	if a := strings.TrimSpace(args); a != "" {
