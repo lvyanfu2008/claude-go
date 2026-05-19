@@ -156,7 +156,7 @@ func wireAssistantContentHasThinking(content json.RawMessage) bool {
 
 func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]map[string]any, error) {
 	if len(content) == 0 || string(content) == "null" {
-		return []map[string]any{{"role": "assistant", "content": " "}}, nil
+		return []map[string]any{{"role": "assistant", "content": ""}}, nil
 	}
 	var s string
 	if err := json.Unmarshal(content, &s); err == nil {
@@ -217,6 +217,8 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 	msg := map[string]any{"role": "assistant"}
 	if len(textParts) > 0 {
 		msg["content"] = strings.Join(textParts, "\n")
+	} else {
+		msg["content"] = nil
 	}
 	if len(reasoningParts) > 0 {
 		msg["reasoning_content"] = strings.Join(reasoningParts, "\n")
@@ -225,7 +227,9 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 		msg["tool_calls"] = toolCalls
 	}
 	if msg["content"] == nil && len(toolCalls) == 0 {
-		msg["content"] = " "
+		if len(reasoningParts) == 0 {
+			msg["content"] = ""
+		}
 	}
 	return []map[string]any{msg}, nil
 }
