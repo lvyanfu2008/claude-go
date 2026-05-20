@@ -154,7 +154,7 @@ func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.deleteBefore()
 		return nil
 	}
-	if key.Code == tea.KeySpace || msg.String() == "space" {
+	if (key.Code == tea.KeySpace || msg.String() == "space") && !key.Mod.Contains(tea.ModCtrl) {
 		m.insertRune(' ')
 		return nil
 	}
