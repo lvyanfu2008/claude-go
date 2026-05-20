@@ -5,6 +5,8 @@ import (
 	"os"
 	"runtime"
 
+	"goc/tools"
+
 	"github.com/spf13/cobra"
 )
 
@@ -15,15 +17,20 @@ var agentsSettingSources string
 var agentsCmd = &cobra.Command{
 	Use:   "agents",
 	Short: "List configured custom agents",
-	Long:  "List the custom agents configured in settings files.",
+	Long:  "List the custom agents configured in settings files and --agents flag.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("Configured custom agents:")
-		fmt.Println("  (custom agent listing not yet implemented in Go)")
-		fmt.Println("")
-		if os.Getenv("CLAUDE_CODE_AGENTS_JSON") != "" {
-			fmt.Println("  Agents JSON env var is set (CLAUDE_CODE_AGENTS_JSON)")
+		cwd, _ := os.Getwd()
+		report := tools.LoadAgentDefinitionsReport(cwd)
+		fmt.Printf("Configured agents (%d total, %d active):\n", len(report.AllAgents), len(report.ActiveAgents))
+		for _, a := range report.ActiveAgents {
+			fmt.Printf("  %-25s  source=%-14s  model=%-8s  tools=%d\n", a.AgentType, a.Source, a.Model, len(a.Tools))
 		}
-		fmt.Println("  Use settings files to configure agents.")
+		if len(report.FailedFiles) > 0 {
+			fmt.Println("\nFailed:")
+			for _, f := range report.FailedFiles {
+				fmt.Printf("  %s: %s\n", f.Path, f.Error)
+			}
+		}
 		return nil
 	},
 }

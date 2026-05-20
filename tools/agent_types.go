@@ -59,8 +59,14 @@ type AgentDefinition struct {
 	Background                         bool     `json:"background,omitempty"`
 	Isolation                          string   `json:"isolation,omitempty"`
 	RequiredMcpServers                 []string `json:"requiredMcpServers,omitempty"`
+	// McpServers mirrors TS mcpServers field — inline MCP server configs or name references.
+	McpServers json.RawMessage `json:"mcpServers,omitempty"`
 	SystemPrompt                       string   `json:"systemPrompt,omitempty"`
 	OmitClaudeMd                       bool     `json:"omitClaudeMd,omitempty"`
+	// Effort mirrors TS effort field — per-agent effort level override.
+	Effort string `json:"effort,omitempty"`
+	// InitialPrompt mirrors TS initialPrompt field — prepended to the first user turn.
+	InitialPrompt string `json:"initialPrompt,omitempty"`
 	// Memory mirrors TS custom agent frontmatter memory field.
 	// Valid values: "user", "project", "local" (AgentMemoryScope).
 	Memory string `json:"memory,omitempty"`

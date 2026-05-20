@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,6 +47,13 @@ func LoadAgentDefinitionsReport(cwd string) AgentDefinitionsReport {
 		all = append(all, entries...)
 		failed = append(failed, ferrs...)
 	}
+
+	// Load agents from --agents CLI flag (CLAUDE_CODE_AGENTS_JSON env var).
+	// TS-v2 parses this as parseAgentsFromJson(parsed, 'flagSettings') and
+	// merges into allAgents. Flag agents take highest priority in dedup.
+	jsonAgents, jsonFailed := loadAgentsFromJSONEnv()
+	all = append(all, jsonAgents...)
+	failed = append(failed, jsonFailed...)
 
 	active := dedupeAgentsByTypeOrder(all)
 
@@ -237,6 +245,19 @@ func parseAgentMarkdown(path, markdown, source string) (AgentDefinition, bool, s
 	}, true, ""
 }
 
+// parseJSONRawField marshals a frontmatter value to json.RawMessage if present.
+func parseJSONRawField(fm map[string]interface{}, key string) json.RawMessage {
+	v, ok := fm[key]
+	if !ok || v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return json.RawMessage(b)
+}
+
 func parseHooksFromFrontmatter(fm map[string]interface{}) json.RawMessage {
 	v, ok := fm["hooks"]
 	if !ok || v == nil {
@@ -330,4 +351,128 @@ func parsePositiveInt(v any) int {
 		}
 	}
 	return 0
+}
+
+// loadAgentsFromJSONEnv reads CLAUDE_CODE_AGENTS_JSON (set by --agents CLI flag)
+// and parses agents with source "flagSettings". Mirrors TS parseAgentsFromJson.
+func loadAgentsFromJSONEnv() ([]AgentDefinition, []AgentLoadFailure) {
+	raw := strings.TrimSpace(os.Getenv("CLAUDE_CODE_AGENTS_JSON"))
+	if raw == "" {
+		return nil, nil
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		return nil, []AgentLoadFailure{{Path: "CLAUDE_CODE_AGENTS_JSON", Error: fmt.Sprintf("invalid JSON: %v", err)}}
+	}
+	var agents []AgentDefinition
+	var failed []AgentLoadFailure
+	for name, def := range doc {
+		a, ok := parseAgentJSON(name, def)
+		if ok {
+			agents = append(agents, a)
+		} else {
+			failed = append(failed, AgentLoadFailure{Path: fmt.Sprintf("CLAUDE_CODE_AGENTS_JSON[%s]", name), Error: "failed to parse agent JSON"})
+		}
+	}
+	return agents, failed
+}
+
+// parseAgentJSON parses a single agent JSON definition. Mirrors TS parseAgentFromJson.
+func parseAgentJSON(name string, v any) (AgentDefinition, bool) {
+	def, ok := v.(map[string]any)
+	if !ok {
+		return AgentDefinition{}, false
+	}
+
+	desc, _ := def["description"].(string)
+	desc = strings.TrimSpace(desc)
+	prompt, _ := def["prompt"].(string)
+	prompt = strings.TrimSpace(prompt)
+	if desc == "" || prompt == "" {
+		return AgentDefinition{}, false
+	}
+
+	model, _ := def["model"].(string)
+	model = strings.TrimSpace(model)
+
+	permMode, _ := def["permissionMode"].(string)
+	permMode = strings.TrimSpace(permMode)
+
+	maxTurns := parsePositiveInt(def["maxTurns"])
+
+	bg := false
+	switch v := def["background"].(type) {
+	case bool:
+		bg = v
+	case string:
+		bg = strings.EqualFold(strings.TrimSpace(v), "true")
+	}
+
+	memory, _ := def["memory"].(string)
+	memory = strings.TrimSpace(memory)
+	if memory != "" && memory != "user" && memory != "project" && memory != "local" {
+		memory = ""
+	}
+
+	iso, _ := def["isolation"].(string)
+	iso = strings.TrimSpace(iso)
+	if iso != "" && iso != "worktree" && iso != "remote" {
+		iso = ""
+	}
+
+	tools := parseToolList(def["tools"])
+	disallowedTools := parseToolList(def["disallowedTools"])
+	skills := parseToolList(def["skills"])
+
+	effort, _ := def["effort"].(string)
+	effort = strings.TrimSpace(effort)
+	initialPrompt, _ := def["initialPrompt"].(string)
+	initialPrompt = strings.TrimSpace(initialPrompt)
+
+	var mcpServers json.RawMessage
+	if ms, ok := def["mcpServers"]; ok && ms != nil {
+		if b, err := json.Marshal(ms); err == nil {
+			mcpServers = json.RawMessage(b)
+		}
+	}
+
+	var hooks json.RawMessage
+	if h, ok := def["hooks"]; ok && h != nil {
+		b, err := json.Marshal(h)
+		if err == nil {
+			var raw map[string]any
+			if json.Unmarshal(b, &raw) == nil {
+				valid := true
+				for key := range raw {
+					if !hookstypes.KnownHookEvent(key) {
+						valid = false
+						break
+					}
+				}
+				if valid {
+					hooks = json.RawMessage(b)
+				}
+			}
+		}
+	}
+
+	return AgentDefinition{
+		AgentType:       name,
+		WhenToUse:       desc,
+		SystemPrompt:    prompt,
+		Tools:           tools,
+		DisallowedTools: disallowedTools,
+		Skills:          skills,
+		Source:          "flagSettings",
+		Model:           model,
+		PermissionMode:  permMode,
+		MaxTurns:        maxTurns,
+		Background:      bg,
+		Isolation:       iso,
+		McpServers:      mcpServers,
+		Effort:          effort,
+		InitialPrompt:   initialPrompt,
+		Memory:          memory,
+		Hooks:           hooks,
+	}, true
 }

@@ -311,6 +311,92 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		return string(resp), false, nil
 	}
 
+	// Auto-background: if enabled, race sync execution against a timeout.
+	// When the timeout fires first, transition the agent to background.
+	autoBgDelay := getAutoBackgroundMs(TaskTypeLocalAgent)
+	if autoBgDelay > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), autoBgDelay)
+		defer cancel()
+
+		done := make(chan string, 1)
+		go func() {
+			var out string
+			if forkOpts != nil {
+				out = executeAgentWithOpts(context.Background(), cfg, s, in.Prompt, nil, *forkOpts)
+			} else {
+				out = executeAgent(context.Background(), cfg, s, in.Prompt, nil)
+			}
+			done <- out
+		}()
+
+		select {
+		case output := <-done:
+			// Completed before timeout — return sync result.
+			if hc, _ := ClassifyHandoffIfNeeded(context.Background(), HandoffParams{
+				PermissionMode:        pm,
+				SubagentType:          selected.AgentType,
+				ToolPermissionContext: cfg.ToolPermission,
+			}); hc != nil && hc.ShouldBlock {
+				output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
+			}
+			resp, _ := json.Marshal(AgentToolResponse{
+				Data: AgentToolResponseData{
+					Success:          true,
+					AgentID:          s.ID,
+					Name:             s.Name,
+					AgentType:        s.AgentType,
+					Message:          "Agent completed",
+					Output:           output,
+					WorktreePath:     s.WorktreePath,
+					ProgressMessages: s.ProgressMessages,
+				},
+			})
+			return string(resp), false, nil
+		case <-ctx.Done():
+			// Timeout — transition to background.
+			outFile, _ := writeBackgroundOutput(cfg.TasksDir, s.ID, "Agent auto-backgrounded")
+			writeBackgroundStatus(cfg.TasksDir, s.ID, "running", "Agent auto-backgrounded (timeout)", true)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						msg := fmt.Sprintf("Agent failed in background: %v", r)
+						_, _ = writeBackgroundOutput(cfg.TasksDir, s.ID, msg)
+						writeBackgroundStatus(cfg.TasksDir, s.ID, "failed", msg, false)
+					}
+				}()
+				output := <-done
+				if hc, _ := ClassifyHandoffIfNeeded(context.Background(), HandoffParams{
+					PermissionMode:        pm,
+					SubagentType:          selected.AgentType,
+					ToolPermissionContext: cfg.ToolPermission,
+				}); hc != nil && hc.ShouldBlock {
+					output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
+				}
+				_, _ = writeBackgroundOutput(cfg.TasksDir, s.ID, output)
+				persistAgentMetadata(cfg, s)
+				if isTaskStopRequested(cfg.TasksDir, s.ID) {
+					writeBackgroundStatus(cfg.TasksDir, s.ID, "stopped", "Agent stopped", false)
+					return
+				}
+				writeBackgroundStatus(cfg.TasksDir, s.ID, "completed", "Agent completed after auto-background", true)
+			}()
+			resp, _ := json.Marshal(AgentToolResponse{
+				Data: AgentToolResponseData{
+					Success:          true,
+					AgentID:          s.ID,
+					Name:             s.Name,
+					AgentType:        s.AgentType,
+					Message:          "Agent auto-backgrounded (timeout)",
+					OutputFile:       outFile,
+					IsBackground:     true,
+					WorktreePath:     s.WorktreePath,
+					ProgressMessages: s.ProgressMessages,
+				},
+			})
+			return string(resp), false, nil
+		}
+	}
+
 	var output string
 	if forkOpts != nil {
 		output = executeAgentWithOpts(context.Background(), cfg, s, in.Prompt, nil, *forkOpts)
@@ -339,6 +425,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	})
 	return string(resp), false, nil
 }
+
 
 func ResumeAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 	var in AgentToolInput
