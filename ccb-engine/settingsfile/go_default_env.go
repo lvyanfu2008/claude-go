@@ -50,7 +50,7 @@ func GoProjectSettingsEnvDefaults() map[string]string {
 		"ENABLE_TOOL_SEARCH":                       "1",
 		"CLAUDE_CODE_VERIFY_PLAN":                  "1",
 		"FEATURE_WEB_BROWSER_TOOL":                 "1",
-		"CLAUDE_CODE_SKIP_INIT_PHASE0":             "1",
+		"CLAUDE_CODE_SKIP_INIT_PHASE0":             "0",
 		"CLAUDE_CODE_BASH_SECURITY":                "0",
 		"GOC_EXTRACT_MEMORIES_LOG_FILE":            "/Users/lvyanfu/.cache/claude/extract-memories.log",
 		"GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD":     "0",
