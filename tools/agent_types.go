@@ -73,6 +73,9 @@ type AgentDefinition struct {
 	// Hooks mirrors TS custom agent frontmatter hooks — parsed from agent markdown frontmatter hooks field.
 	// Stored as json.RawMessage to round-trip through JSON serialization for settings/tool API schemas.
 	Hooks json.RawMessage `json:"hooks,omitempty"`
+	// PendingSnapshotUpdate mirrors TS pendingSnapshotUpdate — set when a newer memory snapshot
+	// is available than what was last synced. Marshalled to JSON for settings serialization.
+	PendingSnapshotUpdate json.RawMessage `json:"pendingSnapshotUpdate,omitempty"`
 	// SystemPromptFn is an optional closure that generates the system prompt dynamically.
 	// When non-nil, it takes precedence over the static SystemPrompt field.
 	// Mirrors TS BuiltInAgentDefinition.getSystemPrompt(params).

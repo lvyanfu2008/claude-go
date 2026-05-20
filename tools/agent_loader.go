@@ -12,6 +12,7 @@ import (
 	"goc/agents/builtin"
 	"goc/claudemd"
 	"goc/commands"
+	"goc/memdir"
 	"goc/tools/agentcolor"
 	"goc/tools/hookstypes"
 )
@@ -32,6 +33,11 @@ func LoadAgentDefinitionsReport(cwd string) AgentDefinitionsReport {
 	all := make([]AgentDefinition, 0, len(builtins)+16)
 	all = append(all, builtins...)
 	var failed []AgentLoadFailure
+
+	// Load agents from plugins (mirrors TS loadPluginAgents).
+	// Plugin agents take priority over builtins but not over user/project/policy/flag agents.
+	pluginAgents := loadPluginAgents()
+	all = append(all, pluginAgents...)
 
 	loadOrder := []struct {
 		source string
@@ -68,6 +74,12 @@ func LoadAgentDefinitionsReport(cwd string) AgentDefinitionsReport {
 		}
 	}
 	agentcolor.InitAgentColors(colorSetters)
+
+	// Initialize agent memory snapshots for custom agents with user memory scope
+	// (mirrors TS loadAgentsDir.ts initializeAgentMemorySnapshots).
+	if memdir.IsAutoMemoryEnabled() {
+		initializeAgentMemorySnapshots(active)
+	}
 
 	return AgentDefinitionsReport{
 		ActiveAgents: active,
@@ -475,4 +487,36 @@ func parseAgentJSON(name string, v any) (AgentDefinition, bool) {
 		Memory:          memory,
 		Hooks:           hooks,
 	}, true
+}
+
+// loadPluginAgents mirrors TS src/utils/plugins/loadPluginAgents.ts loadPluginAgents.
+// Loads agent definitions from enabled plugins' agentsPath / agentsPaths directories.
+// Returns nil until the plugin store/cache infrastructure is implemented (P4 dependency).
+// TODO: Implement walkPluginMarkdown + loadAgentsFromDirectory for plugin agent .md files.
+func loadPluginAgents() []AgentDefinition {
+	return nil
+}
+
+// initializeAgentMemorySnapshots mirrors TS loadAgentsDir.ts initializeAgentMemorySnapshots.
+// For custom agents with user memory scope, checks if a project snapshot exists and either
+// initializes local memory from snapshot or marks a pending snapshot update.
+func initializeAgentMemorySnapshots(active []AgentDefinition) {
+	for i := range active {
+		a := &active[i]
+		if a.Memory != "user" || a.Source == "built-in" {
+			continue
+		}
+		result := memdir.CheckAgentMemorySnapshot(a.AgentType, memdir.AgentMemoryUser)
+		switch result.Action {
+		case "initialize":
+			_ = memdir.InitializeFromSnapshot(a.AgentType, memdir.AgentMemoryUser, result.SnapshotTimestamp)
+		case "prompt-update":
+			b, err := json.Marshal(map[string]string{
+				"snapshotTimestamp": result.SnapshotTimestamp,
+			})
+			if err == nil {
+				a.PendingSnapshotUpdate = json.RawMessage(b)
+			}
+		}
+	}
 }
