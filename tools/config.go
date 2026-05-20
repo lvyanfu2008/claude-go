@@ -25,4 +25,8 @@ type Config struct {
 	// ToolPermission is the parent's permission context (deny/allow/ask rules).
 	// When non-nil, it is propagated to child agents for bubble-mode permission enforcement.
 	ToolPermission *types.ToolPermissionContextData
+	// ToolUseID carries the current tool_use block ID from RunToolUseChan through InvokeTool
+	// so that child agent progress messages can be associated with the correct parent tool_use
+	// via ParentToolUseID. Set by the InvokeTool closure in executeAgentWithOpts.
+	ToolUseID string
 }

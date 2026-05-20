@@ -313,6 +313,7 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		TeamName:     s.TeamName,
 		AgentName:    s.Name,
 		AgentID:      s.ID,
+		ToolUseID:    cfg.ParentToolUseID,
 	}
 	pretoolHook := hookexec.AgentPreToolUseHookFromSession(s.ID, s.WorkDir)
 	invokeReadFileState := localtools.NewReadFileState()
@@ -322,7 +323,8 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 	postToolHookRunner := agentPostToolUseHookRunner(cfg, s)
 
 	qdeps.ToolexecutionDeps = toolexecution.ExecutionDeps{
-		InvokeTool: func(ctx context.Context, name, _ string, input json.RawMessage) (string, bool, error) {
+		InvokeTool: func(ctx context.Context, name, toolUseID string, input json.RawMessage) (string, bool, error) {
+			toolCfg.ToolUseID = toolUseID
 			s, isErr, perr := Run(ctx, name, input, toolCfg)
 			if perr == nil || !IsNotHandled(perr) {
 				return s, isErr, perr
@@ -525,6 +527,9 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 				progressMsgs = append(progressMsgs, b)
 			}
 			if cfg.ProgressCallback != nil {
+				if cfg.ParentToolUseID != "" {
+					y.Message.ParentToolUseID = &cfg.ParentToolUseID
+				}
 				cfg.ProgressCallback(y.Message)
 			}
 			continue
