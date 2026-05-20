@@ -703,7 +703,7 @@ func Run(config_ Config) error {
 	}
 
 	sessionID := config_.SessionID
-	if sessionID == "" {
+	if sessionID == "" || !sessiontranscript.IsValidUUID(sessionID) {
 		sessionID = sessiontranscript.NewUUID()
 	}
 	st := &conversation.Store{ConversationID: sessionID}

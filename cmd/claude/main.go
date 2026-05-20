@@ -317,9 +317,6 @@ func runHeadless(prompt string) error {
 		fmt.Fprintf(os.Stderr, "[claude] cron fire: %s\n", prompt)
 	})
 	sessionID := GetSessionID()
-	if sessionID == "" {
-		sessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
-	}
 	transcriptPath := sessiontranscript.TranscriptPath(sessionID, cwd, "", sessiontranscript.ConfigHomeDir())
 
 	// Build base hook input (mirrors TS toolUseContext injection).
@@ -439,9 +436,6 @@ func runHeadless(prompt string) error {
 func runInteractive(args []string) error {
 	cwd, _ := os.Getwd()
 	sessionID := GetSessionID()
-	if sessionID == "" {
-		sessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
-	}
 
 	pm := flagPermissionMode
 	if pm == "" {
