@@ -3,6 +3,8 @@ package slashresolve
 import (
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 
 	"goc/commands/featuregates"
@@ -147,6 +149,25 @@ func starlarkContextFromOpt(opt *BundledResolveOptions) *StarlarkContext {
 	}
 }
 
+func resolveInitBundled(args string) (types.SlashResolveResult, error) {
+	body, err := readBundledText("init.md")
+	if err != nil {
+		return types.SlashResolveResult{}, fmt.Errorf("bundled prompt init: %w", err)
+	}
+	if os.Getenv("CLAUDE_CODE_SKIP_INIT_PHASE0") == "1" {
+		re := regexp.MustCompile(`(?s)## Phase 0:.*?\n## Phase 1:`)
+		body = re.ReplaceAllString(body, "## Phase 1:")
+	}
+	text := body
+	if a := strings.TrimSpace(args); a != "" {
+		text = appendUserSection(text, a)
+	}
+	return types.SlashResolveResult{
+		UserText: text,
+		Source:   types.SlashResolveBundledEmbed,
+	}, nil
+}
+
 func resolveVerifyBundled(args string) (types.SlashResolveResult, error) {
 	dir, err := materializeVerifySkillDir()
 	if err != nil {
@@ -230,6 +251,10 @@ func resolveCronDelete(args string) (types.SlashResolveResult, error) {
 }
 
 func init() {
+	RegisterBundledSkill(BundledSkillDefinition{
+		Name:     "init",
+		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveInitBundled(args) },
+	})
 	RegisterBundledSkill(BundledSkillDefinition{
 		Name:     "verify",
 		Resolver: func(args string, opt *BundledResolveOptions) (types.SlashResolveResult, error) { return resolveVerifyBundled(args) },
