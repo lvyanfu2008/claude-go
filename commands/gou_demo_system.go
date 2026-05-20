@@ -3,38 +3,21 @@ package commands
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
+	"goc/ccb-engine/diaglog"
 	"goc/commands/featuregates"
 	"goc/growthbook"
 	"goc/modelenv"
 	"goc/types"
 )
 
-// systemPromptDebugLogPath returns the debug log path from env or "" to disable.
-func systemPromptDebugLogPath() string {
-	return strings.TrimSpace(os.Getenv("CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT"))
-}
-
 func appendSystemPromptDebugLine(inner string) {
-	logPath := systemPromptDebugLogPath()
-	if logPath == "" {
+	if !envTruthyGo("CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT") {
 		return
 	}
-	t := time.Now().UTC()
-	ts := fmt.Sprintf("%s.%03dZ", t.Format("2006-01-02T15:04:05"), t.Nanosecond()/1e6)
-	line := fmt.Sprintf("%s [DEBUG] %s\n", ts, strings.TrimSpace(inner))
-	dir := filepath.Dir(logPath)
-	_ = os.MkdirAll(dir, 0o755)
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	_, _ = f.WriteString(line)
-	_ = f.Close()
+	diaglog.Line("[system-prompt] %s", inner)
 }
 
 // GouDemoSystemOpts drives phase-2 system string assembly (mirrors TS getSystemPrompt; see prompts.go for constants/helpers).

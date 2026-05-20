@@ -5,32 +5,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"goc/ccb-engine/diaglog"
 	"goc/claudebase"
 )
 
-// autoMemoryDebugLogPath returns the debug log path from env or "".
-func autoMemoryDebugLogPath() string {
-	return strings.TrimSpace(os.Getenv("CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT"))
+func appendAutoMemoryDebugLine(inner string) {
+	if !isAutoMemoryDebugEnabled() {
+		return
+	}
+	diaglog.Line("[auto-memory] %s", inner)
 }
 
-func appendAutoMemoryDebugLine(inner string) {
-	logPath := autoMemoryDebugLogPath()
-	if logPath == "" {
-		return
-	}
-	t := time.Now().UTC()
-	ts := fmt.Sprintf("%s.%03dZ", t.Format("2006-01-02T15:04:05"), t.Nanosecond()/1e6)
-	line := fmt.Sprintf("%s [DEBUG] %s\n", ts, strings.TrimSpace(inner))
-	dir := filepath.Dir(logPath)
-	_ = os.MkdirAll(dir, 0o755)
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	_, _ = f.WriteString(line)
-	_ = f.Close()
+func isAutoMemoryDebugEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
 // Constants from src/memdir/memdir.ts for MEMORY.md / team entrypoint truncation.
