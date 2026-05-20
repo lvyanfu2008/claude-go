@@ -220,7 +220,7 @@ func (m *summaryManager) runSummary() {
 func (m *summaryManager) querySummary(msgs []types.Message) string {
 	ctx := context.Background()
 
-	qdeps := query.ProductionDeps(nil)
+	qdeps := query.ProductionDeps(nil, nil)
 	qdeps.ToolexecutionDeps = toolexecution.ExecutionDeps{
 		InvokeTool: func(ctx context.Context, name, _ string, input json.RawMessage) (string, bool, error) {
 			return "", true, fmt.Errorf("summary agent cannot use tools")

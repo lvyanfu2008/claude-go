@@ -106,6 +106,17 @@ func CompactConversation(
 	customInstructions := MergeHookInstructions(opts.CustomInstructions, preHook.NewCustomInstructions)
 	preHookUserDisplay := preHook.UserDisplayMessage
 
+	// --- Notify host: compaction started ---
+	if deps.OnCompactPhase != nil {
+		deps.OnCompactPhase("started")
+	}
+	compactionStarted := true
+	defer func() {
+		if compactionStarted && deps.OnCompactPhase != nil {
+			deps.OnCompactPhase("done")
+		}
+	}()
+
 	// --- Build compact prompt ---
 	compactPrompt := GetCompactPrompt(customInstructions)
 	summaryRequest, err := newUserPromptMessage(compactPrompt, deps)
@@ -129,6 +140,12 @@ func CompactConversation(
 	var summaryResponse types.Message
 	var summaryText string
 	ptlAttempts := 0
+
+	// --- Notify host: summarizing ---
+	if deps.OnCompactPhase != nil {
+		deps.OnCompactPhase("summarizing")
+	}
+
 	for {
 		if contextIsCanceled(ctx) {
 			return CompactionResult{}, ErrUserAbort

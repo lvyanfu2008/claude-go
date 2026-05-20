@@ -398,6 +398,7 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 				"stop_reason":   stop,
 				"stop_sequence": nil,
 				"usage": map[string]any{
+					"input_tokens":  a.inputTokens,
 					"output_tokens": a.outputTokens,
 				},
 			},

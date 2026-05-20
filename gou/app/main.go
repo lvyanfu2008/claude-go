@@ -368,6 +368,12 @@ type gouMemoryAppendMsg struct {
 	Msg types.Message
 }
 
+// compactPhaseMsg carries auto-compact phase updates for spinner verb changes.
+// Phase values: "started", "summarizing", "done".
+type compactPhaseMsg struct {
+	Phase string
+}
+
 func gouDemoAnthropicAPIKey() string {
 	k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
 	if k != "" {
@@ -556,6 +562,7 @@ type model struct {
 	queryBusyStartedAt    time.Time
 	spinnerVerb           string
 	spinnerFrame          int
+	preCompactVerb        string // saved spinner verb before compact, restored on done
 	lastEmittedTitlePlain string
 
 	// Ctrl+C interrupt support (TS app:interrupt → CancelRequestHandler + useExitOnCtrlCD).
@@ -1117,7 +1124,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.manualRenderMode {
 		switch msg.(type) {
-		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouStreamEventMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg:
+		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouStreamEventMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg, compactPhaseMsg:
 			m.pendingEvents = append(m.pendingEvents, msg)
 			return m, nil
 		}
@@ -1179,6 +1186,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gouMemoryAppendMsg:
 		return m.handleUpdateGouMemoryAppend(msg)
+
+	case compactPhaseMsg:
+		return m.handleUpdateCompactPhase(msg)
 
 	case gouToolSummaryDelayTickMsg:
 		return m.handleUpdateToolSummaryDelayTick(msg)
@@ -2643,7 +2653,11 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 								)
 							}
 						}
-						qdeps := query.ProductionDeps(trySMCompact)
+						qdeps := query.ProductionDeps(trySMCompact, func(phase string) {
+					if send := m.ccbSend; send != nil {
+						send(compactPhaseMsg{Phase: phase})
+					}
+				})
 						te := toolexecution.ExecutionDeps{
 							InvokeTool:              runner.Run,
 							MainLoopModel:           mainLoopModel,

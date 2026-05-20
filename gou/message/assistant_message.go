@@ -131,7 +131,11 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 	}
 
 	// Regular assistant text
-	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+	contentWidth := getContainerWidth(ctx) - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+	lines := renderMarkdown(text, contentWidth, ctx.Theme, ctx.Highlighter)
 
 	// Add "⏺ " prefix to assistant messages and indent all lines by 2 spaces
 	for i, line := range lines {
@@ -152,7 +156,11 @@ func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}
 	if compactservice.IsRateLimitErrorMessage(text) || compactservice.StartsWithApiErrorPrefix(trimmed) {
 		return 1
 	}
-	lines := renderMarkdown(text, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+	contentWidth := getContainerWidth(ctx) - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+	lines := renderMarkdown(text, contentWidth, ctx.Theme, ctx.Highlighter)
 	return len(lines)
 }
 
@@ -163,7 +171,11 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 	// In verbose mode or transcript, show full thinking content.
 	if ctx.Verbose || ctx.IsTranscript {
 		if thinkingBody != "" {
-			lines := renderMarkdown(thinkingBody, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+			contentWidth := getContainerWidth(ctx) - 5
+			if contentWidth < 20 {
+				contentWidth = 20
+			}
+			lines := renderMarkdown(thinkingBody, contentWidth, ctx.Theme, ctx.Highlighter)
 			for i := range lines {
 				if i == 0 {
 					lines[i] = "  💭 " + lines[i]
@@ -182,7 +194,7 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 		if first == "" {
 			first = thinkingBody
 		}
-		w := getContainerWidth(ctx)
+		w := getContainerWidth(ctx) - 5
 		if w > 0 && len(first) > w {
 			first = first[:w] + "..."
 		}
@@ -215,7 +227,7 @@ func FirstSentenceOf(s string) string {
 				return ""
 			}
 			next := runes[i+1]
-			if next == '\n' || next == '\r' {
+			if next == ' ' || next == '\n' || next == '\r' {
 				// Skip numbered-list prefixes (e.g. "1.", "12.") — treat them
 				// as part of the first sentence, not a sentence boundary.
 				if r == '.' && isOnlyDigits(runes[:i]) {
@@ -249,7 +261,11 @@ func (r *AssistantMessageRenderer) measureThinkingBlock(block map[string]interfa
 	}
 
 	if thinkingBody := thinkingBlockString(block); thinkingBody != "" {
-		lines := renderMarkdown(thinkingBody, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+		contentWidth := getContainerWidth(ctx) - 5
+		if contentWidth < 20 {
+			contentWidth = 20
+		}
+		lines := renderMarkdown(thinkingBody, contentWidth, ctx.Theme, ctx.Highlighter)
 		return len(lines)
 	}
 

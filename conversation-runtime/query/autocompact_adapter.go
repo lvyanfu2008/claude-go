@@ -34,7 +34,7 @@ import (
 //
 // Hooks + attachments use the default runners from hookexec. Hosts that need richer
 // pre/post-compact hooks supply their own adapter that layers a CompactDepsBuilder over this.
-func NewCompactAdapter(trySMCompact compactservice.TrySessionMemoryCompactFn) func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
+func NewCompactAdapter(trySMCompact compactservice.TrySessionMemoryCompactFn, onCompactPhase func(string)) func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
 	return func(ctx context.Context, in *AutocompactInput) (*AutocompactResult, error) {
 		if in == nil {
 			return nil, nil
@@ -76,6 +76,7 @@ func NewCompactAdapter(trySMCompact compactservice.TrySessionMemoryCompactFn) fu
 				}
 			},
 			TrySessionMemoryCompact: trySMCompact,
+			OnCompactPhase:         onCompactPhase,
 		}
 
 		snip := 0

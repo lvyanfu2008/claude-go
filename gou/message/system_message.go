@@ -93,7 +93,7 @@ func (r *SystemMessageRenderer) Measure(msg *types.Message, ctx *RenderContext) 
 
 // renderCompactBoundary renders a compact boundary message.
 func (r *SystemMessageRenderer) renderCompactBoundary(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	return []string{"---"}, nil
+	return []string{"⟳ Conversation compacted (ctrl+o to expand)"}, nil
 }
 
 // renderLocalCommand renders a local command message.

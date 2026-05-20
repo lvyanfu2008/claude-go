@@ -523,9 +523,31 @@ func GenerateToolResultSummary(block map[string]interface{}) string {
 
 // generateToolSpecificSummary tries to generate a tool-specific summary based on content analysis.
 func generateToolSpecificSummary(block map[string]interface{}) string {
-	// This function is now redundant since analyzeTextContent handles the analysis
-	// We'll keep it for now but it will rarely be called
+	content := block["content"]
+	if contentStr, ok := content.(string); ok {
+		if summary := extractBriefMessage(contentStr); summary != "" {
+			return summary
+		}
+	}
 	return ""
+}
+
+// extractBriefMessage tries to extract the user-visible message from a Brief/SendUserMessage
+// tool result JSON (tools/stubs.go BriefFromJSON format: {"data":{"message":"...","sentAt":"..."}}).
+func extractBriefMessage(text string) string {
+	var wrapper struct {
+		Data struct {
+			Message string `json:"message"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(text), &wrapper); err != nil {
+		return ""
+	}
+	msg := strings.TrimSpace(wrapper.Data.Message)
+	if msg == "" {
+		return ""
+	}
+	return "Brief: " + msg
 }
 
 // analyzeTextContent analyzes text content and returns a meaningful summary

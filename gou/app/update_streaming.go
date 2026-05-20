@@ -123,6 +123,20 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 	return m, nil
 }
 
+func (m *model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Phase {
+	case "started":
+		m.preCompactVerb = m.spinnerVerb
+		m.spinnerVerb = "Compacting"
+	case "done":
+		if m.preCompactVerb != "" {
+			m.spinnerVerb = m.preCompactVerb
+			m.preCompactVerb = ""
+		}
+	}
+	return m, nil
+}
+
 func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 	ev := ccbstream.StreamEvent(msg)
 	if gouDemoTrace != nil {

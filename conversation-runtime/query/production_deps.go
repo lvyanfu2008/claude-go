@@ -20,10 +20,10 @@ import (
 // session-memory compaction. Hosts that have a sessionmemory.State should provide a closure
 // that bridges to sessionmemory.TrySessionMemoryCompaction. Pass nil to disable (harmless —
 // API-based compaction is used as fallback).
-func ProductionDeps(trySMCompact compactservice.TrySessionMemoryCompactFn) QueryDeps {
+func ProductionDeps(trySMCompact compactservice.TrySessionMemoryCompactFn, onCompactPhase func(string)) QueryDeps {
 	return QueryDeps{
 		NewUUID:     randomUUID,
-		Autocompact: NewCompactAdapter(trySMCompact),
+		Autocompact: NewCompactAdapter(trySMCompact, onCompactPhase),
 	}
 }
 

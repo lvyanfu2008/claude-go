@@ -206,7 +206,7 @@ func runConsolidationSubagent(
 
 	maxTurns := maxConsolidationTurns
 
-	qdeps := query.ProductionDeps(nil)
+	qdeps := query.ProductionDeps(nil, nil)
 	qdeps.NewUUID = newUUID
 	qdeps.ToolexecutionDeps = buildRestrictedExecutionDeps(memoryDir)
 

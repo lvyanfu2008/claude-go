@@ -12,10 +12,12 @@ import (
 // assistantStreamAccumulator turns Anthropic Messages SSE events into one assistant API message (content blocks).
 // Mirrors the assembly path in query.ts before normalizeMessagesForAPI.
 type assistantStreamAccumulator struct {
-	blocks       map[int]*accBlock
-	stopReason   string
-	inputTokens  int
-	outputTokens int
+	blocks                  map[int]*accBlock
+	stopReason              string
+	inputTokens             int
+	cacheCreationInputTokens int
+	cacheReadInputTokens    int
+	outputTokens            int
 	// apiMessageID is message.message.id from message_start (Anthropic API message id).
 	apiMessageID string
 }
@@ -38,12 +40,28 @@ func (a *assistantStreamAccumulator) OnEvent(ev anthropicmessages.MessageStreamE
 	case "message_start":
 		var wrap struct {
 			Message struct {
-				ID string `json:"id"`
+				ID    string `json:"id"`
+				Usage *struct {
+					InputTokens              int `json:"input_tokens"`
+					CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+					CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+				} `json:"usage"`
 			} `json:"message"`
 		}
 		_ = json.Unmarshal(ev.Raw, &wrap)
 		if id := strings.TrimSpace(wrap.Message.ID); id != "" {
 			a.apiMessageID = id
+		}
+		if wrap.Message.Usage != nil {
+			if wrap.Message.Usage.InputTokens > 0 {
+				a.inputTokens = wrap.Message.Usage.InputTokens
+			}
+			if wrap.Message.Usage.CacheCreationInputTokens > 0 {
+				a.cacheCreationInputTokens = wrap.Message.Usage.CacheCreationInputTokens
+			}
+			if wrap.Message.Usage.CacheReadInputTokens > 0 {
+				a.cacheReadInputTokens = wrap.Message.Usage.CacheReadInputTokens
+			}
 		}
 		return nil
 	case "content_block_start":
@@ -108,25 +126,31 @@ func (a *assistantStreamAccumulator) OnEvent(ev anthropicmessages.MessageStreamE
 			Delta json.RawMessage `json:"delta"`
 		}
 		_ = json.Unmarshal(ev.Raw, &wrap)
-		var d struct {
-			StopReason *string `json:"stop_reason"`
-			Usage      *struct {
-				InputTokens  int `json:"input_tokens"`
-				OutputTokens int `json:"output_tokens"`
-			} `json:"usage"`
-		}
-		_ = json.Unmarshal(wrap.Delta, &d)
-		if d.StopReason != nil {
-			a.stopReason = strings.TrimSpace(*d.StopReason)
-		}
-		if d.Usage != nil {
-			if d.Usage.InputTokens > 0 {
-				a.inputTokens = d.Usage.InputTokens
+		// usage may be inside delta (OpenAI adapter) or at event top level (Anthropic native).
+		extractUsage := func(raw json.RawMessage) {
+			var d struct {
+				StopReason *string `json:"stop_reason"`
+				Usage      *struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
 			}
-			if d.Usage.OutputTokens > 0 {
-				a.outputTokens = d.Usage.OutputTokens
+			_ = json.Unmarshal(raw, &d)
+			if d.StopReason != nil {
+				a.stopReason = strings.TrimSpace(*d.StopReason)
+			}
+			if d.Usage != nil {
+				if d.Usage.InputTokens > 0 {
+					a.inputTokens = d.Usage.InputTokens
+				}
+				if d.Usage.OutputTokens > 0 {
+					a.outputTokens = d.Usage.OutputTokens
+				}
 			}
 		}
+		extractUsage(wrap.Delta)
+		// Also try the event top level (Anthropic puts usage at the event root, not inside delta).
+		extractUsage(ev.Raw)
 		return nil
 	case "message_stop", "ping":
 		return nil
@@ -177,6 +201,19 @@ func (a *assistantStreamAccumulator) AssistantWire(uuid string) (inner json.RawM
 	}
 	if id := strings.TrimSpace(a.apiMessageID); id != "" {
 		innerObj["id"] = id
+	}
+	if a.inputTokens > 0 || a.outputTokens > 0 {
+		u := map[string]any{
+			"input_tokens":  a.inputTokens,
+			"output_tokens": a.outputTokens,
+		}
+		if a.cacheCreationInputTokens > 0 {
+			u["cache_creation_input_tokens"] = a.cacheCreationInputTokens
+		}
+		if a.cacheReadInputTokens > 0 {
+			u["cache_read_input_tokens"] = a.cacheReadInputTokens
+		}
+		innerObj["usage"] = u
 	}
 	inner, err = json.Marshal(innerObj)
 	if err != nil {

@@ -56,6 +56,11 @@ type Deps struct {
 	// trySessionMemoryCompaction in sessionMemoryCompact.ts.
 	// Nil defaults to no-op (always returns nil, nil).
 	TrySessionMemoryCompact TrySessionMemoryCompactFn
+
+	// OnCompactPhase is called at key points during compaction so hosts can update UI.
+	// phase values: "started", "summarizing", "done".
+	// Nil defaults to no-op.
+	OnCompactPhase func(phase string)
 }
 
 // TrySessionMemoryCompactFn is the function signature for [Deps.TrySessionMemoryCompact].
