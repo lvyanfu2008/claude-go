@@ -313,6 +313,11 @@ func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID str
 			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, block, body, false, assistantUUID)
 		}
 	}
+	if !isErr && toolName == "AskUserQuestion" && body != "" {
+		if mapped, err := localtools.MapAskUserQuestionOutputToToolResultContent(body); err == nil {
+			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
+		}
+	}
 	return syntheticToolResultWithName(deps, toolName, toolUseID, body, isErr, assistantUUID)
 }
 

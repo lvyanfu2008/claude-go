@@ -68,6 +68,11 @@ func ToolToAPISchema(spec types.ToolSpec, opts ToolToAPISchemaOptions) APIToolDe
 		Description: spec.Description,
 		InputSchema: spec.InputJSONSchema,
 	}
+	// AskUserQuestion description is dynamic (depends on QuestionPreviewFormat).
+	// Re-evaluate here so SetQuestionPreviewFormat takes effect without rebuilding the ToolSpec.
+	if spec.Name == "AskUserQuestion" {
+		out.Description = getAskUserQuestionDescription()
+	}
 	// Mirror TS filterSwarmFieldsFromSchema: strip name/team_name/mode from Agent
 	// tool input_schema when agent swarms are not enabled (src/utils/api.ts lines 166-168).
 	if !commands.AgentSwarmsEnabled() {
