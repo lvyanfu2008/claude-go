@@ -26,7 +26,7 @@ func GoProjectSettingsEnvDefaults() map[string]string {
 		"GOU_DEMO_TOOL_USE_SUMMARY_DELAY_MS":       "1000",
 		"GOU_DEMO_ALT_SCREEN":                      "1",
 		"GOU_DEMO_DUMP_ON_EXIT":                    "1",
-		"GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW":       "100000",
+		"GOC_AUTOCOMPACT_MAX_CONTEXT_WINDOW":       "128000",
 		"FEATURE_BUILTIN_EXPLORE_PLAN_AGENTS":      "1",
 		"CLAUDE_CODE_TENGU_HIVE_EVIDENCE":          "1",
 		"CLAUDE_CODE_TENGU_CORAL_FERN":             "1",
