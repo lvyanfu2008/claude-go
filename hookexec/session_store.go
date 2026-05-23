@@ -61,13 +61,13 @@ func MergeSessionHookTables(agentIDs ...string) HooksTable {
 		if !ok {
 			continue
 		}
-		merged = mergeHooksTable(merged, entry.table)
+		merged = MergeHooksTable(merged, entry.table)
 	}
 	// Also merge all session hooks if no specific IDs given — TS behavior:
 	// getSessionHooks iterates all entries in the sessionHooks Map.
 	if len(agentIDs) == 0 {
 		for _, entry := range globalSessionStore.hooks {
-			merged = mergeHooksTable(merged, entry.table)
+			merged = MergeHooksTable(merged, entry.table)
 		}
 	}
 	return merged

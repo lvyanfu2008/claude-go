@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"goc/ccb-engine/diaglog"
 	"goc/ccb-engine/settingsfile"
 )
 
@@ -17,6 +18,11 @@ type MatcherGroup struct {
 
 // HooksTable is hooks keyed by event name (e.g. SessionStart, InstructionsLoaded).
 type HooksTable map[string][]MatcherGroup
+
+// PluginHooksLoader is an optional hook set by plugin bridge init() to merge
+// plugin hooks (hooks.json from enabled plugins) into the merged hooks table.
+// Uses a function variable to avoid circular imports (hookexec ← plugins bridge).
+var PluginHooksLoader func(cwd string) (HooksTable, error)
 
 func readHooksTable(path string) (HooksTable, error) {
 	if strings.TrimSpace(path) == "" {
@@ -41,7 +47,7 @@ func readHooksTable(path string) (HooksTable, error) {
 	return doc.Hooks, nil
 }
 
-func mergeHooksTable(dst HooksTable, src HooksTable) HooksTable {
+func MergeHooksTable(dst HooksTable, src HooksTable) HooksTable {
 	if len(src) == 0 {
 		return dst
 	}
@@ -64,7 +70,7 @@ func MergedHooksFromPaths(projectRoot string) (HooksTable, error) {
 	if err != nil {
 		return nil, err
 	}
-	merged = mergeHooksTable(merged, tUser)
+	merged = MergeHooksTable(merged, tUser)
 
 	root := strings.TrimSpace(projectRoot)
 	if root != "" {
@@ -73,15 +79,25 @@ func MergedHooksFromPaths(projectRoot string) (HooksTable, error) {
 		if err != nil {
 			return nil, err
 		}
-		merged = mergeHooksTable(merged, tGo)
+		merged = MergeHooksTable(merged, tGo)
 
 		localPath := filepath.Join(root, ".claude", "settings.local.json")
 		tLoc, err := readHooksTable(localPath)
 		if err != nil {
 			return nil, err
 		}
-		merged = mergeHooksTable(merged, tLoc)
+		merged = MergeHooksTable(merged, tLoc)
 	}
+	if PluginHooksLoader != nil {
+		pluginHooks, err := PluginHooksLoader(root)
+		if err != nil {
+			// Log and continue — plugin hooks should not block startup
+			diaglog.Line("[goc/hookexec] plugin hooks load error: %v", err)
+		} else if pluginHooks != nil {
+			merged = MergeHooksTable(merged, pluginHooks)
+		}
+	}
+
 	return merged, nil
 }
 

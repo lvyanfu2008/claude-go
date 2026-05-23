@@ -76,5 +76,5 @@ func AgentMergedHooksTable(projectRoot string, agentID string) (HooksTable, erro
 		return nil, err
 	}
 	sessionTable := MergeSessionHookTables(agentID)
-	return mergeHooksTable(settingsTable, sessionTable), nil
+	return MergeHooksTable(settingsTable, sessionTable), nil
 }
