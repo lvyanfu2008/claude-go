@@ -19,6 +19,7 @@ import (
 	"goc/conversation-runtime/query"
 	"goc/gou/app"
 	"goc/hookexec"
+	_ "goc/plugins"
 	"goc/sessiontranscript"
 	"goc/types"
 )

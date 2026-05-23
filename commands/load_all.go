@@ -3,8 +3,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
+	"goc/ccb-engine/diaglog"
 	"goc/commands/featuregates"
 	"goc/types"
 	"path/filepath"
@@ -255,8 +257,28 @@ func loadPluginCommands() []types.Command {
 	return nil
 }
 
+// PluginSkillsLoader is set by goc/plugins bridge to load plugin skills
+// without creating a circular import (goc/plugins imports goc/commands
+// for LoadSkillsFromDirectory).
+var pluginSkillsLoaderFn func(cwd string) ([]types.Command, error)
+
+// RegisterPluginSkillsLoader sets the function used by loadPluginSkills.
+// Called from goc/plugins bridge init().
+func RegisterPluginSkillsLoader(fn func(cwd string) ([]types.Command, error)) {
+	pluginSkillsLoaderFn = fn
+}
+
 func loadPluginSkills() []types.Command {
-	return nil
+	if pluginSkillsLoaderFn == nil {
+		return nil
+	}
+	cwd, _ := os.Getwd()
+	cmds, err := pluginSkillsLoaderFn(cwd)
+	if err != nil {
+		diaglog.Line("[goc/commands] loadPluginSkills: %v", err)
+		return nil
+	}
+	return cmds
 }
 
 // --- Phase P7: COMMANDS() (src/commands.ts) — handwritten.AssembleBuiltinCommands + z_builtin_table_gen.go ---
