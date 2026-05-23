@@ -142,31 +142,14 @@ func (r *UserMessageRenderer) renderTextBlock(block map[string]interface{}, ctx 
 	if strings.Contains(text, "<local-command-stdout") || strings.Contains(text, "<local-command-stderr") {
 		return r.renderLocalCommandOutput(text, ctx)
 	}
+	if strings.Contains(text, "<command-message>") {
+		return r.renderCommandMessage(text, ctx)
+	}
 
 	// Regular user prompt
 	containerWidth := getContainerWidth(ctx)
 	lines := renderMarkdown(text, containerWidth, ctx.Theme, ctx.Highlighter)
-
-	// Create lipgloss style for user messages: gray background, bold font
-	// Use Width() to fill the entire row with background color
-	userStyle := lipgloss.NewStyle().
-		Background(ctx.Theme.UserMessageBackground).
-		Foreground(ctx.Theme.UserMessageText).
-		Bold(true).
-		Width(containerWidth)
-
-	// Apply styling to each line including prefix
-	for i, line := range lines {
-		// Add prefix first, then apply styling to the entire line
-		if i == 0 {
-			line = "  > " + line
-		} else {
-			line = "    " + line
-		}
-		lines[i] = userStyle.Render(line)
-	}
-
-	return lines, nil
+	return r.styleUserLines(lines, ctx), nil
 }
 
 // measureTextBlock measures a text block.
@@ -178,7 +161,8 @@ func (r *UserMessageRenderer) measureTextBlock(block map[string]interface{}, ctx
 		strings.Contains(text, "<bash-stdout") ||
 		strings.Contains(text, "<bash-stderr") ||
 		strings.Contains(text, "<local-command-stdout") ||
-		strings.Contains(text, "<local-command-stderr") {
+		strings.Contains(text, "<local-command-stderr") ||
+		strings.Contains(text, "<command-message>") {
 		return 1
 	}
 
@@ -241,6 +225,61 @@ func (r *UserMessageRenderer) renderLocalCommandOutput(text string, ctx *RenderC
 		output = output[:100] + "..."
 	}
 	return []string{"    " + output}, nil
+}
+
+// renderCommandMessage renders the visible metadata row for a slash command or skill invocation.
+// TS reference: UserCommandMessage renders "❯ /command args" or "Skill(name)".
+func (r *UserMessageRenderer) renderCommandMessage(text string, ctx *RenderContext) ([]string, error) {
+	cmdName := extractXMLTagValue(text, "command-message")
+	if cmdName == "" {
+		cmdName = extractXMLTagValue(text, "command-name")
+		cmdName = strings.TrimPrefix(cmdName, "/")
+	}
+	if cmdName == "" {
+		// Fallback: treat as regular text
+		containerWidth := getContainerWidth(ctx)
+		lines := renderMarkdown(text, containerWidth, ctx.Theme, ctx.Highlighter)
+		return r.styleUserLines(lines, ctx), nil
+	}
+
+	isSkillFormat := extractXMLTagValue(text, "skill-format") == "true"
+	args := extractXMLTagValue(text, "command-args")
+
+	display := "/" + cmdName
+	if args != "" {
+		display += " " + args
+	}
+	if isSkillFormat {
+		display = "Skill(" + cmdName + ")"
+	}
+
+	containerWidth := getContainerWidth(ctx)
+	userStyle := lipgloss.NewStyle().
+		Background(ctx.Theme.UserMessageBackground).
+		Foreground(ctx.Theme.UserMessageText).
+		Bold(true).
+		Width(containerWidth)
+	fullLine := "  > " + display
+	return []string{userStyle.Render(fullLine)}, nil
+}
+
+// styleUserLines applies "  > " / "    " prefix + theme to each rendered line.
+func (r *UserMessageRenderer) styleUserLines(lines []string, ctx *RenderContext) []string {
+	containerWidth := getContainerWidth(ctx)
+	userStyle := lipgloss.NewStyle().
+		Background(ctx.Theme.UserMessageBackground).
+		Foreground(ctx.Theme.UserMessageText).
+		Bold(true).
+		Width(containerWidth)
+	for i, line := range lines {
+		if i == 0 {
+			line = "  > " + line
+		} else {
+			line = "    " + line
+		}
+		lines[i] = userStyle.Render(line)
+	}
+	return lines
 }
 
 // renderImageBlock renders an image block.
@@ -631,4 +670,21 @@ func analyzeTextContent(text string) string {
 		return "[Text result]"
 	}
 	return fmt.Sprintf("[Text: %d lines]", nonEmptyLines)
+}
+
+// extractXMLTagValue extracts the text content of the first occurrence of a named XML tag.
+// e.g. extractXMLTagValue("<command-name>/init</command-name>", "command-name") returns "/init".
+func extractXMLTagValue(text, tag string) string {
+	open := "<" + tag + ">"
+	close := "</" + tag + ">"
+	start := strings.Index(text, open)
+	if start < 0 {
+		return ""
+	}
+	start += len(open)
+	end := strings.Index(text[start:], close)
+	if end < 0 {
+		return ""
+	}
+	return text[start : start+end]
 }
