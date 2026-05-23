@@ -77,7 +77,9 @@ func RunCommandHook(ctx context.Context, workDir, command, jsonInput string, tim
 	return stdout, stderr, 0, nil
 }
 
-// ParseHookJSONOutput extracts hookSpecificOutput.additionalContext for SessionStart (and similar) from hook stdout.
+// ParseHookJSONOutput extracts additionalContext from hook stdout.
+// Handles both TS nested format {"hookSpecificOutput":{"additionalContext":"..."}}
+// and plain format {"additionalContext":"..."} (used when CLAUDE_PLUGIN_ROOT is unset).
 func ParseHookJSONOutput(stdout, expectedEvent string) (additionalContext string, _ error) {
 	s := strings.TrimSpace(stdout)
 	if s == "" {
@@ -87,20 +89,29 @@ func ParseHookJSONOutput(stdout, expectedEvent string) (additionalContext string
 	if err := json.Unmarshal([]byte(s), &top); err != nil {
 		return "", nil
 	}
-	rawHSO, ok := top["hookSpecificOutput"]
-	if !ok || len(rawHSO) == 0 {
-		return "", nil
+
+	// Try nested hookSpecificOutput first (TS Claude Code format).
+	if rawHSO, ok := top["hookSpecificOutput"]; ok && len(rawHSO) > 0 {
+		var hso struct {
+			HookEventName     string `json:"hookEventName"`
+			AdditionalContext string `json:"additionalContext"`
+		}
+		if err := json.Unmarshal(rawHSO, &hso); err != nil {
+			return "", nil
+		}
+		if expectedEvent != "" && hso.HookEventName != "" && hso.HookEventName != expectedEvent {
+			return "", nil
+		}
+		return strings.TrimSpace(hso.AdditionalContext), nil
 	}
-	var hso struct {
-		HookEventName      string `json:"hookEventName"`
-		AdditionalContext  string `json:"additionalContext"`
+
+	// Fallback: top-level additionalContext (plain format).
+	if rawAC, ok := top["additionalContext"]; ok && len(rawAC) > 0 {
+		var ac string
+		if err := json.Unmarshal(rawAC, &ac); err != nil {
+			return "", nil
+		}
+		return strings.TrimSpace(ac), nil
 	}
-	if err := json.Unmarshal(rawHSO, &hso); err != nil {
-		return "", nil
-	}
-	if expectedEvent != "" && hso.HookEventName != "" && hso.HookEventName != expectedEvent {
-		return "", nil
-	}
-	// When hookEventName is omitted, still accept additionalContext (lenient vs strict TS validation).
-	return strings.TrimSpace(hso.AdditionalContext), nil
+	return "", nil
 }
