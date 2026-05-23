@@ -58,6 +58,8 @@ type OutsideReplCommandParams struct {
 	// Deps enables non-command hook types (prompt, http, agent).
 	// When nil, only command hooks are executed.
 	Deps *HookExecDeps
+	// ExtraEnv is appended to the hook command's environment (key=value pairs).
+	ExtraEnv []string
 }
 
 // ExecuteCommandHooksOutsideREPLParallel runs all matching **command** hooks concurrently.
@@ -92,7 +94,7 @@ func ExecuteCommandHooksOutsideREPLParallel(p OutsideReplCommandParams) []Outsid
 			defer wg.Done()
 			ms := hookTimeoutMS(h, batch)
 			start := time.Now()
-			stdout, stderr, exitCode, err := RunCommandHook(ctx, wd, h.Command, strings.TrimSpace(p.JSONInput), ms)
+			stdout, stderr, exitCode, err := RunCommandHook(ctx, wd, h.Command, strings.TrimSpace(p.JSONInput), ms, p.ExtraEnv)
 			res := OutsideReplCommandResult{
 				Command:    h.Command,
 				Output:     stdout,
@@ -165,7 +167,7 @@ func ExecuteAllHooksOutsideREPLParallel(p OutsideReplCommandParams) []OutsideRep
 			}
 			switch strings.TrimSpace(h.Type) {
 			case "command":
-				stdout, stderr, exitCode, err := RunCommandHook(ctx, wd, h.Command, strings.TrimSpace(p.JSONInput), ms)
+				stdout, stderr, exitCode, err := RunCommandHook(ctx, wd, h.Command, strings.TrimSpace(p.JSONInput), ms, p.ExtraEnv)
 				res.Stdout = stdout
 				res.Stderr = stderr
 				res.ExitCode = exitCode

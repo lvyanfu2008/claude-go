@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -37,7 +38,7 @@ func hookTimeoutMS(h commandHook, batchDefault int) int {
 }
 
 // RunCommandHook runs a single command hook: sh -c with jsonInput written to stdin (plus newline), like TS execCommandHook.
-func RunCommandHook(ctx context.Context, workDir, command, jsonInput string, timeoutMs int) (stdout, stderr string, exitCode int, err error) {
+func RunCommandHook(ctx context.Context, workDir, command, jsonInput string, timeoutMs int, extraEnv []string) (stdout, stderr string, exitCode int, err error) {
 	if strings.TrimSpace(command) == "" {
 		return "", "", 0, nil
 	}
@@ -57,6 +58,16 @@ func RunCommandHook(ctx context.Context, workDir, command, jsonInput string, tim
 	if cmd.Dir == "" {
 		cmd.Dir = "."
 	}
+	env := os.Environ()
+	if len(extraEnv) > 0 {
+		env = append(env, extraEnv...)
+	}
+	// If the command lives under a plugin cache directory, set CLAUDE_PLUGIN_ROOT
+	// so hook scripts can detect the plugin environment.
+	if pluginRoot := extractPluginRoot(command); pluginRoot != "" {
+		env = append(env, "CLAUDE_PLUGIN_ROOT="+pluginRoot)
+	}
+	cmd.Env = env
 	cmd.Stdin = strings.NewReader(jsonInput + "\n")
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -114,4 +125,28 @@ func ParseHookJSONOutput(stdout, expectedEvent string) (additionalContext string
 		return strings.TrimSpace(ac), nil
 	}
 	return "", nil
+}
+
+// extractPluginRoot returns the plugin root directory if the command path
+// is inside a plugin cache directory, otherwise returns empty string.
+func extractPluginRoot(command string) string {
+	// The command contains a path like:
+	// .../plugins/cache/{marketplace}/{name}/{version}/hooks/script
+	// Extract up to the version directory.
+	fields := strings.Fields(command)
+	for _, f := range fields {
+		f = strings.Trim(f, `"'`)
+		idx := strings.Index(f, "/.claude/plugins/cache/")
+		if idx < 0 {
+			continue
+		}
+		rest := f[idx+len("/.claude/plugins/cache/"):]
+		parts := strings.Split(rest, "/")
+		if len(parts) < 3 {
+			continue
+		}
+		// marketplace/name/version
+		return f[:idx] + "/.claude/plugins/cache/" + strings.Join(parts[:3], "/")
+	}
+	return ""
 }
