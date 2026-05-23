@@ -34,11 +34,18 @@ func LoadSkillsFromPluginDir(pluginDir, pluginName, sourceName, pluginPath strin
 }
 
 // LoadSkillsFromPlugin loads all skill commands from an already-parsed manifest.
+// If manifest.Skills is empty, it auto-discovers skill directories by scanning
+// immediate subdirectories of pluginDir for SKILL.md files.
 func LoadSkillsFromPlugin(pluginDir string, manifest *plugins.PluginManifest, pluginName, sourceName string) ([]types.Command, error) {
+	skillDirs := manifest.Skills
+	if len(skillDirs) == 0 {
+		skillDirs = autoDiscoverSkillDirs(pluginDir)
+	}
+
 	var all []types.Command
 	loadedPaths := make(map[string]struct{})
 
-	for _, skillRel := range manifest.Skills {
+	for _, skillRel := range skillDirs {
 		skillPath := filepath.Join(pluginDir, skillRel)
 		cmds, err := goccommands.LoadSkillsFromDirectory(
 			context.Background(),
@@ -56,6 +63,68 @@ func LoadSkillsFromPlugin(pluginDir string, manifest *plugins.PluginManifest, pl
 		all = append(all, cmds...)
 	}
 	return all, nil
+}
+
+// autoDiscoverSkillDirs scans pluginDir for immediate subdirectories containing SKILL.md.
+// Also checks if pluginDir itself has a "skills/" subdirectory and scans within it.
+func autoDiscoverSkillDirs(pluginDir string) []string {
+	var dirs []string
+
+	// First, check for a "skills/" subdirectory (common plugin layout)
+	skillsRoot := filepath.Join(pluginDir, "skills")
+	if info, err := os.Stat(skillsRoot); err == nil && info.IsDir() {
+		entries, err := os.ReadDir(skillsRoot)
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+				skillMD := filepath.Join(skillsRoot, e.Name(), "SKILL.md")
+				if _, err := os.Stat(skillMD); err == nil {
+					dirs = append(dirs, filepath.Join("skills", e.Name()))
+				}
+			}
+		}
+		return dirs
+	}
+
+	// Fallback: scan immediate subdirectories of pluginDir for SKILL.md
+	entries, err := os.ReadDir(pluginDir)
+	if err != nil {
+		return dirs
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		// Skip common non-skill directories
+		if e.Name() == "hooks" || e.Name() == "assets" || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		// Check direct child: pluginDir/xxx/SKILL.md
+		skillMD := filepath.Join(pluginDir, e.Name(), "SKILL.md")
+		if _, err := os.Stat(skillMD); err == nil {
+			dirs = append(dirs, e.Name())
+			continue
+		}
+		// Check nested: pluginDir/xxx/skills/*/SKILL.md
+		nestedSkills := filepath.Join(pluginDir, e.Name(), "skills")
+		if info, err := os.Stat(nestedSkills); err == nil && info.IsDir() {
+			subEntries, err := os.ReadDir(nestedSkills)
+			if err != nil {
+				continue
+			}
+			for _, sub := range subEntries {
+				if sub.IsDir() {
+					subMD := filepath.Join(nestedSkills, sub.Name(), "SKILL.md")
+					if _, err := os.Stat(subMD); err == nil {
+						dirs = append(dirs, filepath.Join(e.Name(), "skills", sub.Name()))
+					}
+				}
+			}
+		}
+	}
+	return dirs
 }
 
 func manifestToRaw(m *plugins.PluginManifest) json.RawMessage {
