@@ -19,11 +19,6 @@ func MergeEnabledPlugins(cwd string) (map[string]bool, error) {
 	merged := map[string]bool{}
 
 	userPath := userClaudeSettingsPath()
-	// Also read settings.json (TS CLI writes enabledPlugins here).
-	userSettingsJSON := userClaudeSettingsJSONPath()
-	if err := mergeEnabledPluginsFile(userSettingsJSON, merged); err != nil {
-		return nil, err
-	}
 	if err := mergeEnabledPluginsFile(userPath, merged); err != nil {
 		return nil, err
 	}
@@ -33,11 +28,6 @@ func MergeEnabledPlugins(cwd string) (map[string]bool, error) {
 		return nil, err
 	}
 	cl := filepath.Join(projRoot, ".claude")
-	// settings.json is written by TS CLI (plugin install etc.); read it first so
-	// settings.go.json (Go-specific overrides) can shadow individual keys.
-	if err := mergeEnabledPluginsFile(filepath.Join(cl, "settings.json"), merged); err != nil {
-		return nil, err
-	}
 	if err := mergeEnabledPluginsFile(filepath.Join(cl, "settings.go.json"), merged); err != nil {
 		return nil, err
 	}
@@ -57,17 +47,6 @@ func userClaudeSettingsPath() string {
 		return filepath.Join(".", ".claude", "settings.go.json")
 	}
 	return filepath.Join(home, ".claude", "settings.go.json")
-}
-
-func userClaudeSettingsJSONPath() string {
-	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
-		return filepath.Join(d, "settings.json")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".", ".claude", "settings.json")
-	}
-	return filepath.Join(home, ".claude", "settings.json")
 }
 
 func mergeEnabledPluginsFile(path string, merged map[string]bool) error {
