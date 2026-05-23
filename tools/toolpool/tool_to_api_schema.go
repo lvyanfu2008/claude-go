@@ -68,10 +68,29 @@ func ToolToAPISchema(spec types.ToolSpec, opts ToolToAPISchemaOptions) APIToolDe
 		Description: spec.Description,
 		InputSchema: spec.InputJSONSchema,
 	}
-	// AskUserQuestion description is dynamic (depends on QuestionPreviewFormat).
-	// Re-evaluate here so SetQuestionPreviewFormat takes effect without rebuilding the ToolSpec.
-	if spec.Name == "AskUserQuestion" {
+	// Re-evaluate dynamic descriptions so runtime state changes
+	// (env vars, feature flags, dates, etc.) take effect without rebuilding the ToolSpec.
+	switch spec.Name {
+	case "AskUserQuestion":
 		out.Description = getAskUserQuestionDescription()
+	case "WebSearch":
+		out.Description = getWebSearchDescription()
+	case "SendMessage":
+		out.Description = getSendMessageDescription()
+	case "EnterPlanMode":
+		out.Description = getEnterPlanModeDescription()
+	case "CronCreate":
+		out.Description = getCronCreateDescription()
+	case "CronDelete":
+		out.Description = getCronDeleteDescription()
+	case "CronList":
+		out.Description = getCronListDescription()
+	case "TaskCreate":
+		out.Description = getTaskCreateDescription()
+	case "TaskList":
+		out.Description = getTaskListDescription()
+	case "PowerShell":
+		out.Description = getPowerShellDescription()
 	}
 	// Mirror TS filterSwarmFieldsFromSchema: strip name/team_name/mode from Agent
 	// tool input_schema when agent swarms are not enabled (src/utils/api.ts lines 166-168).

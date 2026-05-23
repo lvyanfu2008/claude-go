@@ -351,7 +351,7 @@ func nativeNotebookEditToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "NotebookEdit",
-		Description:     "Edit Jupyter notebook cells (.ipynb)",
+		Description:     notebookEditPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -374,7 +374,7 @@ func nativeTaskStopToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskStop",
-		Description:     "Stop a running background task by ID.",
+		Description:     taskStopPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -413,7 +413,7 @@ func nativeTodoWriteToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TodoWrite",
-		Description:     "Manage structured task lists for the current coding session.",
+		Description:     todoWritePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -438,7 +438,7 @@ func nativeWebFetchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "WebFetch",
-		Description:     "Fetch and analyze web content for a given URL.",
+		Description:     webFetchPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -473,7 +473,7 @@ func nativeWebSearchToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "WebSearch",
-		Description:     "Search the web for up-to-date information.",
+		Description:     getWebSearchDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -487,7 +487,7 @@ func nativeEnterPlanModeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "EnterPlanMode",
-		Description:     "Enter plan mode for complex implementation tasks.",
+		Description:     getEnterPlanModeDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -522,7 +522,7 @@ func nativeExitPlanModeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ExitPlanMode",
-		Description:     "Exit plan mode and request user approval.",
+		Description:     exitPlanModePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -554,7 +554,7 @@ func nativeCronCreateToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "CronCreate",
-		Description:     "Schedule prompts using cron expressions.",
+		Description:     getCronCreateDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -574,7 +574,7 @@ func nativeCronDeleteToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "CronDelete",
-		Description:     "Cancel a scheduled cron job.",
+		Description:     getCronDeleteDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -588,7 +588,7 @@ func nativeCronListToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "CronList",
-		Description:     "List all scheduled cron jobs.",
+		Description:     getCronListDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -764,7 +764,7 @@ func nativeEnterWorktreeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "EnterWorktree",
-		Description:     "Enter an isolated worktree session.",
+		Description:     enterWorktreePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -789,7 +789,7 @@ func nativeExitWorktreeToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ExitWorktree",
-		Description:     "Exit current worktree session.",
+		Description:     exitWorktreePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -876,7 +876,7 @@ func nativeTaskOutputToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "TaskOutput",
-		Description:     "Read output from a running or completed background task.",
+		Description:     taskOutputPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1051,7 +1051,7 @@ func nativeSendMessageToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "SendMessage",
-		Description:     "Send a message to a teammate or broadcast target.",
+		Description:     getSendMessageDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1090,7 +1090,7 @@ func nativeListMcpResourcesToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ListMcpResourcesTool",
-		Description:     "List resources from connected MCP servers.",
+		Description:     listMcpResourcesPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1108,7 +1108,7 @@ func nativeReadMcpResourceToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "ReadMcpResourceTool",
-		Description:     "Read a specific resource from an MCP server.",
+		Description:     readMcpResourcePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1133,7 +1133,7 @@ func nativeTaskCreateToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:        "TaskCreate",
-		Description: "Create a new task in the structured task list (Todo v2). Tasks track progress, dependencies, and ownership. Use this to break complex work into tracked subtasks — each task should be a concrete, verifiable unit of work. Tasks support status tracking (pending -> in_progress -> completed/failed/killed) and can set initial blocks/blockedBy to encode dependencies. Owner auto-assigns from the current agent when swarms are enabled.",
+		Description: getTaskCreateDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1148,13 +1148,13 @@ func nativeTaskGetToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:        "TaskGet",
-		Description: "Retrieve a single task by ID from the Todo v2 task list. Returns the full task object including id, subject, description, status, blocks, blockedBy, and owner. Returns null if the task does not exist.",
+		Description: taskGetPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
 
 func nativeTaskListToolSpec() types.ToolSpec {
-	return nativeEmptyObjectSchemaToolSpec("TaskList", "List all tasks in the Todo v2 task list. Returns an array of tasks with id, subject, status, owner, and blockedBy fields. Completed blockers are filtered from blockedBy. Tasks with _internal metadata are hidden. Use this to review progress, find available work, and inspect dependency chains.")
+	return nativeEmptyObjectSchemaToolSpec("TaskList", getTaskListDescription())
 }
 
 func nativeTaskUpdateToolSpec() types.ToolSpec {
@@ -1177,7 +1177,7 @@ func nativeTaskUpdateToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:        "TaskUpdate",
-		Description: "Update an existing task in the Todo v2 task list. Supports updating subject, description, status, owner, metadata, and adding dependency links (addBlocks/addBlockedBy). Status transitions: pending -> in_progress -> completed/failed/killed. Set status to \"deleted\" to remove a task (dependency references are cleaned up automatically). When completing a task, blockedBy blockers are validated — all must be resolved first. Use TaskList after completing a task to find newly unblocked work.",
+		Description: taskUpdatePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1651,7 +1651,7 @@ func nativePowerShellToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "PowerShell",
-		Description:     "Execute a PowerShell command in the local environment.",
+		Description:     getPowerShellDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
