@@ -1,9 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
+	plugins "claude-go-plugins"
 	"github.com/spf13/cobra"
 )
 
@@ -41,10 +47,26 @@ var pluginListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed plugins",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("Installed plugins:")
-		fmt.Println("  (plugin system not yet implemented in Go)")
-		fmt.Println("")
-		fmt.Println("Use the TS CLI for plugin management.")
+		store := plugins.NewDiskStore()
+		cacheDir, err := pluginCacheDir()
+		if err != nil {
+			return err
+		}
+		installed, err := store.ListInstalled(cmd.Context(), cacheDir)
+		if err != nil {
+			return err
+		}
+		if len(installed) == 0 {
+			fmt.Println("No plugins installed.")
+			return nil
+		}
+		for _, p := range installed {
+			status := "enabled"
+			if !p.Enabled {
+				status = "disabled"
+			}
+			fmt.Printf("  %-30s %-8s  %s\n", p.ID, p.Version, status)
+		}
 		return nil
 	},
 }
@@ -107,8 +129,34 @@ var pluginInstallCmd = &cobra.Command{
 	Short:   "Install a plugin",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		plugin := args[0]
-		fmt.Printf("Installing plugin %q... (not yet implemented in Go)\n", plugin)
+		pluginRef := args[0]
+		src, err := plugins.ResolveSource(pluginRef)
+		if err != nil {
+			return fmt.Errorf("invalid plugin reference %q: %w", pluginRef, err)
+		}
+
+		httpClient := &http.Client{Timeout: 60 * time.Second}
+		cat := plugins.NewGitHubCatalog(httpClient)
+		resolved, err := cat.Resolve(cmd.Context(), src, src.Repo)
+		if err != nil {
+			return fmt.Errorf("resolve plugin: %w", err)
+		}
+		defer resolved.Payload.Close()
+
+		store := plugins.NewDiskStore()
+		cacheDir, _ := pluginCacheDir()
+		installed, err := store.Install(cmd.Context(), *resolved, cacheDir)
+		if err != nil {
+			return fmt.Errorf("install: %w", err)
+		}
+
+		// Update settings to enable the plugin
+		pluginID := installed.Manifest.Name + "@" + pluginsMarketplaceName(src)
+		if err := enablePluginInSettings(pluginID); err != nil {
+			fmt.Println("Warning: installed but failed to enable in settings:", err)
+		}
+
+		fmt.Printf("Installed %s %s\n", installed.Manifest.Name, installed.Manifest.Version)
 		return nil
 	},
 }
@@ -124,9 +172,12 @@ var pluginUninstallCmd = &cobra.Command{
 	Short:   "Uninstall a plugin",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		plugin := args[0]
-		fmt.Printf("Uninstalling plugin %q... (not yet implemented in Go)\n", plugin)
-		return nil
+		store := plugins.NewDiskStore()
+		cacheDir, err := pluginCacheDir()
+		if err != nil {
+			return err
+		}
+		return store.Uninstall(cmd.Context(), cacheDir, args[0])
 	},
 }
 
@@ -180,6 +231,51 @@ var pluginUpdateCmd = &cobra.Command{
 		fmt.Printf("Updating plugin %q... (not yet implemented in Go)\n", plugin)
 		return nil
 	},
+}
+
+func pluginCacheDir() (string, error) {
+	if d := os.Getenv("CLAUDE_PLUGIN_CACHE_DIR"); d != "" {
+		return d, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".claude", "plugins", "cache"), nil
+}
+
+func pluginsMarketplaceName(source plugins.Source) string {
+	if source.Repo != "" {
+		parts := strings.Split(source.Repo, "/")
+		if len(parts) > 0 {
+			return parts[0]
+		}
+	}
+	return "local"
+}
+
+func enablePluginInSettings(pluginID string) error {
+	// Simplified: write to user settings.go.json
+	home, _ := os.UserHomeDir()
+	settingsPath := filepath.Join(home, ".claude", "settings.go.json")
+
+	var settings struct {
+		EnabledPlugins map[string]bool `json:"enabledPlugins"`
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err == nil {
+		json.Unmarshal(data, &settings)
+	}
+	if settings.EnabledPlugins == nil {
+		settings.EnabledPlugins = make(map[string]bool)
+	}
+	settings.EnabledPlugins[pluginID] = true
+
+	newData, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(settingsPath, newData, 0644)
 }
 
 func init() {
