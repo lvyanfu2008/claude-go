@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	plugins "claude-go-plugins"
+	plugins "goc/plugincore"
 )
 
 func TestLoadSkillsFromPluginDir(t *testing.T) {

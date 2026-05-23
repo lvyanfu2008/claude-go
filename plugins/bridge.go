@@ -1,6 +1,8 @@
 // Package plugins adapts claude-go-plugins (core plugin system) to claude-go types
 // and hooks. It is the integration layer between the independent plugin module
 // and the claude-go runtime.
+// Package plugins adapts plugincore to claude-go types and hooks.
+// It is the integration layer between the plugin system and the runtime.
 package plugins
 
 import (
@@ -11,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	plugins "claude-go-plugins"
+	plugins "goc/plugincore"
 
 	"goc/ccb-engine/diaglog"
 	"goc/ccb-engine/settingsfile"

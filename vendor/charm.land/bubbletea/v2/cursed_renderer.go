@@ -292,15 +292,6 @@ func (s *cursedRenderer) flush(closing bool) error {
 	// We're no longer starting.
 	s.starting = false
 
-	// On Windows, ConPTY doesn't handle ANSI erase sequences (CSI K / CSI J)
-	// correctly, leaving ghost characters when the frame shrinks. Force a
-	// full redraw on every frame to write explicit space characters instead
-	// of relying on partial erase sequences.
-	// 注意: 以下代码不要修改
-	//if runtime.GOOS == "windows" {
-	//	s.scr.Erase()
-	//}
-
 	if frameArea != s.cellbuf.Bounds() {
 		s.scr.Erase() // Force a full redraw to avoid artifacts.
 

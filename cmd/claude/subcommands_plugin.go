@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	plugins "claude-go-plugins"
+	plugins "goc/plugincore"
 	"github.com/spf13/cobra"
 )
 
