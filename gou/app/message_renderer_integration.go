@@ -271,7 +271,7 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 				content += "\n"
 			}
 			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
-			content += applyMessagePaneGutter(md, m.messageBodyColsForLayout())
+			content += applyAssistantStreamingGutter(md, m.messageBodyColsForLayout())
 		}
 
 		// Add streaming tools
@@ -430,7 +430,7 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 				content += "\n"
 			}
 			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
-			content += applyMessagePaneGutter(md, m.messageBodyColsForLayout())
+			content += applyAssistantStreamingGutter(md, m.messageBodyColsForLayout())
 		}
 
 		// Add streaming tools
