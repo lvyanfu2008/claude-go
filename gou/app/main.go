@@ -2536,9 +2536,12 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 				}
 				extraRoots := querycontext.ExtraClaudeMdRootsForFetch(params.RuntimeContext)
 				fetchOpts := querycontext.FetchOpts{
-					CustomSystemPrompt: customSys,
-					Gou:                gouOpts,
-					ExtraClaudeMdRoots: extraRoots,
+					CustomSystemPrompt:  customSys,
+					Gou:                 gouOpts,
+					ExtraClaudeMdRoots:  extraRoots,
+					SessionStartSource:  "startup",
+					HooksSessionID:      m.store.ConversationID,
+					HooksTranscriptPath: "",
 				}
 				if m.tsBridge != nil {
 					fetchOpts.TSSnapshot = m.tsBridge
@@ -2732,6 +2735,11 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						}
 						// Snapshot matches qp.Messages (TS QueryEngine messages at callModel): includes skill_listing row if appended above.
 						msgsForQ := slices.Clone(m.store.Messages)
+						// Prepend SessionStart hook_additional_context attachments (e.g. superpowers using-superpowers skill).
+						// These are ephemeral — not persisted to store, only injected into the current query messages.
+						if partsRes.SessionStartHookMessages != nil {
+							msgsForQ = append(slices.Clone(partsRes.SessionStartHookMessages), msgsForQ...)
+						}
 						if send := m.ccbSend; send != nil {
 							qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
 								send(gouStreamingToolUsesMsg{Uses: uses})
