@@ -86,6 +86,7 @@ import (
 	"goc/tools"
 	"goc/tools/localtools"
 	"goc/tools/skilltools"
+	"goc/tools/toolsearchwire"
 	"goc/tools/toolexecution"
 	"goc/tools/toolresultpersist"
 	"goc/tscontext"
@@ -2645,6 +2646,11 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 					m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
 					m.rebuildHeightCache()
 				} else {
+					// When dynamic tool loading is active, prepend <available-deferred-tools>
+					// so the model knows which tools to discover via ToolSearch.
+					if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsJSON, mainLoopModel, false, false); len(prep) > 0 {
+						msgsJSON = prep
+					}
 					reqID := fmt.Sprintf("turn-%d", time.Now().UnixNano())
 					m.store.ClearStreaming()
 					m.store.ClearStreamingToolUses()
