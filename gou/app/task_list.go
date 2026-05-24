@@ -86,10 +86,14 @@ func (tl *taskListModel) setAgentTasks(s *agentTaskStore) {
 }
 
 // dirChanged checks if the tasks directory mod time has changed since last check.
-// Used as a lightweight file watcher without fsnotify dependency.
 func (tl *taskListModel) dirChanged() bool {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
+	return tl.dirChangedUnlocked()
+}
+
+// dirChangedUnlocked is the internal version (caller holds tl.mu).
+func (tl *taskListModel) dirChangedUnlocked() bool {
 	info, err := os.Stat(tl.tasksDir)
 	if err != nil {
 		return false
@@ -126,14 +130,21 @@ func taskMetadataInternal(meta map[string]any) bool {
 	}
 }
 
-// poll fetches tasks from disk and updates internal state.
+// poll fetches tasks from disk (only if dir changed) and updates timing state.
 // Returns true if visibility changed (caller should trigger rerender).
 func (tl *taskListModel) poll() bool {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
 	now := time.Now()
-	tasks := tl.readTasksFromDiskUnlocked()
+
+	// Only re-read from disk when the directory actually changed.
+	// Timing logic (completedAt, hide timer) runs on every tick.
+	tasks := tl.tasks
+	dirChanged := tl.dirChangedUnlocked()
+	if dirChanged || tasks == nil {
+		tasks = tl.readTasksFromDiskUnlocked()
+	}
 
 	if len(tasks) == 0 {
 		tl.visible = false
@@ -141,20 +152,22 @@ func (tl *taskListModel) poll() bool {
 		return true
 	}
 
-	// Track completion transitions
-	for _, t := range tasks {
-		prevStatus, seen := tl.lastSnapshot[t.ID]
-		if t.Status == "completed" {
-			if !seen || prevStatus != "completed" {
-				tl.completedAt[t.ID] = now
+	// Track completion transitions (only when tasks were reloaded)
+	if dirChanged {
+		for _, t := range tasks {
+			prevStatus, seen := tl.lastSnapshot[t.ID]
+			if t.Status == "completed" {
+				if !seen || prevStatus != "completed" {
+					tl.completedAt[t.ID] = now
+				}
+			} else {
+				delete(tl.completedAt, t.ID)
 			}
-		} else {
-			delete(tl.completedAt, t.ID)
+			tl.lastSnapshot[t.ID] = t.Status
 		}
-		tl.lastSnapshot[t.ID] = t.Status
 	}
 
-	// Clean up stale completion timestamps
+	// Clean up stale completion timestamps (always runs — wall-clock dependent)
 	for id, ts := range tl.completedAt {
 		if now.Sub(ts) > recentCompletedTTL {
 			delete(tl.completedAt, id)
@@ -181,7 +194,6 @@ func (tl *taskListModel) poll() bool {
 	if allDone {
 		if tl.hideUntil.IsZero() {
 			tl.hideUntil = now.Add(taskHideAfterComplete)
-			tl.visible = true
 		} else if now.After(tl.hideUntil) {
 			tl.visible = false
 			tl.tasks = tasks
