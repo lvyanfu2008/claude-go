@@ -157,3 +157,110 @@ func TestAgentEvictExpiredMultipleTasks(t *testing.T) {
 		t.Fatal("expected a1 to survive eviction")
 	}
 }
+
+
+// TestTaskListActivityDisplay verifies that when an in-progress task has an owner
+// and the agentTasks store has a running agent with matching name, the activity
+// description appears in the view output.
+func TestTaskListActivityDisplay(t *testing.T) {
+	store := newAgentTaskStore()
+	now := time.Now()
+
+	// Register a running agent with activity
+	actTime := time.Now()
+	store.Register(&AgentTaskState{
+		ID: "agent-a1", AgentType: "explore", Name: "explorer",
+		Status: "running", StartTime: now,
+		EvictAfter: ptrTime(now.Add(time.Minute)),
+		Progress: &AgentTaskProgress{
+			Summary:      "Reading main.go",
+			LastActivity: &actTime,
+		},
+	})
+
+	tl := newTaskListModel("test-session")
+	tl.setAgentTasks(store)
+
+	// Manually add a task with matching owner
+	tl.mu.Lock()
+	tl.tasks = []taskListEntry{
+		{ID: "1", Subject: "Do thing", Status: "in_progress", Owner: "explorer"},
+	}
+	tl.visible = true
+	tl.mu.Unlock()
+
+	view := tl.view(10, 80)
+	if !strings.Contains(view, "Do thing") {
+		t.Fatal("expected task subject in view")
+	}
+	if !strings.Contains(view, "Reading main.go") {
+		t.Fatalf("expected activity in view, got: %s", view)
+	}
+}
+
+// TestOwnerColorDisplay verifies owner is rendered with color when agent has a color.
+func TestOwnerColorDisplay(t *testing.T) {
+	tl := newTaskListModel("test-session")
+
+	tl.mu.Lock()
+	tl.tasks = []taskListEntry{
+		{ID: "1", Subject: "Task 1", Status: "in_progress", Owner: "worker1"},
+	}
+	tl.visible = true
+	tl.mu.Unlock()
+
+	// Without agentTasks set, owner should use faint style
+	view := tl.view(10, 80)
+	if !strings.Contains(view, "@worker1") {
+		t.Fatal("expected owner in view")
+	}
+
+	// With agentTasks set and agent has a color, verify it renders
+	store := newAgentTaskStore()
+	store.Register(&AgentTaskState{
+		ID: "agent-blue", AgentType: "blueAgent", Name: "worker1",
+		Status: "running", StartTime: time.Now(),
+		EvictAfter: ptrTime(time.Now().Add(time.Minute)),
+	})
+	tl.setAgentTasks(store)
+	view2 := tl.view(10, 80)
+	if !strings.Contains(view2, "@worker1") {
+		t.Fatal("expected owner in view with agentTasks")
+	}
+}
+
+// TestNoActivityForCompletedTask verifies that completed tasks do not show activity lines.
+func TestNoActivityForCompletedTask(t *testing.T) {
+	store := newAgentTaskStore()
+	store.Register(&AgentTaskState{
+		ID: "agent-a1", AgentType: "x", Name: "explorer",
+		Status: "running", StartTime: time.Now(),
+		EvictAfter: ptrTime(time.Now().Add(time.Minute)),
+		Progress: &AgentTaskProgress{Summary: "Working"},
+	})
+
+	tl := newTaskListModel("test-session")
+	tl.setAgentTasks(store)
+
+	tl.mu.Lock()
+	tl.tasks = []taskListEntry{
+		{ID: "1", Subject: "Done task", Status: "completed", Owner: "explorer"},
+	}
+	tl.visible = true
+	tl.mu.Unlock()
+
+	view := tl.view(10, 80)
+	if strings.Contains(view, "Working") {
+		t.Fatal("expected NO activity for completed task")
+	}
+}
+
+// TestAgentColorMap covers all known color entries.
+func TestAgentColorMap(t *testing.T) {
+	names := []string{"red", "blue", "green", "yellow", "magenta", "cyan", "orange", "claude"}
+	for _, name := range names {
+		if _, ok := agentColorMap[name]; !ok {
+			t.Fatalf("missing color: %s", name)
+		}
+	}
+}

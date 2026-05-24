@@ -777,6 +777,7 @@ func Run(config_ Config) error {
 	mcpCmdPath := strings.TrimSpace(config_.MCPCommandsJSONPath)
 	mcpToolPath := strings.TrimSpace(config_.MCPToolsJSONPath)
 	m := newModel(st, mcpCmdPath, mcpToolPath, nil)
+		m.taskList.setAgentTasks(m.agentTasks)
 
 	opts := []tea.ProgramOption{}
 	if config_.StreamStdin {

@@ -18,6 +18,19 @@ import (
 	"goc/tools"
 )
 
+// agentColorMap maps agent definition color names to lipgloss terminal colors.
+// TS AGENT_COLOR_TO_THEME_COLOR in agentColorManager.ts.
+var agentColorMap = map[string]color.Color{
+	"red":     lipgloss.Color("1"),
+	"blue":    lipgloss.Color("4"),
+	"green":   lipgloss.Color("2"),
+	"yellow":  lipgloss.Color("3"),
+	"magenta": lipgloss.Color("5"),
+	"cyan":    lipgloss.Color("6"),
+	"orange":  lipgloss.Color("214"),
+	"claude":  lipgloss.Color("141"),
+}
+
 // taskListEntry mirrors tools.v2Task for display (decoupled from full validation).
 type taskListEntry struct {
 	ID        string         `json:"id"`
@@ -38,6 +51,9 @@ type taskListModel struct {
 	hideUntil    time.Time            // hide all-tasks-completed banner until
 	visible      bool
 	pollTick     time.Duration
+	agentTasks   *agentTaskStore // for teammate activity + owner color lookup
+	tasksDir     string          // cached tasks directory path for dir watcher
+	dirWatchMod  time.Time       // last observed ModTime of tasks dir
 }
 
 const (
@@ -52,12 +68,38 @@ const (
 )
 
 func newTaskListModel(sessionID string) *taskListModel {
-	return &taskListModel{
+	tl := &taskListModel{
 		toolCfg:      tools.Config{SessionID: strings.TrimSpace(sessionID)},
 		completedAt:  make(map[string]time.Time),
 		lastSnapshot: make(map[string]string),
 		pollTick:     defaultPollInterval,
 	}
+	tl.tasksDir = tools.V2TasksDir(tools.TaskListID(tl.toolCfg))
+	return tl
+}
+
+// setAgentTasks wires the agent task store for teammate activity lookup and owner color.
+func (tl *taskListModel) setAgentTasks(s *agentTaskStore) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	tl.agentTasks = s
+}
+
+// dirChanged checks if the tasks directory mod time has changed since last check.
+// Used as a lightweight file watcher without fsnotify dependency.
+func (tl *taskListModel) dirChanged() bool {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	info, err := os.Stat(tl.tasksDir)
+	if err != nil {
+		return false
+	}
+	mt := info.ModTime()
+	if mt.After(tl.dirWatchMod) {
+		tl.dirWatchMod = mt
+		return true
+	}
+	return false
 }
 
 // taskMetadataInternal matches TS listTasks filter: exclude tasks with metadata._internal.
@@ -289,6 +331,11 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
+	return tl.viewUnlocked(maxDisplay, columns)
+}
+
+// viewUnlocked is the internal view renderer (caller holds tl.mu).
+func (tl *taskListModel) viewUnlocked(maxDisplay int, columns int) string {
 	if !tl.visible || len(tl.tasks) == 0 {
 		return ""
 	}
@@ -325,6 +372,34 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		}
 	} else {
 		visible = tasks
+	}
+
+	// Build activity lookup from agentTasks: owner name → current summary/activity
+	ownerActivity := make(map[string]string)
+	ownerActive := make(map[string]bool)
+	ownerColorName := make(map[string]string)
+	if tl.agentTasks != nil {
+		for _, at := range tl.agentTasks.VisibleTasks() {
+			if at.Status == "running" {
+				ownerActive[at.Name] = true
+				ownerActive[at.AgentType] = true
+				if at.Progress != nil {
+					act := at.Progress.Summary
+					if act == "" {
+						act = at.Progress.LastActivityDesc
+					}
+					if act != "" {
+						ownerActivity[at.Name] = act
+						ownerActivity[at.AgentType] = act
+					}
+				}
+				// Look up agent color from definitions
+				if colorName := resolveAgentColorName(at.AgentType); colorName != "" {
+					ownerColorName[at.Name] = colorName
+					ownerColorName[at.AgentType] = colorName
+				}
+			}
+		}
 	}
 
 	var b strings.Builder
@@ -388,9 +463,17 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		b.WriteString(subjStyle.Render(subject))
 
 		// Show owner for non-completed tasks (mirrors TS TaskListV2 owner display)
-		if t.Owner != "" && t.Status != "completed" && columns >= 60 {
+		if t.Owner != "" && t.Status != "completed" && columns >= 60 && ownerActive[t.Owner] {
+			ownerStyle := lipgloss.NewStyle().Faint(true)
+			if cn, ok := ownerColorName[t.Owner]; ok {
+				if oc, ok2 := agentColorMap[cn]; ok2 {
+					ownerStyle = lipgloss.NewStyle().Foreground(oc)
+				}
+			}
 			ownerStr := " (@" + t.Owner + ")"
-			b.WriteString(lipgloss.NewStyle().Faint(true).Render(ownerStr))
+			b.WriteString(ownerStyle.Render(ownerStr))
+		} else if t.Owner != "" && t.Status != "completed" && columns >= 60 {
+			b.WriteString(lipgloss.NewStyle().Faint(true).Render(" (@" + t.Owner + ")"))
 		}
 
 		if isBlocked {
@@ -404,6 +487,24 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 		}
 
 		b.WriteByte('\n')
+
+		// Show teammate activity on second line for in-progress, non-blocked, owned tasks
+		showActivity := t.Status == "in_progress" && !isBlocked && t.Owner != ""
+		if showActivity {
+			act := ownerActivity[t.Owner]
+			if act != "" {
+				maxActivityWidth := columns - 15
+				if maxActivityWidth < 15 {
+					maxActivityWidth = 15
+				}
+				if len(act) > maxActivityWidth {
+					act = act[:maxActivityWidth-1] + "…"
+				}
+				b.WriteString("  ")
+				b.WriteString(lipgloss.NewStyle().Faint(true).Render(act + "…"))
+				b.WriteByte('\n')
+			}
+		}
 	}
 
 	if len(hidden) > 0 {
@@ -437,6 +538,17 @@ func (tl *taskListModel) view(maxDisplay int, columns int) string {
 	}
 
 	return b.String()
+}
+
+// resolveAgentColorName returns the color name from an agent definition matching the given agentType.
+func resolveAgentColorName(agentType string) string {
+	defs := tools.LoadAgentDefinitionsForCwd("")
+	for _, d := range defs {
+		if strings.EqualFold(d.AgentType, agentType) {
+			return strings.ToLower(strings.TrimSpace(d.Color))
+		}
+	}
+	return ""
 }
 
 // taskListTickMsg is sent by the polling tick timer.
