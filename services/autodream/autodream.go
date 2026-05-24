@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,7 +103,6 @@ func Execute(
 	// --- Time gate ---
 	lastAt, err := ReadLastConsolidatedAt(memoryDir)
 	if err != nil {
-		log.Printf("[autoDream] ReadLastConsolidatedAt failed: %v", err)
 		return nil, nil
 	}
 	hoursSince := float64(time.Now().UnixMilli()-lastAt) / 3_600_000
@@ -118,7 +116,6 @@ func Execute(
 	sinceScanMs := now - state.lastSessionScan
 	if sinceScanMs < sessionScanIntervalMs {
 		state.mu.Unlock()
-		log.Printf("[autoDream] scan throttle — time-gate passed but last scan was %ds ago", sinceScanMs/1000)
 		return nil, nil
 	}
 	state.lastSessionScan = now
@@ -127,7 +124,6 @@ func Execute(
 	// --- Session gate ---
 	sessionIDs, err := ListSessionsTouchedSince(lastAt, originalCwd, configHome)
 	if err != nil {
-		log.Printf("[autoDream] ListSessionsTouchedSince failed: %v", err)
 		return nil, nil
 	}
 	// Exclude current session.
@@ -141,34 +137,27 @@ func Execute(
 		sessionIDs = filtered
 	}
 	if len(sessionIDs) < cfg.MinSessions {
-		log.Printf("[autoDream] skip — %d sessions since last consolidation, need %d", len(sessionIDs), cfg.MinSessions)
 		return nil, nil
 	}
 
 	// --- Lock ---
 	priorMtime, err := TryAcquireConsolidationLock(memoryDir)
 	if err != nil {
-		log.Printf("[autoDream] lock acquire failed: %v", err)
 		return nil, nil
 	}
 	if priorMtime < 0 {
 		return nil, nil
 	}
 
-	log.Printf("[autoDream] firing — %.1fh since last, %d sessions to review", hoursSince, len(sessionIDs))
-
 	// Run the consolidation sub-agent.
 	writtenPaths, err := runConsolidationSubagent(ctx, memoryDir, systemPrompt, toolUseContext, userContext, systemContext, querySource, newUUID, originalCwd, configHome, sessionIDs)
 	if err != nil {
-		log.Printf("[autoDream] consolidation failed: %v", err)
 		RollbackConsolidationLock(memoryDir, priorMtime)
 		return nil, nil
 	}
 
 	// Filter out MEMORY.md.
 	memoryPaths := filterMemoryPaths(writtenPaths, memoryDir)
-
-	log.Printf("[autoDream] completed — %d memory files written", len(memoryPaths))
 
 	return memoryPaths, nil
 }
