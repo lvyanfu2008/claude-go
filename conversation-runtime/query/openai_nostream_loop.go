@@ -62,6 +62,11 @@ func runOpenAINonStreamingParityModelLoop(
 		if len(in.Tools) > 0 {
 			if wired, errW := toolsearchwire.WireToolsJSON(in.Tools, model, false, true, msgsJSON); errW == nil {
 				toolsForWire = wired
+				// When dynamic tool loading is active, prepend <available-deferred-tools>
+				// before OpenAI message conversion so the model knows deferred tool names.
+				if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsForWire, model, false, true); len(prep) > 0 {
+					msgsJSON = prep
+				}
 			}
 		}
 		toolsOA, err := anthropicToolsWireToOpenAI(toolsForWire)

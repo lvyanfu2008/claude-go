@@ -85,6 +85,14 @@ func runStreamingParityModelLoop(
 		if len(in.Tools) > 0 {
 			if wired, errW := toolsearchwire.WireToolsJSON(in.Tools, model, false, false, msgsJSON); errW == nil {
 				toolsForWire = wired
+				// When dynamic tool loading is active, prepend <available-deferred-tools>
+				// to messages so the model knows which tools to discover via ToolSearch.
+				if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsForWire, model, false, false); len(prep) > 0 {
+					var prepWire any
+					if err := json.Unmarshal(prep, &prepWire); err == nil {
+						msgsWire = prepWire
+					}
+				}
 			}
 		}
 
