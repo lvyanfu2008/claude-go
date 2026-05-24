@@ -31,6 +31,12 @@ func PrepareMessagesForWire(messagesJSON, toolsJSON json.RawMessage, modelID str
 	var tools []anthropic.ToolDefinition
 	_ = json.Unmarshal(toolsJSON, &tools)
 	cfg := toolsearch.BuildWireConfig(modelID, tools, hasPendingMcp, openAICompat)
+	// When delta mode is on, TS uses <system-reminder> attachments instead of
+	// <available-deferred-tools> prepend. Go does not implement the delta attachment
+	// path, so always force prepend when dynamic loading is active.
+	if cfg.UseDynamicToolLoading && cfg.ModelSupportsToolReference && !cfg.PrependAvailableDeferredBlock {
+		cfg.PrependAvailableDeferredBlock = true
+	}
 	prepared := toolsearch.PrepareAnthropicMessages(msgs, tools, cfg)
 	changed := len(prepared) != len(msgs) || (len(prepared) > 0 && len(msgs) > 0 && prepared[0].Role != msgs[0].Role)
 	diaglog.Line("[deferred-tools] model=%s UseDynamic=%v SupportsToolRef=%v PrependBlock=%v deferredCount=%d msgsBefore=%d msgsAfter=%d changed=%v",
