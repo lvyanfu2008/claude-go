@@ -448,3 +448,10 @@ func taskListTickCmd(tl *taskListModel) tea.Cmd {
 		return taskListTickMsg{}
 	})
 }
+
+// taskListTickCmdAgent returns a command that fires a 1s tick for agent coordinator panel refresh.
+func taskListTickCmdAgent() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return AgentTaskTickMsg{}
+	})
+}

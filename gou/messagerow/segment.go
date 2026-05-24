@@ -92,6 +92,15 @@ func segmentsFromMessageDepthOpts(msg types.Message, depth int, opts *RenderOpts
 		return segmentsGroupedToolUse(msg, depth, opts)
 	case types.MessageTypeCollapsedReadSearch:
 		return segmentsCollapsedReadSearch(msg, depth, opts)
+	case types.MessageTypeProgress:
+		// Route progress messages through agent progress renderer when lookups are available
+		if opts != nil && opts.GroupedAgentLookups != nil {
+			toolUseID := findProgressParentToolUseID(msg)
+			if pms, ok := opts.GroupedAgentLookups.ProgressMessagesByToolUseID[toolUseID]; ok {
+				return FormatAgentProgressSegments(pms)
+			}
+		}
+		return FormatAgentProgressSegments([]types.Message{msg})
 	default:
 		return segmentsFromContentArray(msg, opts)
 	}
@@ -470,4 +479,18 @@ func compactJSON(s string, max int) string {
 		return s
 	}
 	return s[:max] + "…"
+}
+
+
+func findProgressParentToolUseID(msg types.Message) string {
+	if msg.ParentToolUseID != nil {
+		return *msg.ParentToolUseID
+	}
+	if len(msg.Data) > 0 {
+		var d struct{ ParentToolUseID string `json:"parentToolUseID"` }
+		if json.Unmarshal(msg.Data, &d) == nil {
+			return d.ParentToolUseID
+		}
+	}
+	return ""
 }

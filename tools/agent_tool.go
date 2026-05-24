@@ -120,6 +120,28 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		s.TeamName = strings.TrimSpace(cfg.TeamName)
 	}
 
+	// Notify TUI of agent registration (if callback is wired from main.go)
+	if cfg.ProgressCallback != nil {
+		progJSON, _ := json.Marshal(map[string]any{
+			"type":            "agent_registered",
+			"agentId":         agentID,
+			"agentType":       selected.AgentType,
+			"description":     in.Description,
+			"name":            name,
+			"isBackground":    in.RunInBackground || selected.Background,
+			"parentToolUseID": cfg.ParentToolUseID,
+		})
+		prog := &types.Message{
+			Type: types.MessageTypeProgress,
+			UUID: fmt.Sprintf("agent-reg-%s", agentID),
+			Data: json.RawMessage(progJSON),
+		}
+		if cfg.ParentToolUseID != "" {
+			prog.ParentToolUseID = &cfg.ParentToolUseID
+		}
+		cfg.ProgressCallback(prog)
+	}
+
 	// Resolve dynamic system prompt via closure if available (TS getSystemPrompt(params)).
 	if selected.SystemPromptFn != nil {
 		params := AgentSystemPromptParams{
@@ -294,6 +316,23 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 				return
 			}
 			writeBackgroundStatus(cfg.TasksDir, s.ID, "completed", "Agent completed in background", true)
+			// Notify TUI of agent completion
+			if cfg.ProgressCallback != nil {
+				completionJSON, _ := json.Marshal(map[string]any{
+					"type":    "agent_completed",
+					"agentId": agentID,
+					"status":  "completed",
+				})
+				prog := &types.Message{
+					Type: types.MessageTypeProgress,
+					UUID: fmt.Sprintf("agent-done-%s", agentID),
+					Data: json.RawMessage(completionJSON),
+				}
+				if cfg.ParentToolUseID != "" {
+					prog.ParentToolUseID = &cfg.ParentToolUseID
+				}
+				cfg.ProgressCallback(prog)
+			}
 		}()
 		resp, _ := json.Marshal(AgentToolResponse{
 			Data: AgentToolResponseData{
@@ -339,6 +378,23 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 			}); hc != nil && hc.ShouldBlock {
 				output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
 			}
+			// Notify TUI of agent completion
+			if cfg.ProgressCallback != nil {
+				completionJSON, _ := json.Marshal(map[string]any{
+					"type":    "agent_completed",
+					"agentId": agentID,
+					"status":  "completed",
+				})
+				prog := &types.Message{
+					Type: types.MessageTypeProgress,
+					UUID: fmt.Sprintf("agent-done-%s", agentID),
+					Data: json.RawMessage(completionJSON),
+				}
+				if cfg.ParentToolUseID != "" {
+					prog.ParentToolUseID = &cfg.ParentToolUseID
+				}
+				cfg.ProgressCallback(prog)
+			}
 			resp, _ := json.Marshal(AgentToolResponse{
 				Data: AgentToolResponseData{
 					Success:          true,
@@ -379,6 +435,23 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 					return
 				}
 				writeBackgroundStatus(cfg.TasksDir, s.ID, "completed", "Agent completed after auto-background", true)
+				// Notify TUI of agent completion
+				if cfg.ProgressCallback != nil {
+					completionJSON, _ := json.Marshal(map[string]any{
+						"type":    "agent_completed",
+						"agentId": agentID,
+						"status":  "completed",
+					})
+					prog := &types.Message{
+						Type: types.MessageTypeProgress,
+						UUID: fmt.Sprintf("agent-done-%s", agentID),
+						Data: json.RawMessage(completionJSON),
+					}
+					if cfg.ParentToolUseID != "" {
+						prog.ParentToolUseID = &cfg.ParentToolUseID
+					}
+					cfg.ProgressCallback(prog)
+				}
 			}()
 			resp, _ := json.Marshal(AgentToolResponse{
 				Data: AgentToolResponseData{
@@ -410,6 +483,23 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		ToolPermissionContext: cfg.ToolPermission,
 	}); hc != nil && hc.ShouldBlock {
 		output = "SECURITY WARNING\n\n" + hc.Reason + "\n\n---\n\n" + output
+	}
+	// Notify TUI of agent completion
+	if cfg.ProgressCallback != nil {
+		completionJSON, _ := json.Marshal(map[string]any{
+			"type":    "agent_completed",
+			"agentId": agentID,
+			"status":  "completed",
+		})
+		prog := &types.Message{
+			Type: types.MessageTypeProgress,
+			UUID: fmt.Sprintf("agent-done-%s", agentID),
+			Data: json.RawMessage(completionJSON),
+		}
+		if cfg.ParentToolUseID != "" {
+			prog.ParentToolUseID = &cfg.ParentToolUseID
+		}
+		cfg.ProgressCallback(prog)
 	}
 	resp, _ := json.Marshal(AgentToolResponse{
 		Data: AgentToolResponseData{

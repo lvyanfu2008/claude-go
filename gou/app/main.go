@@ -391,6 +391,27 @@ type gouMemoryAppendMsg struct {
 	Msg types.Message
 }
 
+// AgentRegisteredMsg is sent when a new agent task is registered.
+type AgentRegisteredMsg struct {
+	Task *AgentTaskState
+}
+
+// AgentProgressMsg carries a progress update for a running agent.
+type AgentProgressMsg struct {
+	AgentID  string
+	Progress *AgentTaskProgress
+}
+
+// AgentCompletedMsg signals an agent completed, was killed, or failed.
+type AgentCompletedMsg struct {
+	AgentID string
+	Status  string // "completed", "killed", "failed"
+	Result  string
+}
+
+// AgentTaskTickMsg is sent by the 1s tick timer for coordinator panel refresh.
+type AgentTaskTickMsg struct{}
+
 // compactPhaseMsg carries auto-compact phase updates for spinner verb changes.
 // Phase values: "started", "summarizing", "done".
 type compactPhaseMsg struct {
@@ -669,6 +690,9 @@ type model struct {
 	// Task list (mirrors TS TaskListV2)
 	taskList *taskListModel
 
+	// agentTasks tracks sub-agent tasks for the coordinator panel (TS LocalAgentTaskState registry).
+	agentTasks *agentTaskStore
+
 	// toolResultState tracks tool-result persistence decisions across turns.
 	// Shared between the write path (per-tool persist) and read path (per-message budget enforcement).
 	toolResultState *toolresultpersist.ContentReplacementState
@@ -837,6 +861,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		sessionMemHook:      sessionmemory.Hook(sessionMemState, st.ConversationID, cwd),
 		suggestionEngine:    suggEngine,
 		taskList:            newTaskListModel(st.ConversationID),
+		agentTasks:          newAgentTaskStore(),
 		toolResultState:     toolResultState,
 	}
 }
@@ -1219,6 +1244,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ccbstream.Msg:
 		return m.handleUpdateCCBStream(msg)
 
+	case AgentRegisteredMsg:
+		m.agentTasks.Register(msg.Task)
+		return m, func() tea.Msg { return AgentTaskTickMsg{} }
+
+	case AgentProgressMsg:
+		m.agentTasks.UpdateProgress(msg.AgentID, msg.Progress)
+		return m, nil
+
+	case AgentCompletedMsg:
+		m.agentTasks.Complete(msg.AgentID, msg.Status)
+		return m, nil
+
+	case AgentTaskTickMsg:
+		m.agentTasks.EvictExpired(time.Now())
+		if m.agentTasks.Count() > 0 {
+			return m, taskListTickCmdAgent()
+		}
+		return m, nil
+
 	case taskListTickMsg:
 		m.taskList.poll()
 		return m, taskListTickCmd(m.taskList)
@@ -1271,6 +1315,13 @@ func listViewportH(m *model) int {
 	}
 	if m.uiScreen != gouDemoScreenTranscript {
 		h -= m.taskListViewReservedRows()
+		// Reserve lines for coordinator panel (main row + up to N agent rows)
+		if cv := m.agentCoordinatorView(); cv != "" {
+			lines := strings.Count(cv, "\n")
+			if lines > 0 {
+				h -= lines
+			}
+		}
 	}
 	if h < 3 {
 		h = 3
@@ -1623,6 +1674,12 @@ func (m *model) View() tea.View {
 				b.WriteString(indented)
 				b.WriteByte('\n')
 			}
+		}
+		// Agent coordinator panel (below task list, above status line)
+		if cv := m.agentCoordinatorView(); cv != "" {
+			indented := applyMessagePaneGutter(cv, m.width)
+			b.WriteString(indented)
+			b.WriteByte('\n')
 		}
 	}
 	if s := m.statusLineString(); s != "" {
@@ -2618,6 +2675,70 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						MessagesFunc:     func() []types.Message { return m.store.Messages },
 						SystemPrompt:     []string{guidance},
 						ProgressCallback: func(msg *types.Message) {
+							if msg == nil {
+								return
+							}
+							// Parse agent lifecycle events from progress messages
+							if msg.Type == types.MessageTypeProgress && len(msg.Data) > 0 {
+								var data struct {
+									Type             string `json:"type"`
+									AgentID          string `json:"agentId"`
+									AgentType        string `json:"agentType"`
+									Description      string `json:"description"`
+									Name             string `json:"name"`
+									IsBackground     bool   `json:"isBackground"`
+									ParentToolUseID  string `json:"parentToolUseID"`
+									TokenCount       int    `json:"tokenCount"`
+									ToolUseCount     int    `json:"toolUseCount"`
+									LastActivityDesc string `json:"lastActivityDesc"`
+									Summary          string `json:"summary"`
+									Status           string `json:"status"`
+								}
+								if json.Unmarshal(msg.Data, &data) == nil {
+									switch data.Type {
+									case "agent_registered":
+										evictAfter := time.Now().Add(24 * time.Hour)
+										task := &AgentTaskState{
+											ID:              data.AgentID,
+											AgentType:       data.AgentType,
+											Description:     data.Description,
+											Name:            data.Name,
+											Status:          "running",
+											StartTime:       time.Now(),
+											IsBackground:    data.IsBackground,
+											ParentToolUseID: data.ParentToolUseID,
+											EvictAfter:      &evictAfter,
+										}
+										if send := m.ccbSend; send != nil {
+											send(AgentRegisteredMsg{Task: task})
+										}
+										// Still forward for message pane rendering
+										if send := m.ccbSend; send != nil {
+											send(gouQueryYieldMsg{Message: *msg})
+										}
+										return
+									case "agent_summary":
+										if send := m.ccbSend; send != nil {
+											send(AgentProgressMsg{
+												AgentID: data.AgentID,
+												Progress: &AgentTaskProgress{
+													Summary:          data.Summary,
+													TokenCount:       data.TokenCount,
+													ToolUseCount:     data.ToolUseCount,
+													LastActivityDesc: data.LastActivityDesc,
+												},
+											})
+										}
+										return
+									case "agent_completed":
+										if send := m.ccbSend; send != nil {
+											send(AgentCompletedMsg{AgentID: data.AgentID, Status: "completed"})
+										}
+										return
+									}
+								}
+							}
+							// Default: forward as yield message for the message pane
 							if send := m.ccbSend; send != nil {
 								send(gouQueryYieldMsg{Message: *msg})
 							}
