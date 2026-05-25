@@ -35,6 +35,7 @@ var ASYNC_AGENT_ALLOWED_TOOLS = map[string]struct{}{
 	"NotebookEdit":      {},
 	"Skill":             {},
 	"StructuredOutput":  {},
+	"ToolSearch":        {},
 	"TaskCreate":        {},
 	"TaskGet":           {},
 	"TaskList":          {},

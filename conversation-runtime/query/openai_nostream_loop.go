@@ -64,7 +64,7 @@ func runOpenAINonStreamingParityModelLoop(
 				toolsForWire = wired
 				// When dynamic tool loading is active, prepend <available-deferred-tools>
 				// before OpenAI message conversion so the model knows deferred tool names.
-				if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsForWire, model, false, true, nil); len(prep) > 0 {
+				if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, in.Tools, model, false, true, nil); len(prep) > 0 {
 					msgsJSON = prep
 				}
 			}
