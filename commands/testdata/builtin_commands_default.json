@@ -173,7 +173,7 @@
   {
     "type": "prompt",
     "name": "init",
-    "description": "Initialize a new CLAUDE.md file with codebase documentation",
+    "description": "Initialize a new HARNESS.md file with codebase documentation",
     "contentLength": 0,
     "progressMessage": "analyzing your codebase",
     "source": "builtin"

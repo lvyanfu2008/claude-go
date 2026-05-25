@@ -2744,7 +2744,7 @@ If a hook isn't running:
       }
     },
     "claudeMdExcludes": {
-      "description": "Glob patterns or absolute paths of CLAUDE.md files to exclude from loading. Patterns are matched against absolute file paths using picomatch. Only applies to User, Project, and Local memory types (Managed/policy files cannot be excluded). Examples: \"/home/user/monorepo/CLAUDE.md\", \"**/code/CLAUDE.md\", \"**/some-dir/.harness/rules/**\"",
+      "description": "Glob patterns or absolute paths of HARNESS.md files to exclude from loading. Patterns are matched against absolute file paths using picomatch. Only applies to User, Project, and Local memory types (Managed/policy files cannot be excluded). Examples: \"/home/user/monorepo/HARNESS.md\", \"**/code/HARNESS.md\", \"**/some-dir/.harness/rules/**\"",
       "type": "array",
       "items": {
         "type": "string"

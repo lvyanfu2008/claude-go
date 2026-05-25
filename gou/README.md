@@ -1,6 +1,6 @@
 # gou — Go TUI 基础库（对话流 + 虚拟滚动）
 
-**权威产品架构**（Go：TUI、消息处理、skill 加载、LLM 编排）见 **[`docs/plans/architecture-go-orchestration.md`](../../docs/plans/architecture-go-orchestration.md)**。`goc` **默认构建与运行不依赖** Bun/Node 执行 TS；仓库内嵌入数据与注释中的 TS 路径不算运行时依赖（与根目录 [`CLAUDE.md`](../CLAUDE.md)「No TypeScript runtime dependency」一致）。
+**权威产品架构**（Go：TUI、消息处理、skill 加载、LLM 编排）见 **[`docs/plans/architecture-go-orchestration.md`](../../docs/plans/architecture-go-orchestration.md)**。`goc` **默认构建与运行不依赖** Bun/Node 执行 TS；仓库内嵌入数据与注释中的 TS 路径不算运行时依赖（与根目录 [`HARNESS.md`](../HARNESS.md)「No TypeScript runtime dependency」一致）。
 
 本目录承载终端 UI 迁移的 **Go 实现骨架**，命名对齐 `src/types/message.ts`、`useVirtualScroll.ts`、`Messages.tsx`（见 `docs/plans/go-tui-message-stream-virtual-scroll.md`）。
 
