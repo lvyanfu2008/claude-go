@@ -77,7 +77,7 @@ cd goc && go run ./cmd/claude
 
 **主题**：合并后的环境变量 **`CLAUDE_CODE_THEME=light`** 使用高对比调色（见 `goc/gou/theme`）。**`GOU_DEMO_STATUS_LINE=1`** 在输入区上方显示一行状态（theme / 消息数 / 列宽等）。工具块中的 `http(s)://` 会做 **OSC 8 超链接**（`goc/gou/textutil.LinkifyOSC8`）。
 
-**调试日志**：`GOU_DEMO_LOG_FILE=/path/to.log` 追加写入；或 `GOU_DEMO_LOG=1` 在 **stderr 为 TTY** 时默认写入 `~/.claude/debug/gou-demo-trace.txt`（全屏 TUI 与 stderr 混用会错位，故不用 stderr）；`GOU_DEMO_LOG_STDERR=1` 强制 stderr。行前缀 `[gou-demo]`。
+**调试日志**：`GOU_DEMO_LOG_FILE=/path/to.log` 追加写入；或 `GOU_DEMO_LOG=1` 在 **stderr 为 TTY** 时默认写入 `~/.harness/debug/gou-demo-trace.txt`（全屏 TUI 与 stderr 混用会错位，故不用 stderr）；`GOU_DEMO_LOG_STDERR=1` 强制 stderr。行前缀 `[gou-demo]`。
 
 ### 与真实 transcript / NDJSON 流接轨
 
@@ -91,7 +91,7 @@ cd goc && go run ./cmd/claude -replay-cc=/path/to/stream.ndjson
 # 管道读 stdin 上的 NDJSON（Unix 下会尝试打开 /dev/tty 供键盘）
 cd goc && cat /path/to/stream.ndjson | go run ./cmd/claude -stream-stdin
 
-# 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.claude/settings.go.json 或项目 .claude/settings.go.json
+# 真实 LLM：API key + 流式 parity（见上表）；密钥可放在 ~/.harness/settings.go.json 或项目 .harness/settings.go.json
 cd goc && go run ./cmd/claude
 ```
 

@@ -387,7 +387,7 @@ var builtinDefaultCommandsTable = []types.Command{
 		Type:                  "prompt",
 		ProgressMessage:       ptrStr("setting up statusLine"),
 		ContentLength:         ptrInt(0),
-		AllowedTools:          []string{"Agent", "Read(~/**)", "Edit(~/.claude/settings.go.json)"},
+		AllowedTools:          []string{"Agent", "Read(~/**)", "Edit(~/.harness/settings.go.json)"},
 		Source:                ptrStr("builtin"),
 		DisableNonInteractive: ptrBool(true),
 	},

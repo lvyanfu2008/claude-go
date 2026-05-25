@@ -10,5 +10,5 @@
 //  5. Per-event stdin validation (Zod in TS) — callers must build JSON matching coreSchemas HookInput union.
 //     Sync hook **stdout** top-level fields are validated with Zog (github.com/Oudwins/zog) toward syncHookResponseSchema (see hook_output_sync_zog.go).
 //
-// Merged hook tables: user ~/.claude/settings.go.json, project .claude/settings.go.json, .claude/settings.local.json.
+// Merged hook tables: user ~/.harness/settings.go.json, project .harness/settings.go.json, .harness/settings.local.json.
 package hookexec

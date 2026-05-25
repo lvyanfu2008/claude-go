@@ -16,7 +16,7 @@ type ExportResult struct {
 // HandleExportCommand handles /export.
 func HandleExportCommand(args string) ([]byte, error) {
 	cwd, _ := os.Getwd()
-	transcriptPath := filepath.Join(cwd, ".claude", "transcripts")
+	transcriptPath := filepath.Join(cwd, ".harness", "transcripts")
 
 	return json.Marshal(ExportResult{
 		Type: "text",

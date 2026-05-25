@@ -8,7 +8,7 @@ import (
 )
 
 // applyExtraCACertsUserControlled mirrors TS [applyExtraCACertsFromConfig]: only
-// ~/.claude/settings.go.json and ~/.claude.json env (user-controlled), not project files.
+// ~/.harness/settings.go.json and ~/.harness.json env (user-controlled), not project files.
 // Call before [settingsfile.EnsureProjectClaudeEnvOnce] so shell/parent NODE_EXTRA_CA_CERTS still wins.
 func applyExtraCACertsUserControlled() error {
 	if strings.TrimSpace(os.Getenv("NODE_EXTRA_CA_CERTS")) != "" {

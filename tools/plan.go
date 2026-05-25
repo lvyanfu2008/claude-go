@@ -11,7 +11,7 @@ type planModeFile struct {
 	EnteredAt string `json:"enteredAt,omitempty"`
 }
 
-// EnterPlanModeFromJSON marks plan mode active in `.claude/gou_plan_mode.json`.
+// EnterPlanModeFromJSON marks plan mode active in `.harness/gou_plan_mode.json`.
 func EnterPlanModeFromJSON(_ []byte, c Config) (string, bool, error) {
 	path := c.PlanModePath()
 	rec := planModeFile{Active: true, EnteredAt: time.Now().UTC().Format(time.RFC3339)}

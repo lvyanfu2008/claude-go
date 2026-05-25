@@ -18,7 +18,7 @@ type ResumeResult struct {
 // HandleResumeCommand handles /resume — lists resumable sessions.
 func HandleResumeCommand(args string) ([]byte, error) {
 	cwd, _ := os.Getwd()
-	transcriptDir := filepath.Join(cwd, ".claude", "transcripts")
+	transcriptDir := filepath.Join(cwd, ".harness", "transcripts")
 
 	entries, err := os.ReadDir(transcriptDir)
 	if err != nil {

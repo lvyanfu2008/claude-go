@@ -102,7 +102,7 @@ func loadLegacyCommandEntries(cwd string, opts LoadOptions) ([]SkillLoadEntry, e
 	}
 	var roots []legacyRoot
 	roots = append(roots, legacyRoot{
-		dir:    filepath.Join(ManagedFilePath(), ".claude", "commands"),
+		dir:    filepath.Join(ManagedFilePath(), ".harness", "commands"),
 		source: "policySettings",
 	})
 	if h := ClaudeConfigHome(); h != "" && opts.isSettingSourceEnabled("userSettings") {

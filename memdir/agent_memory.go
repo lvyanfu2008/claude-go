@@ -33,7 +33,7 @@ func getLocalAgentMemoryDir(dirName string) string {
 		return filepath.Join(v, "projects", claudebase.SanitizePath(projectRoot), "agent-memory-local", dirName) + string(filepath.Separator)
 	}
 	cwd, _ := os.Getwd()
-	return filepath.Join(cwd, ".claude", "agent-memory-local", dirName) + string(filepath.Separator)
+	return filepath.Join(cwd, ".harness", "agent-memory-local", dirName) + string(filepath.Separator)
 }
 
 // findCanonicalGitRootOrCwd returns the canonical git root if available, otherwise the current directory.
@@ -51,7 +51,7 @@ func GetAgentMemoryDir(agentType string, scope AgentMemoryScope) string {
 	switch scope {
 	case AgentMemoryProject:
 		cwd, _ := os.Getwd()
-		return filepath.Join(cwd, ".claude", "agent-memory", dirName) + string(filepath.Separator)
+		return filepath.Join(cwd, ".harness", "agent-memory", dirName) + string(filepath.Separator)
 	case AgentMemoryLocal:
 		return getLocalAgentMemoryDir(dirName)
 	case AgentMemoryUser:
@@ -72,7 +72,7 @@ func IsAgentMemoryPath(absolutePath string) bool {
 
 	// Project scope: always cwd-based
 	cwd, _ := os.Getwd()
-	if strings.HasPrefix(normalizedPath, filepath.Join(cwd, ".claude", "agent-memory")+string(filepath.Separator)) {
+	if strings.HasPrefix(normalizedPath, filepath.Join(cwd, ".harness", "agent-memory")+string(filepath.Separator)) {
 		return true
 	}
 
@@ -85,7 +85,7 @@ func IsAgentMemoryPath(absolutePath string) bool {
 		}
 	} else {
 		sep := string(filepath.Separator)
-		if strings.HasPrefix(normalizedPath, filepath.Join(cwd, ".claude", "agent-memory-local")+sep) {
+		if strings.HasPrefix(normalizedPath, filepath.Join(cwd, ".harness", "agent-memory-local")+sep) {
 			return true
 		}
 	}
@@ -104,7 +104,7 @@ func GetMemoryScopeDisplay(memory AgentMemoryScope) string {
 	case AgentMemoryUser:
 		return "User (" + filepath.Join(MemoryBaseDir(), "agent-memory") + "/)"
 	case AgentMemoryProject:
-		return "Project (.claude/agent-memory/)"
+		return "Project (.harness/agent-memory/)"
 	case AgentMemoryLocal:
 		return "Local (" + getLocalAgentMemoryDir("...") + ")"
 	default:

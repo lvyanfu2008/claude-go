@@ -378,7 +378,7 @@ const enterWorktreePrompt = `Use this tool ONLY when the user explicitly asks to
 
 ## Behavior
 
-- In a git repository: creates a new git worktree inside ` + "`.claude/worktrees/`" + ` with a new branch based on HEAD
+- In a git repository: creates a new git worktree inside ` + "`.harness/worktrees/`" + ` with a new branch based on HEAD
 - Outside a git repository: delegates to WorktreeCreate/WorktreeRemove hooks for VCS-agnostic isolation
 - Switches the session's working directory to the new worktree
 - Use ExitWorktree to leave the worktree mid-session (keep or remove). On session exit, if still in the worktree, the user will be prompted to keep or remove it
@@ -429,8 +429,8 @@ func getCronCreateDescription() string {
 	if durable {
 		section = `## Durability
 
-By default (durable: false) the job lives only in this Claude session — nothing is written to disk, and the job is gone when Claude exits. Pass durable: true to write to .claude/scheduled_tasks.json so the job survives restarts. Only use durable: true when the user explicitly asks for the task to persist ("keep doing this every day", "set this up permanently"). Most "remind me in 5 minutes" / "check back in an hour" requests should stay session-only.`
-		runtimeExtra = ` Durable jobs persist to .claude/scheduled_tasks.json and survive session restarts — on next launch they resume automatically. One-shot durable tasks that were missed while the REPL was closed are surfaced for catch-up. Session-only jobs die with the process.`
+By default (durable: false) the job lives only in this Claude session — nothing is written to disk, and the job is gone when Claude exits. Pass durable: true to write to .harness/scheduled_tasks.json so the job survives restarts. Only use durable: true when the user explicitly asks for the task to persist ("keep doing this every day", "set this up permanently"). Most "remind me in 5 minutes" / "check back in an hour" requests should stay session-only.`
+		runtimeExtra = ` Durable jobs persist to .harness/scheduled_tasks.json and survive session restarts — on next launch they resume automatically. One-shot durable tasks that were missed while the REPL was closed are surfaced for catch-up. Session-only jobs die with the process.`
 	}
 
 	return `Schedule a prompt to be enqueued at a future time. Use for both recurring schedules and one-shot reminders.
@@ -472,7 +472,7 @@ Returns a job ID you can pass to CronDelete.`
 // getCronDeleteDescription mirrors buildCronDeletePrompt in TS.
 func getCronDeleteDescription() string {
 	if isCronDurableEnabled() {
-		return "Cancel a cron job previously scheduled with CronCreate. Removes it from .claude/scheduled_tasks.json (durable jobs) or the in-memory session store (session-only jobs)."
+		return "Cancel a cron job previously scheduled with CronCreate. Removes it from .harness/scheduled_tasks.json (durable jobs) or the in-memory session store (session-only jobs)."
 	}
 	return "Cancel a cron job previously scheduled with CronCreate. Removes it from the in-memory session store."
 }
@@ -480,7 +480,7 @@ func getCronDeleteDescription() string {
 // getCronListDescription mirrors buildCronListPrompt in TS.
 func getCronListDescription() string {
 	if isCronDurableEnabled() {
-		return "List all cron jobs scheduled via CronCreate, both durable (.claude/scheduled_tasks.json) and session-only."
+		return "List all cron jobs scheduled via CronCreate, both durable (.harness/scheduled_tasks.json) and session-only."
 	}
 	return "List all cron jobs scheduled via CronCreate in this session."
 }

@@ -52,7 +52,7 @@ func NewState() *State {
 //   - systemContext: key-value pairs
 //   - querySource: query source label
 //   - newUUID: UUID generator (nil = use RandomUUID)
-//   - configHome: ~/.claude or CLAUDE_CONFIG_DIR
+//   - configHome: ~/.harness or CLAUDE_CONFIG_DIR
 //   - originalCwd: the original working directory
 //   - memoryDir: the auto-memory directory (empty = resolve from originalCwd)
 //   - currentSessionID: current session ID to exclude from session count

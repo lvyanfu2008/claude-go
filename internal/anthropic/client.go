@@ -89,7 +89,7 @@ type CreateMessageResponse struct {
 // CreateMessage performs a non-streaming messages request.
 func (c *Client) CreateMessage(ctx context.Context, req CreateMessageRequest) (*CreateMessageResponse, error) {
 	if c.APIKey == "" {
-		return nil, fmt.Errorf("set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN (shell, or project .claude/settings.go.json env when EnsureProjectClaudeEnvOnce has run)")
+		return nil, fmt.Errorf("set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN (shell, or project .harness/settings.go.json env when EnsureProjectClaudeEnvOnce has run)")
 	}
 	if req.Model == "" {
 		req.Model = c.Model

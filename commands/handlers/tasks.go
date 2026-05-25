@@ -17,7 +17,7 @@ type TasksResult struct {
 // HandleTasksCommand handles /tasks.
 func HandleTasksCommand(args string) ([]byte, error) {
 	cwd, _ := os.Getwd()
-	tasksDir := filepath.Join(cwd, ".claude", ".gou-tasks")
+	tasksDir := filepath.Join(cwd, ".harness", ".gou-tasks")
 
 	entries, err := os.ReadDir(tasksDir)
 	if err != nil {

@@ -33,7 +33,7 @@ func isAutoManagedMemoryFileGo(filePath string) bool {
 	if cp == "" {
 		return false
 	}
-	if strings.Contains(cp, "/.claude/memory/") || strings.Contains(cp, "/.claude\\memory\\") {
+	if strings.Contains(cp, "/.harness/memory/") || strings.Contains(cp, "/.harness\\memory\\") {
 		return true
 	}
 	if strings.Contains(cp, "session-memory") && strings.HasSuffix(cp, ".md") {
@@ -53,7 +53,7 @@ func isMemoryDirectoryGo(dirPath string) bool {
 	if cp == "" {
 		return false
 	}
-	return strings.Contains(cp, "/.claude/memory") ||
+	return strings.Contains(cp, "/.harness/memory") ||
 		strings.Contains(cp, "session-memory") ||
 		strings.Contains(cp, "/agent-memory/")
 }
@@ -66,7 +66,7 @@ func isAutoManagedMemoryPatternGo(glob string) bool {
 
 func isShellCommandTargetingMemoryGo(command string) bool {
 	c := strings.ToLower(command)
-	return strings.Contains(c, ".claude/memory") ||
+	return strings.Contains(c, ".harness/memory") ||
 		strings.Contains(c, "session-memory") ||
 		strings.Contains(c, "agent-memory")
 }

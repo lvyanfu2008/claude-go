@@ -45,7 +45,7 @@ func NewCronScheduler(projectRoot string, onFire func(ctx context.Context, promp
 	if err != nil {
 		abs = pr
 	}
-	lockPath := filepath.Join(abs, ".claude", "scheduled_tasks.lock")
+	lockPath := filepath.Join(abs, ".harness", "scheduled_tasks.lock")
 	return &CronScheduler{
 		projectRoot: abs,
 		lockPath:    lockPath,

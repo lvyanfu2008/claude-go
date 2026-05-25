@@ -64,7 +64,7 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 		return []string{filepath.Join(ManagedFilePath(), "CLAUDE.md")}
 	}
 
-	// 用户内存：~/.claude/CLAUDE.md
+	// 用户内存：~/.harness/CLAUDE.md
 	mh.pathResolvers[MemoryUser] = func(_ string) []string {
 		cfg, err := claudebase.ClaudeConfigHomeDir()
 		if err != nil {
@@ -102,8 +102,8 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 			// CLAUDE.md 在目录中
 			paths = append(paths, filepath.Join(dir, "CLAUDE.md"))
 
-			// .claude/CLAUDE.md 在目录中
-			paths = append(paths, filepath.Join(dir, ".claude", "CLAUDE.md"))
+			// .harness/CLAUDE.md 在目录中
+			paths = append(paths, filepath.Join(dir, ".harness", "CLAUDE.md"))
 		}
 
 		return paths
@@ -337,7 +337,7 @@ func (mh *MemoryHierarchy) loadProjectRulesFiles(
 			continue
 		}
 
-		rulesDir := filepath.Join(dir, ".claude", "rules")
+		rulesDir := filepath.Join(dir, ".harness", "rules")
 		files := ProcessMdRules(rulesDir, MemoryProject, processedPaths, includeExternal, cwd, false, nil, mh.excludeChecker)
 		allFiles = append(allFiles, files...)
 	}

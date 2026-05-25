@@ -17,7 +17,7 @@ type MemoryResult struct {
 // HandleMemoryCommand handles /memory.
 func HandleMemoryCommand(args string) ([]byte, error) {
 	home, _ := os.UserHomeDir()
-	memDir := filepath.Join(home, ".claude", "memory")
+	memDir := filepath.Join(home, ".harness", "memory")
 	if envDir := os.Getenv("CLAUDE_MEMORY_DIR"); envDir != "" {
 		memDir = envDir
 	}

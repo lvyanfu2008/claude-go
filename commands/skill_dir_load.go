@@ -27,7 +27,7 @@ func loadSkillDirCommands(cwd string, opts LoadOptions) ([]types.Command, error)
 			if err != nil {
 				return nil, err
 			}
-			skillsDir := filepath.Join(abs, ".claude", "skills")
+			skillsDir := filepath.Join(abs, ".harness", "skills")
 			part, err := loadSkillsFromDir(skillsDir, "projectSettings")
 			if err != nil {
 				return nil, err
@@ -41,7 +41,7 @@ func loadSkillDirCommands(cwd string, opts LoadOptions) ([]types.Command, error)
 	var entries []SkillLoadEntry
 
 	if !policyOff {
-		managedSkillsDir := filepath.Join(ManagedFilePath(), ".claude", "skills")
+		managedSkillsDir := filepath.Join(ManagedFilePath(), ".harness", "skills")
 		managed, err := loadSkillsFromDir(managedSkillsDir, "policySettings")
 		if err != nil {
 			return nil, err
@@ -80,7 +80,7 @@ func loadSkillDirCommands(cwd string, opts LoadOptions) ([]types.Command, error)
 			if err != nil {
 				return nil, err
 			}
-			skillsDir := filepath.Join(abs, ".claude", "skills")
+			skillsDir := filepath.Join(abs, ".harness", "skills")
 			part, err := loadSkillsFromDir(skillsDir, "projectSettings")
 			if err != nil {
 				return nil, err

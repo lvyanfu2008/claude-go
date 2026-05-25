@@ -174,5 +174,5 @@ func pluginCacheDir() string {
 		return d
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "plugins", "cache")
+	return filepath.Join(home, ".harness", "plugins", "cache")
 }

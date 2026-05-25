@@ -62,7 +62,7 @@ func MergeHooksTable(dst HooksTable, src HooksTable) HooksTable {
 
 // MergedHooksFromPaths loads and concatenates hook matcher groups in merge order:
 // user settings.go.json, then project settings.go.json, then project settings.local.json.
-// Project .claude/settings.json (TS-only) is not read.
+// Project .harness/settings.json (TS-only) is not read.
 func MergedHooksFromPaths(projectRoot string) (HooksTable, error) {
 	var merged HooksTable
 	userPath := settingsfile.UserClaudeSettingsPath()
@@ -74,14 +74,14 @@ func MergedHooksFromPaths(projectRoot string) (HooksTable, error) {
 
 	root := strings.TrimSpace(projectRoot)
 	if root != "" {
-		goPath := filepath.Join(root, ".claude", "settings.go.json")
+		goPath := filepath.Join(root, ".harness", "settings.go.json")
 		tGo, err := readHooksTable(goPath)
 		if err != nil {
 			return nil, err
 		}
 		merged = MergeHooksTable(merged, tGo)
 
-		localPath := filepath.Join(root, ".claude", "settings.local.json")
+		localPath := filepath.Join(root, ".harness", "settings.local.json")
 		tLoc, err := readHooksTable(localPath)
 		if err != nil {
 			return nil, err

@@ -669,7 +669,7 @@ func TeamDeleteFromJSON(raw []byte, cfg Config) (string, bool, error) {
 		if root == "" {
 			root = strings.TrimSpace(cfg.WorkDir)
 		}
-		oldDir := filepath.Join(root, ".claude", ".gou-team")
+		oldDir := filepath.Join(root, ".harness", ".gou-team")
 		_ = os.RemoveAll(oldDir)
 
 		out := map[string]any{
@@ -793,7 +793,7 @@ func ConfigFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	if root == "" {
 		return "", true, fmt.Errorf("project root is required")
 	}
-	cfgPath := filepath.Join(root, ".claude", ".gou-config.json")
+	cfgPath := filepath.Join(root, ".harness", ".gou-config.json")
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
 		return "", true, err
 	}
@@ -989,7 +989,7 @@ func oauthAccessToken() string {
 	if err != nil {
 		return ""
 	}
-	raw, err := os.ReadFile(filepath.Join(home, ".claude", ".credentials.json"))
+	raw, err := os.ReadFile(filepath.Join(home, ".harness", ".credentials.json"))
 	if err != nil {
 		return ""
 	}
@@ -1014,7 +1014,7 @@ func organizationUUID() string {
 	if err != nil {
 		return ""
 	}
-	raw, err := os.ReadFile(filepath.Join(home, ".claude", "config.json"))
+	raw, err := os.ReadFile(filepath.Join(home, ".harness", "config.json"))
 	if err != nil {
 		return ""
 	}
@@ -1089,7 +1089,7 @@ func MonitorFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 	return string(b), false, nil
 }
 
-// WorkflowFromJSON executes a user-defined workflow file from .claude/workflows/.
+// WorkflowFromJSON executes a user-defined workflow file from .harness/workflows/.
 // Supports .yml, .yaml, and .md files. YAML workflows define steps with name + run;
 // Markdown workflows extract shell code blocks and numbered task items.
 func WorkflowFromJSON(raw []byte) (string, bool, error) {
@@ -1105,7 +1105,7 @@ func WorkflowFromJSON(raw []byte) (string, bool, error) {
 	}
 
 	cwd, _ := os.Getwd()
-	workflowDir := filepath.Join(cwd, ".claude", "workflows")
+	workflowDir := filepath.Join(cwd, ".harness", "workflows")
 	exts := []string{".yml", ".yaml", ".md"}
 
 	var workflowPath string

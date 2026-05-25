@@ -1,7 +1,7 @@
 // Package settingsfile loads Claude Code-style settings `env` blocks for Go binaries:
-// [GoProjectSettingsEnvDefaults] (lowest; embedded), user ~/.claude/settings.go.json, project
+// [GoProjectSettingsEnvDefaults] (lowest; embedded), user ~/.harness/settings.go.json, project
 // settings.go.json, project settings.local.json (highest for duplicate keys in the merged map).
-// Project .claude/settings.json is consumed by the TypeScript CLI only — not merged here.
+// Project .harness/settings.json is consumed by the TypeScript CLI only — not merged here.
 package settingsfile
 
 import (
@@ -14,7 +14,7 @@ import (
 )
 
 // UserClaudeSettingsPath returns the Go-side user settings path:
-// $CLAUDE_CONFIG_DIR/settings.go.json, or $HOME/.claude/settings.go.json.
+// $CLAUDE_CONFIG_DIR/settings.go.json, or $HOME/.harness/settings.go.json.
 func UserClaudeSettingsPath() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
 		return filepath.Join(d, "settings.go.json")
@@ -23,7 +23,7 @@ func UserClaudeSettingsPath() string {
 	if err != nil || strings.TrimSpace(h) == "" {
 		return ""
 	}
-	return filepath.Join(h, ".claude", "settings.go.json")
+	return filepath.Join(h, ".harness", "settings.go.json")
 }
 
 // ReadUserSettingsEnv returns the "env" map from user settings.go.json only (no project merge).
@@ -31,16 +31,16 @@ func ReadUserSettingsEnv() (map[string]string, error) {
 	return readEnvFromSettingsPath(UserClaudeSettingsPath())
 }
 
-// GlobalClaudeJSONPath is ~/.claude.json (TS global config file for auth/env subset).
+// GlobalClaudeJSONPath is ~/.harness.json (TS global config file for auth/env subset).
 func GlobalClaudeJSONPath() string {
 	h, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(h) == "" {
 		return ""
 	}
-	return filepath.Join(h, ".claude.json")
+	return filepath.Join(h, ".harness.json")
 }
 
-// ReadGlobalClaudeJSONEnv reads top-level "env" from ~/.claude.json if present.
+// ReadGlobalClaudeJSONEnv reads top-level "env" from ~/.harness.json if present.
 func ReadGlobalClaudeJSONEnv() (map[string]string, error) {
 	return readEnvFromSettingsPath(GlobalClaudeJSONPath())
 }
@@ -118,17 +118,17 @@ func mergeEnvMany(maps ...map[string]string) map[string]string {
 
 // ApplyMergedClaudeSettingsEnv merges env from (later entries override earlier for duplicate keys):
 // 1) [GoProjectSettingsEnvDefaults] — embedded Go baseline
-// 2) UserClaudeSettingsPath() — CLAUDE_CONFIG_DIR/settings.go.json or ~/.claude/settings.go.json
-// 3) projectRoot/.claude/settings.go.json (Go / ccb-engine / gou-demo; optional)
-// 4) projectRoot/.claude/settings.local.json (optional)
+// 2) UserClaudeSettingsPath() — CLAUDE_CONFIG_DIR/settings.go.json or ~/.harness/settings.go.json
+// 3) projectRoot/.harness/settings.go.json (Go / ccb-engine / gou-demo; optional)
+// 4) projectRoot/.harness/settings.local.json (optional)
 //
-// Project .claude/settings.json is not read — it is for the TypeScript CLI only.
+// Project .harness/settings.json is not read — it is for the TypeScript CLI only.
 //
 // Process env entries that are already non-empty are left unchanged (shell / parent wins).
 func ApplyMergedClaudeSettingsEnv(projectRoot string) error {
 	userPath := UserClaudeSettingsPath()
-	goPath := filepath.Join(projectRoot, ".claude", "settings.go.json")
-	localPath := filepath.Join(projectRoot, ".claude", "settings.local.json")
+	goPath := filepath.Join(projectRoot, ".harness", "settings.go.json")
+	localPath := filepath.Join(projectRoot, ".harness", "settings.local.json")
 
 	userMap, err := readEnvFromSettingsPath(userPath)
 	if err != nil {
@@ -151,13 +151,13 @@ func ApplyUserAndProjectClaudeEnv(home, projectRoot string) error {
 	return ApplyMergedClaudeSettingsEnv(projectRoot)
 }
 
-// ApplyProjectClaudeEnv reads root/.claude/settings.go.json and applies the top-level "env"
+// ApplyProjectClaudeEnv reads root/.harness/settings.go.json and applies the top-level "env"
 // map to the process environment. Variables that are already set in the environment
 // (non-empty) are left unchanged so the shell and parent process keep precedence.
 //
 // If the file is missing, returns nil. If the file exists but is invalid JSON, returns an error.
 func ApplyProjectClaudeEnv(root string) error {
-	path := filepath.Join(root, ".claude", "settings.go.json")
+	path := filepath.Join(root, ".harness", "settings.go.json")
 	m, err := readEnvFromSettingsPath(path)
 	if err != nil {
 		return err

@@ -26,7 +26,7 @@ func bundledCorePrefix() []types.Command {
 		{
 			CommandBase: types.CommandBase{
 				Name:                        "keybindings-help",
-				Description:                 "Use when the user wants to customize keyboard shortcuts, rebind keys, add chord bindings, or modify ~/.claude/keybindings.json. Examples: \"rebind ctrl+s\", \"add a chord shortcut\", \"change the submit key\", \"customize keybindings\".",
+				Description:                 "Use when the user wants to customize keyboard shortcuts, rebind keys, add chord bindings, or modify ~/.harness/keybindings.json. Examples: \"rebind ctrl+s\", \"add a chord shortcut\", \"change the submit key\", \"customize keybindings\".",
 				HasUserSpecifiedDescription: ptrBool(true),
 				IsHidden:                    ptrBool(true),
 				LoadedFrom:                  ptrStr(src),

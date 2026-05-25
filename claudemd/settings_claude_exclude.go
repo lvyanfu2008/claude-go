@@ -15,7 +15,7 @@ type settingsExcludesJSON struct {
 }
 
 // MergedClaudeMdExcludes mirrors TS-style layering for paths Go reads: user, settings.go.json,
-// settings.local.json, then flag/policy from enabled sources. Project .claude/settings.go.json
+// settings.local.json, then flag/policy from enabled sources. Project .harness/settings.go.json
 // is TS-only and is not read here.
 func MergedClaudeMdExcludes(originalCwd string) []string {
 	absCwd, err := filepath.Abs(originalCwd)
@@ -24,8 +24,8 @@ func MergedClaudeMdExcludes(originalCwd string) []string {
 	}
 	var acc []string
 	acc = mergeStringUniq(acc, readUserClaudeMdExcludes())
-	acc = mergeStringUniq(acc, readClaudeMdExcludesFile(filepath.Join(absCwd, ".claude", "settings.go.json")))
-	acc = mergeStringUniq(acc, readClaudeMdExcludesFile(filepath.Join(absCwd, ".claude", "settings.local.json")))
+	acc = mergeStringUniq(acc, readClaudeMdExcludesFile(filepath.Join(absCwd, ".harness", "settings.go.json")))
+	acc = mergeStringUniq(acc, readClaudeMdExcludesFile(filepath.Join(absCwd, ".harness", "settings.local.json")))
 
 	for _, src := range EnabledSettingSources() {
 		var next []string

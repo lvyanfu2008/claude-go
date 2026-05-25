@@ -44,8 +44,8 @@ func LoadAgentDefinitionsReport(cwd string) AgentDefinitionsReport {
 		dir    string
 	}{
 		{source: "userSettings", dir: filepath.Join(commands.ClaudeConfigHome(), "agents")},
-		{source: "projectSettings", dir: filepath.Join(strings.TrimSpace(cwd), ".claude", "agents")},
-		{source: "policySettings", dir: filepath.Join(commands.ManagedFilePath(), ".claude", "agents")},
+		{source: "projectSettings", dir: filepath.Join(strings.TrimSpace(cwd), ".harness", "agents")},
+		{source: "policySettings", dir: filepath.Join(commands.ManagedFilePath(), ".harness", "agents")},
 	}
 
 	for _, item := range loadOrder {

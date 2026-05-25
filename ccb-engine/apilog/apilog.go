@@ -54,7 +54,7 @@ func ResolvedLogPath() string {
 }
 
 // MaybePrintDiag records resolved path and flag state when GOU_DEMO_LOG is truthy (same switch as gou-demo trace).
-// It appends to the same file as [ResolvedLogPath] / LLM API body logs (~/.claude/debug/<session>.txt
+// It appends to the same file as [ResolvedLogPath] / LLM API body logs (~/.harness/debug/<session>.txt
 // by default) so TTY sessions are not spammed; if the path is empty or the write fails, it falls back to stderr.
 func MaybePrintDiag() {
 	if !envTruthy("GOU_DEMO_LOG") {
@@ -75,10 +75,10 @@ func MaybePrintDiag() {
 		fmt.Fprintf(&b, "[ccb-engine apilog] diag: logging flags off → PrepareIfEnabled does nothing → no debug log file created\n")
 	}
 	if p := settingsfile.UserClaudeSettingsPath(); p != "" {
-		fmt.Fprintf(&b, "[ccb-engine apilog] diag: user env merge reads %q (override dir: CLAUDE_CONFIG_DIR; project also uses .claude/settings.local.json)\n", p)
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: user env merge reads %q (override dir: CLAUDE_CONFIG_DIR; project also uses .harness/settings.local.json)\n", p)
 	}
 	if root := settingsfile.ProjectRootLastResolved(); root != "" {
-		fmt.Fprintf(&b, "[ccb-engine apilog] diag: project root for Go .claude/settings.go.json (and local): %q (set CCB_ENGINE_PROJECT_ROOT to override)\n", root)
+		fmt.Fprintf(&b, "[ccb-engine apilog] diag: project root for Go .harness/settings.go.json (and local): %q (set CCB_ENGINE_PROJECT_ROOT to override)\n", root)
 	}
 	body := b.String()
 	if path != "" {
@@ -107,10 +107,10 @@ func appendDiagToLog(path, body string) error {
 
 // PrepareIfEnabled creates the log file and its parent directories when either
 // CLAUDE_CODE_LOG_API_REQUEST_BODY or CLAUDE_CODE_LOG_API_RESPONSE_BODY is truthy,
-// and writes a one-time "latest points to …" line to that log file (not stderr). Call after project .claude/settings.go.json
+// and writes a one-time "latest points to …" line to that log file (not stderr). Call after project .harness/settings.go.json
 // (and local) env is applied so CLAUDE_CODE_DEBUG_LOG_* from settings take effect.
 //
-// Without this, ~/.claude/debug only appears after the first LLM request when logging is on.
+// Without this, ~/.harness/debug only appears after the first LLM request when logging is on.
 func PrepareIfEnabled() {
 	if !ApiBodyLoggingEnabled() {
 		return

@@ -97,7 +97,7 @@ func formatInt(n int) string {
 }
 
 // LoadSessionMemoryTemplate loads the custom session memory template from
-// ~/.claude/session-memory/config/template.md, falling back to the default.
+// ~/.harness/session-memory/config/template.md, falling back to the default.
 // Mirrors TS loadSessionMemoryTemplate.
 func LoadSessionMemoryTemplate() string {
 	configHome, err := claudebase.ClaudeConfigHomeDir()
@@ -117,7 +117,7 @@ func LoadSessionMemoryTemplate() string {
 }
 
 // LoadSessionMemoryPrompt loads the custom session memory prompt from
-// ~/.claude/session-memory/config/prompt.md, falling back to the default.
+// ~/.harness/session-memory/config/prompt.md, falling back to the default.
 // Mirrors TS loadSessionMemoryPrompt.
 func LoadSessionMemoryPrompt() string {
 	configHome, err := claudebase.ClaudeConfigHomeDir()

@@ -27,7 +27,7 @@ func MergeEnabledPlugins(cwd string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	cl := filepath.Join(projRoot, ".claude")
+	cl := filepath.Join(projRoot, ".harness")
 	if err := mergeEnabledPluginsFile(filepath.Join(cl, "settings.go.json"), merged); err != nil {
 		return nil, err
 	}
@@ -44,9 +44,9 @@ func userClaudeSettingsPath() string {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".", ".claude", "settings.go.json")
+		return filepath.Join(".", ".harness", "settings.go.json")
 	}
-	return filepath.Join(home, ".claude", "settings.go.json")
+	return filepath.Join(home, ".harness", "settings.go.json")
 }
 
 func mergeEnabledPluginsFile(path string, merged map[string]bool) error {

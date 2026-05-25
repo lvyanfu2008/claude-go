@@ -323,7 +323,7 @@
     "allowedTools": [
       "Agent",
       "Read(~/**)",
-      "Edit(~/.claude/settings.go.json)"
+      "Edit(~/.harness/settings.go.json)"
     ],
     "source": "builtin",
     "disableNonInteractive": true

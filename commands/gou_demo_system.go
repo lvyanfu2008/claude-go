@@ -90,7 +90,7 @@ func envTruthyGo(k string) bool {
 // EnvModelForSystemPrompt returns the model id used in ComputeSimpleEnvInfo / ComputeEnvInfo (TS computeSimpleEnvInfo modelId).
 // Priority: EnvReportModelID → CLAUDE_CODE_SYSTEM_PROMPT_MODEL_ID → same process-env chain as HTTP
 // ([modelenv.FirstNonEmpty]: CCB_ENGINE_MODEL, ANTHROPIC_MODEL, ANTHROPIC_DEFAULT_* — includes values
-// applied from ~/.claude/settings.go.json and project .claude/settings.go.json when the process env was empty) → ModelID.
+// applied from ~/.harness/settings.go.json and project .harness/settings.go.json when the process env was empty) → ModelID.
 func (o GouDemoSystemOpts) EnvModelForSystemPrompt() string {
 	if v := strings.TrimSpace(o.EnvReportModelID); v != "" {
 		return v

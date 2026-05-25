@@ -39,7 +39,7 @@ func cronFilePath(projectRoot string) string {
 	if pr == "" {
 		pr = "."
 	}
-	return filepath.Join(pr, ".claude", "scheduled_tasks.json")
+	return filepath.Join(pr, ".harness", "scheduled_tasks.json")
 }
 
 func parseCron(expr string) (cron.Schedule, error) {

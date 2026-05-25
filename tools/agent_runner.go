@@ -35,7 +35,7 @@ var (
 )
 
 func agentMetaDir(cfg AgentRuntimeConfig) string {
-	return filepath.Join(cfg.ProjectRoot, ".claude", ".gou-agents")
+	return filepath.Join(cfg.ProjectRoot, ".harness", ".gou-agents")
 }
 
 func persistAgentMetadata(cfg AgentRuntimeConfig, s *AgentSession) {

@@ -307,7 +307,7 @@ func editCallDeps(in editInput, abs string, state *ReadFileState, userModified b
 
 // ValidateEditSettingsJSON validates whether edits to settings JSON files produce valid JSON.
 // This is a default helper for the EditDeps.CheckEditSettings callback.
-// It checks if the file path matches .claude/settings*.json patterns and validates the JSON.
+// It checks if the file path matches .harness/settings*.json patterns and validates the JSON.
 // Returns an empty string if valid, or an error message if invalid.
 func ValidateEditSettingsJSON(filePath, oldContent, newContent string) string {
 	base := pathpkg.Base(filePath)
@@ -315,7 +315,7 @@ func ValidateEditSettingsJSON(filePath, oldContent, newContent string) string {
 		return ""
 	}
 	dir := pathpkg.Base(pathpkg.Dir(filePath))
-	if dir != ".claude" {
+	if dir != ".harness" {
 		return ""
 	}
 	var v any

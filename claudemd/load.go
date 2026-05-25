@@ -90,14 +90,14 @@ func loadMemoryFilesUncached(opts LoadOptions) []MemoryFileInfo {
 				result = append(result, files...)
 			}
 
-			// 处理额外目录中的 .claude/CLAUDE.md 文件
-			dotClaudePath := filepath.Join(ad, ".claude", "CLAUDE.md")
+			// 处理额外目录中的 .harness/CLAUDE.md 文件
+			dotClaudePath := filepath.Join(ad, ".harness", "CLAUDE.md")
 			if files := mh.processMemoryFileWithIncludes(dotClaudePath, MemoryProject, processed, includeExternal, absOrig); len(files) > 0 {
 				result = append(result, files...)
 			}
 
 			// 处理额外目录中的规则文件
-			rulesDir := filepath.Join(ad, ".claude", "rules")
+			rulesDir := filepath.Join(ad, ".harness", "rules")
 			if rulesFiles := ProcessMdRules(rulesDir, MemoryProject, processed, includeExternal, absOrig, false, nil, mh.excludeChecker); len(rulesFiles) > 0 {
 				result = append(result, rulesFiles...)
 			}

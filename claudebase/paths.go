@@ -15,5 +15,5 @@ func ClaudeConfigHomeDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(h, ".claude"), nil
+	return filepath.Join(h, ".harness"), nil
 }

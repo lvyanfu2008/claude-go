@@ -43,11 +43,11 @@ func HandleDoctorCommand() ([]byte, error) {
 		lines = append(lines, "  CLAUDE.md:   ✗ Not found (run /init)")
 	}
 
-	// Check .claude directory
-	if fi, err := os.Stat(cwd + "/.claude"); err == nil && fi.IsDir() {
-		lines = append(lines, "  .claude/:    ✓ Found")
+	// Check .harness directory
+	if fi, err := os.Stat(cwd + "/.harness"); err == nil && fi.IsDir() {
+		lines = append(lines, "  .harness/:    ✓ Found")
 	} else {
-		lines = append(lines, "  .claude/:    ✗ Not found")
+		lines = append(lines, "  .harness/:    ✗ Not found")
 	}
 
 	// Check git

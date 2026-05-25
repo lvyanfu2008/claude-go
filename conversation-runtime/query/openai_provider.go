@@ -26,7 +26,7 @@ func UseOpenAIChatProvider() bool {
 	if err != nil {
 		return false
 	}
-	proj := filepath.Join(cwd, ".claude", "settings.go.json")
+	proj := filepath.Join(cwd, ".harness", "settings.go.json")
 	return modelTypeOpenAI(proj)
 }
 

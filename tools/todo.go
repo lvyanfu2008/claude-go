@@ -13,7 +13,7 @@ type todoItem struct {
 	ActiveForm string `json:"activeForm"`
 }
 
-// TodoWriteFromJSON persists todos next to the project .claude tree (subset parity with TS TodoWriteTool).
+// TodoWriteFromJSON persists todos next to the project .harness tree (subset parity with TS TodoWriteTool).
 func TodoWriteFromJSON(raw []byte, c Config) (string, bool, error) {
 	var in struct {
 		Todos []todoItem `json:"todos"`

@@ -7,7 +7,7 @@ Go implementation of Claude Code's keyboard shortcut configuration system, provi
 ✅ **Complete functionality implemented:**
 
 - **Configuration File Management**
-  - Load and parse `~/.claude/keybindings.json` 
+  - Load and parse `~/.harness/keybindings.json` 
   - Generate keybindings template with default bindings
   - Validate JSON structure and syntax
 
@@ -76,7 +76,7 @@ go build ./cmd/keybindings-demo
 
 ## Configuration Format
 
-The `~/.claude/keybindings.json` file follows this structure:
+The `~/.harness/keybindings.json` file follows this structure:
 
 ```json
 {

@@ -25,7 +25,7 @@ type LoadOptions struct {
 	DisablePolicySkills bool
 	// SkillsPluginOnlyLocked mirrors isRestrictedToPluginOnly('skills'): skips user/project/add-dir skills and legacy /commands; managed policy skills dir still loads when policy is not disabled.
 	SkillsPluginOnlyLocked bool
-	// AddSkillDirs are extra project roots (TS --add-dir); each contributes <root>/.claude/skills.
+	// AddSkillDirs are extra project roots (TS --add-dir); each contributes <root>/.harness/skills.
 	AddSkillDirs []string
 	// SessionProjectRoot is TS getProjectRoot() for resolveStopBoundary (nested repo / worktree). Empty defaults to cwd when resolving.
 	SessionProjectRoot string

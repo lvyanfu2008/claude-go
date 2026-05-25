@@ -27,7 +27,7 @@ func debugLogPath(sessionID string) string {
 	if home == "" {
 		return filepath.Join(os.TempDir(), "claude", "debug", sid+".txt")
 	}
-	return filepath.Join(home, ".claude", "debug", sid+".txt")
+	return filepath.Join(home, ".harness", "debug", sid+".txt")
 }
 
 func resolveDebugBundled(args, sessionID string) types.SlashResolveResult {
@@ -48,8 +48,8 @@ func resolveDebugBundled(args, sessionID string) types.SlashResolveResult {
 	}
 
 	cfgUser := filepath.Join(commands.ClaudeConfigHome(), "settings.go.json")
-	cfgProj := ".claude/settings.go.json"
-	cfgLocal := ".claude/settings.local.json"
+	cfgProj := ".harness/settings.go.json"
+	cfgLocal := ".harness/settings.local.json"
 
 	prompt := fmt.Sprintf(`# Debug Skill
 

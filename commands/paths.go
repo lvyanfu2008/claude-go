@@ -10,7 +10,7 @@ import (
 	"goc/utils"
 )
 
-// ClaudeConfigHome returns ~/.claude or CLAUDE_CONFIG_DIR (same as TS getClaudeConfigHomeDir).
+// ClaudeConfigHome returns ~/.harness or CLAUDE_CONFIG_DIR (same as TS getClaudeConfigHomeDir).
 func ClaudeConfigHome() string {
 	return debugpath.ConfigHomeDir()
 }
@@ -60,7 +60,7 @@ func projectClaudeSubdirs(cwd, subdir, sessionProjectRoot string) ([]string, err
 		if pathsEqual(cur, home) {
 			break
 		}
-		sub := filepath.Join(cur, ".claude", subdir)
+		sub := filepath.Join(cur, ".harness", subdir)
 		if st, err := os.Stat(sub); err == nil && st.IsDir() {
 			dirs = append(dirs, sub)
 		}
@@ -78,7 +78,7 @@ func projectClaudeSubdirs(cwd, subdir, sessionProjectRoot string) ([]string, err
 }
 
 // appendWorktreeMainRepoProjectDirIfMissing mirrors src/utils/markdownConfigLoader.ts loadMarkdownFilesForSubdir lines 320–335
-// (sparse worktree: add main repo .claude/<subdir> when worktree root lacks it).
+// (sparse worktree: add main repo .harness/<subdir> when worktree root lacks it).
 func appendWorktreeMainRepoProjectDirIfMissing(dirs []string, cwd, subdir string) []string {
 	gitRoot := findGitRoot(cwd)
 	canonicalRoot := findCanonicalGitRoot(cwd)
@@ -88,7 +88,7 @@ func appendWorktreeMainRepoProjectDirIfMissing(dirs []string, cwd, subdir string
 	if normalizePathForComparison(gitRoot) == normalizePathForComparison(canonicalRoot) {
 		return dirs
 	}
-	worktreeSubdir := filepath.Join(gitRoot, ".claude", subdir)
+	worktreeSubdir := filepath.Join(gitRoot, ".harness", subdir)
 	nWT := normalizePathForComparison(worktreeSubdir)
 	worktreeHas := false
 	for _, d := range dirs {
@@ -100,7 +100,7 @@ func appendWorktreeMainRepoProjectDirIfMissing(dirs []string, cwd, subdir string
 	if worktreeHas {
 		return dirs
 	}
-	mainClaudeSubdir := filepath.Join(canonicalRoot, ".claude", subdir)
+	mainClaudeSubdir := filepath.Join(canonicalRoot, ".harness", subdir)
 	for _, d := range dirs {
 		if normalizePathForComparison(d) == normalizePathForComparison(mainClaudeSubdir) {
 			return dirs
@@ -123,7 +123,7 @@ func projectSkillDirs(cwd, sessionProjectRoot string) ([]string, error) {
 	return projectClaudeSubdirs(cwd, "skills", sessionProjectRoot)
 }
 
-// projectWorkflowDirs is projectClaudeSubdirs(cwd, "workflows", sessionProjectRoot) — `.claude/workflows` per ancestor.
+// projectWorkflowDirs is projectClaudeSubdirs(cwd, "workflows", sessionProjectRoot) — `.harness/workflows` per ancestor.
 func projectWorkflowDirs(cwd, sessionProjectRoot string) ([]string, error) {
 	return projectClaudeSubdirs(cwd, "workflows", sessionProjectRoot)
 }

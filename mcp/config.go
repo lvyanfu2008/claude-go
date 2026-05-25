@@ -43,9 +43,9 @@ func SaveMcpJsonConfig(cwd string, cfg *McpJsonConfig) error {
 type ConfigSource int
 
 const (
-	SourceUserSettings   ConfigSource = iota // ~/.claude/settings.go.json
-	SourceProjectSettings                     // .claude/settings.go.json
-	SourceLocalSettings                       // .claude/settings.local.json
+	SourceUserSettings   ConfigSource = iota // ~/.harness/settings.go.json
+	SourceProjectSettings                     // .harness/settings.go.json
+	SourceLocalSettings                       // .harness/settings.local.json
 	SourceMcpJson                             // .mcp.json
 	SourceEnterprise                          // managed-mcp.json
 	SourceDynamic                             // runtime-added
@@ -206,7 +206,7 @@ func IsMcpServerDisabled(name string, disabledServers []string) bool {
 
 // path helpers
 
-// UserSettingsPath returns ~/.claude/settings.go.json or $CLAUDE_CONFIG_DIR/settings.go.json.
+// UserSettingsPath returns ~/.harness/settings.go.json or $CLAUDE_CONFIG_DIR/settings.go.json.
 func UserSettingsPath() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
 		return filepath.Join(d, "settings.go.json")
@@ -215,17 +215,17 @@ func UserSettingsPath() string {
 	if h == "" {
 		return ""
 	}
-	return filepath.Join(h, ".claude", "settings.go.json")
+	return filepath.Join(h, ".harness", "settings.go.json")
 }
 
-// ProjectSettingsPath returns <cwd>/.claude/settings.go.json.
+// ProjectSettingsPath returns <cwd>/.harness/settings.go.json.
 func ProjectSettingsPath(cwd string) string {
-	return filepath.Join(cwd, ".claude", "settings.go.json")
+	return filepath.Join(cwd, ".harness", "settings.go.json")
 }
 
-// LocalSettingsPath returns <cwd>/.claude/settings.local.json.
+// LocalSettingsPath returns <cwd>/.harness/settings.local.json.
 func LocalSettingsPath(cwd string) string {
-	return filepath.Join(cwd, ".claude", "settings.local.json")
+	return filepath.Join(cwd, ".harness", "settings.local.json")
 }
 
 // McpJsonPath returns <cwd>/.mcp.json.
@@ -233,12 +233,12 @@ func McpJsonPath(cwd string) string {
 	return filepath.Join(cwd, ".mcp.json")
 }
 
-// SettingsGoJsonPath returns <cwd>/.claude/settings.go.json.
+// SettingsGoJsonPath returns <cwd>/.harness/settings.go.json.
 func SettingsGoJsonPath(cwd string) string {
-	return filepath.Join(cwd, ".claude", "settings.go.json")
+	return filepath.Join(cwd, ".harness", "settings.go.json")
 }
 
-// LoadSettingsGoJson loads the full contents of .claude/settings.go.json.
+// LoadSettingsGoJson loads the full contents of .harness/settings.go.json.
 // Returns nil if the file does not exist.
 func LoadSettingsGoJson(cwd string) (map[string]json.RawMessage, error) {
 	path := SettingsGoJsonPath(cwd)
@@ -256,13 +256,13 @@ func LoadSettingsGoJson(cwd string) (map[string]json.RawMessage, error) {
 	return doc, nil
 }
 
-// SaveSettingsGoJson writes the full document to .claude/settings.go.json.
-// Creates the .claude directory if it doesn't exist.
+// SaveSettingsGoJson writes the full document to .harness/settings.go.json.
+// Creates the .harness directory if it doesn't exist.
 func SaveSettingsGoJson(cwd string, doc map[string]json.RawMessage) error {
 	path := SettingsGoJsonPath(cwd)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create .claude dir: %w", err)
+		return fmt.Errorf("create .harness dir: %w", err)
 	}
 	data, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -274,7 +274,7 @@ func SaveSettingsGoJson(cwd string, doc map[string]json.RawMessage) error {
 	return nil
 }
 
-// LoadSettingsGoJsonMcpServers loads mcpServers from .claude/settings.go.json.
+// LoadSettingsGoJsonMcpServers loads mcpServers from .harness/settings.go.json.
 // Returns nil, nil if the file or key is missing.
 func LoadSettingsGoJsonMcpServers(cwd string) (map[string]json.RawMessage, error) {
 	doc, err := LoadSettingsGoJson(cwd)
@@ -295,7 +295,7 @@ func LoadSettingsGoJsonMcpServers(cwd string) (map[string]json.RawMessage, error
 	return servers, nil
 }
 
-// SaveSettingsGoJsonMcpServers writes mcpServers into .claude/settings.go.json,
+// SaveSettingsGoJsonMcpServers writes mcpServers into .harness/settings.go.json,
 // preserving all other top-level keys.
 func SaveSettingsGoJsonMcpServers(cwd string, servers map[string]json.RawMessage) error {
 	doc, err := LoadSettingsGoJson(cwd)

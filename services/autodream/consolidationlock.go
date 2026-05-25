@@ -180,7 +180,7 @@ func ProjectDirForOriginalCwd(projectPath, configHome string) string {
 	return filepath.Join(ProjectsDir(configHome), sanitizePath(projectPath))
 }
 
-// ProjectsDir is ~/.claude/projects.
+// ProjectsDir is ~/.harness/projects.
 func ProjectsDir(configHome string) string {
 	return filepath.Join(configHome, "projects")
 }

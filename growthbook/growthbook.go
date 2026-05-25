@@ -232,13 +232,13 @@ func (m *Manager) loadFromConfigFile() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Try to load from ~/.claude/growthbook.json
+	// Try to load from ~/.harness/growthbook.json
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
 
-	configPath := filepath.Join(homeDir, ".claude", "growthbook.json")
+	configPath := filepath.Join(homeDir, ".harness", "growthbook.json")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		// File doesn't exist or can't be read

@@ -137,17 +137,17 @@ func extractPluginRoot(command string) string {
 	for _, f := range fields {
 		f = strings.Trim(f, `"'`)
 		f = strings.ReplaceAll(f, "\\", "/") // normalize Windows backslashes
-		idx := strings.Index(f, "/.claude/plugins/cache/")
+		idx := strings.Index(f, "/.harness/plugins/cache/")
 		if idx < 0 {
 			continue
 		}
-		rest := f[idx+len("/.claude/plugins/cache/"):]
+		rest := f[idx+len("/.harness/plugins/cache/"):]
 		parts := strings.Split(rest, "/")
 		if len(parts) < 3 {
 			continue
 		}
 		// marketplace/name/version
-		return f[:idx] + "/.claude/plugins/cache/" + strings.Join(parts[:3], "/")
+		return f[:idx] + "/.harness/plugins/cache/" + strings.Join(parts[:3], "/")
 	}
 	return ""
 }

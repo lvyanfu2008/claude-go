@@ -4,7 +4,7 @@
 // providing the ability to load, parse, validate, and manage user keybinding configurations.
 //
 // Key Features:
-// - Loading and parsing of ~/.claude/keybindings.json configuration files
+// - Loading and parsing of ~/.harness/keybindings.json configuration files
 // - Validation of keybinding syntax and conflict detection
 // - Template generation for new keybinding configurations  
 // - Support for chord bindings (multi-keystroke sequences)

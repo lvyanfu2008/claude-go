@@ -20,7 +20,7 @@ type ParityToolRunner struct {
 	DemoToolRunner
 	WorkDir    string
 	ExtraRoots []string
-	// ProjectRoot is the repo / project directory (for .claude paths: todos, cron, plan mode, task files).
+	// ProjectRoot is the repo / project directory (for .harness paths: todos, cron, plan mode, task files).
 	ProjectRoot string
 	// ReadFileState mirrors TS toolUseContext.readFileState (nil → lazy per runner; gou-demo sets a session-scoped pointer on model).
 	ReadFileState *localtools.ReadFileState
@@ -236,5 +236,5 @@ func computeTasksDir(projectRoot, sessionID string) string {
 	if sid == "" {
 		sid = "default-session"
 	}
-	return filepath.Join(pr, ".claude", ".gou-tasks", sid, "tasks")
+	return filepath.Join(pr, ".harness", ".gou-tasks", sid, "tasks")
 }

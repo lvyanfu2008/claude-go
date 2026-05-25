@@ -70,7 +70,7 @@ func TestMemoryDirDisplayPath(t *testing.T) {
 		tests = append(tests, struct {
 			in   string
 			want string
-		}{filepath.Join(home, ".claude", "projects", "foo", "memory") + "/", "~/.claude/projects/foo/memory/"})
+		}{filepath.Join(home, ".harness", "projects", "foo", "memory") + "/", "~/.harness/projects/foo/memory/"})
 	}
 	for _, tc := range tests {
 		got := memoryDirDisplayPath(tc.in)

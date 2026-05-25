@@ -28,7 +28,7 @@ func HandleMcpCommand(args string) ([]byte, error) {
 	}
 
 	// Check settings.go.json
-	settingsGoPath := filepath.Join(cwd, ".claude", "settings.go.json")
+	settingsGoPath := filepath.Join(cwd, ".harness", "settings.go.json")
 	if data, err := os.ReadFile(settingsGoPath); err == nil {
 		lines = append(lines, fmt.Sprintf("settings.go.json: %s (%d bytes)", settingsGoPath, len(data)))
 	}

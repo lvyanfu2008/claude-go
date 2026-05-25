@@ -30,7 +30,7 @@ func GetKeybindingsPath() (string, error) {
 }
 
 // getClaudeConfigHomeDir mirrors TypeScript getClaudeConfigHomeDir()
-// Returns $CLAUDE_CONFIG_DIR if set, otherwise $HOME/.claude
+// Returns $CLAUDE_CONFIG_DIR if set, otherwise $HOME/.harness
 func getClaudeConfigHomeDir() (string, error) {
 	if configDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); configDir != "" {
 		return configDir, nil
@@ -41,7 +41,7 @@ func getClaudeConfigHomeDir() (string, error) {
 		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 	
-	return filepath.Join(homeDir, ".claude"), nil
+	return filepath.Join(homeDir, ".harness"), nil
 }
 
 // LoadKeybindings loads and parses keybindings from user config file

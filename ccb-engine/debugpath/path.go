@@ -28,7 +28,7 @@ func SessionID() string {
 	return sessionID
 }
 
-// ConfigHomeDir matches getClaudeConfigHomeDir: CLAUDE_CONFIG_DIR, else ~/.claude.
+// ConfigHomeDir matches getClaudeConfigHomeDir: CLAUDE_CONFIG_DIR, else ~/.harness.
 func ConfigHomeDir() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
 		return d
@@ -37,12 +37,12 @@ func ConfigHomeDir() string {
 	if err != nil || strings.TrimSpace(h) == "" {
 		return ""
 	}
-	return filepath.Join(h, ".claude")
+	return filepath.Join(h, ".harness")
 }
 
 // ResolveLogPath matches src/utils/debug.ts getDebugLogPath resolution order:
 //  1. CLAUDE_CODE_DEBUG_LOG_FILE — explicit file
-//  2. CLAUDE_CODE_DEBUG_LOGS_DIR — if an existing directory (or trailing path sep / no extension path), <dir>/<sessionId>.txt; otherwise the value is used as the full file path (TS passes through). Non-absolute values are joined under ConfigHomeDir() (CLAUDE_CONFIG_DIR or ~/.claude), not the process cwd.
+//  2. CLAUDE_CODE_DEBUG_LOGS_DIR — if an existing directory (or trailing path sep / no extension path), <dir>/<sessionId>.txt; otherwise the value is used as the full file path (TS passes through). Non-absolute values are joined under ConfigHomeDir() (CLAUDE_CONFIG_DIR or ~/.harness), not the process cwd.
 //  3. <configHome>/debug/<sessionId>.txt
 func ResolveLogPath() string {
 	if p := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DEBUG_LOG_FILE")); p != "" {
@@ -94,7 +94,7 @@ func LatestLinkPathFor(logPath string) string {
 }
 
 // MaybeUpdateLatestSymlink creates <debug-dir>/latest -> logPath (best-effort; TS parity:
-// ~/.claude/debug/latest — see src/utils/debug.ts updateLatestDebugLogSymlink).
+// ~/.harness/debug/latest — see src/utils/debug.ts updateLatestDebugLogSymlink).
 func MaybeUpdateLatestSymlink(logPath string) {
 	if logPath == "" {
 		return

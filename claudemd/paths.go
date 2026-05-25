@@ -45,7 +45,7 @@ func MemoryPath(memoryType MemoryType, _ string) string {
 }
 
 func managedClaudeRulesDir() string {
-	return filepath.Join(ManagedFilePath(), ".claude", "rules")
+	return filepath.Join(ManagedFilePath(), ".harness", "rules")
 }
 
 func userClaudeRulesDir() (string, error) {

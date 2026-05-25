@@ -241,7 +241,7 @@ func pluginCacheDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".claude", "plugins", "cache"), nil
+	return filepath.Join(home, ".harness", "plugins", "cache"), nil
 }
 
 func pluginsMarketplaceName(source plugins.Source) string {
@@ -257,7 +257,7 @@ func pluginsMarketplaceName(source plugins.Source) string {
 func enablePluginInSettings(pluginID string) error {
 	// Simplified: write to user settings.go.json
 	home, _ := os.UserHomeDir()
-	settingsPath := filepath.Join(home, ".claude", "settings.go.json")
+	settingsPath := filepath.Join(home, ".harness", "settings.go.json")
 
 	var settings struct {
 		EnabledPlugins map[string]bool `json:"enabledPlugins"`

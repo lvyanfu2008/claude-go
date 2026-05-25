@@ -40,7 +40,7 @@ func scheduleOAuthToken() string {
 	if err != nil {
 		return ""
 	}
-	path := filepath.Join(home, ".claude", ".credentials.json")
+	path := filepath.Join(home, ".harness", ".credentials.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return ""
@@ -70,7 +70,7 @@ func scheduleOrganizationUUID() string {
 	if err != nil {
 		return ""
 	}
-	cfgPath := filepath.Join(home, ".claude", "config.json")
+	cfgPath := filepath.Join(home, ".harness", "config.json")
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return ""

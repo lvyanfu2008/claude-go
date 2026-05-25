@@ -13,7 +13,7 @@ func trimProjectRoot(root string) string {
 }
 
 // TaskBaseDir returns the directory used for TaskOutput / TaskStop file protocol
-// (under project .claude, scoped by session).
+// (under project .harness, scoped by session).
 func (c Config) TaskBaseDir() string {
 	pr := trimProjectRoot(c.ProjectRoot)
 	if pr == "" {
@@ -23,7 +23,7 @@ func (c Config) TaskBaseDir() string {
 	if sid == "" {
 		sid = "default-session"
 	}
-	return filepath.Join(pr, ".claude", ".gou-tasks", sid)
+	return filepath.Join(pr, ".harness", ".gou-tasks", sid)
 }
 
 func (c Config) TasksDir() string {
@@ -40,7 +40,7 @@ func (c Config) TodoFilePath() string {
 	if sid == "" {
 		sid = "default-session"
 	}
-	return filepath.Join(pr, ".claude", "gou_demo_todos_"+sanitizeFilePart(sid)+".json")
+	return filepath.Join(pr, ".harness", "gou_demo_todos_"+sanitizeFilePart(sid)+".json")
 }
 
 func (c Config) PlanModePath() string {
@@ -48,7 +48,7 @@ func (c Config) PlanModePath() string {
 	if pr == "" {
 		pr = c.WorkDir
 	}
-	return filepath.Join(pr, ".claude", "gou_plan_mode.json")
+	return filepath.Join(pr, ".harness", "gou_plan_mode.json")
 }
 
 func sanitizeFilePart(s string) string {

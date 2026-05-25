@@ -10,7 +10,7 @@ import (
 
 // DiscoverSkillDirsForPaths mirrors src/skills/loadSkillsDir.ts discoverSkillDirsForPaths.
 // It walks up from each file's directory toward cwd (exclusive of cwd) and collects
-// existing <dir>/.claude/skills paths where <dir> is not gitignored (git check-ignore).
+// existing <dir>/.harness/skills paths where <dir> is not gitignored (git check-ignore).
 //
 // persistentSeen: if non-nil, skillDir paths are recorded here and skipped on later calls
 // (TS process-global dynamicSkillDirs). If nil, a new map is used for dedup within this call only.
@@ -35,7 +35,7 @@ func DiscoverSkillDirsForPaths(filePaths []string, cwd string, persistentSeen ma
 		fp = filepath.Clean(fp)
 		currentDir := filepath.Dir(fp)
 		for isStrictChildOf(currentDir, cwd) {
-			skillDir := filepath.Join(currentDir, ".claude", "skills")
+			skillDir := filepath.Join(currentDir, ".harness", "skills")
 			if _, done := seen[skillDir]; !done {
 				seen[skillDir] = struct{}{}
 				st, err := os.Stat(skillDir)

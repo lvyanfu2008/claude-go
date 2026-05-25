@@ -91,7 +91,7 @@ func claudeCodeGuideBasePrompt(embeddedSearch bool) string {
 4. Fetch the specific documentation pages
 5. Provide clear, actionable guidance based on official documentation
 6. Use %s if docs don't cover the topic
-7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using %s
+7. Reference local project files (CLAUDE.md, .harness/ directory) when relevant using %s
 
 **Guidelines:**
 - Always prioritize official documentation over assumptions

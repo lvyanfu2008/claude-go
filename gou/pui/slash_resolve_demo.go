@@ -153,7 +153,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				"gou-demo: /%s could not be resolved (type=%q). "+
 					"Disk skills need SkillRoot pointing at a directory with SKILL.md. "+
 					"Bundled prompts need a Go-side resolver or embedded .md. "+
-					"Add a project skill under .claude/skills/SKILL.md or implement a resolver in slashresolve/.",
+					"Add a project skill under .harness/skills/SKILL.md or implement a resolver in slashresolve/.",
 				cmd.Name, cmd.Type))},
 			ShouldQuery: false,
 		}, nil

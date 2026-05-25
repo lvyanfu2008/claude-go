@@ -17,7 +17,7 @@ type HooksResult struct {
 // HandleHooksCommand handles /hooks — lists configured hooks.
 func HandleHooksCommand(args string) ([]byte, error) {
 	cwd, _ := os.Getwd()
-	hooksDir := filepath.Join(cwd, ".claude", "hooks")
+	hooksDir := filepath.Join(cwd, ".harness", "hooks")
 
 	entries, err := os.ReadDir(hooksDir)
 	if err != nil {

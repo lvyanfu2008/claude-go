@@ -19,7 +19,7 @@ func createWorktree(projectRoot, requestedName string) (string, error) {
 		name = fmt.Sprintf("agent-%d", time.Now().UnixNano())
 	}
 	safe := sanitizeName(name)
-	base := filepath.Join(root, ".claude", "worktrees")
+	base := filepath.Join(root, ".harness", "worktrees")
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return "", err
 	}
@@ -52,7 +52,7 @@ func CleanupStaleAgentWorktrees(projectRoot string, maxAge time.Duration) {
 	if root == "" {
 		return
 	}
-	base := filepath.Join(root, ".claude", "worktrees")
+	base := filepath.Join(root, ".harness", "worktrees")
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		return
@@ -103,7 +103,7 @@ func BumpWorktreeMtime(worktreePath string) {
 	if wp == "" {
 		return
 	}
-	marker := filepath.Join(wp, ".claude", "worktree-marker")
+	marker := filepath.Join(wp, ".harness", "worktree-marker")
 	_ = os.MkdirAll(filepath.Dir(marker), 0o700)
 	_ = os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600)
 }

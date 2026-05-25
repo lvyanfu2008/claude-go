@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Workflow *listing* from disk (Phase P6): implementation保留，但产品路径 **延后**（[DefaultLoadOptions] 不启用 [LoadOptions.WorkflowScripts]；见 docs/plans/goc-load-all-commands.md）。显式设置 WorkflowScripts=true 时仍会扫描 `.claude/workflows` 等。多步执行仍依赖 TS stub / 未实现。
+// Workflow *listing* from disk (Phase P6): implementation保留，但产品路径 **延后**（[DefaultLoadOptions] 不启用 [LoadOptions.WorkflowScripts]；见 docs/plans/goc-load-all-commands.md）。显式设置 WorkflowScripts=true 时仍会扫描 `.harness/workflows` 等。多步执行仍依赖 TS stub / 未实现。
 
 // workflowFileMeta is a minimal root object for `.yaml`/`.yml`/`.json` workflow definitions
 // (see docs/features/workflow-scripts.md — full execution engine is TS stub).
@@ -54,7 +54,7 @@ func loadWorkflowCommands(cwd string, opts LoadOptions) []types.Command {
 			if err != nil {
 				continue
 			}
-			dir := filepath.Join(abs, ".claude", "workflows")
+			dir := filepath.Join(abs, ".harness", "workflows")
 			cmds, err := loadWorkflowsFromDir(dir, "projectSettings")
 			if err != nil {
 				continue
@@ -66,7 +66,7 @@ func loadWorkflowCommands(cwd string, opts LoadOptions) []types.Command {
 
 	if opts.SkillsPluginOnlyLocked {
 		if !policyOff {
-			dir := filepath.Join(ManagedFilePath(), ".claude", "workflows")
+			dir := filepath.Join(ManagedFilePath(), ".harness", "workflows")
 			cmds, _ := loadWorkflowsFromDir(dir, "policySettings")
 			appendUnique(cmds)
 		}
@@ -74,7 +74,7 @@ func loadWorkflowCommands(cwd string, opts LoadOptions) []types.Command {
 	}
 
 	if !policyOff {
-		dir := filepath.Join(ManagedFilePath(), ".claude", "workflows")
+		dir := filepath.Join(ManagedFilePath(), ".harness", "workflows")
 		cmds, _ := loadWorkflowsFromDir(dir, "policySettings")
 		appendUnique(cmds)
 	}
@@ -101,7 +101,7 @@ func loadWorkflowCommands(cwd string, opts LoadOptions) []types.Command {
 			if err != nil {
 				continue
 			}
-			dir := filepath.Join(abs, ".claude", "workflows")
+			dir := filepath.Join(abs, ".harness", "workflows")
 			cmds, err := loadWorkflowsFromDir(dir, "projectSettings")
 			if err != nil {
 				continue

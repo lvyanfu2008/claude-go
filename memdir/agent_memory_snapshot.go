@@ -26,10 +26,10 @@ type syncedMeta struct {
 
 // GetSnapshotDirForAgent mirrors TS getSnapshotDirForAgent.
 // Returns the path to the snapshot directory for an agent in the current project.
-// e.g., <cwd>/.claude/agent-memory-snapshots/<agentType>/
+// e.g., <cwd>/.harness/agent-memory-snapshots/<agentType>/
 func GetSnapshotDirForAgent(agentType string) string {
 	cwd, _ := os.Getwd()
-	return filepath.Join(cwd, ".claude", snapshotBase, agentType)
+	return filepath.Join(cwd, ".harness", snapshotBase, agentType)
 }
 
 func getSnapshotJSONPath(agentType string) string {

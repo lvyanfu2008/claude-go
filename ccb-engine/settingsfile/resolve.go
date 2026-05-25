@@ -11,8 +11,8 @@ func fileExistsRegular(path string) bool {
 	return err == nil && !st.IsDir()
 }
 
-// goClaudeProjectMarkers are the only project-level files Go uses to locate `.claude/` for
-// env merge ([ApplyMergedClaudeSettingsEnv]) and related Go paths. Project `.claude/settings.json`
+// goClaudeProjectMarkers are the only project-level files Go uses to locate `.harness/` for
+// env merge ([ApplyMergedClaudeSettingsEnv]) and related Go paths. Project `.harness/settings.json`
 // is TypeScript-only and must not anchor Go project root discovery.
 var goClaudeProjectMarkers = []string{"settings.go.json", "settings.local.json"}
 
@@ -27,7 +27,7 @@ func findClaudeProjectRootWithMarkers(startDir string, markers []string) (string
 	}
 	orig := dir
 	for {
-		cl := filepath.Join(dir, ".claude")
+		cl := filepath.Join(dir, ".harness")
 		for _, name := range markers {
 			if fileExistsRegular(filepath.Join(cl, name)) {
 				return dir, nil
@@ -42,7 +42,7 @@ func findClaudeProjectRootWithMarkers(startDir string, markers []string) (string
 }
 
 // FindClaudeProjectRoot walks from startDir upward (including startDir) and returns
-// the first directory whose `.claude/` contains **settings.go.json** or **settings.local.json**.
+// the first directory whose `.harness/` contains **settings.go.json** or **settings.local.json**.
 // Project **settings.json** is ignored on purpose (TS CLI only).
 // If none is found, returns abs(startDir) so behavior matches “use cwd” when no Go marker exists.
 func FindClaudeProjectRoot(startDir string) (string, error) {
@@ -50,7 +50,7 @@ func FindClaudeProjectRoot(startDir string) (string, error) {
 }
 
 // FindClaudeProjectRootAny walks upward like [FindClaudeProjectRoot] but also treats
-// project `.claude/settings.json` as a marker. Use for TS-compat reads (e.g. enabledPlugins);
+// project `.harness/settings.json` as a marker. Use for TS-compat reads (e.g. enabledPlugins);
 // do not use for Go env merge — that stays on [FindClaudeProjectRoot].
 func FindClaudeProjectRootAny(startDir string) (string, error) {
 	return findClaudeProjectRootWithMarkers(startDir, allClaudeProjectMarkers)

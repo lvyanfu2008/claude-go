@@ -83,7 +83,7 @@ Analytics events are written to:
 
 GrowthBook-style feature flags with support for:
 - Environment variable loading (`FEATURE_*` and `CLAUDE_CODE_TENGU_*`)
-- Configuration file loading (`~/.claude/growthbook.json`)
+- Configuration file loading (`~/.harness/growthbook.json`)
 - Rule-based evaluation with attributes
 - Type conversion (bool, int, float, string)
 
@@ -125,7 +125,7 @@ CLAUDE_CODE_TENGU_DEFAULT_NAME="production"  # string
 
 ### Configuration File
 
-Create `~/.claude/growthbook.json`:
+Create `~/.harness/growthbook.json`:
 
 ```json
 {

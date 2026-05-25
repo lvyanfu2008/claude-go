@@ -10,7 +10,7 @@ import (
 
 // MergeGouDemoLocalePrefs reads top-level "language" and "outputStyle" from Claude settings files.
 // Merge order matches [ApplyMergedClaudeSettingsEnv] for project files (later wins):
-// when includeUser is true: user settings, then projectRoot/.claude/settings.go.json,
+// when includeUser is true: user settings, then projectRoot/.harness/settings.go.json,
 // settings.local.json. Project settings.json is TS-only and is not read here.
 // When includeUser is false, only settings.go.json and settings.local.json under the project.
 //
@@ -22,7 +22,7 @@ func MergeGouDemoLocalePrefs(projectRoot string, includeUser bool) (language, ou
 			paths = append(paths, u)
 		}
 	}
-	cl := filepath.Join(projectRoot, ".claude")
+	cl := filepath.Join(projectRoot, ".harness")
 	for _, name := range []string{"settings.go.json", "settings.local.json"} {
 		paths = append(paths, filepath.Join(cl, name))
 	}

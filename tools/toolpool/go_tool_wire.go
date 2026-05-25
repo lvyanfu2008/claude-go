@@ -546,7 +546,7 @@ func nativeCronCreateToolSpec() types.ToolSpec {
 			},
 			"durable": map[string]any{
 				"type":        "boolean",
-				"description": "true = persist to .claude/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions.",
+				"description": "true = persist to .harness/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions.",
 			},
 		},
 		"required":             []string{"cron", "prompt"},
@@ -839,10 +839,10 @@ func nativeWorkflowToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name: "workflow",
-		Description: `Use the Workflow tool to execute user-defined workflow scripts located in .claude/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks.
+		Description: `Use the Workflow tool to execute user-defined workflow scripts located in .harness/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks.
 
 Guidelines:
-- Specify the workflow name to execute (must match a file in .claude/workflows/)
+- Specify the workflow name to execute (must match a file in .harness/workflows/)
 - Optionally pass arguments that the workflow can use
 - Workflows run in the context of the current project`,
 		InputJSONSchema: mustMarshalJSONRaw(schema),

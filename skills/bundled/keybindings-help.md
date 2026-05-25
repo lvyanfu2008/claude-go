@@ -1,10 +1,10 @@
 # Keybindings Skill
 
-Create or modify `~/.claude/keybindings.json` to customize keyboard shortcuts.
+Create or modify `~/.harness/keybindings.json` to customize keyboard shortcuts.
 
 ## CRITICAL: Read Before Write
 
-**Always read `~/.claude/keybindings.json` first** (it may not exist yet). Merge changes with existing bindings — never replace the entire file.
+**Always read `~/.harness/keybindings.json` first** (it may not exist yet). Merge changes with existing bindings — never replace the entire file.
 
 - Use **Edit** tool for modifications to existing files
 - Use **Write** tool only if the file does not exist yet
@@ -95,7 +95,7 @@ To change the external editor shortcut from `ctrl+g` to `ctrl+e`:
 
 ## Validation with /doctor
 
-The `/doctor` command includes a "Keybinding Configuration Issues" section that validates `~/.claude/keybindings.json`.
+The `/doctor` command includes a "Keybinding Configuration Issues" section that validates `~/.harness/keybindings.json`.
 
 ### Common Issues and Fixes
 
@@ -113,7 +113,7 @@ The `/doctor` command includes a "Keybinding Configuration Issues" section that 
 
 ```
 Keybinding Configuration Issues
-Location: ~/.claude/keybindings.json
+Location: ~/.harness/keybindings.json
   └ [Error] Unknown context "chat"
     → Valid contexts: Global, Chat, Autocomplete, ...
   └ [Warning] "ctrl+c" may not work: Terminal interrupt (SIGINT)

@@ -17,7 +17,7 @@ func storeImages(pastedContents map[string]utils.PastedContent) (map[int]string,
 		return nil, nil
 	}
 
-	// Use temp directory for image cache (simpler than ~/.claude/image-cache/)
+	// Use temp directory for image cache (simpler than ~/.harness/image-cache/)
 	tmpDir, err := os.MkdirTemp("", "claude-pasted-images-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir for images: %w", err)

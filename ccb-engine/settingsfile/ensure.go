@@ -11,7 +11,7 @@ var (
 	lastResolvedProject   string
 )
 
-// ProjectRootLastResolved returns the project directory used for .claude/settings*.json
+// ProjectRootLastResolved returns the project directory used for .harness/settings*.json
 // after the first successful EnsureProjectClaudeEnvOnce (empty before that).
 func ProjectRootLastResolved() string {
 	lastResolvedProjectMu.RLock()
@@ -21,7 +21,7 @@ func ProjectRootLastResolved() string {
 
 // EnsureProjectClaudeEnvOnce loads merged settings env (see ApplyMergedClaudeSettingsEnv).
 // Project root: $CCB_ENGINE_PROJECT_ROOT if set; otherwise the nearest ancestor of
-// the current working directory whose .claude/ contains **settings.go.json** or
+// the current working directory whose .harness/ contains **settings.go.json** or
 // **settings.local.json** (project settings.json is TS-only and is not a marker); if none,
 // the starting directory’s abs path (so nested `goc/` runs without a Go marker still use cwd).
 func EnsureProjectClaudeEnvOnce() error {

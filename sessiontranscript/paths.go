@@ -9,19 +9,19 @@ import (
 	"goc/claudebase"
 )
 
-// ConfigHomeDir matches getClaudeConfigHomeDir: CLAUDE_CONFIG_DIR or ~/.claude (NFC via filepath.Clean).
+// ConfigHomeDir matches getClaudeConfigHomeDir: CLAUDE_CONFIG_DIR or ~/.harness (NFC via filepath.Clean).
 func ConfigHomeDir() string {
 	if d := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); d != "" {
 		return filepath.Clean(d)
 	}
 	h, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Clean(".claude")
+		return filepath.Clean(".harness")
 	}
-	return filepath.Join(h, ".claude")
+	return filepath.Join(h, ".harness")
 }
 
-// ProjectsDir is ~/.claude/projects (or under ConfigHomeDir).
+// ProjectsDir is ~/.harness/projects (or under ConfigHomeDir).
 func ProjectsDir(configHome string) string {
 	return filepath.Join(configHome, "projects")
 }

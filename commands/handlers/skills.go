@@ -18,7 +18,7 @@ type SkillsResult struct {
 func HandleSkillsCommand(args string) ([]byte, error) {
 	cwd, _ := os.Getwd()
 	skillDirs := []string{
-		filepath.Join(cwd, ".claude", "skills"),
+		filepath.Join(cwd, ".harness", "skills"),
 		filepath.Join(cwd, "skills"),
 	}
 
@@ -44,7 +44,7 @@ func HandleSkillsCommand(args string) ([]byte, error) {
 
 	if !found {
 		lines = append(lines, "  No skills found.")
-		lines = append(lines, "\nSkills are defined in .claude/skills/ or skills/ directories.")
+		lines = append(lines, "\nSkills are defined in .harness/skills/ or skills/ directories.")
 		lines = append(lines, "Each skill has a SKILL.md file with a skill frontmatter.")
 	}
 	return json.Marshal(SkillsResult{Type: "text", Value: strings.Join(lines, "\n")})

@@ -83,7 +83,7 @@ func resolveSchedule(args string, opt *BundledResolveOptions) (types.SlashResolv
 	org := scheduleOrganizationUUID()
 	if org == "" {
 		return types.SlashResolveResult{
-			UserText: "Unable to resolve organization UUID for the Environment API. Set CLAUDE_CODE_ORGANIZATION_UUID, or ensure ~/.claude/config.json contains oauthAccount.organizationUuid (same sources as Claude Code TS).",
+			UserText: "Unable to resolve organization UUID for the Environment API. Set CLAUDE_CODE_ORGANIZATION_UUID, or ensure ~/.harness/config.json contains oauthAccount.organizationUuid (same sources as Claude Code TS).",
 			Source:   types.SlashResolveBundledEmbed,
 		}, nil
 	}
