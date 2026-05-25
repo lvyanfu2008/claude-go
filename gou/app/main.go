@@ -2648,8 +2648,13 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 				} else {
 					// When dynamic tool loading is active, prepend <available-deferred-tools>
 					// so the model knows which tools to discover via ToolSearch.
-					if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsJSON, mainLoopModel, false, false); len(prep) > 0 {
+					msgsBefore := len(msgsJSON)
+					if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsJSON, mainLoopModel, false, false, m.store.Messages); len(prep) > 0 {
 						msgsJSON = prep
+					}
+					// Persist announcement in store for delta tracking across turns.
+					if len(msgsJSON) > msgsBefore {
+						toolsearchwire.PersistDeferredAnnouncement(m.store, toolsJSON)
 					}
 					reqID := fmt.Sprintf("turn-%d", time.Now().UnixNano())
 					m.store.ClearStreaming()
