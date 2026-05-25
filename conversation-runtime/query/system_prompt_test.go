@@ -33,7 +33,7 @@ func TestSplitSysPromptPrefix_WithBoundaryMarker(t *testing.T) {
 	if blocks[1].CacheScope != nil {
 		t.Errorf("block 1 (prefix): expected nil CacheScope, got %v", *blocks[1].CacheScope)
 	}
-	if !strings.Contains(blocks[1].Text, "Claude Code") {
+	if !strings.Contains(blocks[1].Text, "Harness Code") {
 		t.Errorf("block 1 should be CLI prefix, got: %s", blocks[1].Text[:50])
 	}
 
@@ -164,7 +164,7 @@ func TestSplitSysPromptPrefix_BoundaryAtEnd(t *testing.T) {
 
 func TestGetCLISyspromptPrefix(t *testing.T) {
 	prefix := GetCLISyspromptPrefix()
-	if !strings.Contains(prefix, "Claude Code") {
+	if !strings.Contains(prefix, "Harness Code") {
 		t.Errorf("unexpected prefix: %s", prefix)
 	}
 }

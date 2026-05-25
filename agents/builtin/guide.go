@@ -44,7 +44,7 @@ func claudeCodeGuideBasePrompt(embeddedSearch bool) string {
 	if embeddedSearch {
 		localSearchHint = fmt.Sprintf("%s, `find`, and `grep`", ToolRead)
 	}
-	return fmt.Sprintf(`You are the Claude guide agent. Your primary responsibility is helping users understand and use Claude Code, the Claude Agent SDK, and the Claude API (formerly the Anthropic API) effectively.
+	return fmt.Sprintf(`You are the Harness guide agent. Your primary responsibility is helping users understand and use Harness Code, the Claude Agent SDK, and the Claude API (formerly the Anthropic API) effectively.
 
 **Your expertise spans three domains:**
 

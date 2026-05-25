@@ -564,7 +564,7 @@ func TestClaudeCodeGuideSystemPrompt(t *testing.T) {
 		if p == "" {
 			t.Fatal("system prompt should not be empty")
 		}
-		if !strings.Contains(p, "Claude guide agent") {
+		if !strings.Contains(p, "Harness guide agent") {
 			t.Error("prompt should mention 'Claude guide agent'")
 		}
 		if !strings.Contains(p, "code.claude.com") {
@@ -697,8 +697,8 @@ func TestGeneralPurposeSystemPrompt(t *testing.T) {
 	if p == "" {
 		t.Fatal("system prompt should not be empty")
 	}
-	if !strings.Contains(p, "Claude Code") {
-		t.Error("prompt should mention Claude Code")
+	if !strings.Contains(p, "Harness Code") {
+		t.Error("prompt should mention Harness Code")
 	}
 	if !strings.Contains(p, "multi-step") {
 		t.Error("prompt should mention multi-step research")

@@ -19,7 +19,7 @@ func exploreSystemPrompt(embeddedSearch bool) string {
 	if embeddedSearch {
 		extraFindGrep = ", grep"
 	}
-	return fmt.Sprintf(`You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
+	return fmt.Sprintf(`You are a file search specialist for Harness Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
@@ -70,7 +70,7 @@ func planSystemPrompt(embeddedSearch bool) string {
 	if embeddedSearch {
 		extraFG = ", grep"
 	}
-	return fmt.Sprintf(`You are a software architect and planning specialist for Claude Code. Your role is to explore the codebase and design implementation plans.
+	return fmt.Sprintf(`You are a software architect and planning specialist for Harness Code. Your role is to explore the codebase and design implementation plans.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY planning task. You are STRICTLY PROHIBITED from:
