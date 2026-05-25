@@ -45,7 +45,12 @@ func (s *DiskStore) Install(ctx context.Context, sourcePlugin Plugin, cacheDir s
 	currentLink := filepath.Join(pluginDir, "current")
 	os.Remove(currentLink)
 	if err := os.Symlink(versionDir, currentLink); err != nil {
-		return nil, fmt.Errorf("create symlink: %w", err)
+		// Windows fallback: symlink requires Developer Mode or admin privileges.
+		// Write a current_version file instead so plugin resolution still works.
+		versionFile := filepath.Join(pluginDir, "current_version")
+		if err2 := os.WriteFile(versionFile, []byte(sourcePlugin.Manifest.Version), 0644); err2 != nil {
+			return nil, fmt.Errorf("create symlink: %w (current_version fallback: %v)", err, err2)
+		}
 	}
 
 	return &InstalledPlugin{
@@ -70,7 +75,31 @@ func (s *DiskStore) Uninstall(ctx context.Context, cacheDir, pluginID string) er
 	return os.RemoveAll(pluginDir)
 }
 
-// ListInstalled returns all plugins with a valid "current" symlink.
+// ResolveCurrentPath resolves the real plugin path from a plugin directory.
+// Tries os.Readlink on "current" symlink first; falls back to reading
+// a "current_version" file (used on Windows where symlinks need admin/Developer Mode).
+func ResolveCurrentPath(pluginDir string) (string, error) {
+	currentLink := filepath.Join(pluginDir, "current")
+	realPath, err := os.Readlink(currentLink)
+	if err == nil {
+		if !filepath.IsAbs(realPath) {
+			realPath = filepath.Join(pluginDir, realPath)
+		}
+		return realPath, nil
+	}
+	versionFile := filepath.Join(pluginDir, "current_version")
+	data, err := os.ReadFile(versionFile)
+	if err != nil {
+		return "", fmt.Errorf("no current symlink or current_version file in %s", pluginDir)
+	}
+	version := strings.TrimSpace(string(data))
+	if version == "" {
+		return "", fmt.Errorf("empty current_version file in %s", pluginDir)
+	}
+	return filepath.Join(pluginDir, version), nil
+}
+
+// ListInstalled returns all plugins with a valid "current" symlink or current_version file.
 func (s *DiskStore) ListInstalled(ctx context.Context, cacheDir string) ([]InstalledPlugin, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -97,14 +126,10 @@ func (s *DiskStore) ListInstalled(ctx context.Context, cacheDir string) ([]Insta
 				continue
 			}
 			pluginPath := filepath.Join(mktPath, p.Name())
-			currentLink := filepath.Join(pluginPath, "current")
-			realPath, err := os.Readlink(currentLink)
-			if err != nil {
-				continue
-			}
-			if !filepath.IsAbs(realPath) {
-				realPath = filepath.Join(pluginPath, realPath)
-			}
+				realPath, err := ResolveCurrentPath(pluginPath)
+				if err != nil {
+					continue
+				}
 
 			manifest, err := LoadManifest(realPath)
 			if err != nil {

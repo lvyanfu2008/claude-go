@@ -8,6 +8,7 @@ import (
 
 	"goc/ccb-engine/diaglog"
 	"goc/ccb-engine/settingsfile"
+	plugins "goc/plugincore"
 	"goc/hookexec"
 )
 
@@ -70,14 +71,10 @@ func LoadAllPluginHooks(cwd string) (hookexec.HooksTable, error) {
 
 		name, marketplace, _ := strings.Cut(pluginID, "@")
 		pluginDir := filepath.Join(cacheDir, marketplace, name)
-		currentLink := filepath.Join(pluginDir, "current")
-		realPath, err := os.Readlink(currentLink)
+		realPath, err := plugins.ResolveCurrentPath(pluginDir)
 		if err != nil {
-			diaglog.Line("[goc/plugins] LoadAllPluginHooks: skip %s: current symlink: %v", pluginID, err)
+			diaglog.Line("[goc/plugins] LoadAllPluginHooks: skip %s: %v", pluginID, err)
 			continue
-		}
-		if !filepath.IsAbs(realPath) {
-			realPath = filepath.Join(pluginDir, realPath)
 		}
 
 		table, err := LoadPluginHooksTable(realPath)

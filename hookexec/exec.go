@@ -136,6 +136,7 @@ func extractPluginRoot(command string) string {
 	fields := strings.Fields(command)
 	for _, f := range fields {
 		f = strings.Trim(f, `"'`)
+		f = strings.ReplaceAll(f, "\\", "/") // normalize Windows backslashes
 		idx := strings.Index(f, "/.claude/plugins/cache/")
 		if idx < 0 {
 			continue

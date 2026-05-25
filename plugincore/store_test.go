@@ -64,6 +64,56 @@ func TestStore_Install(t *testing.T) {
 	}
 }
 
+func TestStore_Install_CurrentVersionFallback(t *testing.T) {
+	tmp := t.TempDir()
+	cacheDir := filepath.Join(tmp, "cache")
+	manifestJSON := `{"name": "fallback-plugin", "version": "2.0.0"}`
+
+	st := NewDiskStore()
+	payload := io.NopCloser(makeTestTarball(manifestJSON))
+	plugin := &Plugin{
+		Meta:     PluginMeta{ID: "fallback-plugin@claude-plugins-official", Name: "fallback-plugin", Version: "2.0.0"},
+		Manifest: PluginManifest{Name: "fallback-plugin", Version: "2.0.0"},
+		Source:   Source{Type: SourceGitHubRelease, Repo: "claude-plugins-official/fallback-plugin"},
+		Payload:  payload,
+	}
+
+	installed, err := st.Install(context.Background(), *plugin, cacheDir)
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	marketplace := "claude-plugins-official"
+	pluginPath := filepath.Join(cacheDir, marketplace, "fallback-plugin")
+
+	// Remove the symlink to simulate Windows (no symlink support).
+	os.Remove(filepath.Join(pluginPath, "current"))
+	// current_version should be written as fallback on Windows.
+	// On macOS/Linux the symlink succeeds, so we simulate the fallback.
+	os.WriteFile(filepath.Join(pluginPath, "current_version"), []byte("2.0.0"), 0644)
+
+	// ResolveCurrentPath should fall back to current_version.
+	realPath, err := ResolveCurrentPath(pluginPath)
+	if err != nil {
+		t.Fatalf("ResolveCurrentPath: %v", err)
+	}
+	if realPath != installed.InstallPath {
+		t.Errorf("ResolveCurrentPath = %q, want %q", realPath, installed.InstallPath)
+	}
+
+	// ListInstalled should also work with the fallback.
+	list, err := st.ListInstalled(context.Background(), cacheDir)
+	if err != nil {
+		t.Fatalf("ListInstalled: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(list))
+	}
+	if list[0].Name != "fallback-plugin" {
+		t.Errorf("expected 'fallback-plugin', got %q", list[0].Name)
+	}
+}
+
 func TestStore_InstallAndList(t *testing.T) {
 	tmp := t.TempDir()
 	cacheDir := filepath.Join(tmp, "cache")
