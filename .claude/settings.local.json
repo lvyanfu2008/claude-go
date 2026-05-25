@@ -35,7 +35,8 @@
       "Bash(git show *)",
       "Bash(git ls-tree *)",
       "Read(//Users/lvyanfu/.claude/plugins/**)",
-      "Read(//Users/lvyanfu/.claude/**)"
+      "Read(//Users/lvyanfu/.claude/**)",
+      "Bash(git grep *)"
     ]
   }
 }
