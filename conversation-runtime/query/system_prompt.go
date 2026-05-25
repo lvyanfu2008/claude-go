@@ -57,7 +57,7 @@ type SystemPromptBlock struct {
 	CacheScope *CacheScope // nil means no cache_control on wire
 }
 
-var cliSyspromptPrefix = "You are Harness Code, Anthropic's official CLI for Claude."
+var cliSyspromptPrefix = "You are Harness Code, built by Lyf."
 
 // GetCLISyspromptPrefix mirrors TS getCLISyspromptPrefix DEFAULT_PREFIX.
 func GetCLISyspromptPrefix() string {

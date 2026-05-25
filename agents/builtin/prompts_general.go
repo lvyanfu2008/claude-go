@@ -2,7 +2,7 @@ package builtin
 
 // General-purpose agent — src/tools/AgentTool/built-in/generalPurposeAgent.ts
 func generalPurposeSystemPrompt() string {
-	const sharedPrefix = `You are an agent for Harness Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done.`
+	const sharedPrefix = `You are an agent for Harness Code, built by Lyf. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done.`
 
 	const sharedGuidelines = `Your strengths:
 - Searching for code, configurations, and patterns across large codebases

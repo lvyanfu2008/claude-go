@@ -29,7 +29,7 @@ var Claude45Or46ModelIDs = struct {
 }
 
 // DefaultAgentPrompt matches prompts.ts DEFAULT_AGENT_PROMPT.
-const DefaultAgentPrompt = `You are an agent for Harness Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
+const DefaultAgentPrompt = `You are an agent for Harness Code, built by Lyf. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
 
 // TickTag matches prompts.ts TICK_TAG (xml.ts).
 const TickTag = "tick"
@@ -593,7 +593,7 @@ func SimpleModeSystemPrompt(cwd, sessionStartDate string) string {
 	if d == "" {
 		d = "(unknown)"
 	}
-	return fmt.Sprintf("You are Harness Code, Anthropic's official CLI for Claude.\n\nCWD: %s\nDate: %s", c, d)
+	return fmt.Sprintf("You are Harness Code, built by Lyf.\n\nCWD: %s\nDate: %s", c, d)
 }
 
 // PromptGitHints returns isGit and worktree hints for computeSimpleEnvInfo (subset of getIsGit + getCurrentWorktreeSession).
