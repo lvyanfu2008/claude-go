@@ -130,11 +130,11 @@ func skillRunSkillGenerator() types.Command {
 	}
 }
 
-// skillInit mirrors TS src/commands/init.ts — type "prompt" that generates CLAUDE.md.
+// skillInit mirrors TS src/commands/init.ts — type "prompt" that generates HARNESS.md.
 func skillInit() types.Command {
 	src := "bundled"
 	pm := "analyzing your codebase"
-	d := "Initialize a new CLAUDE.md file with codebase documentation"
+	d := "Initialize a new HARNESS.md file with codebase documentation"
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:                        "init",

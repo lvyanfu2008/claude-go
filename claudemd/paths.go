@@ -36,9 +36,9 @@ func MemoryPath(memoryType MemoryType, _ string) string {
 	}
 	switch memoryType {
 	case MemoryUser:
-		return filepath.Join(cfg, "CLAUDE.md")
+		return filepath.Join(cfg, "HARNESS.md")
 	case MemoryManaged:
-		return filepath.Join(ManagedFilePath(), "CLAUDE.md")
+		return filepath.Join(ManagedFilePath(), "HARNESS.md")
 	default:
 		return ""
 	}

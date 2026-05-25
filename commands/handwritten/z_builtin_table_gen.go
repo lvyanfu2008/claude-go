@@ -214,7 +214,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "init",
-			Description: "Initialize a new CLAUDE.md file with codebase documentation",
+			Description: "Initialize a new HARNESS.md file with codebase documentation",
 		},
 		Type:            "prompt",
 		ProgressMessage: ptrStr("analyzing your codebase"),

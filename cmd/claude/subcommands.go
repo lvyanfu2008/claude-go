@@ -306,10 +306,10 @@ var doctorCmd = &cobra.Command{
 		fmt.Printf("  CWD:           %s\n", getCWD())
 
 		cwd := getCWD()
-		if _, err := os.Stat(cwd + "/CLAUDE.md"); err == nil {
-			fmt.Println("  CLAUDE.md:     found")
+		if _, err := os.Stat(cwd + "/HARNESS.md"); err == nil {
+			fmt.Println("  HARNESS.md:     found")
 		} else {
-			fmt.Println("  CLAUDE.md:     not found")
+			fmt.Println("  HARNESS.md:     not found")
 		}
 
 		if _, err := os.Stat(cwd + "/.harness"); err == nil {

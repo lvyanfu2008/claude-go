@@ -21,7 +21,7 @@ type FetchOpts struct {
 	// Gou builds the default system prompt when CustomSystemPrompt is empty (subset: commands.BuildGouDemoSystemPrompt).
 	Gou commands.GouDemoSystemOpts
 
-	// ExtraClaudeMdRoots is the Go equivalent of additional working dirs for CLAUDE.md when CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1.
+	// ExtraClaudeMdRoots is the Go equivalent of additional working dirs for HARNESS.md when CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1.
 	ExtraClaudeMdRoots []string
 
 	// SystemPromptInjection optional override; nil falls back to CLAUDE_CODE_SYSTEM_PROMPT_INJECTION env.
@@ -93,7 +93,7 @@ func enrichUserContext(uc map[string]string, opts FetchOpts) {
 }
 
 // userContextLikeTS is the Go equivalent of TS getUserContext() in src/utils/queryContext.ts
-// fetchSystemPromptParts: always live from cwd/CLAUDE.md, never merged from tscontext.Snapshot.
+// fetchSystemPromptParts: always live from cwd/HARNESS.md, never merged from tscontext.Snapshot.
 func userContextLikeTS(opts FetchOpts) (map[string]string, error) {
 	uc, err := BuildUserContext(opts.Gou.Cwd, opts.ExtraClaudeMdRoots)
 	if err != nil {

@@ -1,17 +1,17 @@
-# CLAUDE.md
+# HARNESS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Harness Code (harness.ai/code) when working with code in this repository.
 
 ## Hard constraint
 
-**No TypeScript runtime dependency**: builds/tests must not spawn Bun, Node, or `claude-code` `.ts` entrypoints. Embedded JSON/markdown from the TS codebase are static assets only.
+**No TypeScript runtime dependency**: builds/tests must not spawn Bun, Node, or `harness-code` `.ts` entrypoints. Embedded JSON/markdown from the TS codebase are static assets only.
 
 ## Commands
 
 ```bash
 go test ./...
 go vet ./...
-go build -o /dev/null ./cmd/claude
+go build -o /dev/null ./cmd/harness
 golangci-lint run ./...
 ```
 
@@ -26,7 +26,7 @@ go generate ./commands/handwritten
 
 ## Key details
 
-- Module name is `goc` (not `claude-go`).
+- Module name is `goc` (not `harness-go`).
 - `canUseTool` / `QueryCanUseToolFn` returns `PermissionDecision` (`allow` / `deny` / `ask`) — 3-state, not a bool.
 - Branch naming uses conventional prefixes (e.g., `feature/`, `fix/`, `base-`).
 
@@ -64,16 +64,16 @@ Streaming text is rendered in the message pane (above completed messages), not i
 
 | Var | Effect |
 |-----|--------|
-| `CLAUDE_CODE_ENABLE_TASKS=1` | Enable Todo v2 (TaskCreate/Get/List/Update); default on in interactive mode |
-| `CLAUDE_CODE_USE_OPENAI=1` | Route LLM queries through OpenAI-compatible API |
-| `CLAUDE_CODE_USE_GROK=1` | Route LLM queries through Grok API |
+| `HARNESS_CODE_ENABLE_TASKS=1` | Enable Todo v2 (TaskCreate/Get/List/Update); default on in interactive mode |
+| `HARNESS_CODE_USE_OPENAI=1` | Route LLM queries through OpenAI-compatible API |
+| `HARNESS_CODE_USE_GROK=1` | Route LLM queries through Grok API |
 | `OPENAI_API_KEY` | API key for OpenAI-compatible providers |
 | `OPENAI_BASE_URL` | Base URL override for OpenAI-compatible API |
 | `OPENAI_ENABLE_THINKING=1` | Enable thinking mode for OpenAI-compatible providers |
 | `GO_TOOL_INPUT_VALIDATOR=zog` | Use zog-validated Bash (BashZog) |
 | `CCB_ENGINE_MODEL` | Model ID (e.g., `deepseek-v4-pro`) |
 | `GOU_QUERY_OPENAI_CHAT_NO_STREAM=1` | Force non-streaming mode for OpenAI path |
-| `CLAUDE_CODE_NON_INTERACTIVE=1` | Disable interactive features (disables Todo v2) |
+| `HARNESS_CODE_NON_INTERACTIVE=1` | Disable interactive features (disables Todo v2) |
 
 ## Key patterns
 

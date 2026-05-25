@@ -36,11 +36,11 @@ func HandleDoctorCommand() ([]byte, error) {
 		fmt.Sprintf("  Go version:  %s", runtime.Version()),
 	}
 
-	// Check CLAUDE.md
-	if _, err := os.Stat(cwd + "/CLAUDE.md"); err == nil {
-		lines = append(lines, "  CLAUDE.md:   ✓ Found")
+	// Check HARNESS.md
+	if _, err := os.Stat(cwd + "/HARNESS.md"); err == nil {
+		lines = append(lines, "  HARNESS.md:   ✓ Found")
 	} else {
-		lines = append(lines, "  CLAUDE.md:   ✗ Not found (run /init)")
+		lines = append(lines, "  HARNESS.md:   ✗ Not found (run /init)")
 	}
 
 	// Check .harness directory

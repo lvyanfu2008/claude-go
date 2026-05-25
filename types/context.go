@@ -1,5 +1,5 @@
 // This file mirrors data shapes produced by src/context.ts (getSystemContext, getUserContext,
-// and related git/CLAUDE.md injection). Logic stays in TS; Go uses these structs for parity tests / bridges.
+// and related git/HARNESS.md injection). Logic stays in TS; Go uses these structs for parity tests / bridges.
 package types
 
 // MaxGitStatusChars matches src/context.ts MAX_STATUS_CHARS (git status truncation before append to prompt).

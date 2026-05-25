@@ -204,7 +204,7 @@ var remoteControlCmd = &cobra.Command{
 var upCmd = &cobra.Command{
 	Use:   "up",
 	Short: "Initialize or upgrade local dev environment",
-	Long:  "Run the '# claude up' section from the nearest CLAUDE.md.",
+	Long:  "Run the '# claude up' section from the nearest HARNESS.md.",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("'claude up' not yet implemented in Go.")

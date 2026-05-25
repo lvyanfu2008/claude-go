@@ -73,11 +73,11 @@ func skillSkillify() types.Command {
 func skillRemember() types.Command {
 	src := "bundled"
 	pm := "running"
-	w := "Use when the user wants to review, organize, or promote their auto-memory entries. Also useful for cleaning up outdated or conflicting entries across CLAUDE.md, CLAUDE.local.md, and auto-memory."
+	w := "Use when the user wants to review, organize, or promote their auto-memory entries. Also useful for cleaning up outdated or conflicting entries across HARNESS.md, HARNESS.local.md, and auto-memory."
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:                        "remember",
-			Description:                 "Review auto-memory entries and propose promotions to CLAUDE.md, CLAUDE.local.md, or shared memory. Also detects outdated, conflicting, and duplicate entries across memory layers.",
+			Description:                 "Review auto-memory entries and propose promotions to HARNESS.md, HARNESS.local.md, or shared memory. Also detects outdated, conflicting, and duplicate entries across memory layers.",
 			HasUserSpecifiedDescription: ptrBool(true),
 			WhenToUse:                   &w,
 			IsHidden:                    ptrBool(false),

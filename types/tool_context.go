@@ -110,7 +110,7 @@ type ToolUseContextData = ToolUseContext
 // Callback fields and loadBashModeProgress are not serialized.
 //
 // ToolPermissionContext is optional: when present (e.g. IPC from TS), additionalWorkingDirectories
-// feed CLAUDE.md discovery together with CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS / GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS.
+// feed HARNESS.md discovery together with CLAUDE_CODE_EXTRA_CLAUDE_MD_ROOTS / GOU_DEMO_EXTRA_CLAUDE_MD_ROOTS.
 type ProcessUserInputContextData struct {
 	ToolUseContext
 	ToolPermissionContext *ToolPermissionContextData `json:"toolPermissionContext,omitempty"`

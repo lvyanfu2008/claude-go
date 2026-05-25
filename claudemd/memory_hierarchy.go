@@ -59,18 +59,18 @@ func NewMemoryHierarchy(cwd string, excludePatterns []string) *MemoryHierarchy {
 
 // initPathResolvers 初始化每种记忆类型的路径解析器
 func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
-	// 托管内存：/etc/claude-code/CLAUDE.md 或等效路径
+	// 托管内存：/etc/claude-code/HARNESS.md 或等效路径
 	mh.pathResolvers[MemoryManaged] = func(_ string) []string {
-		return []string{filepath.Join(ManagedFilePath(), "CLAUDE.md")}
+		return []string{filepath.Join(ManagedFilePath(), "HARNESS.md")}
 	}
 
-	// 用户内存：~/.harness/CLAUDE.md
+	// 用户内存：~/.harness/HARNESS.md
 	mh.pathResolvers[MemoryUser] = func(_ string) []string {
 		cfg, err := claudebase.ClaudeConfigHomeDir()
 		if err != nil {
 			return []string{}
 		}
-		path := filepath.Join(cfg, "CLAUDE.md")
+		path := filepath.Join(cfg, "HARNESS.md")
 		return []string{path}
 	}
 
@@ -99,17 +99,17 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 				continue
 			}
 
-			// CLAUDE.md 在目录中
-			paths = append(paths, filepath.Join(dir, "CLAUDE.md"))
+			// HARNESS.md 在目录中
+			paths = append(paths, filepath.Join(dir, "HARNESS.md"))
 
-			// .harness/CLAUDE.md 在目录中
-			paths = append(paths, filepath.Join(dir, ".harness", "CLAUDE.md"))
+			// .harness/HARNESS.md 在目录中
+			paths = append(paths, filepath.Join(dir, ".harness", "HARNESS.md"))
 		}
 
 		return paths
 	}
 
-	// 本地内存：CLAUDE.local.md 从当前目录向上遍历
+	// 本地内存：HARNESS.local.md 从当前目录向上遍历
 	mh.pathResolvers[MemoryLocal] = func(cwd string) []string {
 		var paths []string
 		dirs := directoryChainUp(cwd)
@@ -117,7 +117,7 @@ func (mh *MemoryHierarchy) initPathResolvers(cwd string) {
 		// 从根目录向下到当前目录
 		for i := len(dirs) - 1; i >= 0; i-- {
 			dir := dirs[i]
-			paths = append(paths, filepath.Join(dir, "CLAUDE.local.md"))
+			paths = append(paths, filepath.Join(dir, "HARNESS.local.md"))
 		}
 
 		return paths

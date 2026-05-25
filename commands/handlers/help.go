@@ -41,7 +41,7 @@ func HandleHelpCommand() ([]byte, error) {
 		{"effort", "Set effort level for model usage [low|medium|high|max|auto]"},
 		{"files", "List files tracked in this session"},
 		{"help", "Show this help message"},
-		{"init", "Initialize a new CLAUDE.md file with codebase documentation"},
+		{"init", "Initialize a new HARNESS.md file with codebase documentation"},
 		{"keybindings", "Show keyboard shortcuts"},
 		{"model", "Set the AI model for Claude Code"},
 		{"plugins", "Manage Claude Code plugins (stub in gou-demo)"},
