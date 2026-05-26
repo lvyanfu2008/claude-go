@@ -958,19 +958,18 @@ func (m *model) bottomChromeHeight() int {
 		h := m.inputAreaHeight()
 		h += m.slashResultPanelChromeExtra()
 		h += m.slashListChromeExtra()
-		// Agent footer height
+		// Agent footer height (only when sub-agents exist)
 		if m.agentTasks != nil {
-			mainTask := m.agentTasks.MainTask()
 			agentTasks := m.agentTasks.VisibleTasks()
-			if mainTask != nil || len(agentTasks) > 0 {
-				footerLines := 1
-				if len(agentTasks) > 0 {
-					footerLines += len(agentTasks)
-					if footerLines > maxAgentFooterLines {
-						footerLines = maxAgentFooterLines
-					}
+			if len(agentTasks) > 0 {
+				footerLines := 1 + len(agentTasks)
+				if footerLines > maxAgentFooterLines {
+					footerLines = maxAgentFooterLines
 				}
 				h += footerLines
+			} else {
+				// Separator line below input when no agents
+				h++
 			}
 		}
 		return h
@@ -1741,13 +1740,19 @@ func (m *model) View() tea.View {
 		b.WriteByte('\n')
 		promptView := userInputViewWithPromptPrefix(m)
 		b.WriteString(promptView)
-		// Agent footer (fixed below input area)
+		// Agent footer (fixed below input area, only when sub-agents exist)
 		if m.agentTasks != nil {
-			mainTask := m.agentTasks.MainTask()
 			agentTasks := m.agentTasks.VisibleTasks()
-			if footer := AgentFooterView(mainTask, agentTasks, m.cols); footer != "" {
+			if len(agentTasks) > 0 {
+				mainTask := m.agentTasks.MainTask()
+				if footer := AgentFooterView(mainTask, agentTasks, m.cols); footer != "" {
+					b.WriteByte('\n')
+					b.WriteString(footer)
+				}
+			} else {
+				// Separator line below input when no agents
 				b.WriteByte('\n')
-				b.WriteString(footer)
+				b.WriteString(promptAboveInputRuleLine(m.cols))
 			}
 		}
 		if blk := m.slashResultPanelViewBlock(); blk != "" {
