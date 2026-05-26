@@ -5,34 +5,44 @@ import (
 	"time"
 )
 
+const (
+	agentEvictMin    = 2 * time.Second
+	agentEvictNormal = 5 * time.Second
+	agentEvictError  = 10 * time.Second
+	mainSessionID    = "main-session"
+)
+
 // AgentTaskState mirrors TS LocalAgentTaskState fields used by CoordinatorTaskPanel.
 type AgentTaskState struct {
 	ID              string
 	AgentType       string
 	Description     string
-	Name            string // SendMessage routing name
-	Status          string // "running", "completed", "killed", "failed"
+	Name            string
+	Status          string // "running", "completed", "killed", "failed", "stopped"
 	StartTime       time.Time
 	EndTime         *time.Time
+	Duration        time.Duration // cached elapsed on completion
 	Progress        *AgentTaskProgress
-	EvictAfter      *time.Time // auto-remove after this time (completed/killed)
+	EvictAfter      *time.Time
 	IsBackground    bool
-	ParentToolUseID string // tool_use_id of the parent Agent tool call
+	ParentToolUseID string
+	ErrorMessage    string
 }
 
-// AgentTaskProgress mirrors TS progress fields from LocalAgentTaskState.progress.
+// AgentTaskProgress mirrors TS progress fields.
 type AgentTaskProgress struct {
 	TokenCount       int
 	ToolUseCount     int
-	LastActivity     *time.Time // nil -> arrow up (sending); set -> arrow down (receiving)
+	LastActivity     *time.Time
 	LastActivityDesc string
-	Summary          string // from background summarization goroutine
+	Summary          string
 }
 
 // agentTaskStore is the in-memory registry of active/completed agent tasks.
 type agentTaskStore struct {
-	mu    sync.RWMutex
-	tasks map[string]*AgentTaskState
+	mu       sync.RWMutex
+	tasks    map[string]*AgentTaskState
+	mainTask *AgentTaskState
 }
 
 func newAgentTaskStore() *agentTaskStore {
@@ -45,9 +55,60 @@ func (s *agentTaskStore) Register(task *AgentTaskState) {
 	s.tasks[task.ID] = task
 }
 
+// RegisterMainSession creates the main session task entry.
+func (s *agentTaskStore) RegisterMainSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mainTask = &AgentTaskState{
+		ID:        mainSessionID,
+		AgentType: "main-session",
+		Status:    "running",
+		StartTime: time.Now(),
+	}
+}
+
+// CompleteMainSession marks the main session as completed.
+func (s *agentTaskStore) CompleteMainSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.mainTask != nil {
+		s.mainTask.Status = "completed"
+		now := time.Now()
+		s.mainTask.EndTime = &now
+		s.mainTask.Duration = now.Sub(s.mainTask.StartTime)
+		evict := now.Add(agentEvictNormal)
+		s.mainTask.EvictAfter = &evict
+	}
+}
+
+// StopMainSession marks the main session as stopped.
+func (s *agentTaskStore) StopMainSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.mainTask != nil && s.mainTask.Status == "running" {
+		s.mainTask.Status = "stopped"
+		now := time.Now()
+		s.mainTask.EndTime = &now
+		s.mainTask.Duration = now.Sub(s.mainTask.StartTime)
+	}
+}
+
+// MainTask returns the main session task (nil if not registered).
+func (s *agentTaskStore) MainTask() *AgentTaskState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mainTask
+}
+
 func (s *agentTaskStore) UpdateProgress(id string, p *AgentTaskProgress) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if id == mainSessionID {
+		if s.mainTask != nil && s.mainTask.Status == "running" {
+			s.mainTask.Progress = p
+		}
+		return
+	}
 	if t, ok := s.tasks[id]; ok && t.Status == "running" {
 		t.Progress = p
 	}
@@ -60,7 +121,15 @@ func (s *agentTaskStore) Complete(id string, status string) {
 		t.Status = status
 		now := time.Now()
 		t.EndTime = &now
-		evict := now.Add(30 * time.Second)
+		t.Duration = now.Sub(t.StartTime)
+		deadline := agentEvictNormal
+		if status == "failed" {
+			deadline = agentEvictError
+		}
+		if t.Duration < time.Second {
+			deadline = agentEvictMin
+		}
+		evict := now.Add(deadline)
 		t.EvictAfter = &evict
 	}
 }
@@ -86,11 +155,14 @@ func (s *agentTaskStore) EvictExpired(now time.Time) int {
 			n++
 		}
 	}
+	if s.mainTask != nil && s.mainTask.EvictAfter != nil && !now.Before(*s.mainTask.EvictAfter) {
+		s.mainTask = nil
+		n++
+	}
 	return n
 }
 
-// VisibleTasks returns tasks that should be shown in the coordinator panel,
-// sorted by start time ascending. Excludes entries with nil/zero EvictAfter.
+// VisibleTasks returns tasks that should be shown, sorted by start time ascending.
 func (s *agentTaskStore) VisibleTasks() []*AgentTaskState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -101,12 +173,24 @@ func (s *agentTaskStore) VisibleTasks() []*AgentTaskState {
 		}
 		out = append(out, t)
 	}
-	// Sort by start time ascending
 	for i := range out {
 		for j := i + 1; j < len(out); j++ {
 			if out[j].StartTime.Before(out[i].StartTime) {
 				out[i], out[j] = out[j], out[i]
 			}
+		}
+	}
+	return out
+}
+
+// RunningAgents returns non-main-session tasks with status "running".
+func (s *agentTaskStore) RunningAgents() []*AgentTaskState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*AgentTaskState
+	for _, t := range s.tasks {
+		if t.Status == "running" {
+			out = append(out, t)
 		}
 	}
 	return out
