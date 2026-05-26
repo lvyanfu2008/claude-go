@@ -1694,17 +1694,17 @@ func (m *model) View() tea.View {
 			b.WriteString(strings.Join(streamRows, "\n"))
 			b.WriteByte('\n')
 		}
-		// Spinner row + teammate tree (when query busy)
+		// Spinner row + teammate tree (when query busy, flush left)
 		if m.queryBusy {
 			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.cols)
 			if spinner != "" {
-				b.WriteString(applyMessagePaneGutter(spinner, m.width))
+				b.WriteString(spinner)
 				b.WriteByte('\n')
 			}
 			if m.agentTasks != nil {
 				running := m.agentTasks.RunningAgents()
 				if tree := TeammateTree(running); tree != "" {
-					b.WriteString(applyMessagePaneGutter(tree, m.width))
+					b.WriteString(tree)
 					b.WriteByte('\n')
 				}
 			}

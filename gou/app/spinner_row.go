@@ -18,21 +18,19 @@ func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thi
 		verb = "Working"
 	}
 
-	// Animate the star glyph, keep "…" fixed
+	// Slow star glyph animation (changes every ~720ms at 120ms tick)
 	starGlyphs := []string{"✶", "✷", "✸", "✹"}
-	glyph := starGlyphs[frame%len(starGlyphs)]
+	glyph := starGlyphs[(frame/6)%len(starGlyphs)]
 
 	darkRed := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
 
 	var b strings.Builder
-	// Glyph in dark red, verb + fixed "…"
 	b.WriteString(darkRed.Render(glyph))
 	b.WriteString(" ")
 	b.WriteString(verb)
-	b.WriteString("…")
+	b.WriteString("…") // … fixed
 
-	// Stats in parentheses
 	var stats []string
 
 	elapsed := formatSpinnerElapsed(startedAt)
@@ -41,7 +39,7 @@ func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thi
 	}
 
 	if tokenCount > 0 {
-		stats = append(stats, "↓ "+formatSpinnerTokens(tokenCount))
+		stats = append(stats, "↓ "+formatSpinnerTokens(tokenCount)) // ↓
 	}
 
 	if thinking {
@@ -49,7 +47,7 @@ func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thi
 	}
 
 	if len(stats) > 0 {
-		b.WriteString(faint.Render(" (" + strings.Join(stats, " · ") + ")"))
+		b.WriteString(faint.Render(" (" + strings.Join(stats, " · ") + ")")) // ·
 	}
 
 	return b.String()
