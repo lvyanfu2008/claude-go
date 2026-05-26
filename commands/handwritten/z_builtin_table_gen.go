@@ -146,7 +146,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "doctor",
-			Description: "Diagnose and verify your Claude Code installation and settings",
+			Description: "Diagnose and verify your Harness Code installation and settings",
 		},
 		Type: "local-jsx",
 	},
@@ -273,7 +273,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:         "model",
-			Description:  "Set the AI model for Claude Code (currently deepseek-chat)",
+			Description:  "Set the AI model for Harness Code (currently deepseek-chat)",
 			ArgumentHint: ptrStr("[model]"),
 			Immediate:    ptrBool(false),
 		},
@@ -298,7 +298,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "plugin",
-			Description: "Manage Claude Code plugins",
+			Description: "Manage Harness Code plugins",
 			Aliases:     []string{"plugins", "marketplace"},
 			Immediate:   ptrBool(true),
 		},
@@ -367,14 +367,14 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "stats",
-			Description: "Show your Claude Code usage statistics and activity",
+			Description: "Show your Harness Code usage statistics and activity",
 		},
 		Type: "local-jsx",
 	},
 	{
 		CommandBase: types.CommandBase{
 			Name:        "status",
-			Description: "Show Claude Code status including version, model, account, API connectivity, and tool statuses",
+			Description: "Show Harness Code status including version, model, account, API connectivity, and tool statuses",
 			Immediate:   ptrBool(true),
 		},
 		Type: "local-jsx",
@@ -382,7 +382,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "statusline",
-			Description: "Set up Claude Code's status line UI",
+			Description: "Set up Harness Code's status line UI",
 		},
 		Type:                  "prompt",
 		ProgressMessage:       ptrStr("setting up statusLine"),
@@ -394,7 +394,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "stickers",
-			Description: "Order Claude Code stickers",
+			Description: "Order Harness Code stickers",
 		},
 		Type:                   "local",
 		SupportsNonInteractive: ptrBool(false),
@@ -417,7 +417,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:         "feedback",
-			Description:  "Submit feedback about Claude Code",
+			Description:  "Submit feedback about Harness Code",
 			Aliases:      []string{"bug"},
 			ArgumentHint: ptrStr("[report]"),
 		},
@@ -436,7 +436,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "ultrareview",
-			Description: "~10–20 min · Finds and verifies bugs in your branch. Runs in Claude Code on the web. See https://code.claude.com/docs/en/claude-code-on-the-web",
+			Description: "~10–20 min · Finds and verifies bugs in your branch. Runs on the web.",
 		},
 		Type: "local-jsx",
 	},
@@ -511,7 +511,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "insights",
-			Description: "Generate a report analyzing your Claude Code sessions",
+			Description: "Generate a report analyzing your Harness Code sessions",
 		},
 		Type:            "prompt",
 		ProgressMessage: ptrStr("analyzing your sessions"),
@@ -529,7 +529,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "think-back",
-			Description: "Your 2025 Claude Code Year in Review",
+			Description: "Your 2025 Harness Code Year in Review",
 		},
 		Type: "local-jsx",
 	},
@@ -608,7 +608,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "passes",
-			Description: "Share a free week of Claude Code with friends",
+			Description: "Share a free week of Harness Code with friends",
 			IsHidden:    ptrBool(true),
 		},
 		Type: "local-jsx",

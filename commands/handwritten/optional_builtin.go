@@ -59,7 +59,7 @@ func cmdWebSetup() types.Command {
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:         "web-setup",
-			Description:  "Setup Claude Code on the web (requires connecting your GitHub account)",
+			Description:  "Setup Harness Code on the web (requires connecting your GitHub account)",
 			Availability: []types.CommandAvailability{types.CommandAvailabilityClaudeAI},
 		},
 		Type: "local-jsx",

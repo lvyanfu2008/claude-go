@@ -48,7 +48,7 @@ func RunPromptHook(ctx context.Context, h hookstypes.HookCommand, jsonInput stri
 
 	start := time.Now()
 
-	systemPrompt := `You are evaluating a hook in Claude Code. Your response must be a JSON object matching one of the following schemas:
+	systemPrompt := `You are evaluating a hook in Harness Code. Your response must be a JSON object matching one of the following schemas:
 1. If the condition is met, return: {"ok": true}
 2. If the condition is not met, return: {"ok": false, "reason": "..."}
 

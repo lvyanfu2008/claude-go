@@ -122,7 +122,7 @@ func DoingTasksSection(userTypeAnt bool, askUserQuestionToolName, issuesExplaine
 		)
 	}
 	userHelpSubitems := []string{
-		`/help: Get help with using Claude Code`,
+		`/help: Get help with using Harness Code`,
 		fmt.Sprintf(`To give feedback, users should %s`, issuesExplainer),
 	}
 	items := []any{
@@ -147,7 +147,7 @@ func DoingTasksSection(userTypeAnt bool, askUserQuestionToolName, issuesExplaine
 	)
 	if userTypeAnt {
 		items = append(items, `Report outcomes faithfully: if tests fail, say so with the relevant output; if you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress or simplify failing checks (tests, lints, type errors) to manufacture a green result, and never characterize incomplete or broken work as done. Equally, when a check did pass or a task is complete, state it plainly — do not hedge confirmed results with unnecessary disclaimers, downgrade finished work to "partial," or re-verify things you already checked. The goal is an accurate report, not a defensive one.`)
-		items = append(items, `If the user reports a bug, slowness, or unexpected behavior with Claude Code itself (as opposed to asking you to fix their own code), recommend the appropriate slash command: /issue for model-related problems (odd outputs, wrong tool choices, hallucinations, refusals), or /share to upload the full session transcript for product bugs, crashes, slowness, or general issues. Only recommend these when the user is describing a problem with Claude Code. After /share produces a ccshare link, if you have a Slack MCP tool available, offer to post the link to #claude-code-feedback (channel ID C07VBSHV7EV) for the user.`)
+		items = append(items, `If the user reports a bug, slowness, or unexpected behavior with Harness Code itself (as opposed to asking you to fix their own code), recommend the appropriate slash command: /issue for model-related problems (odd outputs, wrong tool choices, hallucinations, refusals), or /share to upload the full session transcript for product bugs, crashes, slowness, or general issues. Only recommend these when the user is describing a problem with Harness Code. After /share produces a ccshare link, if you have a Slack MCP tool available, offer to post the link to the feedback channel for the user.`)
 	}
 	items = append(items,
 		`If the user asks for help or wants to give feedback inform them of the following:`,
@@ -366,8 +366,8 @@ func ComputeSimpleEnvInfo(in SimpleEnvInfoInput) string {
 	if !(in.UserTypeAnt && in.Undercover) {
 		envItems = append(envItems,
 			fmt.Sprintf(`The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '%s', Sonnet 4.6: '%s', Haiku 4.5: '%s'. When building AI applications, default to the latest and most capable Claude models.`, Claude45Or46ModelIDs.Opus, Claude45Or46ModelIDs.Sonnet, Claude45Or46ModelIDs.Haiku),
-			`Claude Code is available as a CLI in the terminal, desktop app (Mac/Windows), web app (claude.ai/code), and IDE extensions (VS Code, JetBrains).`,
-			fmt.Sprintf(`Fast mode for Claude Code uses the same %s model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`, FrontierModelName),
+			`Harness Code is available as a CLI in the terminal.`,
+			fmt.Sprintf(`Fast mode for Harness Code uses the same %s model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`, FrontierModelName),
 		)
 	}
 	// Filter nulls

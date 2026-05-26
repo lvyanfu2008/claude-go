@@ -39,7 +39,7 @@ type SystemPromptParams struct {
 const (
 	generalPurposeWhenToUse = `General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you.`
 
-	statuslineWhenToUse = `Use this agent to configure the user's Claude Code status line setting.`
+	statuslineWhenToUse = `Use this agent to configure the user's Harness Code status line setting.`
 
 	exploreWhenToUse = `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`
 

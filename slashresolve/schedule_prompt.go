@@ -92,7 +92,7 @@ func buildSchedulePrompt(o SchedulePromptOpts) string {
 	var b strings.Builder
 	b.WriteString(`# Schedule Remote Agents
 
-You are helping the user schedule, update, list, or run **remote** Claude Code agents. These are NOT local cron jobs — each trigger spawns a fully isolated remote session (CCR) in Anthropic's cloud infrastructure on a cron schedule. The agent runs in a sandboxed environment with its own git checkout, tools, and optional MCP connections.
+You are helping the user schedule, update, list, or run **remote** Harness Code agents. These are NOT local cron jobs — each trigger spawns a fully isolated remote session (CCR) in the cloud on a cron schedule. The agent runs in a sandboxed environment with its own git checkout, tools, and optional MCP connections.
 
 ## First Step
 

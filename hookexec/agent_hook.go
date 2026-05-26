@@ -89,7 +89,7 @@ func RunAgentHook(ctx context.Context, h hookstypes.HookCommand, jsonInput strin
 
 	// Build a system prompt instructing the agent to verify the condition.
 	systemPrompt := fmt.Sprintf(
-		`You are verifying a stop condition in Claude Code. Your task is to verify
+		`You are verifying a stop condition in Harness Code. Your task is to verify
 that the agent completed the given plan.
 
 Use the available tools to inspect the codebase and verify the condition.
