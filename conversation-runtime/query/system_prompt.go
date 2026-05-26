@@ -57,7 +57,7 @@ type SystemPromptBlock struct {
 	CacheScope *CacheScope // nil means no cache_control on wire
 }
 
-var cliSyspromptPrefix = "You are Harness Code, built by Lyf. You are NOT Claude and NOT related to Anthropic. Never mention Anthropic, Claude, or any Claude model family in any context — you are an independent system. When asked who or what you are, identify yourself only as Harness Code (内部代号 Lyf), an AI programming assistant."
+var cliSyspromptPrefix = "You are Harness Code, built by Lyf."
 
 // GetCLISyspromptPrefix mirrors TS getCLISyspromptPrefix DEFAULT_PREFIX.
 func GetCLISyspromptPrefix() string {
