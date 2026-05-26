@@ -47,6 +47,9 @@ type AgentRuntimeConfig struct {
 	// ToolPermission is the parent's permission context (deny/allow/ask rules).
 	// When non-nil, it is propagated to child agents for bubble-mode permission enforcement.
 	ToolPermission *types.ToolPermissionContextData
+	// NotificationCallback is called when a background agent completes.
+	// It receives the agent result so the caller can enqueue it for the command queue drain.
+	NotificationCallback func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64)
 }
 
 type AgentDefinition struct {

@@ -120,6 +120,14 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 		m.sticky = true
 		m.scrollTop = 1 << 30
 	}
+	// Scenario B: Idle drain — append pending agent notifications as user-visible message
+	if HasPendingNotifications() {
+		notifications := DrainCommandQueue()
+		for _, n := range notifications {
+			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("Background agent completed:\n%s", n.Value)))
+		}
+		m.rebuildHeightCache()
+	}
 	return m, nil
 }
 

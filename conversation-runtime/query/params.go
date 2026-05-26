@@ -97,6 +97,10 @@ type QueryDeps struct {
 	// (before returning Terminal). Hosts may use this to run post-turn hooks
 	// like extractMemories.
 	OnQueryComplete func(ctx context.Context, params QueryCompleteParams)
+	// DrainCommandQueue optional; called between rounds in the streaming parity loop
+	// to check for background agent completion notifications. Returns XML notification
+	// strings that should be injected as user messages for the model to process.
+	DrainCommandQueue func() []string
 }
 
 // QueryCompleteParams carries context for post-turn hooks (e.g. extractMemories).

@@ -75,9 +75,10 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 			AgentName:           cfg.AgentName,
 			AgentID:             cfg.AgentID,
 			MainLoopModel:       cfg.MainLoopModel,
-			ProgressCallback:    cfg.ProgressCallback,
-			ParentToolUseID:     cfg.ToolUseID,
-			ToolPermission:      cfg.ToolPermission,
+			ProgressCallback:     cfg.ProgressCallback,
+			NotificationCallback: cfg.NotificationCallback,
+			ParentToolUseID:      cfg.ToolUseID,
+			ToolPermission:       cfg.ToolPermission,
 	})
 	case "SendMessage":
 		return RunSendMessageTool(raw, AgentRuntimeConfig{

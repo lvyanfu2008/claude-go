@@ -22,6 +22,8 @@ type Config struct {
 	MainLoopModel string
 	// ProgressCallback forwards agent progress messages in real time to the UI.
 	ProgressCallback func(*types.Message)
+	// NotificationCallback is called when a background agent completes.
+	NotificationCallback func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64)
 	// ToolPermission is the parent's permission context (deny/allow/ask rules).
 	// When non-nil, it is propagated to child agents for bubble-mode permission enforcement.
 	ToolPermission *types.ToolPermissionContextData

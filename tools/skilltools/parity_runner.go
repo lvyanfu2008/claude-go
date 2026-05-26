@@ -44,6 +44,8 @@ type ParityToolRunner struct {
 	// ProgressCallback forwards agent progress messages in real time to the UI.
 	// Set by gou-demo to forward progress from inner agent query loops via ccbSend.
 	ProgressCallback func(*types.Message)
+	// NotificationCallback is called when a background agent completes.
+	NotificationCallback func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64)
 	// WriteDeps holds optional callbacks for Write tool parity features.
 	// When nil or individual callbacks are nil, the corresponding TS feature is skipped.
 	WriteDeps *localtools.WriteDeps
@@ -116,8 +118,9 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		Messages:          msgs,
 		SystemPrompt:      r.SystemPrompt,
 		MainLoopModel:     r.MainLoopModel,
-		ProgressCallback:  r.ProgressCallback,
-		ToolPermission:    r.ToolPermission,
+		ProgressCallback:     r.ProgressCallback,
+		NotificationCallback: r.NotificationCallback,
+		ToolPermission:       r.ToolPermission,
 	}
 	s, isErr, perr := tools.Run(ctx, name, input, cfg)
 	if perr == nil || !tools.IsNotHandled(perr) {

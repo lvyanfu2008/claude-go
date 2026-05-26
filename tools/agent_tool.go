@@ -333,6 +333,11 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 				}
 				cfg.ProgressCallback(prog)
 			}
+				// Notify caller via NotificationCallback for command queue drain
+				if cfg.NotificationCallback != nil {
+					summary := fmt.Sprintf("Agent %q completed", name)
+					cfg.NotificationCallback(agentID, cfg.ParentToolUseID, outFile, "completed", summary, output, 0, 0, 0)
+				}
 		}()
 		resp, _ := json.Marshal(AgentToolResponse{
 			Data: AgentToolResponseData{
@@ -451,6 +456,11 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 						prog.ParentToolUseID = &cfg.ParentToolUseID
 					}
 					cfg.ProgressCallback(prog)
+				}
+				// Notify caller via NotificationCallback for command queue drain
+				if cfg.NotificationCallback != nil {
+					summary := fmt.Sprintf("Agent %q completed", name)
+					cfg.NotificationCallback(agentID, cfg.ParentToolUseID, outFile, "completed", summary, output, 0, 0, 0)
 				}
 			}()
 			resp, _ := json.Marshal(AgentToolResponse{

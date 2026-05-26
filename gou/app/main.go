@@ -1708,19 +1708,12 @@ func (m *model) View() tea.View {
 			b.WriteString(strings.Join(streamRows, "\n"))
 			b.WriteByte('\n')
 		}
-		// Spinner row + teammate tree (when query busy, flush left)
+		// Spinner row (when query busy, flush left)
 		if m.queryBusy {
 			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.cols)
 			if spinner != "" {
 				b.WriteString(spinner)
 				b.WriteByte('\n')
-			}
-			if m.agentTasks != nil {
-				running := m.agentTasks.RunningAgents()
-				if tree := TeammateTree(running); tree != "" {
-					b.WriteString(tree)
-					b.WriteByte('\n')
-				}
 			}
 		}
 		// Task list (inline, after stream rows)
@@ -2749,7 +2742,8 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						Messages:         m.store.Messages,
 						MessagesFunc:     func() []types.Message { return m.store.Messages },
 						SystemPrompt:     []string{guidance},
-						ProgressCallback: func(msg *types.Message) {
+						NotificationCallback: EnqueueAgentNotification,
+					ProgressCallback: func(msg *types.Message) {
 							if msg == nil {
 								return
 							}
@@ -2988,6 +2982,13 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							}
 							// Session memory extraction (TS sessionMemory post-turn hook).
 							m.sessionMemHook(ctx, qcp)
+						}
+						qdeps.DrainCommandQueue = func() []string {
+							var result []string
+							for _, cmd := range DrainCommandQueue() {
+								result = append(result, cmd.Value)
+							}
+							return result
 						}
 						qp := query.QueryParams{
 							Messages:        msgsForQ,

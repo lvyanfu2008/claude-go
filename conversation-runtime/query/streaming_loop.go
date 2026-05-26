@@ -258,7 +258,33 @@ func runStreamingParityModelLoop(
 			}
 		}
 
-		if !acc.HasToolUse() {
+		// Scenario A: Drain command queue for background agent notifications.
+		// Inject notifications as user messages so the model processes them in
+		// the next API round.
+		hasNotifications := false
+		if deps != nil && deps.DrainCommandQueue != nil {
+			for _, xml := range deps.DrainCommandQueue() {
+				if xml == "" {
+					continue
+				}
+				hasNotifications = true
+				content, _ := json.Marshal([]map[string]any{{
+					"type": "text",
+					"text": "<system-reminder>\n" + xml + "\n</system-reminder>",
+				}})
+				msg := types.Message{
+					Type:    types.MessageTypeUser,
+					Content: content,
+					UUID:    deps.NewUUID(),
+				}
+				if !yieldStreamingParity(ctx, deps, QueryYield{Message: &msg}, yield) {
+					return context.Canceled
+				}
+				cur = append(cur, msg)
+			}
+		}
+
+		if !acc.HasToolUse() && !hasNotifications {
 			return nil
 		}
 		cur = append(cur, asst)
