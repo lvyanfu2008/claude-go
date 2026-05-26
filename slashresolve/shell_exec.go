@@ -9,46 +9,54 @@ import (
 
 // ExecuteShellCommandsInPrompt finds shell command substitution patterns in prompt
 // text and replaces them with command output. Supports two patterns:
-//   - ${...} — inline shell execution, substituted inline
-//   - `backtick commands` — backtick execution, substituted inline
+//   - ```! command ``` — block shell execution (replaced inline with output)
+//   - !`command` — inline shell execution (must be preceded by ^ or whitespace)
 //
-// TS parity: src/commands/skill/executeShellCommandsInPrompt.ts
+// TS parity: src/utils/promptShellExecution.ts
 // Safety: commands are executed via sh -c. No sandboxing is applied (matches TS behavior).
 func ExecuteShellCommandsInPrompt(prompt string) (string, error) {
 	var errs []string
 	result := prompt
 
-	// Replace ${...} patterns: ${command}
-	dollarBraceRe := regexp.MustCompile(`\$\{([^}]+)\}`)
-	result = dollarBraceRe.ReplaceAllStringFunc(result, func(match string) string {
-		cmd := strings.TrimSpace(match[2 : len(match)-1]) // strip ${ and }
+	// Block pattern: ```! command ``` (matches TS BLOCK_PATTERN)
+	blockRe := regexp.MustCompile("```!\\s*\\n?([\\s\\S]*?)\\n?```")
+	result = blockRe.ReplaceAllStringFunc(result, func(match string) string {
+		sub := blockRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		cmd := strings.TrimSpace(sub[1])
 		if cmd == "" {
 			return match
 		}
 		out, err := runShellCommand(cmd)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("${%s}: %v", cmd, err))
-			return match // leave original on error
+			errs = append(errs, fmt.Sprintf("```! %s: %v", cmd, err))
+			return match
 		}
 		return strings.TrimRight(out, "\n\r")
 	})
 
-	// Replace backtick patterns: `command`
-	// Simple approach: find paired backticks that are NOT inside ${...}.
-	backtickRe := regexp.MustCompile("`([^`]+)`")
-	result = backtickRe.ReplaceAllStringFunc(result, func(match string) string {
-		cmd := strings.TrimSpace(match[1 : len(match)-1]) // strip backticks
+	// Inline pattern: !`command`  (matches TS INLINE_PATTERN)
+	// Go does not support lookbehind; use non-capturing (^|\s) prefix instead.
+	inlineRe := regexp.MustCompile(`(?:^|\s)!` + "`([^`]+)`")
+	result = inlineRe.ReplaceAllStringFunc(result, func(match string) string {
+		bangBacktick := "!`"
+		idx := strings.Index(match, bangBacktick)
+		if idx < 0 {
+			return match
+		}
+		prefix := match[:idx]
+		cmd := strings.TrimSpace(match[idx+2 : len(match)-1])
 		if cmd == "" {
 			return match
 		}
-		// Skip if this backtick is inside a ${...} that wasn't already replaced.
-		// Since dollar-brace replacement runs first, remaining backticks are safe.
 		out, err := runShellCommand(cmd)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("`%s`: %v", cmd, err))
-			return match // leave original on error
+			errs = append(errs, fmt.Sprintf("!`%s`: %v", cmd, err))
+			return match
 		}
-		return strings.TrimRight(out, "\n\r")
+		return prefix + strings.TrimRight(out, "\n\r")
 	})
 
 	if len(errs) > 0 {
