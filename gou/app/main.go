@@ -62,6 +62,7 @@ import (
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
+	"goc/gou/commandqueue"
 	"goc/gou/conversation"
 	"goc/gou/layout"
 	"goc/gou/markdown"
@@ -2730,7 +2731,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						Messages:         m.store.Messages,
 						MessagesFunc:     func() []types.Message { return m.store.Messages },
 						SystemPrompt:     []string{guidance},
-						NotificationCallback: EnqueueAgentNotification,
+						NotificationCallback: commandqueue.EnqueueAgentNotification,
 					ProgressCallback: func(msg *types.Message) {
 							if msg == nil {
 								return
@@ -2973,7 +2974,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						}
 						qdeps.DrainCommandQueue = func() []string {
 							var result []string
-							for _, cmd := range DrainCommandQueue() {
+							for _, cmd := range commandqueue.DrainCommandQueue() {
 								result = append(result, cmd.Value)
 							}
 							return result

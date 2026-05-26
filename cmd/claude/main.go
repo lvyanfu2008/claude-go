@@ -18,6 +18,7 @@ import (
 	"goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/gou/app"
+	"goc/gou/commandqueue"
 	"goc/hookexec"
 	_ "goc/plugins"
 	"goc/sessiontranscript"
@@ -431,6 +432,50 @@ func runHeadless(prompt string) error {
 	}
 
 	fmt.Println()
+	// Drain command queue: keep processing background agent notifications
+	// until no more pending results (matches TS print.ts do-while loop).
+	msgs := result.Messages
+	for commandqueue.HasPendingNotifications() {
+		notifications := commandqueue.DrainCommandQueue()
+		for _, n := range notifications {
+			content, _ := json.Marshal([]map[string]any{{
+				"type": "text",
+				"text": "<system-reminder>\n" + n.Value + "\n</system-reminder>",
+			}})
+			msgs = append(msgs, types.Message{
+				Type:    "user",
+				Content: content,
+			})
+		}
+
+		qparams2 := qparams
+		qparams2.Messages = msgs
+
+		for yield, err := range query.Query(ctx, qparams2) {
+			if err != nil {
+				return fmt.Errorf("query (notification drain): %w", err)
+			}
+			if yield.Message != nil && yield.Message.Type == "assistant" {
+				var blocks []json.RawMessage
+				if err := json.Unmarshal(yield.Message.Content, &blocks); err == nil {
+					for _, block := range blocks {
+						var b struct {
+							Type string `json:"type"`
+							Text string `json:"text"`
+						}
+						if json.Unmarshal(block, &b) == nil && b.Type == "text" {
+							fmt.Print(b.Text)
+						}
+					}
+				}
+			}
+			if yield.Terminal != nil {
+				break
+			}
+		}
+		fmt.Println()
+	}
+
 	return nil
 }
 

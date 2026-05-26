@@ -1,7 +1,7 @@
 // Command queue for background agent notifications.
 // Matches TS messageQueueManager + task-notification XML format.
 
-package app
+package commandqueue
 
 import (
 	"fmt"
