@@ -96,18 +96,6 @@ func (m *model) builtinStatusLineView() string {
 	sep := lipgloss.NewStyle().Faint(true).Render(" │ ")
 	var b strings.Builder
 
-	if m.queryBusy {
-		verb := strings.TrimSpace(m.spinnerVerb)
-		if verb == "" {
-			verb = "Flowing"
-		}
-		frames := []string{"…", ".", "..", "..."}
-		sfx := frames[m.spinnerFrame%len(frames)]
-		spinner := lipgloss.NewStyle().Bold(true).Render(teardropAsterisk + " " + verb + sfx)
-		b.WriteString(spinner)
-		b.WriteByte('\n')
-	}
-
 	b.WriteString(lipgloss.NewStyle().Render(shortModelDisplay(modelName)))
 
 	info := m.tokenWarningDisplayInfo()

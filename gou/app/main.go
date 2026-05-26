@@ -513,12 +513,20 @@ func (m *model) beginQuerySpinner() {
 	m.queryBusyStartedAt = time.Now()
 	m.spinnerVerb = pickSpinnerVerb()
 	m.spinnerFrame = 0
+	m.spinnerTokens = 0
+	if m.agentTasks != nil {
+		m.agentTasks.RegisterMainSession()
+	}
 }
 
 func (m *model) endQuerySpinner() {
 	m.spinnerVerb = ""
 	m.queryBusyStartedAt = time.Time{}
 	m.spinnerFrame = 0
+	m.spinnerTokens = 0
+	if m.agentTasks != nil {
+		m.agentTasks.CompleteMainSession()
+	}
 }
 
 func padStreamRows(rows []string, h int) []string {
@@ -607,6 +615,7 @@ type model struct {
 	queryBusyStartedAt    time.Time
 	spinnerVerb           string
 	spinnerFrame          int
+	spinnerTokens         int
 	preCompactVerb        string // saved spinner verb before compact, restored on done
 	lastEmittedTitlePlain string
 
@@ -949,6 +958,21 @@ func (m *model) bottomChromeHeight() int {
 		h := m.inputAreaHeight()
 		h += m.slashResultPanelChromeExtra()
 		h += m.slashListChromeExtra()
+		// Agent footer height
+		if m.agentTasks != nil {
+			mainTask := m.agentTasks.MainTask()
+			agentTasks := m.agentTasks.VisibleTasks()
+			if mainTask != nil || len(agentTasks) > 0 {
+				footerLines := 1
+				if len(agentTasks) > 0 {
+					footerLines += len(agentTasks)
+					if footerLines > maxAgentFooterLines {
+						footerLines = maxAgentFooterLines
+					}
+				}
+				h += footerLines
+			}
+		}
 		return h
 	}
 	narrow := m.cols > 0 && m.cols < 80
@@ -1252,6 +1276,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentProgressMsg:
 		m.agentTasks.UpdateProgress(msg.AgentID, msg.Progress)
+		// Also update main session token count from sub-agent progress
+		if msg.Progress != nil && msg.Progress.TokenCount > 0 {
+			m.spinnerTokens += msg.Progress.TokenCount
+			if m.agentTasks != nil {
+				m.agentTasks.UpdateProgress("main-session", &AgentTaskProgress{
+					TokenCount: m.spinnerTokens,
+				})
+			}
+		}
 		return m, nil
 
 	case AgentCompletedMsg:
@@ -1317,13 +1350,6 @@ func listViewportH(m *model) int {
 	}
 	if m.uiScreen != gouDemoScreenTranscript {
 		h -= m.taskListViewReservedRows()
-		// Reserve lines for coordinator panel (main row + up to N agent rows)
-		if cv := m.agentCoordinatorView(); cv != "" {
-			lines := strings.Count(cv, "\n")
-			if lines > 0 {
-				h -= lines
-			}
-		}
 	}
 	if h < 3 {
 		h = 3
@@ -1668,6 +1694,21 @@ func (m *model) View() tea.View {
 			b.WriteString(strings.Join(streamRows, "\n"))
 			b.WriteByte('\n')
 		}
+		// Spinner row + teammate tree (when query busy)
+		if m.queryBusy {
+			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.cols)
+			if spinner != "" {
+				b.WriteString(applyMessagePaneGutter(spinner, m.width))
+				b.WriteByte('\n')
+			}
+			if m.agentTasks != nil {
+				running := m.agentTasks.RunningAgents()
+				if tree := TeammateTree(running); tree != "" {
+					b.WriteString(applyMessagePaneGutter(tree, m.width))
+					b.WriteByte('\n')
+				}
+			}
+		}
 		// Task list (inline, after stream rows)
 		if m.taskList != nil && m.taskList.isVisible() {
 			maxDisplay := m.taskListViewMaxDisplay()
@@ -1676,12 +1717,6 @@ func (m *model) View() tea.View {
 				b.WriteString(indented)
 				b.WriteByte('\n')
 			}
-		}
-		// Agent coordinator panel (below task list, above status line)
-		if cv := m.agentCoordinatorView(); cv != "" {
-			indented := applyMessagePaneGutter(cv, m.width)
-			b.WriteString(indented)
-			b.WriteByte('\n')
 		}
 	}
 	if s := m.statusLineString(); s != "" {
@@ -1706,6 +1741,15 @@ func (m *model) View() tea.View {
 		b.WriteByte('\n')
 		promptView := userInputViewWithPromptPrefix(m)
 		b.WriteString(promptView)
+		// Agent footer (fixed below input area)
+		if m.agentTasks != nil {
+			mainTask := m.agentTasks.MainTask()
+			agentTasks := m.agentTasks.VisibleTasks()
+			if footer := AgentFooterView(mainTask, agentTasks, m.cols); footer != "" {
+				b.WriteByte('\n')
+				b.WriteString(footer)
+			}
+		}
 		if blk := m.slashResultPanelViewBlock(); blk != "" {
 			b.WriteByte('\n')
 			b.WriteString(blk)

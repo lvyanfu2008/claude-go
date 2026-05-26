@@ -3,7 +3,6 @@ package messagerow
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"goc/types"
 )
@@ -18,41 +17,9 @@ type AgentProgressSummary struct {
 	IsEmpty      bool
 }
 
-// FormatAgentProgressSegments produces segments showing inline agent execution progress.
-// progressMessages are ProgressMessage entries for this agent's parent tool_use_id.
+// FormatAgentProgressSegments is a no-op now that progress is shown in AgentFooter.
 func FormatAgentProgressSegments(progressMessages []types.Message) []Segment {
-	if len(progressMessages) == 0 {
-		return []Segment{{Kind: SegDisplayHint, Text: "Initializing…"}}
-	}
-
-	stats := computeAgentProgressStats(progressMessages)
-
-	// Condensed mode header: "Agent · N tool uses · X tokens"
-	var parts []string
-	parts = append(parts, "Agent")
-	if stats.ToolUseCount > 0 {
-		noun := "uses"
-		if stats.ToolUseCount == 1 {
-			noun = "use"
-		}
-		parts = append(parts, fmt.Sprintf("%d tool %s", stats.ToolUseCount, noun))
-	}
-	if stats.Tokens > 0 {
-		parts = append(parts, formatTokenCount(stats.Tokens)+" tokens")
-	}
-	parts = append(parts, strings.TrimSpace(CtrlOToExpandHint))
-
-	header := strings.Join(parts, " · ")
-	var out []Segment
-	out = append(out, Segment{Kind: SegGroupedToolUse, Text: header})
-
-	// Show last few activity lines
-	activities := extractRecentActivities(progressMessages, maxProgressMessagesToShow)
-	for _, a := range activities {
-		out = append(out, Segment{Kind: SegDisplayHint, Text: "  ⎿  " + a})
-	}
-
-	return out
+	return nil
 }
 
 func computeAgentProgressStats(progressMessages []types.Message) AgentProgressSummary {

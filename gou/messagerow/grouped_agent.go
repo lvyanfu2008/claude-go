@@ -182,55 +182,26 @@ func FormatGroupedAgentToolUse(msg types.Message, lookups *GroupedAgentLookups) 
 	}
 	out = append(out, Segment{Kind: SegGroupedToolUse, Text: title})
 
-	// Sub lines for each agent
+	// Sub lines: simplified to name + status only (progress moved to AgentFooter)
 	for _, s := range stats {
 		var b strings.Builder
 		b.WriteString("  ⎿  ")
-		
+
 		nameDisplay := s.AgentType
 		if !allSameType && s.AgentType == "Agent" && s.Name != "" {
 			nameDisplay = s.Name
 		}
 		b.WriteString(nameDisplay)
 
-		var details []string
-		if s.ToolUseCount > 0 {
-			noun := "uses"
-			if s.ToolUseCount == 1 {
-				noun = "use"
-			}
-			details = append(details, fmt.Sprintf("%d tool %s", s.ToolUseCount, noun))
-		}
-		if s.Tokens > 0 {
-			details = append(details, fmt.Sprintf("%d tokens", s.Tokens))
-		}
-		
 		if s.IsError {
-			details = append(details, "error")
-		} else if !s.IsResolved && !s.IsAsync {
-			details = append(details, "in progress")
-		} else if s.IsAsync && !s.IsResolved {
-			details = append(details, "background")
+			b.WriteString(" · error")
+		} else if s.IsResolved {
+			b.WriteString(" · done")
+		} else if s.IsAsync {
+			b.WriteString(" · background")
 		}
 
-		if len(details) > 0 {
-			b.WriteString(" (")
-			b.WriteString(strings.Join(details, " · "))
-			b.WriteString(")")
-		}
-
-		if s.TaskDescription != "" {
-			b.WriteString(" · ")
-			b.WriteString(s.TaskDescription)
-		} else if s.Description != "" {
-			b.WriteString(" · ")
-			b.WriteString(s.Description)
-		}
-
-		text := b.String()
-		// We use SegDisplayHint so it gets the muted ⎿ styling, but we could use a new SegmentKind
-		// Actually SegDisplayHint uses Foreground(theme.DimMuted()), which is perfect for these nested lines.
-		out = append(out, Segment{Kind: SegDisplayHint, Text: text})
+		out = append(out, Segment{Kind: SegDisplayHint, Text: b.String()})
 	}
 
 	return out
