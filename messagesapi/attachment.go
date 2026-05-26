@@ -209,12 +209,6 @@ func normalizeAttachmentFile(att json.RawMessage, uuidGen func() string) ([]type
 	if err := json.Unmarshal(att, &a); err != nil {
 		return nil, err
 	}
-	var fc struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(a.Content, &fc); err != nil {
-		return nil, err
-	}
 	msgs := []types.Message{
 		createToolUseMetaMessage(fileReadToolName, map[string]any{"file_path": a.Filename}, uuidGen),
 		createFileReadResultUserMessage(a.Filename, a.Content, uuidGen),
