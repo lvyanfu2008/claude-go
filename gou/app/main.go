@@ -1292,14 +1292,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentTaskTickMsg:
 		m.agentTasks.EvictExpired(time.Now())
-		// Idle drain: check for pending bg agent notifications
-		if !m.queryBusy && commandqueue.HasPendingNotifications() {
-			notifications := commandqueue.DrainCommandQueue()
-			for _, n := range notifications {
-				m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("Background agent completed:\n%s", n.Value)))
-			}
-			m.rebuildHeightCache()
-		}
 		if m.agentTasks.Count() > 0 {
 			return m, taskListTickCmdAgent()
 		}
@@ -2929,6 +2921,20 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						if partsRes.SessionStartHookMessages != nil {
 							msgsForQ = append(slices.Clone(partsRes.SessionStartHookMessages), msgsForQ...)
 						}
+					// Inject pending background agent notifications as user messages
+					// so the model sees them when the next query starts.
+					if commandqueue.HasPendingNotifications() {
+						for _, cmd := range commandqueue.DrainCommandQueue() {
+							content, _ := json.Marshal([]map[string]any{{
+								"type": "text",
+								"text": "<system-reminder>\n" + cmd.Value + "\n</system-reminder>",
+							}})
+							msgsForQ = append(msgsForQ, types.Message{
+								Type:    "user",
+								Content: content,
+							})
+						}
+					}
 						if send := m.ccbSend; send != nil {
 							qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
 								send(gouStreamingToolUsesMsg{Uses: uses})

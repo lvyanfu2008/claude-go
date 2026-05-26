@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"goc/gou/ccbstream"
-	"goc/gou/commandqueue"
 	"goc/gou/conversation"
 	"goc/gou/pui"
 
@@ -120,14 +119,6 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 	if m.uiScreen != gouDemoScreenTranscript {
 		m.sticky = true
 		m.scrollTop = 1 << 30
-	}
-	// Scenario B: Idle drain — append pending agent notifications as user-visible message
-	if commandqueue.HasPendingNotifications() {
-		notifications := commandqueue.DrainCommandQueue()
-		for _, n := range notifications {
-			m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("Background agent completed:\n%s", n.Value)))
-		}
-		m.rebuildHeightCache()
 	}
 	return m, nil
 }
