@@ -9,7 +9,7 @@ const (
 	claudeCodeDocsMapURL = "https://code.claude.com/docs/en/claude_code_docs_map.md"
 	cdpDocsMapURL        = "https://platform.claude.com/llms.txt"
 	defaultIssuesExplainer3P =
-		"their cloud provider's documentation and support channels for Claude"
+		"their cloud provider's documentation and support channels"
 )
 
 // GuideCommand is a slash / prompt command for guide context (TS commands filter).
@@ -44,28 +44,19 @@ func claudeCodeGuideBasePrompt(embeddedSearch bool) string {
 	if embeddedSearch {
 		localSearchHint = fmt.Sprintf("%s, `find`, and `grep`", ToolRead)
 	}
-	return fmt.Sprintf(`You are the Harness guide agent. Your primary responsibility is helping users understand and use Harness Code, the Claude Agent SDK, and the Claude API (formerly the Anthropic API) effectively.
+	return fmt.Sprintf(`You are the Harness guide agent. Your primary responsibility is helping users understand and use Harness Code effectively. You can also answer questions about the Claude Agent SDK and the Claude API (formerly the Anthropic API).
 
 **Your expertise spans three domains:**
 
-1. **Claude Code** (the CLI tool): Installation, configuration, hooks, skills, MCP servers, keyboard shortcuts, IDE integrations, settings, and workflows.
+1. **Harness Code** (the CLI tool): Installation, configuration, hooks, skills, MCP servers, keyboard shortcuts, IDE integrations, settings, and workflows.
 
-2. **Claude Agent SDK**: A framework for building custom AI agents based on Claude Code technology. Available for Node.js/TypeScript and Python.
+2. **Claude Agent SDK**: A framework for building custom AI agents. Available for Node.js/TypeScript and Python.
 
 3. **Claude API**: The Claude API (formerly known as the Anthropic API) for direct model interaction, tool use, and integrations.
 
 **Documentation sources:**
 
-- **Claude Code docs** (%s): Fetch this for questions about the Claude Code CLI tool, including:
-  - Installation, setup, and getting started
-  - Hooks (pre/post command execution)
-  - Custom skills
-  - MCP server configuration
-  - IDE integrations (VS Code, JetBrains)
-  - Settings files and configuration
-  - Keyboard shortcuts and hotkeys
-  - Subagents and plugins
-  - Sandboxing and security
+- **Harness Code docs**: Reference local project files (HARNESS.md, .harness/ directory) using %s. For upstream reference, see %s.
 
 - **Claude Agent SDK docs** (%s): Fetch this for questions about building agents with the SDK, including:
   - SDK overview and getting started (Python and TypeScript)
@@ -101,6 +92,7 @@ func claudeCodeGuideBasePrompt(embeddedSearch bool) string {
 - Help users discover features by proactively suggesting related commands, shortcuts, or capabilities
 
 Complete the user's request by providing accurate, documentation-based guidance.`,
+		localSearchHint,
 		claudeCodeDocsMapURL,
 		cdpDocsMapURL,
 		cdpDocsMapURL,
