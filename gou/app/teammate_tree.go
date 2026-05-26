@@ -45,6 +45,8 @@ func TeammateTree(tasks []*AgentTaskState) string {
 		}
 
 		activity := teammateActivityText(t)
+		// Fallback title: agent type + description when no activity yet
+		title := teammateTitle(t, name)
 
 		// Stats: tool uses + tokens
 		var stats []string
@@ -69,6 +71,8 @@ func TeammateTree(tasks []*AgentTaskState) string {
 
 		if activity != "" {
 			b.WriteString(faint.Render(" · " + activity))
+		} else if title != "" {
+			b.WriteString(faint.Render(" · " + title))
 		}
 
 		if len(stats) > 0 {
@@ -86,6 +90,18 @@ func TeammateTree(tasks []*AgentTaskState) string {
 	}
 
 	return b.String()
+}
+
+// teammateTitle returns a static label for the agent when there's no activity yet.
+func teammateTitle(t *AgentTaskState, name string) string {
+	var parts []string
+	if t.AgentType != "" && t.AgentType != name && t.AgentType != "generalPurpose" {
+		parts = append(parts, t.AgentType)
+	}
+	if t.Description != "" {
+		parts = append(parts, t.Description)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // teammateActivityText returns the activity description with fallback.
