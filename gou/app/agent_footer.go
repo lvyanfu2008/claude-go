@@ -73,6 +73,16 @@ func AgentFooterView(mainTask *AgentTaskState, agentTasks []*AgentTaskState, col
 		}
 		b.WriteString(bold.Render("@" + name))
 
+		// Agent type label (if different from name)
+		if t.AgentType != "" && t.AgentType != name && t.AgentType != "generalPurpose" {
+			b.WriteString(faint.Render(" · " + t.AgentType))
+		}
+
+		// Description
+		if t.Description != "" {
+			b.WriteString(faint.Render(" · " + t.Description))
+		}
+
 		elapsed := formatFooterElapsed(t)
 		if elapsed != "" {
 			b.WriteString(faint.Render(" · " + elapsed))
@@ -106,31 +116,6 @@ func AgentFooterView(mainTask *AgentTaskState, agentTasks []*AgentTaskState, col
 
 	if shown < len(agentTasks) {
 		b.WriteString(faint.Render(fmt.Sprintf("  … +%d more", len(agentTasks)-shown)))
-		b.WriteByte('\n')
-	}
-
-	// Background pills row (compact agent names with elapsed time)
-	bgCount := len(agentTasks)
-	if bgCount > 0 {
-		var pills []string
-		maxPills := 6
-		for i, t := range agentTasks {
-			if i >= maxPills {
-				pills = append(pills, faint.Render(fmt.Sprintf("+%d more", bgCount-i)))
-				break
-			}
-			name := t.Name
-			if name == "" {
-				name = t.AgentType
-			}
-			pill := fmt.Sprintf("[@%s %s]", name, formatFooterElapsed(t))
-			if t.Status != "running" {
-				pill = faint.Render(pill)
-			}
-			pills = append(pills, pill)
-		}
-		b.WriteString("  ")
-		b.WriteString(strings.Join(pills, " "))
 		b.WriteByte('\n')
 	}
 

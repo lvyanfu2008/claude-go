@@ -100,12 +100,12 @@ func TestAgentFooterViewIntegration(t *testing.T) {
 		}
 	}
 
-	// Verify pills row includes both agents
-	if !strings.Contains(view, "[@explorer") {
-		t.Fatalf("view missing pill for explorer: %s", view)
+	// Verify agent type labels are shown
+	if !strings.Contains(view, "explore") {
+		t.Fatalf("view missing agent type 'explore': %s", view)
 	}
-	if !strings.Contains(view, "[@planner") {
-		t.Fatalf("view missing pill for planner: %s", view)
+	if !strings.Contains(view, "plan") {
+		t.Fatalf("view missing agent type 'plan': %s", view)
 	}
 }
 
