@@ -1348,21 +1348,9 @@ func listViewportH(m *model) int {
 	}
 	if m.uiScreen != gouDemoScreenTranscript {
 		h -= m.taskListViewReservedRows()
-		// Reserve space for spinner + teammate tree (including sub-rows)
+		// Reserve space for spinner
 		if m.queryBusy {
 			h-- // spinner row
-			if m.agentTasks != nil {
-				for _, t := range m.agentTasks.RunningAgents() {
-					h-- // agent main line
-					if t.Progress != nil && len(t.Progress.RecentActivities) > 0 {
-						n := len(t.Progress.RecentActivities)
-						if n > maxTeammateSubRows {
-							n = maxTeammateSubRows
-						}
-						h -= n
-					}
-				}
-			}
 		}
 	}
 	if h < 3 {
