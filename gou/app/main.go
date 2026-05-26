@@ -1292,6 +1292,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentTaskTickMsg:
 		m.agentTasks.EvictExpired(time.Now())
+		// Idle drain: check for pending bg agent notifications
+		if !m.queryBusy && commandqueue.HasPendingNotifications() {
+			notifications := commandqueue.DrainCommandQueue()
+			for _, n := range notifications {
+				m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("Background agent completed:\n%s", n.Value)))
+			}
+			m.rebuildHeightCache()
+		}
 		if m.agentTasks.Count() > 0 {
 			return m, taskListTickCmdAgent()
 		}
