@@ -540,11 +540,32 @@ func padStreamRows(rows []string, h int) []string {
 }
 
 func (m *model) promptBottomStreamRows() []string {
+	var rows []string
+
+	// Spinner row (when query busy)
+	if m.queryBusy {
+		spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.cols)
+		if spinner != "" {
+			rows = append(rows, spinner)
+		}
+		// Teammate tree
+		if m.agentTasks != nil {
+			running := m.agentTasks.RunningAgents()
+			if tree := TeammateTree(running); tree != "" {
+				for _, line := range strings.Split(tree, "\n") {
+					if line != "" {
+						rows = append(rows, line)
+					}
+				}
+			}
+		}
+	}
+
 	h := m.streamH
 	if h < 1 {
 		h = 1
 	}
-	return padStreamRows(nil, h)
+	return padStreamRows(rows, h)
 }
 
 type model struct {
@@ -1629,6 +1650,16 @@ func (m *model) View() tea.View {
 		return m.wrapRootView("Loading…")
 	}
 
+	// Dynamically reserve space for spinner + teammate tree in the message pane
+	if m.queryBusy {
+		m.streamH = 1 // spinner row
+		if m.agentTasks != nil {
+			m.streamH += len(m.agentTasks.RunningAgents())
+		}
+	} else {
+		m.streamH = 0
+	}
+
 	vpH := listViewportH(m)
 	bodyCols := m.messageBodyColsForLayout()
 	useVp := m.msgViewportWanted()
@@ -1692,21 +1723,6 @@ func (m *model) View() tea.View {
 		if len(streamRows) > 0 {
 			b.WriteString(strings.Join(streamRows, "\n"))
 			b.WriteByte('\n')
-		}
-		// Spinner row + teammate tree (when query busy, flush left)
-		if m.queryBusy {
-			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.cols)
-			if spinner != "" {
-				b.WriteString(spinner)
-				b.WriteByte('\n')
-			}
-			if m.agentTasks != nil {
-				running := m.agentTasks.RunningAgents()
-				if tree := TeammateTree(running); tree != "" {
-					b.WriteString(tree)
-					b.WriteByte('\n')
-				}
-			}
 		}
 		// Task list (inline, after stream rows)
 		if m.taskList != nil && m.taskList.isVisible() {
