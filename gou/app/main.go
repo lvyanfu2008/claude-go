@@ -1348,11 +1348,20 @@ func listViewportH(m *model) int {
 	}
 	if m.uiScreen != gouDemoScreenTranscript {
 		h -= m.taskListViewReservedRows()
-		// Reserve space for spinner + teammate tree
+		// Reserve space for spinner + teammate tree (including sub-rows)
 		if m.queryBusy {
-			h--
+			h-- // spinner row
 			if m.agentTasks != nil {
-				h -= len(m.agentTasks.RunningAgents())
+				for _, t := range m.agentTasks.RunningAgents() {
+					h-- // agent main line
+					if t.Progress != nil && len(t.Progress.RecentActivities) > 0 {
+						n := len(t.Progress.RecentActivities)
+						if n > maxTeammateSubRows {
+							n = maxTeammateSubRows
+						}
+						h -= n
+					}
+				}
 			}
 		}
 	}
@@ -2756,9 +2765,10 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 									ParentToolUseID  string `json:"parentToolUseID"`
 									TokenCount       int    `json:"tokenCount"`
 									ToolUseCount     int    `json:"toolUseCount"`
-									LastActivityDesc string `json:"lastActivityDesc"`
-									Summary          string `json:"summary"`
-									Status           string `json:"status"`
+									LastActivityDesc  string   `json:"lastActivityDesc"`
+									Summary           string   `json:"summary"`
+									RecentActivities  []string `json:"recentActivities"`
+									Status            string   `json:"status"`
 								}
 								if json.Unmarshal(msg.Data, &data) == nil {
 									switch data.Type {
@@ -2788,10 +2798,11 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 											send(AgentProgressMsg{
 												AgentID: data.AgentID,
 												Progress: &AgentTaskProgress{
-													Summary:          data.Summary,
-													TokenCount:       data.TokenCount,
-													ToolUseCount:     data.ToolUseCount,
-													LastActivityDesc: data.LastActivityDesc,
+													Summary:           data.Summary,
+													TokenCount:        data.TokenCount,
+													ToolUseCount:      data.ToolUseCount,
+													LastActivityDesc:  data.LastActivityDesc,
+									RecentActivities:  data.RecentActivities,
 												},
 											})
 										}

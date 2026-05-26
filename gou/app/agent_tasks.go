@@ -31,11 +31,12 @@ type AgentTaskState struct {
 
 // AgentTaskProgress mirrors TS progress fields.
 type AgentTaskProgress struct {
-	TokenCount       int
-	ToolUseCount     int
-	LastActivity     *time.Time
-	LastActivityDesc string
-	Summary          string
+	TokenCount        int
+	ToolUseCount      int
+	LastActivity      *time.Time
+	LastActivityDesc  string
+	Summary           string
+	RecentActivities  []string // last N activity descriptions
 }
 
 // agentTaskStore is the in-memory registry of active/completed agent tasks.
@@ -110,6 +111,14 @@ func (s *agentTaskStore) UpdateProgress(id string, p *AgentTaskProgress) {
 		return
 	}
 	if t, ok := s.tasks[id]; ok && t.Status == "running" {
+		// Merge recent activities (cap at 5)
+		if t.Progress != nil && len(t.Progress.RecentActivities) > 0 {
+			merged := append(t.Progress.RecentActivities, p.RecentActivities...)
+			if len(merged) > 5 {
+				merged = merged[len(merged)-5:]
+			}
+			p.RecentActivities = merged
+		}
 		t.Progress = p
 	}
 }

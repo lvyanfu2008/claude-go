@@ -1,15 +1,22 @@
+// TeammateTree renders running sub-agent activity below the spinner with box-drawing tree structure.
+// Matches TS TeammateSpinnerTree + TeammateSpinnerLine rendering.
+
 package app
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
 )
 
-const idleThreshold = 2 * time.Second
+const (
+	maxTeammateSubRows = 3
+	teammateIdleThresh = 2 * time.Second
+)
 
-// TeammateTree renders running sub-agent activity lines below the spinner.
+// TeammateTree renders running sub-agent activity lines with tree structure.
 // Returns empty string when no sub-agents are running.
 func TeammateTree(tasks []*AgentTaskState) string {
 	if len(tasks) == 0 {
@@ -20,40 +27,129 @@ func TeammateTree(tasks []*AgentTaskState) string {
 	bold := lipgloss.NewStyle().Bold(true)
 
 	var b strings.Builder
-	for _, t := range tasks {
+	for i, t := range tasks {
+		isLast := i == len(tasks)-1
+
+		// Box-drawing branch character
+		branch := "├─"
+		if isLast {
+			branch = "└─"
+		}
+		if len(tasks) == 1 {
+			branch = "┌─"
+		}
+
 		name := t.Name
 		if name == "" {
 			name = t.AgentType
 		}
 
-		activity := activityDesc(t)
-		tokenText := formatAgentTokens(t.Progress)
+		activity := teammateActivityText(t)
 
+		// Stats: tool uses + tokens
+		var stats []string
+		if t.Progress != nil {
+			if t.Progress.ToolUseCount > 0 {
+				noun := "tool uses"
+				if t.Progress.ToolUseCount == 1 {
+					noun = "tool use"
+				}
+				stats = append(stats, fmt.Sprintf("%d %s", t.Progress.ToolUseCount, noun))
+			}
+			if t.Progress.TokenCount > 0 {
+				stats = append(stats, formatAgentTokens(t.Progress))
+			}
+		}
+
+		// Main agent line
 		b.WriteString("  ")
+		b.WriteString(branch)
+		b.WriteString(" ")
 		b.WriteString(bold.Render("@" + name))
 
 		if activity != "" {
 			b.WriteString(faint.Render(" · " + activity))
 		}
 
-		if tokenText != "" {
-			b.WriteString(faint.Render(" · ↑ " + tokenText))
+		if len(stats) > 0 {
+			b.WriteString(faint.Render(" · " + strings.Join(stats, " · ")))
 		}
 
 		b.WriteByte('\n')
+
+		// Sub-rows: recent tool call activities
+		subRows := teammateSubRows(t, isLast)
+		for _, row := range subRows {
+			b.WriteString(row)
+			b.WriteByte('\n')
+		}
 	}
 
 	return b.String()
 }
 
-func activityDesc(t *AgentTaskState) string {
-	if t.Progress != nil {
-		if t.Progress.LastActivityDesc != "" {
-			return t.Progress.LastActivityDesc
-		}
-		if t.Progress.LastActivity != nil && time.Since(*t.Progress.LastActivity) > idleThreshold {
-			return "Idle"
+// teammateActivityText returns the activity description with fallback.
+func teammateActivityText(t *AgentTaskState) string {
+	if t.Progress == nil {
+		return ""
+	}
+
+	// 1. Most recent activity from RecentActivities
+	if len(t.Progress.RecentActivities) > 0 {
+		last := t.Progress.RecentActivities[len(t.Progress.RecentActivities)-1]
+		if last != "" {
+			return last
 		}
 	}
+
+	// 2. Last activity description
+	if t.Progress.LastActivityDesc != "" {
+		return t.Progress.LastActivityDesc
+	}
+
+	// 3. Idle detection
+	if t.Progress.LastActivity != nil && time.Since(*t.Progress.LastActivity) > teammateIdleThresh {
+		idle := time.Since(*t.Progress.LastActivity)
+		if idle < time.Minute {
+			return fmt.Sprintf("Idle for %.0fs", idle.Seconds())
+		}
+		return fmt.Sprintf("Idle for %.0fm", idle.Minutes())
+	}
+
 	return ""
+}
+
+// teammateSubRows returns tool call activity sub-rows (up to maxTeammateSubRows).
+func teammateSubRows(t *AgentTaskState, isLast bool) []string {
+	if t.Progress == nil || len(t.Progress.RecentActivities) == 0 {
+		return nil
+	}
+
+	activities := t.Progress.RecentActivities
+	if len(activities) > maxTeammateSubRows {
+		activities = activities[len(activities)-maxTeammateSubRows:]
+	}
+
+	faint := lipgloss.NewStyle().Faint(true)
+	pipe := faint.Render("│")
+	blank := " "
+
+	var rows []string
+	for _, act := range activities {
+		if act == "" {
+			continue
+		}
+
+		var prefix string
+		if isLast {
+			prefix = blank + " " // no pipe for last agent
+		} else {
+			prefix = pipe + " " // continuation pipe for non-last agents
+		}
+
+		branch := faint.Render("⎿  ")
+		rows = append(rows, "  "+prefix+branch+act)
+	}
+
+	return rows
 }
