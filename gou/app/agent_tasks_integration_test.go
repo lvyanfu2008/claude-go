@@ -64,13 +64,13 @@ func TestAgentFullLifecycle(t *testing.T) {
 	}
 }
 
-// TestCoordinatorViewIntegration verifies multiple agents in different states render correctly.
-func TestCoordinatorViewIntegration(t *testing.T) {
-	m := &model{agentTasks: newAgentTaskStore()}
+// TestAgentFooterViewIntegration verifies AgentFooterView renders correctly with multiple agents.
+func TestAgentFooterViewIntegration(t *testing.T) {
+	store := newAgentTaskStore()
 	now := time.Now()
 
 	// Running agent
-	m.agentTasks.Register(&AgentTaskState{
+	store.Register(&AgentTaskState{
 		ID: "a1", AgentType: "explore", Name: "explorer",
 		Description: "Searching", Status: "running",
 		StartTime: now, EvictAfter: ptrTime(now.Add(time.Minute)),
@@ -79,7 +79,7 @@ func TestCoordinatorViewIntegration(t *testing.T) {
 
 	// Completed agent
 	end := now.Add(-5 * time.Second)
-	m.agentTasks.Register(&AgentTaskState{
+	store.Register(&AgentTaskState{
 		ID: "a2", AgentType: "plan", Name: "planner",
 		Description: "Done", Status: "completed",
 		StartTime: now.Add(-10 * time.Second), EndTime: &end,
@@ -87,22 +87,25 @@ func TestCoordinatorViewIntegration(t *testing.T) {
 		Progress: &AgentTaskProgress{TokenCount: 500},
 	})
 
-	view := m.agentCoordinatorView()
+	visible := store.VisibleTasks()
+	view := AgentFooterView(nil, visible, 80)
 	if view == "" {
 		t.Fatal("expected non-empty view")
 	}
 
-	// Check major structural elements
-	for _, s := range []string{"main", "explorer", "planner", "x to clear"} {
+	// Check structural elements
+	for _, s := range []string{"explorer", "planner", "x to clear"} {
 		if !strings.Contains(view, s) {
 			t.Fatalf("view missing %q: %s", s, view)
 		}
 	}
 
-	// Verify lines: main + 2 agents = 3 \n separated lines
-	lines := strings.Split(strings.TrimSpace(view), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 lines (main + 2 agents), got %d: %q", len(lines), view)
+	// Verify pills row includes both agents
+	if !strings.Contains(view, "[@explorer") {
+		t.Fatalf("view missing pill for explorer: %s", view)
+	}
+	if !strings.Contains(view, "[@planner") {
+		t.Fatalf("view missing pill for planner: %s", view)
 	}
 }
 
