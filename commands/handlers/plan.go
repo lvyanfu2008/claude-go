@@ -36,7 +36,7 @@ func HandlePlanCommand(args string) ([]byte, error) {
 		os.Setenv("CLAUDE_CODE_PLAN_MODE", "1")
 		return json.Marshal(PlanResult{
 			Type: "text",
-			Value: "Plan mode enabled. Claude will design solutions before implementing.\nUse /plan off to exit plan mode.",
+			Value: "Plan mode enabled. Harness Code will design solutions before implementing.\nUse /plan off to exit plan mode.",
 		})
 	case "off", "disable", "false", "0":
 		os.Unsetenv("CLAUDE_CODE_PLAN_MODE")

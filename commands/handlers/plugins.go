@@ -16,7 +16,7 @@ type PluginsResult struct {
 func HandlePluginsCommand() ([]byte, error) {
 	msg := PluginsResult{
 		Type:  "text",
-		Value: "Plugin management is not available in gou-demo. Use the TS CLI to manage plugins:\n  claude /plugin         — Browse plugins\n  claude /plugin install <name>  — Install a plugin\n  claude /plugin list    — List installed plugins",
+		Value: "Plugin management is not available in gou-demo. Use the TS CLI to manage plugins:\n  harness /plugin         — Browse plugins\n  harness /plugin install <name>  — Install a plugin\n  harness /plugin list    — List installed plugins",
 	}
 	return json.Marshal(msg)
 }

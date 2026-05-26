@@ -24,8 +24,8 @@ func HandleRewindCommand(args string) ([]byte, error) {
 		Type: "text",
 		Value: fmt.Sprintf("Checkpoint restore (/rewind) is not available in gou-demo.%s\n\n"+
 			"Use the TS CLI to restore a checkpoint:\n"+
-			"  claude /rewind              — Interactive checkpoint picker\n"+
-			"  claude /rewind <id>         — Restore to a specific checkpoint", extra),
+			"  harness /rewind              — Interactive checkpoint picker\n"+
+			"  harness /rewind <id>         — Restore to a specific checkpoint", extra),
 	}
 	return json.Marshal(msg)
 }

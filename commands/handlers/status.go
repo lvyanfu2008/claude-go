@@ -16,7 +16,7 @@ type StatusResult struct {
 	Value string `json:"value"`
 }
 
-// HandleStatusCommand returns Claude Code status info for /status.
+// HandleStatusCommand returns Harness Code status info for /status.
 // Mirrors TS src/commands/status/ (local-jsx -> Settings > Status tab).
 func HandleStatusCommand() ([]byte, error) {
 	version := "gou-demo (dev)"
@@ -36,7 +36,7 @@ func HandleStatusCommand() ([]byte, error) {
 	}
 
 	lines := []string{
-		"Claude Code (gou-demo) — Status",
+		"Harness Code (gou-demo) — Status",
 		"═════════════════════════════════",
 		fmt.Sprintf("  Version:   %s", version),
 		fmt.Sprintf("  OS:        %s / %s", runtime.GOOS, runtime.GOARCH),
@@ -53,7 +53,7 @@ func HandleStatusCommand() ([]byte, error) {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, "For detailed status, use the TS CLI: claude /status")
+	lines = append(lines, "For detailed status, use the TS CLI: harness /status")
 
 	msg := StatusResult{
 		Type:  "text",

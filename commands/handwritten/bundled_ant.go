@@ -98,7 +98,7 @@ func skillStuck() types.Command {
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:                        "stuck",
-			Description:                 "[ANT-ONLY] Investigate frozen/stuck/slow Claude Code sessions on this machine and post a diagnostic report to #claude-code-feedback.",
+			Description:                 "[ANT-ONLY] Investigate frozen/stuck/slow Harness Code sessions on this machine and post a diagnostic report to #harness-code-feedback.",
 			HasUserSpecifiedDescription: ptrBool(true),
 			IsHidden:                    ptrBool(false),
 			LoadedFrom:                  ptrStr(src),

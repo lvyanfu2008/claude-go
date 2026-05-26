@@ -22,7 +22,7 @@ func HandleHelpCommand() ([]byte, error) {
 	allCmds := handwritten.AssembleBundledSkills()
 
 	var lines []string
-	lines = append(lines, "Claude Code (gou-demo) — Available Commands")
+	lines = append(lines, "Harness Code (gou-demo) — Available Commands")
 	lines = append(lines, strings.Repeat("═", 50))
 	lines = append(lines, "")
 
@@ -37,18 +37,18 @@ func HandleHelpCommand() ([]byte, error) {
 		{"compact", "Compact conversation to free context space"},
 		{"context", "Show context usage summary"},
 		{"cost", "Show session token usage"},
-		{"doctor", "Diagnose and verify your Claude Code installation"},
+		{"doctor", "Diagnose and verify your Harness Code installation"},
 		{"effort", "Set effort level for model usage [low|medium|high|max|auto]"},
 		{"files", "List files tracked in this session"},
 		{"help", "Show this help message"},
 		{"init", "Initialize a new HARNESS.md file with codebase documentation"},
 		{"keybindings", "Show keyboard shortcuts"},
-		{"model", "Set the AI model for Claude Code"},
-		{"plugins", "Manage Claude Code plugins (stub in gou-demo)"},
+		{"model", "Set the AI model for Harness Code"},
+		{"plugins", "Manage Harness Code plugins (stub in gou-demo)"},
 		{"release-notes", "Show release notes"},
 		{"session", "Show remote session URL (remote mode only)"},
-		{"status", "Show Claude Code status information"},
-		{"stickers", "Order Claude Code stickers"},
+		{"status", "Show Harness Code status information"},
+		{"stickers", "Order Harness Code stickers"},
 		{"version", "Show gou-demo version"},
 		{"vim", "Toggle vim mode [on|off]"},
 	}
@@ -75,7 +75,7 @@ func HandleHelpCommand() ([]byte, error) {
 		}
 	}
 	lines = append(lines, "")
-	lines = append(lines, "For more details, use the TS CLI: claude /help")
+	lines = append(lines, "For more details, use the TS CLI: harness /help")
 
 	msg := HelpResult{
 		Type:  "text",

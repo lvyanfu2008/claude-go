@@ -1,6 +1,6 @@
 # Update Config Skill
 
-Modify Claude Code configuration by updating settings.go.json files.
+Modify Harness Code configuration by updating settings.go.json files.
 
 ## When Hooks Are Required (Not Memory)
 
@@ -162,7 +162,7 @@ Plugin syntax: `plugin-name@source` where source is `claude-code-marketplace`, `
 
 ## Hooks Configuration
 
-Hooks run commands at specific points in Claude Code's lifecycle.
+Hooks run commands at specific points in Harness Code's lifecycle.
 
 ### Hook Structure
 ```json
@@ -194,7 +194,7 @@ Hooks run commands at specific points in Claude Code's lifecycle.
 | PostToolUse | Tool name | Run after successful tool |
 | PostToolUseFailure | Tool name | Run after tool fails |
 | Notification | Notification type | Run on notifications |
-| Stop | - | Run when Claude stops (including clear, resume, compact) |
+| Stop | - | Run when Harness Code stops (including clear, resume, compact) |
 | PreCompact | "manual"/"auto" | Before compaction |
 | PostCompact | "manual"/"auto" | After compaction (receives summary) |
 | UserPromptSubmit | - | When user submits |
@@ -348,7 +348,7 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 
 6. **Prove the hook fires** — only for `Pre|PostToolUse` on a matcher you can trigger in-turn (`Write|Edit` via Edit, `Bash` via Bash). `Stop`/`UserPromptSubmit`/`SessionStart` fire outside this turn — skip to step 7.
 
-   For a **formatter** on `PostToolUse`/`Write|Edit`: introduce a detectable violation via Edit (two consecutive blank lines, bad indentation, missing semicolon — something this formatter corrects; NOT trailing whitespace, Edit strips that before writing), re-read, confirm the hook **fixed** it. For **anything else**: temporarily prefix the command in settings.go.json with `echo "$(date) hook fired" >> /tmp/claude-hook-check.txt; `, trigger the matching tool (Edit for `Write|Edit`, a harmless `true` for `Bash`), read the sentinel file.
+   For a **formatter** on `PostToolUse`/`Write|Edit`: introduce a detectable violation via Edit (two consecutive blank lines, bad indentation, missing semicolon — something this formatter corrects; NOT trailing whitespace, Edit strips that before writing), re-read, confirm the hook **fixed** it. For **anything else**: temporarily prefix the command in settings.go.json with `echo "$(date) hook fired" >> /tmp/harness-hook-check.txt; `, trigger the matching tool (Edit for `Write|Edit`, a harmless `true` for `Bash`), read the sentinel file.
 
    **Always clean up** — revert the violation, strip the sentinel prefix — whether the proof passed or failed.
 
@@ -361,7 +361,7 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 
 ### Adding a Hook
 
-User: "Format my code after Claude writes it"
+User: "Format my code after Harness Code writes it"
 
 1. **Clarify**: Which formatter? (prettier, gofmt, etc.)
 2. **Read**: `.harness/settings.go.json` (or create if missing)
@@ -415,7 +415,7 @@ If a hook isn't running:
 3. **Check the matcher** - Does it match the tool name? (e.g., "Bash", "Write", "Edit")
 4. **Check hook type** - Is it "command", "prompt", or "agent"?
 5. **Test the command** - Run the hook command manually to see if it works
-6. **Use --debug** - Run `claude --debug` to see hook execution logs
+6. **Use --debug** - Run `harness --debug` to see hook execution logs
 
 
 ## Full Settings JSON Schema
@@ -426,7 +426,7 @@ If a hook isn't running:
   "type": "object",
   "properties": {
     "$schema": {
-      "description": "JSON Schema reference for Claude Code settings",
+      "description": "JSON Schema reference for Harness Code settings",
       "type": "string",
       "const": "https://json.schemastore.org/claude-code-settings.json"
     },
@@ -474,7 +474,7 @@ If a hook isn't running:
       "maximum": 9007199254740991
     },
     "env": {
-      "description": "Environment variables to set for Claude Code sessions",
+      "description": "Environment variables to set for Harness Code sessions",
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -484,7 +484,7 @@ If a hook isn't running:
       }
     },
     "attribution": {
-      "description": "Customize attribution text for commits and PRs. Each field defaults to the standard Claude Code attribution if not set.",
+      "description": "Customize attribution text for commits and PRs. Each field defaults to the standard Harness Code attribution if not set.",
       "type": "object",
       "properties": {
         "commit": {
@@ -498,11 +498,11 @@ If a hook isn't running:
       }
     },
     "includeCoAuthoredBy": {
-      "description": "Deprecated: Use attribution instead. Whether to include Claude's co-authored by attribution in commits and PRs (defaults to true)",
+      "description": "Deprecated: Use attribution instead. Whether to include Harness Code's co-authored by attribution in commits and PRs (defaults to true)",
       "type": "boolean"
     },
     "includeGitInstructions": {
-      "description": "Include built-in commit and PR workflow instructions in Claude's system prompt (default: true)",
+      "description": "Include built-in commit and PR workflow instructions in Harness Code's system prompt (default: true)",
       "type": "boolean"
     },
     "permissions": {
@@ -531,7 +531,7 @@ If a hook isn't running:
           }
         },
         "defaultMode": {
-          "description": "Default permission mode when Claude Code needs access",
+          "description": "Default permission mode when Harness Code needs access",
           "type": "string",
           "enum": [
             "acceptEdits",
@@ -567,7 +567,7 @@ If a hook isn't running:
       ]
     },
     "model": {
-      "description": "Override the default model used by Claude Code",
+      "description": "Override the default model used by Harness Code",
       "type": "string"
     },
     "availableModels": {
@@ -2283,7 +2283,7 @@ If a hook isn't running:
       }
     },
     "forceLoginMethod": {
-      "description": "Force a specific login method: \"claudeai\" for Claude Pro/Max, \"console\" for Console billing",
+      "description": "Force a specific login method: \"claudeai\" for Harness Pro/Max, \"console\" for Console billing",
       "type": "string",
       "enum": [
         "claudeai",
@@ -2303,7 +2303,7 @@ If a hook isn't running:
       "type": "string"
     },
     "language": {
-      "description": "Preferred language for Claude responses and voice dictation (e.g., \"japanese\", \"spanish\")",
+      "description": "Preferred language for Harness Code responses and voice dictation (e.g., \"japanese\", \"spanish\")",
       "type": "string"
     },
     "skipWebFetchPreflight": {
@@ -2654,7 +2654,7 @@ If a hook isn't running:
       "type": "boolean"
     },
     "allowedChannelPlugins": {
-      "description": "Teams/Enterprise allowlist of channel plugins. When set, replaces the default Anthropic allowlist — admins decide which plugins may push inbound messages. Undefined falls back to the default. Requires channelsEnabled: true.",
+      "description": "Teams/Enterprise allowlist of channel plugins. When set, replaces the default Lyf allowlist — admins decide which plugins may push inbound messages. Undefined falls back to the default. Requires channelsEnabled: true.",
       "type": "array",
       "items": {
         "type": "object",
@@ -2677,7 +2677,7 @@ If a hook isn't running:
       "type": "boolean"
     },
     "autoMemoryEnabled": {
-      "description": "Enable auto-memory for this project. When false, Claude will not read from or write to the auto-memory directory.",
+      "description": "Enable auto-memory for this project. When false, Harness Code will not read from or write to the auto-memory directory.",
       "type": "boolean"
     },
     "autoMemoryDirectory": {
@@ -2732,7 +2732,7 @@ If a hook isn't running:
             "type": "string"
           },
           "startDirectory": {
-            "description": "Default working directory on the remote host. Supports tilde expansion (e.g. ~/projects). If not specified, defaults to the remote user home directory. Can be overridden by the [dir] positional argument in `claude ssh <config> [dir]`.",
+            "description": "Default working directory on the remote host. Supports tilde expansion (e.g. ~/projects). If not specified, defaults to the remote user home directory. Can be overridden by the [dir] positional argument in `harness ssh <config> [dir]`.",
             "type": "string"
           }
         },

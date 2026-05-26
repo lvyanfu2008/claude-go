@@ -565,7 +565,7 @@ func TestClaudeCodeGuideSystemPrompt(t *testing.T) {
 			t.Fatal("system prompt should not be empty")
 		}
 		if !strings.Contains(p, "Harness guide agent") {
-			t.Error("prompt should mention 'Claude guide agent'")
+			t.Error("prompt should mention 'Harness guide agent'")
 		}
 		if !strings.Contains(p, "code.claude.com") {
 			t.Error("prompt should reference Claude Code docs URL")
@@ -984,14 +984,14 @@ func TestClaudeCodeGuideWhenToUse(t *testing.T) {
 	if result == "" {
 		t.Fatal("claudeCodeGuideWhenToUse() should not be empty")
 	}
-	if !strings.Contains(result, "Claude Code") {
-		t.Error("should mention Claude Code")
+	if !strings.Contains(result, "Harness Code") {
+		t.Error("should mention Harness Code")
 	}
-	if !strings.Contains(result, "Claude Agent SDK") {
-		t.Error("should mention Claude Agent SDK")
+	if !strings.Contains(result, "Harness Agent SDK") {
+		t.Error("should mention Harness Agent SDK")
 	}
-	if !strings.Contains(result, "Claude API") {
-		t.Error("should mention Claude API")
+	if !strings.Contains(result, "Harness API") {
+		t.Error("should mention Harness API")
 	}
 	if !strings.Contains(result, ToolSendMessage) {
 		t.Error("should mention SendMessage tool")

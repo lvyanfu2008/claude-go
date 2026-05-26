@@ -16,7 +16,7 @@ func HandleClearCommand(args string) ([]byte, error) {
 		Type: "text",
 		Value: "To clear the current conversation:\n" +
 			"  1. Use /compact to compress the conversation context\n" +
-			"  2. Or exit and start a new session with: claude\n" +
+			"  2. Or exit and start a new session with: harness\n" +
 			"  3. Or use Ctrl+L to clear the screen display",
 	})
 }

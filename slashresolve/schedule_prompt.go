@@ -73,9 +73,9 @@ func buildSchedulePrompt(o SchedulePromptOpts) string {
 	gitHubReminderLine := ""
 	if o.NeedsGitHubAccessReminder {
 		if o.WebSetupEnabled {
-			gitHubReminderLine = "\n- If the user's request seems to require GitHub repo access (e.g. cloning a repo, opening PRs, reading code), remind them that they should run /web-setup to connect their GitHub account (or install the Claude GitHub App on the repo as an alternative) — otherwise the remote agent won't be able to access it."
+			gitHubReminderLine = "\n- If the user's request seems to require GitHub repo access (e.g. cloning a repo, opening PRs, reading code), remind them that they should run /web-setup to connect their GitHub account (or install the Harness GitHub App on the repo as an alternative) — otherwise the remote agent won't be able to access it."
 		} else {
-			gitHubReminderLine = "\n- If the user's request seems to require GitHub repo access (e.g. cloning a repo, opening PRs, reading code), remind them that they need the Claude GitHub App installed on the repo — otherwise the remote agent won't be able to access it."
+			gitHubReminderLine = "\n- If the user's request seems to require GitHub repo access (e.g. cloning a repo, opening PRs, reading code), remind them that they need the Harness GitHub App installed on the repo — otherwise the remote agent won't be able to access it."
 		}
 	}
 
@@ -241,7 +241,7 @@ Minimum interval is 1 hour. ` + "`*/30 * * * *`" + ` will be rejected.
 
 ## Important Notes
 
-- These are REMOTE agents — they run in Anthropic's cloud, not on the user's machine. They cannot access local files, local services, or local environment variables.
+- These are REMOTE agents — they run in Lyf's cloud, not on the user's machine. They cannot access local files, local services, or local environment variables.
 - Always convert cron to human-readable when displaying
 - Default to ` + "`enabled: true`" + ` unless user says otherwise
 - Accept GitHub URLs in any format (https://github.com/org/repo, org/repo, etc.) and normalize to the full HTTPS URL (without .git suffix)

@@ -33,8 +33,8 @@ func HandleMcpCommand(args string) ([]byte, error) {
 		lines = append(lines, fmt.Sprintf("settings.go.json: %s (%d bytes)", settingsGoPath, len(data)))
 	}
 
-	lines = append(lines, "\nUse `claude mcp list` for a detailed list.")
-	lines = append(lines, "Use `claude mcp add [name] [type] [url]` to add a server.")
+	lines = append(lines, "\nUse `harness mcp list` for a detailed list.")
+	lines = append(lines, "Use `harness mcp add [name] [type] [url]` to add a server.")
 	return json.Marshal(McpListResult{
 		Type: "text", Value: strings.Join(lines, "\n"),
 	})

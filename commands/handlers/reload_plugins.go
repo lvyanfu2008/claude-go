@@ -16,7 +16,7 @@ type ReloadPluginsResult struct {
 func HandleReloadPluginsCommand() ([]byte, error) {
 	msg := ReloadPluginsResult{
 		Type:  "text",
-		Value: "Plugin reload is not available in gou-demo. Changes to plugins will take effect on the next session. Use the TS CLI to reload plugins:\n  claude /reload-plugins    — Activate pending plugin changes",
+		Value: "Plugin reload is not available in gou-demo. Changes to plugins will take effect on the next session. Use the TS CLI to reload plugins:\n  harness /reload-plugins    — Activate pending plugin changes",
 	}
 	return json.Marshal(msg)
 }

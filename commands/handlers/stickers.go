@@ -16,7 +16,7 @@ type StickersResult struct {
 func HandleStickersCommand() ([]byte, error) {
 	msg := StickersResult{
 		Type:  "text",
-		Value: "Order Claude Code stickers at:\n  https://www.stickermule.com/claudecode\n\n(Open this URL in your browser to order.)",
+		Value: "Order Harness Code stickers at:\n  https://www.stickermule.com/claudecode\n\n(Open this URL in your browser to order.)",
 	}
 	return json.Marshal(msg)
 }

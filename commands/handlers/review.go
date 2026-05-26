@@ -15,7 +15,7 @@ func HandleReviewCommand(args string) ([]byte, error) {
 	return json.Marshal(ReviewResult{
 		Type: "text",
 		Value: "Code review requested.\n" +
-			"Claude will review recent changes in the next turn.\n" +
+			"Harness will review recent changes in the next turn.\n" +
 			"Use a prompt like 'review the changes in this file' for targeted review.",
 	})
 }

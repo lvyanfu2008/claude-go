@@ -7,7 +7,7 @@ import (
 )
 
 // Mirrors src/utils/claudeInChrome/prompt.ts BASE_CHROME_PROMPT + claudeInChrome.ts SKILL_ACTIVATION_MESSAGE.
-const chromeBundledBody = `# Claude in Chrome browser automation
+const chromeBundledBody = `# Harness in Chrome browser automation
 
 You have access to browser automation tools (mcp__claude-in-chrome__*) for interacting with web pages in Chrome. Follow these guidelines for effective browser automation.
 

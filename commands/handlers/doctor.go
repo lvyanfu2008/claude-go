@@ -28,7 +28,7 @@ func HandleDoctorCommand() ([]byte, error) {
 	cwd, _ := os.Getwd()
 
 	lines := []string{
-		"Claude Code (gou-demo) — Doctor Report",
+		"Harness Code (gou-demo) — Doctor Report",
 		"══════════════════════════════════════",
 		fmt.Sprintf("  Version:     %s", version),
 		fmt.Sprintf("  OS:          %s / %s", runtime.GOOS, runtime.GOARCH),
@@ -58,7 +58,7 @@ func HandleDoctorCommand() ([]byte, error) {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, "For a full diagnosis, use the TS CLI: claude /doctor")
+	lines = append(lines, "For a full diagnosis, use the TS CLI: harness /doctor")
 
 	msg := DoctorResult{
 		Type:  "text",

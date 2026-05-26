@@ -17,7 +17,7 @@ const ClaudeCodeDocsMapURL = "https://code.claude.com/docs/en/claude_code_docs_m
 const SystemPromptDynamicBoundary = "__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__"
 
 // FrontierModelName matches prompts.ts FRONTIER_MODEL_NAME.
-const FrontierModelName = "Claude Opus 4.6"
+const FrontierModelName = "Harness Opus 4.6"
 
 // Claude45Or46ModelIDs matches prompts.ts CLAUDE_4_5_OR_4_6_MODEL_IDS.
 var Claude45Or46ModelIDs = struct {
@@ -264,13 +264,13 @@ func MarketingNameForModel(modelID string) (string, bool) {
 		}
 		return "Sonnet 4", true
 	case strings.Contains(c, "claude-3-7-sonnet"):
-		return "Claude 3.7 Sonnet", true
+		return "Harness 3.7 Sonnet", true
 	case strings.Contains(c, "claude-3-5-sonnet"):
-		return "Claude 3.5 Sonnet", true
+		return "Harness 3.5 Sonnet", true
 	case strings.Contains(c, "claude-haiku-4-5"):
 		return "Haiku 4.5", true
 	case strings.Contains(c, "claude-3-5-haiku"):
-		return "Claude 3.5 Haiku", true
+		return "Harness 3.5 Haiku", true
 	default:
 		return "", false
 	}
@@ -365,7 +365,7 @@ func ComputeSimpleEnvInfo(in SimpleEnvInfoInput) string {
 	)
 	if !(in.UserTypeAnt && in.Undercover) {
 		envItems = append(envItems,
-			fmt.Sprintf(`The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '%s', Sonnet 4.6: '%s', Haiku 4.5: '%s'. When building AI applications, default to the latest and most capable Claude models.`, Claude45Or46ModelIDs.Opus, Claude45Or46ModelIDs.Sonnet, Claude45Or46ModelIDs.Haiku),
+			fmt.Sprintf(`The most recent Harness model family is Harness 4.5/4.6. Model IDs — Opus 4.6: '%s', Sonnet 4.6: '%s', Haiku 4.5: '%s'. When building AI applications, default to the latest and most capable Harness models.`, Claude45Or46ModelIDs.Opus, Claude45Or46ModelIDs.Sonnet, Claude45Or46ModelIDs.Haiku),
 			`Harness Code is available as a CLI in the terminal.`,
 			fmt.Sprintf(`Fast mode for Harness Code uses the same %s model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`, FrontierModelName),
 		)

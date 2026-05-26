@@ -70,8 +70,8 @@ func skillSchedule() types.Command {
 func skillClaudeAPI() types.Command {
 	src := "bundled"
 	pm := "running"
-	d := "Build apps with the Claude API or Anthropic SDK.\n" +
-		"TRIGGER when: code imports `anthropic`/`@anthropic-ai/sdk`/`claude_agent_sdk`, or user asks to use Claude API, Anthropic SDKs, or Agent SDK.\n" +
+	d := "Build apps with the Harness API or Lyf SDK.\n" +
+		"TRIGGER when: code imports `anthropic`/`@anthropic-ai/sdk`/`claude_agent_sdk`, or user asks to use Harness API, Lyf SDKs, or Agent SDK.\n" +
 		"DO NOT TRIGGER when: code imports `openai`/other AI SDK, general programming, or ML/data-science tasks."
 	return types.Command{
 		CommandBase: types.CommandBase{

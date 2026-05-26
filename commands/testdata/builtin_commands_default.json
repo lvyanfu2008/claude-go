@@ -36,7 +36,7 @@
   },
   {
     "name": "chrome",
-    "description": "Claude in Chrome (Beta) settings",
+    "description": "Harness in Chrome (Beta) settings",
     "availability": [],
     "type": "local-jsx"
   },
@@ -75,7 +75,7 @@
   {
     "type": "local-jsx",
     "name": "copy",
-    "description": "Copy Claude's last response to clipboard (or /copy N for the Nth-latest)"
+    "description": "Copy Harness Code's last response to clipboard (or /copy N for the Nth-latest)"
   },
   {
     "type": "local-jsx",
@@ -83,7 +83,7 @@
     "aliases": [
       "app"
     ],
-    "description": "Continue the current session in Claude Desktop",
+    "description": "Continue the current session in Harness Desktop",
     "availability": [
       "claude-ai"
     ],
@@ -115,7 +115,7 @@
   },
   {
     "name": "doctor",
-    "description": "Diagnose and verify your Claude Code installation and settings",
+    "description": "Diagnose and verify your Harness Code installation and settings",
     "type": "local-jsx"
   },
   {
@@ -187,7 +187,7 @@
   {
     "type": "local-jsx",
     "name": "install-github-app",
-    "description": "Set up Claude GitHub Actions for a repository",
+    "description": "Set up Harness GitHub Actions for a repository",
     "availability": [
       "claude-ai",
       "console"
@@ -196,7 +196,7 @@
   {
     "type": "local",
     "name": "install-slack-app",
-    "description": "Install the Claude Slack app",
+    "description": "Install the Harness Slack app",
     "availability": [
       "claude-ai"
     ],
@@ -212,7 +212,7 @@
   {
     "type": "local-jsx",
     "name": "memory",
-    "description": "Edit Claude memory files"
+    "description": "Edit Harness memory files"
   },
   {
     "type": "local-jsx",
@@ -221,12 +221,12 @@
       "ios",
       "android"
     ],
-    "description": "Show QR code to download the Claude mobile app"
+    "description": "Show QR code to download the Harness mobile app"
   },
   {
     "type": "local-jsx",
     "name": "model",
-    "description": "Set the AI model for Claude Code (currently deepseek-chat)",
+    "description": "Set the AI model for Harness Code (currently deepseek-chat)",
     "argumentHint": "[model]",
     "immediate": false
   },
@@ -249,7 +249,7 @@
       "plugins",
       "marketplace"
     ],
-    "description": "Manage Claude Code plugins",
+    "description": "Manage Harness Code plugins",
     "immediate": true
   },
   {
@@ -305,17 +305,17 @@
   {
     "type": "local-jsx",
     "name": "stats",
-    "description": "Show your Claude Code usage statistics and activity"
+    "description": "Show your Harness Code usage statistics and activity"
   },
   {
     "type": "local-jsx",
     "name": "status",
-    "description": "Show Claude Code status including version, model, account, API connectivity, and tool statuses",
+    "description": "Show Harness Code status including version, model, account, API connectivity, and tool statuses",
     "immediate": true
   },
   {
     "type": "prompt",
-    "description": "Set up Claude Code's status line UI",
+    "description": "Set up Harness Code's status line UI",
     "contentLength": 0,
     "aliases": [],
     "name": "statusline",
@@ -331,7 +331,7 @@
   {
     "type": "local",
     "name": "stickers",
-    "description": "Order Claude Code stickers",
+    "description": "Order Harness Code stickers",
     "supportsNonInteractive": false
   },
   {
@@ -351,7 +351,7 @@
     ],
     "type": "local-jsx",
     "name": "feedback",
-    "description": "Submit feedback about Claude Code",
+    "description": "Submit feedback about Harness Code",
     "argumentHint": "[report]"
   },
   {
@@ -365,7 +365,7 @@
   {
     "type": "local-jsx",
     "name": "ultrareview",
-    "description": "~10–20 min · Finds and verifies bugs in your branch. Runs in Claude Code on the web. See https://code.claude.com/docs/en/claude-code-on-the-web"
+    "description": "~10–20 min · Finds and verifies bugs in your branch. Runs in Harness Code on the web. See https://code.claude.com/docs/en/claude-code-on-the-web"
   },
   {
     "description": "Restore the code and/or conversation to a previous point",
@@ -428,7 +428,7 @@
   {
     "type": "prompt",
     "name": "insights",
-    "description": "Generate a report analyzing your Claude Code sessions",
+    "description": "Generate a report analyzing your Harness Code sessions",
     "contentLength": 0,
     "progressMessage": "analyzing your sessions",
     "source": "builtin"
@@ -442,7 +442,7 @@
   {
     "type": "local-jsx",
     "name": "think-back",
-    "description": "Your 2025 Claude Code Year in Review"
+    "description": "Your 2025 Harness Code Year in Review"
   },
   {
     "type": "local",
@@ -493,17 +493,17 @@
   {
     "type": "local-jsx",
     "name": "logout",
-    "description": "Sign out from your Anthropic account"
+    "description": "Sign out from your Lyf account"
   },
   {
     "type": "local-jsx",
     "name": "login",
-    "description": "Sign in with your Anthropic account"
+    "description": "Sign in with your Lyf account"
   },
   {
     "type": "local-jsx",
     "name": "passes",
-    "description": "Share a free week of Claude Code with friends",
+    "description": "Share a free week of Harness Code with friends",
     "isHidden": true
   },
   {

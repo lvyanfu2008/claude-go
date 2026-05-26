@@ -55,7 +55,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "chrome",
-			Description: "Claude in Chrome (Beta) settings",
+			Description: "Harness in Chrome (Beta) settings",
 		},
 		Type: "local-jsx",
 	},
@@ -97,14 +97,14 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "copy",
-			Description: "Copy Claude's last response to clipboard (or /copy N for the Nth-latest)",
+			Description: "Copy Harness Code's last response to clipboard (or /copy N for the Nth-latest)",
 		},
 		Type: "local-jsx",
 	},
 	{
 		CommandBase: types.CommandBase{
 			Name:         "desktop",
-			Description:  "Continue the current session in Claude Desktop",
+			Description:  "Continue the current session in Harness Desktop",
 			Availability: []types.CommandAvailability{types.CommandAvailabilityClaudeAI},
 			IsHidden:     ptrBool(false),
 			Aliases:      []string{"app"},
@@ -232,7 +232,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:         "install-github-app",
-			Description:  "Set up Claude GitHub Actions for a repository",
+			Description:  "Set up Harness GitHub Actions for a repository",
 			Availability: []types.CommandAvailability{types.CommandAvailabilityClaudeAI, types.CommandAvailabilityConsole},
 		},
 		Type: "local-jsx",
@@ -240,7 +240,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:         "install-slack-app",
-			Description:  "Install the Claude Slack app",
+			Description:  "Install the Harness Slack app",
 			Availability: []types.CommandAvailability{types.CommandAvailabilityClaudeAI},
 		},
 		Type:                   "local",
@@ -258,14 +258,14 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "memory",
-			Description: "Edit Claude memory files",
+			Description: "Edit Harness memory files",
 		},
 		Type: "local-jsx",
 	},
 	{
 		CommandBase: types.CommandBase{
 			Name:        "mobile",
-			Description: "Show QR code to download the Claude mobile app",
+			Description: "Show QR code to download the Harness mobile app",
 			Aliases:     []string{"ios", "android"},
 		},
 		Type: "local-jsx",
@@ -436,7 +436,7 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "ultrareview",
-			Description: "~10–20 min · Finds and verifies bugs in your branch. Runs on the web.",
+			Description: "~10–20 min · Finds and verifies bugs in your branch. Runs in Harness Code on the web. See https://code.claude.com/docs/en/claude-code-on-the-web",
 		},
 		Type: "local-jsx",
 	},
@@ -594,14 +594,14 @@ var builtinDefaultCommandsTable = []types.Command{
 	{
 		CommandBase: types.CommandBase{
 			Name:        "logout",
-			Description: "Sign out from your Anthropic account",
+			Description: "Sign out from your Lyf account",
 		},
 		Type: "local-jsx",
 	},
 	{
 		CommandBase: types.CommandBase{
 			Name:        "login",
-			Description: "Sign in with your Anthropic account",
+			Description: "Sign in with your Lyf account",
 		},
 		Type: "local-jsx",
 	},
