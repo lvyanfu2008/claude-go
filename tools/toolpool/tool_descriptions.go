@@ -501,9 +501,7 @@ func getTaskCreateDescription() string {
 - Include enough detail in the description for another agent to understand and complete the task
 - New tasks are created with status 'pending' and no owner - use TaskUpdate with the ` + "`owner`" + ` parameter to assign them`
 	}
-	return `IMPORTANT: This tool creates structured todo/task list entries for tracking progress. It is NOT the same as the Agent tool (which launches subprocesses to execute work). When instructed to "create a task" or "create tasks" for a checklist or tracking purpose, use TaskCreate — not Agent.
-
-Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
+	return `Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
 
 ## When to Use This Tool

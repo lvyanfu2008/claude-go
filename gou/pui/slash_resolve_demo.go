@@ -87,7 +87,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				ShouldQuery: false,
 			}, nil
 		}
-
+		
 		cmd := processuserinput.FindCommand(parsed.CommandName, p.Commands)
 		if cmd == nil {
 			// TS processSlashCommand: if looksLikeCommand && !isFilePath → Unknown skill, shouldQuery false.
@@ -100,7 +100,6 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				Source:   types.SlashResolveUnknown,
 			}, attachmentMessages, uuid, p), nil
 		}
-
 		switch cmd.Type {
 		case "local", "local-jsx":
 			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd, ctx, opt.SessionID, opt.SessionMemState, opt.GuidancePtr, opt.UserContextPtr, opt.SystemContextPtr)

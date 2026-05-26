@@ -433,7 +433,6 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 // Helper function to parse message content
 func parseMessageContent(msg *types.Message) ([]map[string]interface{}, error) {
 	var content []map[string]interface{}
-
 	// Try Content field first
 	if len(msg.Content) > 0 {
 		diaglog.Line("[parseMessageContent] Trying to parse Content field, length=%d", len(msg.Content))

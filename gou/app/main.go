@@ -86,9 +86,9 @@ import (
 	"goc/tools"
 	"goc/tools/localtools"
 	"goc/tools/skilltools"
-	"goc/tools/toolsearchwire"
 	"goc/tools/toolexecution"
 	"goc/tools/toolresultpersist"
+	"goc/tools/toolsearchwire"
 	"goc/tscontext"
 	"goc/types"
 )
@@ -611,9 +611,9 @@ type model struct {
 	lastEmittedTitlePlain string
 
 	// Ctrl+C interrupt support (TS app:interrupt → CancelRequestHandler + useExitOnCtrlCD).
-	queryCancel   context.CancelFunc
-	lastCtrlC     time.Time
-	ctrlCPending  bool
+	queryCancel  context.CancelFunc
+	lastCtrlC    time.Time
+	ctrlCPending bool
 
 	// Transcript screen (TS REPL.tsx Screen prompt|transcript + frozenTranscriptState).
 	uiScreen           gouDemoScreen
@@ -778,7 +778,7 @@ func Run(config_ Config) error {
 	mcpCmdPath := strings.TrimSpace(config_.MCPCommandsJSONPath)
 	mcpToolPath := strings.TrimSpace(config_.MCPToolsJSONPath)
 	m := newModel(st, mcpCmdPath, mcpToolPath, nil)
-		m.taskList.setAgentTasks(m.agentTasks)
+	m.taskList.setAgentTasks(m.agentTasks)
 
 	opts := []tea.ProgramOption{}
 	if config_.StreamStdin {
@@ -2813,10 +2813,10 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							}
 						}
 						qdeps := query.ProductionDeps(trySMCompact, func(phase string) {
-					if send := m.ccbSend; send != nil {
-						send(compactPhaseMsg{Phase: phase})
-					}
-				})
+							if send := m.ccbSend; send != nil {
+								send(compactPhaseMsg{Phase: phase})
+							}
+						})
 						te := toolexecution.ExecutionDeps{
 							InvokeTool:              runner.Run,
 							MainLoopModel:           mainLoopModel,
