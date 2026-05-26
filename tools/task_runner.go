@@ -78,11 +78,11 @@ func getAutoBackgroundMs(taskType string) time.Duration {
 	case TaskTypeInProcessTeammate:
 		return 0 // teammates always run in background
 	case TaskTypeLocalAgent:
-		return 30 * time.Second
+		return 0 // disabled by default, matching TS
 	case TaskTypeLocalWorkflow:
-		return 60 * time.Second
+		return 0 // disabled by default
 	default:
-		return 30 * time.Second
+		return 0
 	}
 }
 
