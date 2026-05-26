@@ -20,7 +20,7 @@ const (
 	editToolName   = "Edit"
 	agentToolName  = "Agent"
 	todoWriteName  = "TodoWrite"
-	productCodeURL = "https://claude.com/claude-code"
+	productCodeURL = "https://harness.io/code"
 )
 
 // embeddedSearchToolsActive mirrors src/utils/embeddedTools.ts hasEmbeddedSearchTools
@@ -109,8 +109,8 @@ func getAttributionTexts() (commit string, pr string) {
 		return "", ""
 	}
 	modelName := commands.FrontierModelName
-	defaultPR := fmt.Sprintf("🤖 Generated with [Claude Code](%s)", productCodeURL)
-	defaultCommit := fmt.Sprintf("Co-Authored-By: %s <noreply@anthropic.com>", modelName)
+	defaultPR := fmt.Sprintf("🤖 Generated with [Harness Code](%s)", productCodeURL)
+	defaultCommit := fmt.Sprintf("Co-Authored-By: %s <noreply@harness.io>", modelName)
 	return defaultCommit, defaultPR
 }
 

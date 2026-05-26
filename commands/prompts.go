@@ -28,6 +28,15 @@ var Claude45Or46ModelIDs = struct {
 	Haiku:  "claude-haiku-4-5-20251001",
 }
 
+// HarnessModelDisplayIDs used for model identity in system prompts sent to the LLM.
+var HarnessModelDisplayIDs = struct {
+	Opus, Sonnet, Haiku string
+}{
+	Opus:   "harness-opus-4-6",
+	Sonnet: "harness-sonnet-4-6",
+	Haiku:  "harness-haiku-4-5",
+}
+
 // DefaultAgentPrompt matches prompts.ts DEFAULT_AGENT_PROMPT.
 const DefaultAgentPrompt = `You are an agent for Harness Code, built by Lyf. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
 
@@ -365,7 +374,7 @@ func ComputeSimpleEnvInfo(in SimpleEnvInfoInput) string {
 	)
 	if !(in.UserTypeAnt && in.Undercover) {
 		envItems = append(envItems,
-			fmt.Sprintf(`The most recent Harness model family is Harness 4.5/4.6. Model IDs — Opus 4.6: '%s', Sonnet 4.6: '%s', Haiku 4.5: '%s'. When building AI applications, default to the latest and most capable Harness models.`, Claude45Or46ModelIDs.Opus, Claude45Or46ModelIDs.Sonnet, Claude45Or46ModelIDs.Haiku),
+			fmt.Sprintf(`The most recent Harness model family is Harness 4.5/4.6. Model IDs — Opus 4.6: '%s', Sonnet 4.6: '%s', Haiku 4.5: '%s'. When building AI applications, default to the latest and most capable Harness models.`, HarnessModelDisplayIDs.Opus, HarnessModelDisplayIDs.Sonnet, HarnessModelDisplayIDs.Haiku),
 			`Harness Code is available as a CLI in the terminal.`,
 			fmt.Sprintf(`Fast mode for Harness Code uses the same %s model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`, FrontierModelName),
 		)
