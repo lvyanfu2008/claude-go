@@ -1,4 +1,5 @@
-// SpinnerRow renders the query-busy spinner line: glyph + verb + elapsed + tokens + thinking.
+// SpinnerRow renders the query-busy spinner line matching TS SpinnerAnimationRow format:
+// ✶ Verb… (elapsed · ↓ tokens · thinking)
 
 package app
 
@@ -11,32 +12,44 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// SpinnerRow renders the query-busy spinner line: glyph + verb + elapsed + tokens + thinking.
+// SpinnerRow renders the query-busy spinner line matching TS SpinnerAnimationRow format.
 func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thinking bool, cols int) string {
 	if verb == "" {
 		verb = "Working"
 	}
 
-	frames := []string{"…", ".", "..", "..."}
-	sfx := frames[frame%len(frames)]
+	// Animate the star glyph, keep "…" fixed
+	starGlyphs := []string{"✶", "✷", "✸", "✹"}
+	glyph := starGlyphs[frame%len(starGlyphs)]
 
-	bold := lipgloss.NewStyle().Bold(true)
+	darkRed := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
 
 	var b strings.Builder
-	b.WriteString(bold.Render(teardropAsterisk + " " + verb + sfx))
+	// Glyph in dark red, verb + fixed "…"
+	b.WriteString(darkRed.Render(glyph))
+	b.WriteString(" ")
+	b.WriteString(verb)
+	b.WriteString("…")
+
+	// Stats in parentheses
+	var stats []string
 
 	elapsed := formatSpinnerElapsed(startedAt)
 	if elapsed != "" {
-		b.WriteString(faint.Render(" · " + elapsed))
+		stats = append(stats, elapsed)
 	}
 
 	if tokenCount > 0 {
-		b.WriteString(faint.Render(" · " + formatSpinnerTokens(tokenCount) + " tokens"))
+		stats = append(stats, "↓ "+formatSpinnerTokens(tokenCount))
 	}
 
 	if thinking {
-		b.WriteString(faint.Render(" · thinking…"))
+		stats = append(stats, "thinking")
+	}
+
+	if len(stats) > 0 {
+		b.WriteString(faint.Render(" (" + strings.Join(stats, " · ") + ")"))
 	}
 
 	return b.String()
