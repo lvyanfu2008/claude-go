@@ -546,7 +546,7 @@ func nativeCronCreateToolSpec() types.ToolSpec {
 			},
 			"durable": map[string]any{
 				"type":        "boolean",
-				"description": "true = persist to .harness/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions.",
+				"description": "true = persist to .harness/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this session ends. Use true only when the user asks the task to survive across sessions.",
 			},
 		},
 		"required":             []string{"cron", "prompt"},

@@ -89,10 +89,10 @@ Usage notes:
 func getWebSearchDescription() string {
 	currentMonthYear := getLocalMonthYear()
 	return `
-- Allows Claude to search the web and use the results to inform responses
+- Allows Harness Code to search the web and use the results to inform responses
 - Provides up-to-date information for current events and recent data
 - Returns search result information formatted as search result blocks, including links as markdown hyperlinks
-- Use this tool for accessing information beyond Claude's knowledge cutoff
+- Use this tool for accessing information beyond the model's knowledge cutoff
 - Searches are performed automatically within a single API call
 
 CRITICAL REQUIREMENT - You MUST follow this:
@@ -139,7 +139,7 @@ func getSendMessageDescription() string {
 	udsSection := ""
 	if commands.IsEnvTruthy("CLAUDE_CODE_ENABLE_UDS_INBOX") {
 		udsRow = `
-| ` + "`\"uds:/path/to.sock\"`" + ` | Local Claude session's socket (same machine; use ` + "`ListPeers`" + `) |
+| ` + "`\"uds:/path/to.sock\"`" + ` | Local session's socket (same machine; use ` + "`ListPeers`" + `) |
 | ` + "`\"bridge:session_...\"`" + ` | Remote Control peer session (cross-machine; use ` + "`ListPeers`" + `) |`
 		udsSection = `
 
@@ -424,12 +424,12 @@ If called outside an EnterWorktree session, the tool is a **no-op**: it reports 
 // getCronCreateDescription mirrors buildCronCreatePrompt in TS.
 func getCronCreateDescription() string {
 	durable := isCronDurableEnabled()
-	section := "## Session-only\n\nJobs live only in this Claude session — nothing is written to disk, and the job is gone when Claude exits."
+	section := "## Session-only\n\nJobs live only in this session — nothing is written to disk, and the job is gone when Harness Code exits."
 	runtimeExtra := ""
 	if durable {
 		section = `## Durability
 
-By default (durable: false) the job lives only in this Claude session — nothing is written to disk, and the job is gone when Claude exits. Pass durable: true to write to .harness/scheduled_tasks.json so the job survives restarts. Only use durable: true when the user explicitly asks for the task to persist ("keep doing this every day", "set this up permanently"). Most "remind me in 5 minutes" / "check back in an hour" requests should stay session-only.`
+By default (durable: false) the job lives only in this session — nothing is written to disk, and the job is gone when Harness Code exits. Pass durable: true to write to .harness/scheduled_tasks.json so the job survives restarts. Only use durable: true when the user explicitly asks for the task to persist ("keep doing this every day", "set this up permanently"). Most "remind me in 5 minutes" / "check back in an hour" requests should stay session-only.`
 		runtimeExtra = ` Durable jobs persist to .harness/scheduled_tasks.json and survive session restarts — on next launch they resume automatically. One-shot durable tasks that were missed while the REPL was closed are surfaced for catch-up. Session-only jobs die with the process.`
 	}
 

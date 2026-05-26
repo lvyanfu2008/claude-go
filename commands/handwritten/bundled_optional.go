@@ -48,7 +48,7 @@ func skillHunter() types.Command {
 func skillSchedule() types.Command {
 	src := "bundled"
 	pm := "running"
-	w := "When the user wants to schedule a recurring remote agent, set up automated tasks, create a cron job for Claude Code, or manage their scheduled agents/triggers."
+	w := "When the user wants to schedule a recurring remote agent, set up automated tasks, create a cron job for Harness Code, or manage their scheduled agents/triggers."
 	return types.Command{
 		CommandBase: types.CommandBase{
 			Name:                        "schedule",
