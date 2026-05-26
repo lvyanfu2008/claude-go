@@ -7,26 +7,20 @@ import (
 	"goc/types"
 )
 
-func TestFormatAgentProgressEmpty(t *testing.T) {
+func TestFormatAgentProgressSegmentsDisabled(t *testing.T) {
+	// FormatAgentProgressSegments is now a no-op (progress shown in AgentFooter).
 	segs := FormatAgentProgressSegments(nil)
-	if len(segs) != 1 {
-		t.Fatalf("expected 1 segment, got %d", len(segs))
-	}
-	if segs[0].Text != "Initializing…" {
-		t.Fatalf("expected 'Initializing…', got %q", segs[0].Text)
+	if len(segs) != 0 {
+		t.Fatalf("expected 0 segments, got %d", len(segs))
 	}
 
-	// Also test empty slice
 	segs = FormatAgentProgressSegments([]types.Message{})
-	if len(segs) != 1 {
-		t.Fatalf("expected 1 segment for empty slice, got %d", len(segs))
-	}
-	if segs[0].Text != "Initializing…" {
-		t.Fatalf("expected 'Initializing…' for empty slice, got %q", segs[0].Text)
+	if len(segs) != 0 {
+		t.Fatalf("expected 0 segments for empty slice, got %d", len(segs))
 	}
 }
 
-func TestFormatAgentProgressWithToolResult(t *testing.T) {
+func TestFormatAgentProgressSegmentsNoOp(t *testing.T) {
 	inner, _ := json.Marshal(map[string]any{
 		"message": map[string]any{
 			"type": "user",
@@ -41,16 +35,10 @@ func TestFormatAgentProgressWithToolResult(t *testing.T) {
 		Type: types.MessageTypeProgress,
 		Data: json.RawMessage(inner),
 	}
+	// FormatAgentProgressSegments now returns nil (progress shown in AgentFooter)
 	segs := FormatAgentProgressSegments([]types.Message{pm})
-	if len(segs) == 0 {
-		t.Fatal("expected at least header segment")
-	}
-	if segs[0].Text == "Initializing…" {
-		t.Fatal("expected non-empty progress, got Initializing…")
-	}
-	// Should show "1 tool use" in header
-	if segs[0].Text != "" {
-		t.Logf("header text: %q", segs[0].Text)
+	if len(segs) != 0 {
+		t.Fatalf("expected 0 segments (no-op), got %d", len(segs))
 	}
 }
 
@@ -313,7 +301,7 @@ func TestFormatTokenCountEdgeCases(t *testing.T) {
 	}
 }
 
-func TestFormatAgentProgressActivityLines(t *testing.T) {
+func TestFormatAgentProgressSegmentsNoOpWithActivity(t *testing.T) {
 	input, _ := json.Marshal(map[string]any{"file_path": "/home/test/main.go"})
 	inner, _ := json.Marshal(map[string]any{
 		"message": map[string]any{
@@ -325,7 +313,6 @@ func TestFormatAgentProgressActivityLines(t *testing.T) {
 			},
 		},
 	})
-	// Also include a tool_result to make stats non-empty
 	userInner, _ := json.Marshal(map[string]any{
 		"message": map[string]any{
 			"type": "user",
@@ -340,18 +327,9 @@ func TestFormatAgentProgressActivityLines(t *testing.T) {
 		{Type: types.MessageTypeProgress, Data: json.RawMessage(userInner)},
 		{Type: types.MessageTypeProgress, Data: json.RawMessage(inner)},
 	}
+	// FormatAgentProgressSegments now returns nil (progress shown in AgentFooter)
 	segs := FormatAgentProgressSegments(pms)
-	if len(segs) < 2 {
-		t.Fatalf("expected at least 2 segments (header + activity), got %d", len(segs))
+	if len(segs) != 0 {
+		t.Fatalf("expected 0 segments (no-op), got %d", len(segs))
 	}
-	// Header should not be "Initializing…"
-	if segs[0].Text == "Initializing…" {
-		t.Fatal("expected header with stats, got Initializing…")
-	}
-	// Activity line should be SegDisplayHint
-	if segs[1].Kind != SegDisplayHint {
-		t.Fatalf("expected SegDisplayHint for activity line, got %v", segs[1].Kind)
-	}
-	// Activity text should contain the read indicator
-	t.Logf("activity text: %q", segs[1].Text)
 }
