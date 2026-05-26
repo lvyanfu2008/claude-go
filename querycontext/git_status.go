@@ -2,12 +2,12 @@ package querycontext
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"goc/diagnostics"
 	"goc/utils"
 )
 
@@ -48,7 +48,7 @@ func buildGitStatusSnapshotUncached(ctx context.Context, cwd string) string {
 	for i, err := range errs {
 		if err != nil && i != 1 { // symbolic-ref can fail, that's OK
 			// Log error but continue with partial results
-			fmt.Printf("Git command failed: %v\n", err)
+			diagnostics.LogForDiagnosticsNoPII("Git command failed: %v", err)
 		}
 	}
 
@@ -84,7 +84,7 @@ func buildGitStatusSnapshotUncached(ctx context.Context, cwd string) string {
 `+logOut)
 
 	// Log completion time for diagnostics (simplified version of TS logging)
-	fmt.Printf("Git status completed in %v\n", time.Since(startTime))
+	diagnostics.LogForDiagnosticsNoPII("Git status completed in %v", time.Since(startTime))
 
 	return strings.Join(parts, "\n\n")
 }
