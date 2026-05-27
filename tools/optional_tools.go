@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"goc/diagnostics"
 	"goc/tools/procregistry"
 	"goc/types"
 )
@@ -1301,6 +1302,7 @@ func SnipFromJSON(raw []byte) (string, bool, error) {
 	if summary == "" {
 		summary = fmt.Sprintf("Snipped %d messages", len(in.MessageIDs))
 	}
+	diagnostics.LogForDiagnosticsNoPII("Snip tool called: %d messages ids=%v reason=%q", len(in.MessageIDs), in.MessageIDs, summary)
 	out := map[string]any{
 		"data": map[string]any{
 			"snipped_count": len(in.MessageIDs),

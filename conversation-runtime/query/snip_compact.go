@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"goc/diagnostics"
 	"goc/types"
 )
 
@@ -75,6 +76,7 @@ func snipCompact(messages []types.Message, newUUID func() string) (*SnipCompactR
 	if len(alreadyRemoved) == 0 {
 		return nil, nil
 	}
+	diagnostics.LogForDiagnosticsNoPII("snipCompact: already-removed=%d new-removed=%d", len(alreadyRemoved)-len(newRemovedUUIDs), len(newRemovedUUIDs))
 	filtered := make([]types.Message, 0, len(messages))
 	var tokensFreed int
 	for _, m := range messages {
@@ -93,6 +95,7 @@ func snipCompact(messages []types.Message, newUUID func() string) (*SnipCompactR
 		}, nil
 	}
 
+	diagnostics.LogForDiagnosticsNoPII("snipCompact: creating boundary removed=%d uuids=%v summary=%q", len(newRemovedUUIDs), newRemovedUUIDs, summary)
 	boundary, err := createSnipBoundaryMessage(summary, newRemovedUUIDs, len(newRemovedUUIDs), newUUID)
 	if err != nil {
 		return nil, fmt.Errorf("snipCompact: create boundary: %w", err)
