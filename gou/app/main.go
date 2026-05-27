@@ -565,6 +565,7 @@ type model struct {
 
 	permAsk           *permissionAskOverlay
 	questionUI        *questionModel // non-nil when interactive AskUserQuestion UI is active
+	hooksConfigMenu   *hooksConfigMenu // non-nil when interactive hooks config menu is active
 	askAutoFirst      bool           // cached from runner config, used by installAskResolver
 	slashCommands     []types.Command
 	slashCommandsOnce bool
@@ -1175,6 +1176,16 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// When the interactive hooks config menu is active, delegate all updates to it.
+	if m.hooksConfigMenu != nil {
+		hm, _ := m.hooksConfigMenu.Update(msg)
+		m.hooksConfigMenu = hm.(*hooksConfigMenu)
+		if m.hooksConfigMenu.IsDone() {
+			m.hooksConfigMenu = nil
+		}
+		return m, nil
+	}
+
 	// When the interactive question UI is active, delegate all updates to it.
 	if m.questionUI != nil {
 		qm, _ := m.questionUI.Update(msg)
@@ -1213,6 +1224,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		return m.handleUpdateWindowSize(msg)
+
+	case pui.GouHooksMenuMsg:
+		m.hooksConfigMenu = m.newHooksConfigMenuFromMsg(msg)
+		return m, nil
 
 	case gouPermissionAskMsg:
 		if len(msg.questions) > 0 {
@@ -1665,6 +1680,11 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 }
 
 func (m *model) View() tea.View {
+	// When the interactive hooks config menu is active, render it instead of the normal view.
+	if m.hooksConfigMenu != nil {
+		return m.wrapRootView(m.hooksConfigMenu.View().Content)
+	}
+
 	// When the interactive question UI is active, render it instead of the normal view.
 	if m.questionUI != nil {
 		return m.wrapRootView(m.questionUI.View().Content)
@@ -2570,6 +2590,9 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 		GuidancePtr:      &m.lastGuidance,
 		UserContextPtr:   &m.lastUserCtx,
 		SystemContextPtr: &m.lastSystemCtx,
+		SendMsg: func(msg any) {
+			m.ccbSend(msg)
+		},
 	})
 	gouDemoTracef("ProcessUserInput start priorMsgs=%d", len(m.store.Messages))
 	r, err := processuserinput.ProcessUserInput(context.Background(), params)

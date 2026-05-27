@@ -18,6 +18,11 @@ import (
 	"goc/types"
 )
 
+// GouHooksMenuMsg triggers the interactive hooks config menu in the TUI.
+type GouHooksMenuMsg struct {
+	Cwd string
+}
+
 // SlashResolveHandlerOptions configures [NewSlashResolveProcessSlashCommand] for gou-demo.
 type SlashResolveHandlerOptions struct {
 	// SessionID substitutes ${CLAUDE_SESSION_ID} in disk skills.
@@ -38,6 +43,9 @@ type SlashResolveHandlerOptions struct {
 	UserContextPtr *map[string]string
 	// SystemContextPtr points to the most recent system context map (updated after each query).
 	SystemContextPtr *map[string]string
+	// SendMsg sends a message to the Bubble Tea program for interactive slash commands.
+	// When nil, interactive commands fall back to text output.
+	SendMsg func(msg any)
 }
 
 // NewSlashResolveProcessSlashCommand returns a [processuserinput.ProcessUserInputParams.ProcessSlashCommand]
@@ -102,7 +110,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 		}
 		switch cmd.Type {
 		case "local", "local-jsx":
-			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd, ctx, opt.SessionID, opt.SessionMemState, opt.GuidancePtr, opt.UserContextPtr, opt.SystemContextPtr)
+			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd, ctx, opt.SessionID, opt.SessionMemState, opt.GuidancePtr, opt.UserContextPtr, opt.SystemContextPtr, opt.SendMsg)
 		case "prompt":
 			// handled below
 		default:
@@ -178,6 +186,7 @@ func handleLocalCommand(
 	guidancePtr *string,
 	userCtxPtr *map[string]string,
 	systemCtxPtr *map[string]string,
+	sendMsg func(any),
 ) (*processuserinput.ProcessUserInputBaseResult, error) {
 	// State-mutating commands that need store access.
 	if name == "clear" || name == "reset" || name == "new" {
@@ -198,6 +207,15 @@ func handleLocalCommand(
 	}
 	if name == "summary" {
 		return handleSummaryCommand(ctx, store, p, cwd, sessionID, sessionMemState, guidancePtr, userCtxPtr, systemCtxPtr)
+	}
+
+	// Interactive local commands that need TUI menus.
+	if name == "hooks" && sendMsg != nil {
+		sendMsg(GouHooksMenuMsg{Cwd: cwd})
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    nil,
+			ShouldQuery: false,
+		}, nil
 	}
 
 	// Pure-text local commands: try the handler registry.
