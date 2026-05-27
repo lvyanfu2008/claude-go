@@ -14,6 +14,9 @@ import (
 // charsPerToken mirrors TS CHARS_PER_TOKEN = 4 in snipCompact.ts estimateTokens.
 const charsPerToken = 4
 
+// SnipNudgeThreshold mirrors TS SNIP_NUDGE_THRESHOLD = 30.
+const SnipNudgeThreshold = 30
+
 // snipToolOutputData mirrors the "data" envelope of SnipFromJSON output.
 type snipToolOutputData struct {
 	SnippedCount int      `json:"snipped_count"`
@@ -27,6 +30,12 @@ type snipBoundaryMetadata struct {
 	Summary      string   `json:"summary,omitempty"`
 	RemovedUuids []string `json:"removedUuids"`
 	RemovedCount int      `json:"removedCount"`
+}
+
+// ShouldNudgeForSnips returns true when the conversation is long enough to warrant
+// nudging the model to consider snipping.
+func ShouldNudgeForSnips(messages []types.Message) bool {
+	return len(messages) >= SnipNudgeThreshold
 }
 
 // SnipCompactFn returns a QueryDeps.SnipCompact function.
@@ -96,7 +105,7 @@ func snipCompact(messages []types.Message, newUUID func() string) (*SnipCompactR
 	}
 
 	diagnostics.LogForDiagnosticsNoPII("snipCompact: creating boundary removed=%d uuids=%v summary=%q", len(newRemovedUUIDs), newRemovedUUIDs, summary)
-	boundary, err := createSnipBoundaryMessage(summary, newRemovedUUIDs, len(newRemovedUUIDs), newUUID)
+	boundary, err := CreateSnipBoundaryMessage(summary, newRemovedUUIDs, len(newRemovedUUIDs), newUUID)
 	if err != nil {
 		return nil, fmt.Errorf("snipCompact: create boundary: %w", err)
 	}
@@ -190,9 +199,9 @@ func estimateMsgTokens(msg types.Message) int {
 	return n
 }
 
-// createSnipBoundaryMessage creates a system message with subtype "snip_boundary"
+// CreateSnipBoundaryMessage creates a system message with subtype "snip_boundary"
 // and CompactMetadata containing snip-specific fields.
-func createSnipBoundaryMessage(summary string, removedUUIDs []string, removedCount int, newUUID func() string) (types.Message, error) {
+func CreateSnipBoundaryMessage(summary string, removedUUIDs []string, removedCount int, newUUID func() string) (types.Message, error) {
 	meta := snipBoundaryMetadata{
 		Trigger:      "snip",
 		Summary:      summary,

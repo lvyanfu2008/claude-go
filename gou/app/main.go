@@ -784,7 +784,7 @@ func Run(config_ Config) error {
 		if err != nil {
 			return fmt.Errorf("transcript: %w", err)
 		}
-		st.Messages = msgs
+		st.Messages = sessiontranscript.ApplySnipRemovals(msgs)
 	}
 	if config_.ReplayCCPath != "" {
 		if err := ccbstream.ReplayFile(config_.ReplayCCPath, st); err != nil {

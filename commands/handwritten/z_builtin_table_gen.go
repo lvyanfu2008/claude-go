@@ -189,6 +189,14 @@ var builtinDefaultCommandsTable = []types.Command{
 	},
 	{
 		CommandBase: types.CommandBase{
+			Name:        "force-snip",
+			Description: "Snip conversation history before this point to free context window space",
+		},
+		Type:                   "local",
+		SupportsNonInteractive: ptrBool(true),
+	},
+	{
+		CommandBase: types.CommandBase{
 			Name:        "heapdump",
 			Description: "Dump the JS heap to ~/Desktop",
 			IsHidden:    ptrBool(true),

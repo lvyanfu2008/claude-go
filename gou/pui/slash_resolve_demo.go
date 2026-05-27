@@ -186,6 +186,9 @@ func handleLocalCommand(
 	if name == "compact" {
 		return handleCompactCommand(store)
 	}
+	if name == "force-snip" {
+		return handleForceSnipCommand(store)
+	}
 
 	if name == "files" {
 		return handleFilesCommand(rfs, cwd)
@@ -220,6 +223,29 @@ func handleClearCommand(store *conversation.Store) (*processuserinput.ProcessUse
 	}
 	return &processuserinput.ProcessUserInputBaseResult{
 		Messages:    []types.Message{SystemNotice("Cleared conversation history.")},
+		ShouldQuery: false,
+	}, nil
+}
+
+// handleForceSnipCommand creates a snip_boundary covering all current messages.
+func handleForceSnipCommand(store *conversation.Store) (*processuserinput.ProcessUserInputBaseResult, error) {
+	if store == nil || len(store.Messages) == 0 {
+		return &processuserinput.ProcessUserInputBaseResult{
+			Messages:    []types.Message{SystemNotice("No messages to snip.")},
+			ShouldQuery: false,
+		}, nil
+	}
+	removedUuids := make([]string, len(store.Messages))
+	for i, m := range store.Messages {
+		removedUuids[i] = m.UUID
+	}
+	boundary, err := query.CreateSnipBoundaryMessage("", removedUuids, len(removedUuids), query.RandomUUID)
+	if err != nil {
+		return nil, fmt.Errorf("force-snip: %w", err)
+	}
+	store.AppendMessage(boundary)
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice(fmt.Sprintf("Snipped %d message(s).", len(removedUuids)))},
 		ShouldQuery: false,
 	}, nil
 }

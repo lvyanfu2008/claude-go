@@ -134,6 +134,14 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 		}
 		applyAutocompactSideEffects(&state, autoRes)
 
+		// Snip nudge: inject context_efficiency attachment when conversation is long.
+		if ShouldNudgeForSnips(work) {
+			work = append(work, types.Message{
+				Type:       types.MessageTypeAttachment,
+				Attachment: json.RawMessage(`{"type":"context_efficiency"}`),
+			})
+		}
+
 		msgs := PrependUserContext(work, params.UserContext)
 
 		fullSystem := StripSystemPromptDynamicBoundaryForAPI(

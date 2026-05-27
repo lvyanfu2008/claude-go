@@ -20,8 +20,8 @@ const (
 	taskOutputToolName     = "TaskOutput"
 )
 
-// snipNudgeText mirrors src/services/compact/snipCompact.ts SNIP_NUDGE_TEXT (empty when unset).
-const snipNudgeText = ""
+// snipNudgeText mirrors src/services/compact/snipCompact.ts SNIP_NUDGE_TEXT.
+const snipNudgeText = "The conversation history is getting long. Consider using the /force-snip command or the snip tool to compress older messages, freeing context window space for continued work."
 
 // API_IMAGE_MAX_BASE64_SIZE from src/constants/apiLimits.ts
 const apiImageMaxBase64Size = 5 * 1024 * 1024
