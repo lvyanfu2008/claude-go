@@ -414,6 +414,10 @@ type AgentCompletedMsg struct {
 // AgentTaskTickMsg is sent by the 1s tick timer for coordinator panel refresh.
 type AgentTaskTickMsg struct{}
 
+// commandQueueNotifyMsg is sent when a background agent notification is enqueued.
+// Triggers auto-submit when TUI is idle.
+type commandQueueNotifyMsg struct{}
+
 // compactPhaseMsg carries auto-compact phase updates for spinner verb changes.
 // Phase values: "started", "summarizing", "done".
 type compactPhaseMsg struct {
@@ -703,6 +707,9 @@ type model struct {
 
 	// agentTasks tracks sub-agent tasks for the coordinator panel (TS LocalAgentTaskState registry).
 	agentTasks *agentTaskStore
+
+	// lastQueryParams stores the last query params for auto-submit of bg agent notifications.
+	lastQueryParams *query.QueryParams
 
 	// toolResultState tracks tool-result persistence decisions across turns.
 	// Shared between the write path (per-tool persist) and read path (per-message budget enforcement).
@@ -1295,6 +1302,40 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.agentTasks.Count() > 0 {
 			return m, taskListTickCmdAgent()
 		}
+		return m, nil
+
+	case commandQueueNotifyMsg:
+		// TUI idle: auto-submit a new query with pending bg agent notifications.
+		// TUI busy: notifications are injected at query start by msgsForQ prepend.
+		if m.queryBusy || m.lastQueryParams == nil {
+			return m, nil
+		}
+		if !commandqueue.HasPendingNotifications() {
+			return m, nil
+		}
+		// Drain notifications into messages
+		msgs := slices.Clone(m.store.Messages)
+		for _, cmd := range commandqueue.DrainCommandQueue() {
+			content, _ := json.Marshal([]map[string]any{{
+				"type": "text",
+				"text": "A background agent completed a task:\n" + cmd.Value,
+			}})
+			msgs = append(msgs, types.Message{
+				Type:    "user",
+				Content: content,
+			})
+		}
+		m.store.AppendMessage(msgs[len(msgs)-1])
+		m.rebuildHeightCache()
+		// Reuse last query params with updated messages
+		qp := *m.lastQueryParams
+		qp.Messages = msgs
+		m.beginQuerySpinner()
+		m.queryBusy = true
+		m.store.ClearStreamingToolUses()
+		ctx, cancel := context.WithCancel(context.Background())
+		m.queryCancel = cancel
+		runQueryStreamingParityTurn(ctx, m.ccbSend, qp)
 		return m, nil
 
 	case taskListTickMsg:
@@ -2731,7 +2772,13 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						Messages:         m.store.Messages,
 						MessagesFunc:     func() []types.Message { return m.store.Messages },
 						SystemPrompt:     []string{guidance},
-						NotificationCallback: commandqueue.EnqueueAgentNotification,
+						NotificationCallback: func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
+					commandqueue.EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
+					// Notify TUI to check for idle auto-submit
+					if send := m.ccbSend; send != nil {
+						send(commandQueueNotifyMsg{})
+					}
+				},
 					ProgressCallback: func(msg *types.Message) {
 							if msg == nil {
 								return
@@ -3012,6 +3059,9 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
 						gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
 							reqID, len(m.store.Messages), len(toolsJSON))
+					// Save params for auto-submit of bg agent notifications
+					qpCopy := qp
+					m.lastQueryParams = &qpCopy
 						m.beginQuerySpinner()
 						m.queryBusy = true
 						m.store.ClearStreamingToolUses()
