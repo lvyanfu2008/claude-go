@@ -73,5 +73,6 @@ func OptionsFromEnv() Options {
 	o.ChairSermon = !envDefinedFalsy("CLAUDE_CODE_GO_CHAIR_SERMON")
 	// OpenAPI path: keep trailing thinking so wire can emit reasoning_content (see filterTrailingThinkingFromLastAssistant).
 	o.SkipStripTrailingThinking = envTruthyMsg("CLAUDE_CODE_USE_OPENAI")
+	o.HistorySnip = featuregates.Feature("HISTORY_SNIP")
 	return o
 }
