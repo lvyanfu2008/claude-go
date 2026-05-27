@@ -149,7 +149,7 @@ type RecordOpts struct {
 
 // IsCompactBoundaryMessage mirrors messages.ts isCompactBoundaryMessage.
 func IsCompactBoundaryMessage(m types.Message) bool {
-	return m.Type == types.MessageTypeSystem && m.Subtype != nil && *m.Subtype == "compact_boundary"
+	return m.Type == types.MessageTypeSystem && m.Subtype != nil && (*m.Subtype == "compact_boundary" || *m.Subtype == "snip_boundary")
 }
 
 // IsChainParticipant mirrors sessionStorage.ts isChainParticipant.

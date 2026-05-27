@@ -46,6 +46,8 @@ func (r *SystemMessageRenderer) Render(msg *types.Message, ctx *RenderContext) (
 	switch subtype {
 	case "compact_boundary":
 		return r.renderCompactBoundary(msg, ctx)
+	case "snip_boundary":
+		return r.renderSnipBoundary(msg, ctx)
 	case "local_command":
 		return r.renderLocalCommand(msg, ctx)
 	case "informational":
@@ -76,6 +78,8 @@ func (r *SystemMessageRenderer) Measure(msg *types.Message, ctx *RenderContext) 
 	switch subtype {
 	case "compact_boundary":
 		return 1, nil
+	case "snip_boundary":
+		return 1, nil
 	case "local_command":
 		return r.measureLocalCommand(msg, ctx)
 	case "informational":
@@ -93,29 +97,16 @@ func (r *SystemMessageRenderer) Measure(msg *types.Message, ctx *RenderContext) 
 
 // renderCompactBoundary renders a compact boundary message.
 func (r *SystemMessageRenderer) renderCompactBoundary(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	// Snip boundaries show a distinct label so the user knows messages were trimmed.
-	if isSnipBoundary(msg) {
-		content := systemMessageDecodedString(msg.Content)
-		if content != "" {
-			return []string{"✂ " + content + " (ctrl+o to expand)"}, nil
-		}
-		return []string{"✂ Messages snipped (ctrl+o to expand)"}, nil
-	}
 	return []string{"⟳ Conversation compacted (ctrl+o to expand)"}, nil
 }
 
-// isSnipBoundary checks whether a compact_boundary message was created by SnipCompact.
-func isSnipBoundary(msg *types.Message) bool {
-	if len(msg.CompactMetadata) == 0 {
-		return false
+// renderSnipBoundary renders a snip boundary message.
+func (r *SystemMessageRenderer) renderSnipBoundary(msg *types.Message, ctx *RenderContext) ([]string, error) {
+	content := systemMessageDecodedString(msg.Content)
+	if content != "" {
+		return []string{"✂ " + content + " (ctrl+o to expand)"}, nil
 	}
-	var meta struct {
-		Trigger string `json:"trigger"`
-	}
-	if err := json.Unmarshal(msg.CompactMetadata, &meta); err != nil {
-		return false
-	}
-	return meta.Trigger == "snip"
+	return []string{"✂ Messages snipped (ctrl+o to expand)"}, nil
 }
 
 // renderLocalCommand renders a local command message.

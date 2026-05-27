@@ -147,7 +147,7 @@ func estimateMsgTokens(msg types.Message) int {
 	return n
 }
 
-// createSnipBoundaryMessage creates a system message with subtype "compact_boundary"
+// createSnipBoundaryMessage creates a system message with subtype "snip_boundary"
 // and CompactMetadata containing snip-specific fields.
 func createSnipBoundaryMessage(summary string, removedUUIDs []string, removedCount int, newUUID func() string) (types.Message, error) {
 	meta := snipBoundaryMetadata{
@@ -170,7 +170,7 @@ func createSnipBoundaryMessage(summary string, removedUUIDs []string, removedCou
 		return types.Message{}, err
 	}
 
-	subtype := "compact_boundary"
+	subtype := "snip_boundary"
 	level := "info"
 	isMeta := false
 

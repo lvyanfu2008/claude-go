@@ -95,8 +95,8 @@ func TestSnipCompact_SingleSnipResult(t *testing.T) {
 	if res.BoundaryMessage.Type != types.MessageTypeSystem {
 		t.Errorf("expected system message type, got %s", res.BoundaryMessage.Type)
 	}
-	if res.BoundaryMessage.Subtype == nil || *res.BoundaryMessage.Subtype != "compact_boundary" {
-		t.Errorf("expected subtype compact_boundary, got %v", res.BoundaryMessage.Subtype)
+	if res.BoundaryMessage.Subtype == nil || *res.BoundaryMessage.Subtype != "snip_boundary" {
+		t.Errorf("expected subtype snip_boundary, got %v", res.BoundaryMessage.Subtype)
 	}
 }
 
