@@ -24,6 +24,7 @@ func ProductionDeps(trySMCompact compactservice.TrySessionMemoryCompactFn, onCom
 	return QueryDeps{
 		NewUUID:     randomUUID,
 		Autocompact: NewCompactAdapter(trySMCompact, onCompactPhase),
+		SnipCompact: SnipCompactFn(randomUUID),
 	}
 }
 

@@ -1288,7 +1288,7 @@ func parseMarkdownWorkflow(content string) []workflowStep {
 	return steps
 }
 
-// SnipFromJSON — feature import not in Go runner.
+// SnipFromJSON returns snip receipt including message_ids so downstream SnipCompact can match and remove them.
 func SnipFromJSON(raw []byte) (string, bool, error) {
 	var in struct {
 		MessageIDs []string `json:"message_ids"`
@@ -1305,6 +1305,7 @@ func SnipFromJSON(raw []byte) (string, bool, error) {
 		"data": map[string]any{
 			"snipped_count": len(in.MessageIDs),
 			"summary":       summary,
+			"message_ids":   in.MessageIDs,
 		},
 	}
 	b, _ := json.Marshal(out)

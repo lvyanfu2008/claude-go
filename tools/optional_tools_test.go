@@ -196,6 +196,13 @@ func TestOptionalToolsNoLongerUseUnavailableErrors(t *testing.T) {
 			if _, ok := data[tc.key]; !ok {
 				t.Fatalf("missing expected key %q in data: %v", tc.key, data)
 			}
+			// Snip: also verify message_ids is present in output.
+			if tc.name == "Snip" {
+				ids, _ := data["message_ids"].([]any)
+				if len(ids) != 2 {
+					t.Fatalf("expected 2 message_ids, got %v", ids)
+				}
+			}
 		})
 	}
 }
