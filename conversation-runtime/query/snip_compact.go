@@ -28,54 +28,72 @@ type snipBoundaryMetadata struct {
 	RemovedCount int      `json:"removedCount"`
 }
 
-// SnipCompactFn returns a QueryDeps.SnipCompact function that scans messages
-// for Snip tool results and filters the referenced messages out of the working set.
+// SnipCompactFn returns a QueryDeps.SnipCompact function.
 func SnipCompactFn(newUUID func() string) func(ctx context.Context, in *SnipCompactInput) (*SnipCompactResult, error) {
 	return func(_ context.Context, in *SnipCompactInput) (*SnipCompactResult, error) {
 		return snipCompact(in.Messages, newUUID)
 	}
 }
 
-// snipCompact is the core implementation, extracted for testability.
+// snipCompact mirrors TS snipCompactIfNeeded + projectSnippedView.
+//
+// Phase 1: collect already-removed UUIDs from existing snip_boundary messages
+// (handles subsequent turns where the boundary already exists).
+//
+// Phase 2: find unprocessed Snip tool results, match short IDs to full UUIDs,
+// create a new boundary for any newly-removed messages.
 func snipCompact(messages []types.Message, newUUID func() string) (*SnipCompactResult, error) {
-	shortIDs, summary := findSnipResults(messages)
-	if len(shortIDs) == 0 {
-		return nil, nil
-	}
-
-	// Build short-ID → full UUID map from all messages.
-	shortToUUID := make(map[string]string, len(messages))
+	// Phase 1: collect already-removed UUIDs from existing snip_boundary messages.
+	alreadyRemoved := make(map[string]bool)
 	for _, m := range messages {
-		sid := deriveShortMessageID(m.UUID)
-		shortToUUID[sid] = m.UUID
-	}
-
-	removedSet := make(map[string]bool)
-	var removedUUIDs []string
-	for _, sid := range shortIDs {
-		if uuid, ok := shortToUUID[sid]; ok {
-			if !removedSet[uuid] {
-				removedSet[uuid] = true
-				removedUUIDs = append(removedUUIDs, uuid)
-			}
+		if m.Type != types.MessageTypeSystem || m.Subtype == nil || *m.Subtype != "snip_boundary" {
+			continue
+		}
+		for _, uuid := range parseSnipRemovedUuids(m.CompactMetadata) {
+			alreadyRemoved[uuid] = true
 		}
 	}
-	if len(removedSet) == 0 {
-		return nil, nil
+
+	// Phase 2: find new Snip tool results and match short IDs to full UUIDs.
+	shortIDs, summary := findSnipResults(messages)
+	shortToUUID := buildShortToUUID(messages)
+
+	var newRemovedUUIDs []string
+	for _, sid := range shortIDs {
+		uuid, ok := shortToUUID[sid]
+		if !ok {
+			continue
+		}
+		if alreadyRemoved[uuid] {
+			continue
+		}
+		alreadyRemoved[uuid] = true
+		newRemovedUUIDs = append(newRemovedUUIDs, uuid)
 	}
 
-	// Filter messages.
+	// Phase 3: filter messages.
+	if len(alreadyRemoved) == 0 {
+		return nil, nil
+	}
 	filtered := make([]types.Message, 0, len(messages))
 	var tokensFreed int
 	for _, m := range messages {
-		if removedSet[m.UUID] {
+		if alreadyRemoved[m.UUID] {
 			tokensFreed += estimateMsgTokens(m)
 			continue
 		}
 		filtered = append(filtered, m)
 	}
 
-	boundary, err := createSnipBoundaryMessage(summary, removedUUIDs, len(removedSet), newUUID)
+	// Phase 4: create boundary only if new messages were removed this turn.
+	if len(newRemovedUUIDs) == 0 {
+		return &SnipCompactResult{
+			Messages:    filtered,
+			TokensFreed: tokensFreed,
+		}, nil
+	}
+
+	boundary, err := createSnipBoundaryMessage(summary, newRemovedUUIDs, len(newRemovedUUIDs), newUUID)
 	if err != nil {
 		return nil, fmt.Errorf("snipCompact: create boundary: %w", err)
 	}
@@ -85,6 +103,18 @@ func snipCompact(messages []types.Message, newUUID func() string) (*SnipCompactR
 		TokensFreed:     tokensFreed,
 		BoundaryMessage: &boundary,
 	}, nil
+}
+
+// parseSnipRemovedUuids extracts removedUuids from a snip_boundary's CompactMetadata.
+func parseSnipRemovedUuids(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var meta snipBoundaryMetadata
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return nil
+	}
+	return meta.RemovedUuids
 }
 
 // findSnipResults scans messages for user messages whose ToolUseResult contains
@@ -114,6 +144,16 @@ func findSnipResults(messages []types.Message) (shortIDs []string, summary strin
 		summary = strings.Join(summaries, "; ")
 	}
 	return
+}
+
+// buildShortToUUID builds a map from short base-36 message IDs to full UUIDs.
+func buildShortToUUID(messages []types.Message) map[string]string {
+	m := make(map[string]string, len(messages))
+	for _, msg := range messages {
+		sid := deriveShortMessageID(msg.UUID)
+		m[sid] = msg.UUID
+	}
+	return m
 }
 
 // deriveShortMessageID mirrors messagesapi/format_helpers.go deriveShortMessageId.

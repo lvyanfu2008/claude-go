@@ -202,6 +202,141 @@ func TestSnipCompact_NonSnipToolResultIgnored(t *testing.T) {
 	}
 }
 
+func TestSnipCompact_BoundaryAlreadyExists(t *testing.T) {
+	// Simulates Turn 2+ where snip_boundary from a previous turn already exists.
+	// The snipCompact should filter based on the boundary WITHOUT creating a new one.
+	msg1 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "00000000-0000-4000-8000-000000000001",
+		Content: json.RawMessage(`"message one"`),
+	}
+	msg2 := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "0000000b-0000-4000-8000-000000000003",
+		Content: json.RawMessage(`"assistant"`),
+	}
+
+	sid1 := deriveShortMessageID(msg1.UUID)
+
+	// Snip tool result — already processed in a previous turn.
+	snipResultJSON := `{"data":{"snipped_count":1,"summary":"old snip","message_ids":["` + sid1 + `"]}}`
+	snipResultMsg := types.Message{
+		Type:          types.MessageTypeUser,
+		UUID:          "0000000c-0000-4000-8000-000000000004",
+		ToolUseResult: types.ToolUseResultJSONBytes(snipResultJSON),
+	}
+
+	// Existing snip_boundary from the previous turn.
+	boundaryMeta, _ := json.Marshal(snipBoundaryMetadata{
+		Trigger:      "snip",
+		Summary:      "old snip",
+		RemovedUuids: []string{msg1.UUID},
+		RemovedCount: 1,
+	})
+	boundaryContent, _ := json.Marshal("Snipped 1 messages: old snip")
+	subtype := "snip_boundary"
+	level := "info"
+	isMeta := false
+	boundaryMsg := types.Message{
+		Type:            types.MessageTypeSystem,
+		UUID:            "0000000d-0000-4000-8000-000000000005",
+		Subtype:         &subtype,
+		Level:           &level,
+		IsMeta:          &isMeta,
+		Content:         json.RawMessage(boundaryContent),
+		CompactMetadata: json.RawMessage(boundaryMeta),
+	}
+
+	messages := []types.Message{msg1, msg2, snipResultMsg, boundaryMsg}
+
+	res, err := snipCompact(messages, testUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("expected non-nil result (should filter based on existing boundary)")
+	}
+	// msg1 should be filtered out based on the existing boundary.
+	if len(res.Messages) != 3 {
+		t.Fatalf("expected 3 remaining messages (msg2 + snipResult + boundary), got %d", len(res.Messages))
+	}
+	// No new boundary should be created — the snip result was already processed.
+	if res.BoundaryMessage != nil {
+		t.Errorf("expected no new boundary, got %+v", res.BoundaryMessage)
+	}
+	if res.TokensFreed <= 0 {
+		t.Errorf("expected TokensFreed > 0 from existing boundary, got %d", res.TokensFreed)
+	}
+}
+
+func TestSnipCompact_NewSnipAfterExistingBoundary(t *testing.T) {
+	// An existing boundary covers msg1. A NEW snip result covers msg3.
+	// Both should be filtered, and a new boundary should be created for msg3.
+	msg1 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "00000000-0000-4000-8000-000000000001",
+		Content: json.RawMessage(`"msg1"`),
+	}
+	msg2 := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    "0000000b-0000-4000-8000-000000000003",
+		Content: json.RawMessage(`"msg2"`),
+	}
+	msg3 := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "0000000a-0000-4000-8000-000000000002",
+		Content: json.RawMessage(`"msg3"`),
+	}
+
+	// Existing boundary covers msg1.
+	boundaryMeta, _ := json.Marshal(snipBoundaryMetadata{
+		Trigger:      "snip",
+		Summary:      "first snip",
+		RemovedUuids: []string{msg1.UUID},
+		RemovedCount: 1,
+	})
+	boundaryContent, _ := json.Marshal("Snipped 1 messages: first snip")
+	subtype := "snip_boundary"
+	level := "info"
+	isMeta := false
+	boundaryMsg := types.Message{
+		Type:            types.MessageTypeSystem,
+		UUID:            "0000000d-0000-4000-8000-000000000005",
+		Subtype:         &subtype,
+		Level:           &level,
+		IsMeta:          &isMeta,
+		Content:         json.RawMessage(boundaryContent),
+		CompactMetadata: json.RawMessage(boundaryMeta),
+	}
+
+	// NEW snip result covering msg3 (appeared after the boundary).
+	sid3 := deriveShortMessageID(msg3.UUID)
+	newSnipJSON := `{"data":{"snipped_count":1,"summary":"second snip","message_ids":["` + sid3 + `"]}}`
+	newSnipMsg := types.Message{
+		Type:          types.MessageTypeUser,
+		UUID:          "0000000e-0000-4000-8000-000000000006",
+		ToolUseResult: types.ToolUseResultJSONBytes(newSnipJSON),
+	}
+
+	messages := []types.Message{msg1, msg2, msg3, boundaryMsg, newSnipMsg}
+
+	res, err := snipCompact(messages, testUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+	// Only msg2 + boundaryMsg + newSnipMsg should remain.
+	if len(res.Messages) != 3 {
+		t.Fatalf("expected 3 remaining messages, got %d", len(res.Messages))
+	}
+	// A new boundary should be created for msg3.
+	if res.BoundaryMessage == nil {
+		t.Fatal("expected a new boundary for the new snip result")
+	}
+}
+
 func TestDeriveShortMessageID(t *testing.T) {
 	// Known UUID → known short ID.
 	// 00000000-0000-4000-8000-000000000000 → hex 000000000040008000000000000000
