@@ -270,7 +270,7 @@ func runStreamingParityModelLoop(
 				hasNotifications = true
 				content, _ := json.Marshal([]map[string]any{{
 					"type": "text",
-					"text": "<system-reminder>\n" + xml + "\n</system-reminder>",
+					"text": "A background agent completed a task:\n" + xml,
 				}})
 				msg := types.Message{
 					Type:    types.MessageTypeUser,

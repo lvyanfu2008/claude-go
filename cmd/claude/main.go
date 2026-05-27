@@ -440,7 +440,7 @@ func runHeadless(prompt string) error {
 		for _, n := range notifications {
 			content, _ := json.Marshal([]map[string]any{{
 				"type": "text",
-				"text": "<system-reminder>\n" + n.Value + "\n</system-reminder>",
+				"text": "A background agent completed a task:\n" + n.Value,
 			}})
 			msgs = append(msgs, types.Message{
 				Type:    "user",

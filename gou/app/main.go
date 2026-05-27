@@ -2927,7 +2927,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						for _, cmd := range commandqueue.DrainCommandQueue() {
 							content, _ := json.Marshal([]map[string]any{{
 								"type": "text",
-								"text": "<system-reminder>\n" + cmd.Value + "\n</system-reminder>",
+								"text": "A background agent completed a task:\n" + cmd.Value,
 							}})
 							msgsForQ = append(msgsForQ, types.Message{
 								Type:    "user",

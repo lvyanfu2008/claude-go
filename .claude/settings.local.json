@@ -7,7 +7,9 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(xxd)",
-      "Bash(go run *)"
+      "Bash(go run *)",
+      "Bash(git status *)",
+      "Bash(go vet *)"
     ]
   }
 }
