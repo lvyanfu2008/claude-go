@@ -190,6 +190,12 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 			desc = truncateToolSummary(desc)
 		}
 		return "Running " + desc
+	case "Snip":
+		ids := m["message_ids"]
+		if arr, ok := ids.([]any); ok && len(arr) > 0 {
+			return fmt.Sprintf("Snipping %d messages", len(arr))
+		}
+		return "Snipping messages"
 	default:
 		return ""
 	}

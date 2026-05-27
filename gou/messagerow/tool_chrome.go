@@ -125,6 +125,12 @@ func ToolChromeParts(toolName string, input json.RawMessage) (facing, paren, hin
 		}
 		t := truncateToolSummary(qtext)
 		return "Ask", t, t
+	case "Snip":
+		ids := m["message_ids"]
+		if arr, ok := ids.([]any); ok && len(arr) > 0 {
+			return "Snip", fmt.Sprintf("%d messages", len(arr)), ""
+		}
+		return "Snip", "", ""
 	default:
 		return "", "", ""
 	}
