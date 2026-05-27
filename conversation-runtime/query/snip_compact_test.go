@@ -366,6 +366,110 @@ func TestEstimateMsgTokens(t *testing.T) {
 	}
 }
 
+func TestSnipCompact_RepairToolPairs(t *testing.T) {
+	// When a tool_result user message is snipped, the corresponding assistant
+	// message (with tool_use blocks) must also be removed to keep API validity.
+	assistantUUID := "0000000b-0000-4000-8000-000000000003"
+
+	userMsg := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "00000000-0000-4000-8000-000000000001",
+		Content: json.RawMessage(`"user message"`),
+	}
+	assistantMsg := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    assistantUUID,
+		Content: json.RawMessage(`"assistant with tool_use"`),
+	}
+	toolResultMsg := types.Message{
+		Type:                   types.MessageTypeUser,
+		UUID:                   "0000000a-0000-4000-8000-000000000002",
+		SourceToolAssistantUUID: &assistantUUID,
+		Content:                json.RawMessage(`"tool result"`),
+	}
+
+	// Snip the tool_result message.
+	sid := deriveShortMessageID(toolResultMsg.UUID)
+	snipJSON := `{"data":{"snipped_count":1,"summary":"snip tool result","message_ids":["` + sid + `"]}}`
+	snipMsg := types.Message{
+		Type:          types.MessageTypeUser,
+		UUID:          "0000000c-0000-4000-8000-000000000004",
+		ToolUseResult: types.ToolUseResultJSONBytes(snipJSON),
+	}
+
+	messages := []types.Message{userMsg, assistantMsg, toolResultMsg, snipMsg}
+
+	res, err := snipCompact(messages, testUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+	// Both tool_result AND the paired assistant must be removed.
+	// Only userMsg + snipMsg should remain.
+	if len(res.Messages) != 2 {
+		t.Fatalf("expected 2 remaining messages (userMsg + snipMsg), got %d", len(res.Messages))
+	}
+	for _, m := range res.Messages {
+		if m.UUID == assistantMsg.UUID {
+			t.Errorf("assistant message should have been removed as part of tool pair")
+		}
+		if m.UUID == toolResultMsg.UUID {
+			t.Errorf("tool_result message should have been removed")
+		}
+	}
+}
+
+func TestSnipCompact_RepairToolPairs_AssistantRemoved(t *testing.T) {
+	// When an assistant message is snipped, its tool_result user messages
+	// should also be removed.
+	assistantUUID := "0000000b-0000-4000-8000-000000000003"
+
+	userMsg := types.Message{
+		Type:    types.MessageTypeUser,
+		UUID:    "00000000-0000-4000-8000-000000000001",
+		Content: json.RawMessage(`"user"`),
+	}
+	assistantMsg := types.Message{
+		Type:    types.MessageTypeAssistant,
+		UUID:    assistantUUID,
+		Content: json.RawMessage(`"assistant"`),
+	}
+	toolResultMsg := types.Message{
+		Type:                   types.MessageTypeUser,
+		UUID:                   "0000000a-0000-4000-8000-000000000002",
+		SourceToolAssistantUUID: &assistantUUID,
+		Content:                json.RawMessage(`"tool result"`),
+	}
+
+	// Snip the assistant message — need to use its short ID.
+	// But assistant messages don't get [id:] tags in TS/Go, so the model
+	// normally can't snip them. However, /force-snip covers all messages.
+	// We simulate by using the assistant's short ID.
+	sid := deriveShortMessageID(assistantMsg.UUID)
+	snipJSON := `{"data":{"snipped_count":1,"summary":"snip assistant","message_ids":["` + sid + `"]}}`
+	snipMsg := types.Message{
+		Type:          types.MessageTypeUser,
+		UUID:          "0000000c-0000-4000-8000-000000000004",
+		ToolUseResult: types.ToolUseResultJSONBytes(snipJSON),
+	}
+
+	messages := []types.Message{userMsg, assistantMsg, toolResultMsg, snipMsg}
+
+	res, err := snipCompact(messages, testUUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+	// Both assistant AND the paired tool_result must be removed.
+	if len(res.Messages) != 2 {
+		t.Fatalf("expected 2 remaining, got %d: %+v", len(res.Messages), res.Messages)
+	}
+}
+
 var testUUIDSeq int
 
 func testUUID() string {

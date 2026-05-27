@@ -81,6 +81,10 @@ func snipCompact(messages []types.Message, newUUID func() string) (*SnipCompactR
 		newRemovedUUIDs = append(newRemovedUUIDs, uuid)
 	}
 
+	// Phase 2.5: repair tool_use/tool_result pairs so the API doesn't
+	// reject orphaned tool_use blocks or dangling tool_results.
+	repairPairs(messages, alreadyRemoved)
+
 	// Phase 3: filter messages.
 	if len(alreadyRemoved) == 0 {
 		return nil, nil
@@ -127,6 +131,45 @@ func parseSnipRemovedUuids(raw json.RawMessage) []string {
 		return nil
 	}
 	return meta.RemovedUuids
+}
+
+// repairPairs ensures tool_use/tool_result message pairs stay together when
+// one side is removed. If a tool_result user message is removed, its paired
+// assistant message is also removed. If an assistant message with tool_use
+// blocks is removed, its tool_result user messages are also removed.
+func repairPairs(messages []types.Message, removedSet map[string]bool) {
+	// Build assistant UUID → tool_result user message UUIDs map.
+	assistantToResults := make(map[string][]string)
+	for _, m := range messages {
+		if m.Type == types.MessageTypeUser && m.SourceToolAssistantUUID != nil {
+			assistantUUID := *m.SourceToolAssistantUUID
+			assistantToResults[assistantUUID] = append(assistantToResults[assistantUUID], m.UUID)
+		}
+	}
+
+	// Keep looping until no new removals are added (handles chains).
+	for {
+		added := false
+		for _, m := range messages {
+			uuid := m.UUID
+			if m.Type == types.MessageTypeUser && m.SourceToolAssistantUUID != nil {
+				assistantUUID := *m.SourceToolAssistantUUID
+				// If the tool_result is removed, also remove the assistant.
+				if removedSet[uuid] && !removedSet[assistantUUID] {
+					removedSet[assistantUUID] = true
+					added = true
+				}
+				// If the assistant is removed, also remove this tool_result.
+				if removedSet[assistantUUID] && !removedSet[uuid] {
+					removedSet[uuid] = true
+					added = true
+				}
+			}
+		}
+		if !added {
+			break
+		}
+	}
 }
 
 // findSnipResults scans messages for user messages whose ToolUseResult contains
