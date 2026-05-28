@@ -211,3 +211,33 @@ func (s *agentTaskStore) Count() int {
 	defer s.mu.RUnlock()
 	return len(s.tasks)
 }
+
+// HasCompletedTasks returns true when any visible task has a non-running status
+// (completed, stopped, failed, killed) or the main task is completed/stopped.
+func (s *agentTaskStore) HasCompletedTasks() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.tasks {
+		if t.Status != "running" && t.EvictAfter != nil {
+			return true
+		}
+	}
+	if s.mainTask != nil && s.mainTask.Status != "running" {
+		return true
+	}
+	return false
+}
+
+// EvictCompleted removes all tasks with non-running status and the main task when done.
+func (s *agentTaskStore) EvictCompleted() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, t := range s.tasks {
+		if t.Status != "running" {
+			delete(s.tasks, id)
+		}
+	}
+	if s.mainTask != nil && s.mainTask.Status != "running" {
+		s.mainTask = nil
+	}
+}

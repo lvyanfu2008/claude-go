@@ -992,6 +992,16 @@ func (m *model) bottomChromeHeight() int {
 	return max(4, n+1)
 }
 
+func (m *model) hasCompletedAgents() bool {
+	return m.agentTasks != nil && m.agentTasks.HasCompletedTasks()
+}
+
+func (m *model) evictCompletedAgents() {
+	if m.agentTasks != nil {
+		m.agentTasks.EvictCompleted()
+	}
+}
+
 // handleKeyMsg is the tea.KeyPressMsg branch; also used when SyntheticTTYKeyFromUnknownMsg maps Kitty CSI to KeyPressMsg.
 func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.msgHistoryBrowseMouseOff {
@@ -1017,7 +1027,9 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	if m.handlePermissionKey(msg) {
 		return m, nil
 	}
-	if msg.String() == "ctrl+l" {
+	if msg.String() == "ctrl+l" ||
+		(msg.String() == "x" && m.hasCompletedAgents()) {
+		m.evictCompletedAgents()
 		return m, teaGlobalRedrawCmd()
 	}
 	if m.msgViewportWanted() && msg.String() == "ctrl+y" {
