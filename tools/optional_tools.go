@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"goc/commands/featuregates"
+	"goc/compactservice"
 	"goc/diagnostics"
 	"goc/growthbook"
 	"goc/tools/procregistry"
@@ -231,6 +232,7 @@ func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 		!strings.HasPrefix(model, "gemini/")
 	sessionMem := growthbook.IsTenguSessionMemory()
 	ctxCollapse := featuregates.Feature("CONTEXT_COLLAPSE")
+	estTokens := compactservice.TokenCountWithEstimation(cfg.Messages)
 
 	if len(cfg.Messages) == 0 {
 		var sb strings.Builder
@@ -242,7 +244,7 @@ func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 
 		out := map[string]any{
 			"data": map[string]any{
-				"total_tokens":               0,
+				"total_tokens":               estTokens,
 				"message_count":              0,
 				"context_window_model":       model,
 				"prompt_caching_enabled":     promptCaching,
@@ -256,17 +258,9 @@ func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	}
 
 	counts := map[types.MessageType]int{}
-	totalChars := 0
 	for _, m := range cfg.Messages {
 		counts[m.Type]++
-		if len(m.Content) > 0 {
-			totalChars += len(string(m.Content))
-		}
-		if len(m.Message) > 0 {
-			totalChars += len(string(m.Message))
-		}
 	}
-	estTokens := totalChars / 4
 
 	var sb strings.Builder
 	sb.WriteString("Overall context summary")
@@ -285,7 +279,7 @@ func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 			sb.WriteString(fmt.Sprintf(", %d %s", n, t))
 		}
 	}
-	sb.WriteString(fmt.Sprintf("\nEstimated tokens: ~%d (chars/4 heuristic)", estTokens))
+	sb.WriteString(fmt.Sprintf("\nEstimated tokens: ~%d", estTokens))
 
 	out := map[string]any{
 		"data": map[string]any{
