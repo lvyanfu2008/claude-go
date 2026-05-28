@@ -348,6 +348,11 @@ func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID str
 			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
 		}
 	}
+	if !isErr && toolName == "Agent" && body != "" {
+		if mapped, err := localtools.MapAgentToolResultToAssistantText(body); err == nil {
+			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
+		}
+	}
 	if !isErr && toolName == "PushNotification" && body != "" {
 		var probe struct {
 			Data struct {
