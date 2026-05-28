@@ -14,7 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"goc/commands/featuregates"
 	"goc/diagnostics"
+	"goc/growthbook"
 	"goc/tools/procregistry"
 	"goc/types"
 )
@@ -220,12 +222,33 @@ func fibonacciMod(n int) int {
 // it falls back to the TS-compatible stub.
 func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	_ = raw
+	model := cfg.MainLoopModel
+	if model == "" {
+		model = "unknown"
+	}
+	promptCaching := !strings.HasPrefix(model, "openai/") &&
+		!strings.HasPrefix(model, "grok/") &&
+		!strings.HasPrefix(model, "gemini/")
+	sessionMem := growthbook.IsTenguSessionMemory()
+	ctxCollapse := featuregates.Feature("CONTEXT_COLLAPSE")
+
 	if len(cfg.Messages) == 0 {
+		var sb strings.Builder
+		sb.WriteString("Overall context summary")
+		sb.WriteString(fmt.Sprintf("\nModel context: %s", model))
+		sb.WriteString(fmt.Sprintf("\nPrompt caching: %s", boolLabel(promptCaching)))
+		sb.WriteString(fmt.Sprintf("\nSession memory: %s", boolLabel(sessionMem)))
+		sb.WriteString(fmt.Sprintf("\nContext collapse: %s", boolLabel(ctxCollapse)))
+
 		out := map[string]any{
 			"data": map[string]any{
-				"total_tokens":  0,
-				"message_count": 0,
-				"summary":       "Context inspection requires the CONTEXT_COLLAPSE runtime.",
+				"total_tokens":               0,
+				"message_count":              0,
+				"context_window_model":       model,
+				"prompt_caching_enabled":     promptCaching,
+				"session_memory_enabled":     sessionMem,
+				"context_collapse_enabled":   ctxCollapse,
+				"summary":                    sb.String(),
 			},
 		}
 		b, _ := json.Marshal(out)
@@ -246,7 +269,12 @@ func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	estTokens := totalChars / 4
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Message count: %d total", len(cfg.Messages)))
+	sb.WriteString("Overall context summary")
+	sb.WriteString(fmt.Sprintf("\nModel context: %s", model))
+	sb.WriteString(fmt.Sprintf("\nPrompt caching: %s", boolLabel(promptCaching)))
+	sb.WriteString(fmt.Sprintf("\nSession memory: %s", boolLabel(sessionMem)))
+	sb.WriteString(fmt.Sprintf("\nContext collapse: %s", boolLabel(ctxCollapse)))
+	sb.WriteString(fmt.Sprintf("\nMessage count: %d total", len(cfg.Messages)))
 	for _, t := range []types.MessageType{
 		types.MessageTypeUser,
 		types.MessageTypeAssistant,
@@ -258,17 +286,27 @@ func CtxInspectFromJSON(raw []byte, cfg Config) (string, bool, error) {
 		}
 	}
 	sb.WriteString(fmt.Sprintf("\nEstimated tokens: ~%d (chars/4 heuristic)", estTokens))
-	sb.WriteString("\nNOTE: This is a rough estimate from the Go runner. Exact token counts require the CONTEXT_COLLAPSE runtime (not available).")
 
 	out := map[string]any{
 		"data": map[string]any{
-			"total_tokens":  estTokens,
-			"message_count": len(cfg.Messages),
-			"summary":       sb.String(),
+			"total_tokens":               estTokens,
+			"message_count":              len(cfg.Messages),
+			"context_window_model":       model,
+			"prompt_caching_enabled":     promptCaching,
+			"session_memory_enabled":     sessionMem,
+			"context_collapse_enabled":   ctxCollapse,
+			"summary":                    sb.String(),
 		},
 	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
+}
+
+func boolLabel(v bool) string {
+	if v {
+		return "enabled"
+	}
+	return "disabled"
 }
 
 // TerminalCaptureFromJSON feature tool not wired in Go runner.

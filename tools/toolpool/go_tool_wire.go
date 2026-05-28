@@ -1481,10 +1481,16 @@ func nativeCtxInspectToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
-		Name:            "CtxInspect",
-		Description:     "Inspect the current conversation context. Shows token usage, message count, and a breakdown of what's consuming context space.\n\nUse this to understand your context budget before deciding whether to snip old messages or adjust your approach.",
-		InputJSONSchema: mustMarshalJSONRaw(schema),
+		Name:               "CtxInspect",
+		SearchHint:         "context inspect tokens usage messages window collapse",
+		Description:        "Inspect the current conversation context. Shows token usage, message count, and a breakdown of what's consuming context space.\n\nUse this to understand your context budget before deciding whether to snip old messages or adjust your approach.",
+		InputJSONSchema:    mustMarshalJSONRaw(schema),
+		MaxResultSizeChars: 50_000,
+		Strict:             &trueVal,
+		IsConcurrencySafe:  &trueVal,
+		IsReadOnly:         &trueVal,
 	}
 }
 
