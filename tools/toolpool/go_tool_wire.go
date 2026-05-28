@@ -349,8 +349,10 @@ func nativeNotebookEditToolSpec() types.ToolSpec {
 		"required":             []string{"notebook_path", "new_source"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "NotebookEdit",
+		ShouldDefer:        &trueVal,
 		Description:     notebookEditPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -372,8 +374,10 @@ func nativeTaskStopToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "TaskStop",
+		ShouldDefer:        &trueVal,
 		Description:     taskStopPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -411,8 +415,10 @@ func nativeTodoWriteToolSpec() types.ToolSpec {
 		"required":             []string{"todos"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "TodoWrite",
+		ShouldDefer:        &trueVal,
 		Description:     todoWritePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -436,8 +442,10 @@ func nativeWebFetchToolSpec() types.ToolSpec {
 		"required":             []string{"url", "prompt"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "WebFetch",
+		ShouldDefer:        &trueVal,
 		Description:     webFetchPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -471,8 +479,10 @@ func nativeWebSearchToolSpec() types.ToolSpec {
 		"required":             []string{"query"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "WebSearch",
+		ShouldDefer:        &trueVal,
 		Description:     getWebSearchDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -485,8 +495,10 @@ func nativeEnterPlanModeToolSpec() types.ToolSpec {
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "EnterPlanMode",
+		ShouldDefer:        &trueVal,
 		Description:     getEnterPlanModeDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -520,8 +532,10 @@ func nativeExitPlanModeToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": map[string]any{},
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "ExitPlanMode",
+		ShouldDefer:        &trueVal,
 		Description:     exitPlanModePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -552,8 +566,10 @@ func nativeCronCreateToolSpec() types.ToolSpec {
 		"required":             []string{"cron", "prompt"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "CronCreate",
+		ShouldDefer:        &trueVal,
 		Description:     getCronCreateDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -572,8 +588,10 @@ func nativeCronDeleteToolSpec() types.ToolSpec {
 		"required":             []string{"id"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "CronDelete",
+		ShouldDefer:        &trueVal,
 		Description:     getCronDeleteDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -586,8 +604,10 @@ func nativeCronListToolSpec() types.ToolSpec {
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "CronList",
+		ShouldDefer:        &trueVal,
 		Description:     getCronListDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -743,8 +763,10 @@ func nativeAskUserQuestionToolSpec() types.ToolSpec {
 		"required":             []string{"questions"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "AskUserQuestion",
+		ShouldDefer:        &trueVal,
 		Description:     getAskUserQuestionDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -762,8 +784,10 @@ func nativeEnterWorktreeToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "EnterWorktree",
+		ShouldDefer:        &trueVal,
 		Description:     enterWorktreePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -787,8 +811,10 @@ func nativeExitWorktreeToolSpec() types.ToolSpec {
 		"required":             []string{"action"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "ExitWorktree",
+		ShouldDefer:        &trueVal,
 		Description:     exitWorktreePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -874,8 +900,10 @@ func nativeTaskOutputToolSpec() types.ToolSpec {
 		"required":             []string{"task_id", "block", "timeout"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "TaskOutput",
+		ShouldDefer:        &trueVal,
 		Description:     taskOutputPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -987,18 +1015,23 @@ func nativeAgentToolSpec() types.ToolSpec {
 	}
 }
 
-func nativeEmptyObjectSchemaToolSpec(name, fallbackDescription string) types.ToolSpec {
+func nativeEmptyObjectSchemaToolSpec(name, fallbackDescription string, deferLoading bool) types.ToolSpec {
 	schema := map[string]any{
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"type":                 "object",
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}
-	return types.ToolSpec{
+	ts := types.ToolSpec{
 		Name:            name,
 		Description:     fallbackDescription,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
+	if deferLoading {
+		trueVal := true
+		ts.ShouldDefer = &trueVal
+	}
+	return ts
 }
 
 func nativeTeamAddMemberToolSpec() types.ToolSpec {
@@ -1049,8 +1082,10 @@ func nativeSendMessageToolSpec() types.ToolSpec {
 		"required":             []string{"to", "message"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "SendMessage",
+		ShouldDefer:        &trueVal,
 		Description:     getSendMessageDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1092,10 +1127,12 @@ func nativeListMcpResourcesToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "ListMcpResourcesTool",
 		Description:     listMcpResourcesPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
+		ShouldDefer:     &trueVal,
 	}
 }
 
@@ -1110,10 +1147,12 @@ func nativeReadMcpResourceToolSpec() types.ToolSpec {
 		"required":             []string{"server", "uri"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "ReadMcpResourceTool",
 		Description:     readMcpResourcePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
+		ShouldDefer:     &trueVal,
 	}
 }
 
@@ -1135,8 +1174,10 @@ func nativeTaskCreateToolSpec() types.ToolSpec {
 		"required":             []string{"subject"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:        "TaskCreate",
+		ShouldDefer:        &trueVal,
 		Description: getTaskCreateDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1150,15 +1191,17 @@ func nativeTaskGetToolSpec() types.ToolSpec {
 		"required":             []string{"taskId"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:        "TaskGet",
+		ShouldDefer:        &trueVal,
 		Description: taskGetPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
 
 func nativeTaskListToolSpec() types.ToolSpec {
-	return nativeEmptyObjectSchemaToolSpec("TaskList", getTaskListDescription())
+	return nativeEmptyObjectSchemaToolSpec("TaskList", getTaskListDescription(), true)
 }
 
 func nativeTaskUpdateToolSpec() types.ToolSpec {
@@ -1179,8 +1222,10 @@ func nativeTaskUpdateToolSpec() types.ToolSpec {
 		"required":             []string{"taskId"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:        "TaskUpdate",
+		ShouldDefer:        &trueVal,
 		Description: taskUpdatePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1227,8 +1272,10 @@ func nativeConfigToolSpec() types.ToolSpec {
 		"required":             []string{"setting"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "Config",
+		ShouldDefer:        &trueVal,
 		Description:     "Get or set configuration settings. Use this to read or write tool settings and preferences.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1617,6 +1664,7 @@ func nativeSendUserFileToolSpec() types.ToolSpec {
 		"required":             []string{"file_path"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name: "SendUserFile",
 		Description: `Send a file to the user's device. Use this in assistant mode when the user requests a file or when a file is relevant to the conversation.
@@ -1626,6 +1674,7 @@ Guidelines:
 - The file must exist and be readable
 - Large files may take time to transfer`,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
+		ShouldDefer:     &trueVal,
 	}
 }
 
@@ -1758,27 +1807,27 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "CtxInspect":
 		return nativeCtxInspectToolSpec(), true, nil
 	case "TerminalCapture":
-		return nativeEmptyObjectSchemaToolSpec("TerminalCapture", "Capture terminal state for diagnostics."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("TerminalCapture", "Capture terminal state for diagnostics.", false), true, nil
 	case "LSP":
-		return nativeEmptyObjectSchemaToolSpec("LSP", "Language Server Protocol helper tool."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("LSP", "Language Server Protocol helper tool.", true), true, nil
 	case "ListPeers":
 		return nativeListPeersToolSpec(), true, nil
 	case "TeamCreate":
-		return nativeEmptyObjectSchemaToolSpec("TeamCreate", "Create an agent team context."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("TeamCreate", "Create an agent team context.", true), true, nil
 	case "TeamDelete":
-		return nativeEmptyObjectSchemaToolSpec("TeamDelete", "Delete an agent team context."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("TeamDelete", "Delete an agent team context.", true), true, nil
 	case "TeamAddMember":
 		return nativeTeamAddMemberToolSpec(), true, nil
 	case "TeamRemoveMember":
 		return nativeTeamRemoveMemberToolSpec(), true, nil
 	case "VerifyPlanExecution":
-		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result.", false), true, nil
 	case "REPL":
 		return nativeREPLToolSpec(), true, nil
 	case "workflow":
 		return nativeWorkflowToolSpec(), true, nil
 	case "RemoteTrigger":
-		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions."), true, nil
+		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions.", true), true, nil
 	case "Monitor":
 		return nativeMonitorToolSpec(), true, nil
 	case "SendUserFile":

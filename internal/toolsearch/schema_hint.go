@@ -20,7 +20,7 @@ func BuildSchemaNotSentHint(toolName string, messages []anthropic.Message, tools
 	if !isToolSearchToolAvailable(tools) {
 		return ""
 	}
-	if !IsDeferredToolName(toolName) {
+	if !findDeferredByName(tools, toolName) {
 		return ""
 	}
 	discovered := ExtractDiscoveredToolNames(messages)
@@ -56,7 +56,7 @@ func HasSchemaNotSentHint(toolName string, messages []anthropic.Message, tools [
 	if !isToolSearchToolAvailable(tools) {
 		return false
 	}
-	if !IsDeferredToolName(toolName) {
+	if !findDeferredByName(tools, toolName) {
 		return false
 	}
 	discovered := ExtractDiscoveredToolNames(messages)
@@ -77,6 +77,6 @@ func SchemaNotSentHintForOpenAI(toolName string) string {
 }
 
 // HasDeferredToolName checks if a name belongs to a known deferred tool (for pre-check).
-func HasDeferredToolName(name string) bool {
-	return IsDeferredToolName(name)
+func HasDeferredToolName(tools []anthropic.ToolDefinition, name string) bool {
+	return findDeferredByName(tools, name)
 }

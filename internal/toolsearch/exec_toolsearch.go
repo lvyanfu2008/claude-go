@@ -39,7 +39,7 @@ func ExecToolSearchForRunner(input json.RawMessage, allTools []anthropic.ToolDef
 			matches = searchToolsWithKeywords(q, deferred, allTools, max)
 		}
 	} else {
-		matches = resolveToolSearchQueryBuiltinOnly(q, max)
+		matches = resolveToolSearchQueryBuiltinOnly(q, max, allTools)
 	}
 	if len(matches) == 0 {
 		return toolSearchEmptyMessage(hasPendingMcpServers, pendingMcpServerNames), false, nil
@@ -58,7 +58,7 @@ func ExecToolSearchForRunner(input json.RawMessage, allTools []anthropic.ToolDef
 func deferredFromTools(all []anthropic.ToolDefinition) []anthropic.ToolDefinition {
 	var out []anthropic.ToolDefinition
 	for i := range all {
-		if IsDeferredToolName(all[i].Name) {
+		if IsDeferredTool(all[i]) {
 			out = append(out, all[i])
 		}
 	}
@@ -310,7 +310,7 @@ func parseToolName(name string) (parts []string, full string, isMcp bool) {
 	return parts, full, false
 }
 
-func resolveToolSearchQueryBuiltinOnly(q string, max int) []string {
+func resolveToolSearchQueryBuiltinOnly(q string, max int, allTools []anthropic.ToolDefinition) []string {
 	lower := strings.ToLower(strings.TrimSpace(q))
 	if strings.HasPrefix(lower, "select:") {
 		idx := strings.Index(q, ":")
@@ -318,7 +318,7 @@ func resolveToolSearchQueryBuiltinOnly(q string, max int) []string {
 		var out []string
 		for _, part := range strings.Split(tail, ",") {
 			name := strings.TrimSpace(part)
-			if name == "" || !IsDeferredToolName(name) {
+			if name == "" || !findDeferredByName(allTools, name) {
 				continue
 			}
 			out = appendUnique(out, name)
@@ -333,8 +333,10 @@ func resolveToolSearchQueryBuiltinOnly(q string, max int) []string {
 		return nil
 	}
 	var names []string
-	for n := range deferredBuiltin {
-		names = append(names, n)
+	for i := range allTools {
+		if IsDeferredTool(allTools[i]) {
+			names = append(names, allTools[i].Name)
+		}
 	}
 	sort.Strings(names)
 	type scored struct {

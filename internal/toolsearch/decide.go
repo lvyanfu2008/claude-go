@@ -40,7 +40,7 @@ func isToolSearchToolAvailable(tools []anthropic.ToolDefinition) bool {
 func deferredToolDescriptionChars(tools []anthropic.ToolDefinition) int {
 	total := 0
 	for _, t := range tools {
-		if !IsDeferredToolName(t.Name) {
+		if !IsDeferredTool(t) {
 			continue
 		}
 		schema, _ := json.Marshal(t.InputSchema)
@@ -138,7 +138,7 @@ func (cfg *WireConfig) applyDynamicDecision(enabled bool, tools []anthropic.Tool
 	}
 	deferredCount := 0
 	for _, t := range tools {
-		if IsDeferredToolName(t.Name) {
+		if IsDeferredTool(t) {
 			deferredCount++
 		}
 	}

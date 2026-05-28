@@ -13,7 +13,7 @@ func ApplyWire(fullTools []anthropic.ToolDefinition, msgs []anthropic.Message, c
 
 	deferredNames := make(map[string]struct{})
 	for _, t := range fullTools {
-		if IsDeferredToolName(t.Name) {
+		if IsDeferredTool(t) {
 			deferredNames[t.Name] = struct{}{}
 		}
 	}

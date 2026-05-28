@@ -51,7 +51,7 @@ func PrepareMessagesForWire(messagesJSON, toolsJSON json.RawMessage, modelID str
 
 	var currentDeferred []string
 	for _, t := range tools {
-		if toolsearch.IsDeferredToolName(t.Name) {
+		if toolsearch.IsDeferredTool(t) {
 			currentDeferred = append(currentDeferred, t.Name)
 		}
 	}
@@ -91,7 +91,7 @@ func PersistDeferredAnnouncement(store deferredAnnouncementStore, toolsJSON json
 	_ = json.Unmarshal(toolsJSON, &tools)
 	var names []string
 	for _, t := range tools {
-		if toolsearch.IsDeferredToolName(t.Name) {
+		if toolsearch.IsDeferredTool(t) {
 			names = append(names, t.Name)
 		}
 	}
@@ -122,7 +122,7 @@ type deferredAnnouncementStore interface {
 func countDeferredTools(tools []anthropic.ToolDefinition) int {
 	n := 0
 	for _, t := range tools {
-		if toolsearch.IsDeferredToolName(t.Name) {
+		if toolsearch.IsDeferredTool(t) {
 			n++
 		}
 	}

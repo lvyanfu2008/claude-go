@@ -49,7 +49,7 @@ func filterAPIRoleMessages(msgs []anthropic.Message) []anthropic.Message {
 func deferredToolNamesSorted(tools []anthropic.ToolDefinition) string {
 	var names []string
 	for _, t := range tools {
-		if IsDeferredToolName(t.Name) {
+		if IsDeferredTool(t) {
 			names = append(names, t.Name)
 		}
 	}
