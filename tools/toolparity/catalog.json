@@ -55,7 +55,7 @@
     {"name": "RemoteTrigger", "ts_presence": "AGENT_TRIGGERS_REMOTE", "go_status": "full", "go_location": "tools.RemoteTriggerFromJSON"},
     {"name": "Monitor", "ts_presence": "MONITOR_TOOL", "go_status": "full", "go_location": "tools.MonitorFromJSON"},
     {"name": "SendUserMessage", "aliases": ["Brief"], "ts_presence": "kairos_brief", "ts_note": "BriefTool primary name SendUserMessage; legacy alias Brief", "go_status": "full", "go_location": "tools.BriefFromJSON"},
-    {"name": "SendUserFile", "ts_presence": "kairos", "go_status": "stub", "go_location": "tools.SendUserFileFromJSON", "ts_note": "Wire/error parity only; assistant transport not in Go standalone"},
+    {"name": "SendUserFile", "ts_presence": "kairos", "go_status": "deferred", "go_location": "tools.SendUserFileFromJSON", "ts_note": "Wire/error parity only; assistant transport not in Go standalone"},
     {"name": "PushNotification", "ts_presence": "kairos", "go_status": "stub", "go_location": "tools.PushNotificationFromJSON", "ts_note": "Wire/error parity only; KAIROS transport not in Go standalone"},
     {"name": "SubscribePR", "ts_presence": "kairos_github", "go_status": "stub", "go_location": "tools.SubscribePRFromJSON", "ts_note": "Wire/error parity only; GitHub webhook subsystem not in Go standalone"},
     {"name": "PowerShell", "ts_presence": "conditional", "go_status": "full", "go_location": "localtools.PowerShellFromJSON"},
