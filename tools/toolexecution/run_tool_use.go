@@ -6,6 +6,7 @@ package toolexecution
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"goc/tools/localtools"
@@ -315,6 +316,30 @@ func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID str
 	}
 	if !isErr && toolName == "AskUserQuestion" && body != "" {
 		if mapped, err := localtools.MapAskUserQuestionOutputToToolResultContent(body); err == nil {
+			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
+		}
+	}
+	if !isErr && toolName == "ReviewArtifact" && body != "" {
+		if mapped, err := localtools.MapReviewArtifactToolResultToAssistantText(body); err == nil {
+			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
+		}
+	}
+	if !isErr && (toolName == "SendUserMessage" || toolName == "Brief") && body != "" {
+		var wrapper struct {
+			Data struct {
+				Attachments []any `json:"attachments"`
+			} `json:"data"`
+		}
+		if json.Unmarshal([]byte(body), &wrapper) == nil {
+			n := len(wrapper.Data.Attachments)
+			mapped := "Message delivered to user."
+			if n > 0 {
+				suffix := "attachments"
+				if n == 1 {
+					suffix = "attachment"
+				}
+				mapped = fmt.Sprintf("Message delivered to user. (%d %s included)", n, suffix)
+			}
 			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
 		}
 	}
