@@ -16,16 +16,6 @@ import (
 // BriefToolName matches BRIEF_TOOL_NAME in src/tools/BriefTool/prompt.ts.
 const BriefToolName = "SendUserMessage"
 
-// BriefToolDescription matches DESCRIPTION in src/tools/BriefTool/prompt.ts.
-const BriefToolDescription = "Send a message to the user"
-
-// BriefToolUserPrompt matches BRIEF_TOOL_PROMPT in src/tools/BriefTool/prompt.ts.
-const BriefToolUserPrompt = `Send a message the user will read. Text outside this tool is visible in the detail view, but most won't open it — the answer lives here.
-
-` + "`message`" + ` supports markdown. ` + "`attachments`" + ` takes file paths (absolute or cwd-relative) for images, diffs, logs.
-
-` + "`status`" + ` labels intent: 'normal' when replying to what they just asked; 'proactive' when you're initiating — a scheduled task finished, a blocker surfaced during background work, you need input on something they haven't asked about. Set it honestly; downstream routing uses it.`
-
 // BriefProactiveSectionBody matches BRIEF_PROACTIVE_SECTION in prompt.ts (template uses BriefToolName).
 func BriefProactiveSectionBody() string {
 	t := BriefToolName

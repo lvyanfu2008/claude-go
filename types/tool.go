@@ -151,6 +151,9 @@ type ToolSpec struct {
 	IsLsp       *bool    `json:"isLsp,omitempty"`
 	MCPInfo     *MCPInfo `json:"mcpInfo,omitempty"`
 
+	IsConcurrencySafe *bool `json:"isConcurrencySafe,omitempty"`
+	IsReadOnly        *bool `json:"isReadOnly,omitempty"`
+
 	InterruptBehavior *InterruptBehavior `json:"interruptBehavior,omitempty"`
 }
 

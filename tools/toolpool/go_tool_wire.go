@@ -1071,11 +1071,15 @@ func nativeSendUserMessageToolSpec() types.ToolSpec {
 		"required":             []string{"message", "status"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
 		Name:            "SendUserMessage",
 		Aliases:         []string{"Brief"},
-		Description:     "Send a user-visible message with optional attachments.",
-		InputJSONSchema: mustMarshalJSONRaw(schema),
+		Description:     "Send a message to the user",
+		SearchHint:      "send a message to the user — your primary visible output channel",
+		InputJSONSchema:    mustMarshalJSONRaw(schema),
+		IsConcurrencySafe: &trueVal,
+		IsReadOnly:        &trueVal,
 	}
 }
 
@@ -1569,17 +1573,17 @@ func nativePushNotificationToolSpec() types.ToolSpec {
 		"required":             []string{"title", "body"},
 		"additionalProperties": false,
 	}
+	trueVal := true
 	return types.ToolSpec{
-		Name: "PushNotification",
-		Description: `Send a push notification to the user's mobile device via Remote Control.
-
-Use this when:
-- A long-running task completes and the user may not be watching
-- A permission prompt is waiting and you need user input
-- Something urgent requires the user's attention
-
-Requires Remote Control to be configured. Respects user notification settings (taskCompleteNotifEnabled, inputNeededNotifEnabled, agentPushNotifEnabled).`,
-		InputJSONSchema: mustMarshalJSONRaw(schema),
+		Name:        "PushNotification",
+		Description: "Send a push notification to the user's mobile device",
+		SearchHint:  "push notification mobile alert notify user",
+		InputJSONSchema:    mustMarshalJSONRaw(schema),
+		MaxResultSizeChars: 1000,
+		Strict:             &trueVal,
+		ShouldDefer:        &trueVal,
+		IsConcurrencySafe:  &trueVal,
+		IsReadOnly:         &trueVal,
 	}
 }
 

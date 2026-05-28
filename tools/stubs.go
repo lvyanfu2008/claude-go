@@ -3,11 +3,22 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
-// BriefFromJSON records a user-visible message path: returns JSON echo (headless transcript hint).
+var imageExtensionRegex = regexp.MustCompile(`(?i)\.(png|jpe?g|gif|webp)$`)
+
+type resolvedAttachment struct {
+	Path    string `json:"path"`
+	Size    int64  `json:"size"`
+	IsImage bool   `json:"isImage"`
+}
+
+// BriefFromJSON records a user-visible message path with resolved attachment metadata.
 func BriefFromJSON(raw []byte) (string, bool, error) {
 	var in struct {
 		Message     string   `json:"message"`
@@ -24,12 +35,45 @@ func BriefFromJSON(raw []byte) (string, bool, error) {
 	if st != "normal" && st != "proactive" {
 		return "", true, fmt.Errorf("status must be normal or proactive")
 	}
+
+	// validate attachment paths
+	for _, rawPath := range in.Attachments {
+		fullPath, err := filepath.Abs(rawPath)
+		if err != nil {
+			return "", true, fmt.Errorf("Attachment %q: cannot resolve path: %w", rawPath, err)
+		}
+		fi, err := os.Stat(fullPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				cwd, _ := os.Getwd()
+				return "", true, fmt.Errorf("Attachment %q does not exist. Current working directory: %s.", rawPath, cwd)
+			}
+			if os.IsPermission(err) {
+				return "", true, fmt.Errorf("Attachment %q is not accessible (permission denied).", rawPath)
+			}
+			return "", true, fmt.Errorf("Attachment %q: %w", rawPath, err)
+		}
+		if !fi.Mode().IsRegular() {
+			return "", true, fmt.Errorf("Attachment %q is not a regular file.", rawPath)
+		}
+	}
+
 	sentAt := time.Now().UTC().Format(time.RFC3339Nano)
 	var data map[string]any
 	if len(in.Attachments) == 0 {
 		data = map[string]any{"message": in.Message, "sentAt": sentAt}
 	} else {
-		data = map[string]any{"message": in.Message, "attachments": in.Attachments, "sentAt": sentAt}
+		resolved := make([]resolvedAttachment, len(in.Attachments))
+		for i, rawPath := range in.Attachments {
+			fullPath, _ := filepath.Abs(rawPath)
+			fi, _ := os.Stat(fullPath)
+			resolved[i] = resolvedAttachment{
+				Path:    fullPath,
+				Size:    fi.Size(),
+				IsImage: imageExtensionRegex.MatchString(fullPath),
+			}
+		}
+		data = map[string]any{"message": in.Message, "attachments": resolved, "sentAt": sentAt}
 	}
 	out := map[string]any{"data": data}
 	b, _ := json.Marshal(out)

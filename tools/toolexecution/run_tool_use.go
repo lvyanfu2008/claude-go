@@ -343,6 +343,18 @@ func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID str
 			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
 		}
 	}
+	if !isErr && toolName == "PushNotification" && body != "" {
+		var probe struct {
+			Data struct {
+				Sent bool `json:"sent"`
+			} `json:"data"`
+		}
+		mapped := "Failed to send notification."
+		if json.Unmarshal([]byte(body), &probe) == nil && probe.Data.Sent {
+			mapped = "Notification sent."
+		}
+		return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
+	}
 	return syntheticToolResultWithName(deps, toolName, toolUseID, body, isErr, assistantUUID)
 }
 

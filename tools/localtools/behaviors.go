@@ -82,6 +82,13 @@ func registerBehaviors() {
 	tool.RegisterBehaviors("PowerShell", &tool.Behaviors{
 		ActivityDescriber: &powershellActivityDescriber{},
 	})
+
+	// SendUserMessage / Brief
+	briefBehaviors := &tool.Behaviors{
+		AutoClassifierInputProvider: &briefAutoClassifier{},
+	}
+	tool.RegisterBehaviors("SendUserMessage", briefBehaviors)
+	tool.RegisterBehaviors("Brief", briefBehaviors)
 }
 
 // --- helpers ---
@@ -347,6 +354,7 @@ func classifyBashCommand(cmd string) *types.SearchOrReadCollapse {
 	if len(parts) == 0 {
 		return nil
 	}
+
 	base := parts[0]
 	// Remove leading path components (e.g. /usr/bin/grep → grep)
 	if idx := strings.LastIndex(base, "/"); idx >= 0 {
@@ -376,4 +384,18 @@ func classifyBashCommand(cmd string) *types.SearchOrReadCollapse {
 		return &types.SearchOrReadCollapse{IsRead: true}
 	}
 	return nil
+}
+
+// --- SendUserMessage / Brief tool ---
+
+type briefAutoClassifier struct{}
+
+func (b *briefAutoClassifier) ToAutoClassifierInput(input json.RawMessage) string {
+	var in struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return ""
+	}
+	return in.Message
 }
