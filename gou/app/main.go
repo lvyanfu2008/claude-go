@@ -1310,6 +1310,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentCompletedMsg:
 		m.agentTasks.Complete(msg.AgentID, msg.Status)
+		if runtime.GOOS == "windows" {
+			return m, teaGlobalRedrawCmd()
+		}
 		return m, nil
 
 	case AgentTaskTickMsg:
