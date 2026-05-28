@@ -51,7 +51,7 @@ const (
 )
 
 func claudeCodeGuideWhenToUse() string {
-	return `Use this agent when the user asks questions ("Can Harness...", "Does Harness...", "How do I...") about: (1) Harness Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Harness Agent SDK - building custom agents; (3) Harness API (formerly Lyf API) - API usage, tool use, Lyf SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ` + ToolSendMessage + `.`
+	return `Use this agent when the user asks questions ("Can Harness...", "Does Harness...", "How do I...") about: (1) Harness Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Harness Agent SDK - building custom agents; (3) Harness API (formerly Lyf API) - API usage, tool use, Lyf SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed harness-code-guide agent that you can continue via ` + ToolSendMessage + `.`
 }
 
 var explorePlanDisallowedTools = []string{
@@ -130,7 +130,7 @@ func GetBuiltInAgents(cfg Config, guideCtx GuideContext) []BuiltinAgent {
 
 	if isNonSdkEntrypoint(cfg.Entrypoint) {
 		out = append(out, BuiltinAgent{
-			AgentType:      "claude-code-guide",
+			AgentType:      "harness-code-guide",
 			WhenToUse:      claudeCodeGuideWhenToUse(),
 			Tools:          guideTools(cfg.EmbeddedSearchTools),
 			Source:         "built-in",

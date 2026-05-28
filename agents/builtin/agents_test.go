@@ -380,7 +380,7 @@ func TestGetBuiltInAgents_basic(t *testing.T) {
 		assertAgentType(t, agents, "statusline-setup")
 		assertAgentType(t, agents, "Explore")
 		assertAgentType(t, agents, "Plan")
-		assertAgentType(t, agents, "claude-code-guide")
+		assertAgentType(t, agents, "harness-code-guide")
 	})
 
 	t.Run("SDK entrypoint disables guide", func(t *testing.T) {
@@ -389,8 +389,8 @@ func TestGetBuiltInAgents_basic(t *testing.T) {
 		}
 		agents := GetBuiltInAgents(cfg, GuideContext{})
 		for _, a := range agents {
-			if a.AgentType == "claude-code-guide" {
-				t.Error("claude-code-guide should be excluded for SDK entrypoints")
+			if a.AgentType == "harness-code-guide" {
+				t.Error("harness-code-guide should be excluded for SDK entrypoints")
 			}
 		}
 	})
@@ -489,7 +489,7 @@ func TestGetBuiltInAgents_sourceAndBaseDir(t *testing.T) {
 func TestGetBuiltInAgents_guideTools(t *testing.T) {
 	t.Run("non-embedded", func(t *testing.T) {
 		agents := GetBuiltInAgents(Config{EmbeddedSearchTools: false, Entrypoint: "cli"}, GuideContext{})
-		g := findAgent(t, agents, "claude-code-guide")
+		g := findAgent(t, agents, "harness-code-guide")
 		expected := []string{"Glob", "Grep", "Read", "WebFetch", "WebSearch"}
 		if !stringSliceEq(g.Tools, expected) {
 			t.Errorf("guide tools (non-embedded) = %v, want %v", g.Tools, expected)
@@ -498,7 +498,7 @@ func TestGetBuiltInAgents_guideTools(t *testing.T) {
 
 	t.Run("embedded", func(t *testing.T) {
 		agents := GetBuiltInAgents(Config{EmbeddedSearchTools: true, Entrypoint: "cli"}, GuideContext{})
-		g := findAgent(t, agents, "claude-code-guide")
+		g := findAgent(t, agents, "harness-code-guide")
 		expected := []string{"Bash", "Read", "WebFetch", "WebSearch"}
 		if !stringSliceEq(g.Tools, expected) {
 			t.Errorf("guide tools (embedded) = %v, want %v", g.Tools, expected)
@@ -509,7 +509,7 @@ func TestGetBuiltInAgents_guideTools(t *testing.T) {
 func TestGetBuiltInAgents_permissionMode(t *testing.T) {
 	cfg := Config{Entrypoint: "cli"}
 	agents := GetBuiltInAgents(cfg, GuideContext{})
-	g := findAgent(t, agents, "claude-code-guide")
+	g := findAgent(t, agents, "harness-code-guide")
 	if g.PermissionMode != "dontAsk" {
 		t.Errorf("guide permissionMode = %q, want %q", g.PermissionMode, "dontAsk")
 	}
