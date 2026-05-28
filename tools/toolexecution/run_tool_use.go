@@ -324,6 +324,11 @@ func syntheticToolMessageAfterInvoke(deps ExecutionDeps, toolName, toolUseID str
 			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
 		}
 	}
+	if !isErr && toolName == "Monitor" && body != "" {
+		if mapped, err := localtools.MapMonitorToolResultToAssistantText(body); err == nil {
+			return syntheticToolResultMappedWithName(deps, toolName, toolUseID, mapped, body, false, assistantUUID)
+		}
+	}
 	if !isErr && (toolName == "SendUserMessage" || toolName == "Brief") && body != "" {
 		var wrapper struct {
 			Data struct {

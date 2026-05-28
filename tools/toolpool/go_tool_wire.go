@@ -1508,10 +1508,17 @@ func nativeListPeersToolSpec() types.ToolSpec {
 	builder.WriteString("- `\"bridge:session_...\"` — remote sessions via Remote Control\n\n")
 	builder.WriteString("Use this tool to discover messaging targets before sending cross-session messages. Only running sessions with active messaging sockets are returned.")
 
+	trueVal := true
 	return types.ToolSpec{
-		Name:            "ListPeers",
-		Description:     builder.String(),
-		InputJSONSchema: mustMarshalJSONRaw(schema),
+		Name:               "ListPeers",
+		SearchHint:         "list peers sessions discover uds socket messaging",
+		Description:        builder.String(),
+		InputJSONSchema:    mustMarshalJSONRaw(schema),
+		MaxResultSizeChars: 50_000,
+		Strict:             &trueVal,
+		ShouldDefer:        &trueVal,
+		IsConcurrencySafe:  &trueVal,
+		IsReadOnly:         &trueVal,
 	}
 }
 
