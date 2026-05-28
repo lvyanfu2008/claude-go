@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
@@ -119,6 +120,9 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 	if m.uiScreen != gouDemoScreenTranscript {
 		m.sticky = true
 		m.scrollTop = 1 << 30
+	}
+	if runtime.GOOS == "windows" {
+		return m, teaGlobalRedrawCmd()
 	}
 	return m, nil
 }
