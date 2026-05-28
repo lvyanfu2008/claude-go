@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/mattn/go-runewidth"
 )
 
 // Model is a lightweight multiline text buffer with cursor.
@@ -58,6 +59,24 @@ func (m Model) Value() string {
 // (alias of internal cursor; matches the slice index over UTF-8 runes in [Value] for ASCII text).
 func (m Model) CursorRuneIndex() int {
 	return m.cursor
+}
+
+// CursorLine returns the 0-based line number of the cursor within the prompt.
+// Each newline increments the line counter.
+func (m Model) CursorLine() int {
+	l, _ := cursorLineCol(m.value, m.cursor)
+	return l
+}
+
+// CursorDisplayCol returns the terminal display column of the cursor on its
+// current line, accounting for CJK double-width characters via runewidth.
+func (m Model) CursorDisplayCol() int {
+	start, _ := m.lineBounds()
+	col := 0
+	for i := start; i < m.cursor && i < len(m.value); i++ {
+		col += runewidth.RuneWidth(m.value[i])
+	}
+	return col
 }
 
 // SetValue replaces buffer content and places cursor at end.

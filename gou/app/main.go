@@ -1706,6 +1706,7 @@ func (m *model) View() tea.View {
 	}
 
 	var b strings.Builder
+	var promptLineOffset int
 	narrow := m.cols > 0 && m.cols < 80
 	plainTitle := replChromeComposeTerminalTitle(m.store.ConversationID, m.queryBusy, m.store.HasStreaming())
 	if !gouDemoTerminalTitleDisabled() && plainTitle != m.lastEmittedTitlePlain {
@@ -1796,6 +1797,9 @@ func (m *model) View() tea.View {
 		}
 		b.WriteString(promptAboveInputRuleLine(m.cols))
 		b.WriteByte('\n')
+		// Track cursor line offset before the prompt for Windows IME positioning.
+		// CJK characters are double-width; ConPTY needs explicit cursor coords.
+		promptLineOffset = strings.Count(b.String(), "\n")
 		promptView := userInputViewWithPromptPrefix(m)
 		b.WriteString(promptView)
 		// Separator line below input area (always shown)
@@ -1828,7 +1832,14 @@ func (m *model) View() tea.View {
 		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.width))
 		out = lipgloss.JoinVertical(lipgloss.Left, out, mod)
 	}
-	return m.wrapRootView(out)
+	v := m.wrapRootView(out)
+	if runtime.GOOS == "windows" && m.uiScreen == gouDemoScreenPrompt && m.pr.Focused() {
+		v.Cursor = tea.NewCursor(
+			2+m.pr.CursorDisplayCol(),
+			promptLineOffset+m.pr.CursorLine(),
+		)
+	}
+	return v
 }
 
 func (m *model) wrapRootView(content string) tea.View {
