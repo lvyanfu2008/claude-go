@@ -27,7 +27,7 @@ func buildUserContextUncached(cwd string, extraClaudeMdRoots []string) (map[stri
 		return nil, err
 	}
 	if strings.TrimSpace(claudeMd) != "" {
-		out["claudeMd"] = claudeMd
+		out["harnessMd"] = claudeMd
 	}
 	return out, nil
 }

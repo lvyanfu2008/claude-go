@@ -17,7 +17,7 @@ type SystemContext struct {
 // UserContext is the object shape returned by getUserContext() in src/context.ts.
 type UserContext struct {
 	// ClaudeMd is aggregated AGENTS.md / memory file content when discovery is enabled.
-	ClaudeMd *string `json:"claudeMd,omitempty"`
+	ClaudeMd *string `json:"harnessMd,omitempty"`
 	// CurrentDate is always set in TS: "Today's date is <ISO local date>."
 	CurrentDate string `json:"currentDate"`
 }

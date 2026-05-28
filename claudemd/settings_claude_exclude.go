@@ -11,7 +11,7 @@ import (
 )
 
 type settingsExcludesJSON struct {
-	ClaudeMdExcludes []string `json:"claudeMdExcludes"`
+	ClaudeMdExcludes []string `json:"harnessMdExcludes"`
 }
 
 // MergedClaudeMdExcludes mirrors TS-style layering for paths Go reads: user, settings.go.json,

@@ -61,7 +61,7 @@ func FormatUserContextReminder(context map[string]string) string {
 		return ""
 	}
 	// TS getUserContext spreads claudeMd before currentDate; keep that order, then other keys sorted.
-	pref := []string{"claudeMd", "currentDate"}
+	pref := []string{"harnessMd", "currentDate"}
 	var blocks []string
 	seen := map[string]struct{}{}
 	for _, k := range pref {
