@@ -1102,11 +1102,17 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.lastCtrlC = now
 		m.ctrlCPending = true
 		return m, nil
-	case "esc":
-		if m.slashListUser {
-			m.slashListUser = false
-			return m, nil
-		}
+		case "esc":
+			if m.slashListVisible() {
+				m.slashListUser = false
+				// If the list is auto-shown (via leading "/"), clear the input
+				// so shouldShowTSSlashList stops returning true.
+				if m.pr.Value() != "" {
+					m.pr.SetValue("")
+				}
+				m.syncSlashListAfterPrompt()
+				return m, nil
+			}
 		if m.slashResultPanel != nil {
 			m.clearSlashResultPanel()
 			m.rebuildHeightCache()
