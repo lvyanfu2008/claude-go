@@ -22,9 +22,18 @@ func NormalizeTTYNewlineKey(k tea.KeyPressMsg) tea.KeyPressMsg {
 	switch r {
 	case '\u0085', '\u2028', '\u2029':
 		return tea.KeyPressMsg(tea.Key{Code: 'j', Mod: tea.ModCtrl})
-	default:
-		return k
 	}
+
+	// On Windows with VT Input Mode (ENABLE_VIRTUAL_TERMINAL_INPUT),
+	// Alt+Enter loses the Alt modifier because the console only writes
+	// the Unicode character '\r'. Use GetAsyncKeyState as a fallback.
+	if key.Code == tea.KeyEnter && !key.Mod.Contains(tea.ModAlt) && isAltKeyPressed() {
+		kc := k.Key()
+		kc.Mod |= tea.ModAlt
+		return tea.KeyPressMsg(kc)
+	}
+
+	return k
 }
 
 // SyntheticNewlineFromUnknownMsg returns a ctrl+j key when msg is bubbletea's unknown CSI sequence
