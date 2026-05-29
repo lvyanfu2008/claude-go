@@ -152,6 +152,11 @@ func loadLegacyCommandEntries(cwd string, opts LoadOptions) ([]SkillLoadEntry, e
 		if err != nil {
 			absPath = f.path
 		}
+		// For standalone .md files (not SKILL.md in a directory), store the
+		// file path so resolvers can re-read the content at invocation time.
+		if skillRoot == "" {
+			cmd.LegacyMarkdownPath = &absPath
+		}
 		entries = append(entries, SkillLoadEntry{Cmd: cmd, MarkdownPath: absPath})
 	}
 	return entries, nil

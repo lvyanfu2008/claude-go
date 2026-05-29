@@ -155,6 +155,17 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
 		}
 
+		if cmd.LegacyMarkdownPath != nil && strings.TrimSpace(*cmd.LegacyMarkdownPath) != "" {
+			res, err := slashresolve.ResolveLegacyMarkdownCommand(*cmd, parsed.Args, sid)
+			if err != nil {
+				return &processuserinput.ProcessUserInputBaseResult{
+					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (legacy) for /%s: %v", cmd.Name, err))},
+					ShouldQuery: false,
+				}, nil
+			}
+			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
+		}
+
 		return &processuserinput.ProcessUserInputBaseResult{
 			Messages: []types.Message{SystemNotice(fmt.Sprintf(
 				"gou-demo: /%s could not be resolved (type=%q). "+

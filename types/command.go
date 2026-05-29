@@ -53,6 +53,7 @@ type Command struct {
 	DisableNonInteractive *bool              `json:"disableNonInteractive,omitempty"`
 	Hooks                 json.RawMessage    `json:"hooks,omitempty"`
 	SkillRoot             *string            `json:"skillRoot,omitempty"`
+	LegacyMarkdownPath    *string            `json:"-"`                 // path to standalone .md file (commands_DEPRECATED), read at resolution time
 	Context               *string            `json:"context,omitempty"` // inline | fork
 	Agent                 *string            `json:"agent,omitempty"`
 	Effort                *utils.EffortValue `json:"effort,omitempty"`

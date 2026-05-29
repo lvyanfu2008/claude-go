@@ -140,13 +140,14 @@ func commandFromSkillMarkdown(
 	descriptionFallback string,
 ) (types.Command, error) {
 	yamlBytes, mdBody, hasFM := SplitYAMLFrontmatter(body)
-	if !hasFM {
-		return types.Command{}, fmt.Errorf("markdown missing YAML frontmatter: %s", markdownPath)
-	}
 	var fm skillFrontmatter
-	if err := yaml.Unmarshal(yamlBytes, &fm); err != nil {
-		return types.Command{}, fmt.Errorf("parse frontmatter %s: %w", markdownPath, err)
+	if hasFM {
+		if err := yaml.Unmarshal(yamlBytes, &fm); err != nil {
+			return types.Command{}, fmt.Errorf("parse frontmatter %s: %w", markdownPath, err)
+		}
 	}
+	// When no frontmatter is present, fm stays zero-valued — mirrors TS
+	// parseFrontmatter returning {} and parseSkillFrontmatterFields applying defaults.
 	content := string(mdBody)
 	desc := ""
 	if fm.Description != nil && strings.TrimSpace(*fm.Description) != "" {

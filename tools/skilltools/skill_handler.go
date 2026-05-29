@@ -96,6 +96,12 @@ func NewSkillMultiMessageHandler(commandsList []types.Command, sessionID string,
 			if err != nil {
 				return nil, false
 			}
+		} else if found.LegacyMarkdownPath != nil && strings.TrimSpace(*found.LegacyMarkdownPath) != "" {
+			var err error
+			res, err = slashresolve.ResolveLegacyMarkdownCommand(*found, in.Args, sid)
+			if err != nil {
+				return nil, false
+			}
 		} else {
 			return nil, false
 		}
