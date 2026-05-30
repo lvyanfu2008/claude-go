@@ -171,15 +171,13 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 		return lines, nil
 	}
 
+// renderToolResultInline returns nil in prompt mode — TS doesn't show individual
+// tool result content. Results are only visible in transcript mode (ctrl+o).
 func renderToolResultInline(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
 		return diffLines, nil
 	}
-	summary := GenerateToolResultSummary(block)
-	if summary == "" {
-		return nil, nil
-	}
-	return []string{"  " + summary}, nil
+	return nil, nil
 }
 
 
