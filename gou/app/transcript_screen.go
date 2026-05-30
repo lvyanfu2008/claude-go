@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"goc/gou/conversation"
+	"goc/gou/messagerow"
 	"goc/gou/messagesview"
 	"goc/types"
 )
@@ -66,11 +67,16 @@ func (m *model) messagesForScroll() []types.Message {
 		}
 		raw = slices.Clone(m.store.Messages)
 	}
+	// Build resolved IDs from ALL tool results (not just agent tools) for collapse
+	resolvedIDs := make(map[string]struct{})
+	for k := range messagerow.CollectToolResultContentByToolUseID(raw) {
+		resolvedIDs[k] = struct{}{}
+	}
 	return messagesview.MessagesForScrollList(raw, messagesview.ScrollListOpts{
 		TranscriptMode:       m.uiScreen == gouDemoScreenTranscript,
 		ShowAllInTranscript:  m.transcriptShowAll || m.transcriptDumpMode,
 		VirtualScrollEnabled: !gouDemoVirtualScrollDisabled(),
-		ResolvedToolUseIDs:   m.resolvedToolIDs,
+		ResolvedToolUseIDs:   resolvedIDs,
 	})
 }
 
