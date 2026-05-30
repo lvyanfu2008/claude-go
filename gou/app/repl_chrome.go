@@ -18,7 +18,7 @@ const (
 
 // UserPromptPointerGlyph is the character before user-authored text in the message list and input area (same line, one space after).
 func UserPromptPointerGlyph() string {
-	return ">"
+	return "❯"
 }
 
 // gouDemoTerminalTitleDisabled mirrors CLAUDE_CODE_DISABLE_TERMINAL_TITLE in REPL.tsx.
