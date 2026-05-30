@@ -16,6 +16,7 @@ import (
 
 	"goc/gou/layout"
 	"goc/gou/messagerow"
+	"goc/gou/textutil"
 	"goc/gou/messagesview"
 	"goc/types"
 )
@@ -127,7 +128,7 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 				b.WriteString(string(types.MessageTypeAssistant))
 				b.WriteByte('\n')
 				summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil)
-				line := "⏺ " + summary + messagerow.CtrlOToExpandHint
+				line := textutil.AssistantBullet() + summary + messagerow.CtrlOToExpandHint
 				for _, item := range group.Items {
 					path := extractPartialJSONField(item.UnparsedInput, "file_path")
 					if path == "" {

@@ -6,6 +6,7 @@ import (
 
 	"goc/ccb-engine/diaglog"
 	"goc/compactservice"
+	"goc/gou/textutil"
 	"goc/types"
 )
 
@@ -140,7 +141,7 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 	// Add "⏺ " prefix to assistant messages and indent continuation lines by 2 spaces
 	for i, line := range lines {
 		if i == 0 {
-			lines[i] = "⏺ " + line
+			lines[i] = textutil.AssistantBullet() + line
 		} else {
 			lines[i] = "  " + line
 		}

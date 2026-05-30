@@ -143,7 +143,7 @@ func applyAssistantStreamingGutter(block string, cols int) string {
 	lines := strings.Split(wrapped, "\n")
 	for i, line := range lines {
 		if i == 0 {
-			lines[i] = "⏺ " + line
+			lines[i] = textutil.AssistantBullet() + line
 		} else {
 			lines[i] = "  " + line
 		}
