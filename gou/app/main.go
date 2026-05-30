@@ -1743,35 +1743,7 @@ func (m *model) View() tea.View {
 	b.WriteString(title)
 	b.WriteByte('\n')
 
-	if useVp {
-		// Bubbles viewport + new renderer (applyMsgViewportContentFromView populates the full document).
-		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
-		b.WriteByte('\n')
-	} else {
-		// New renderer without bubbles viewport: virtual slice uses m.scrollTop; scrollbar reflects renderer totals.
-		msgPaneContent := m.renderMessagePaneWithNewRenderer()
-		lines := strings.Split(msgPaneContent, "\n")
-		if len(lines) > vpH {
-			lines = lines[:vpH]
-		}
-		for len(lines) < vpH {
-			lines = append(lines, "")
-		}
-		m.integrateMessageRenderer()
-		messagesPtr := m.messagePtrSliceForNewRenderer()
-		isTranscript := m.uiScreen == gouDemoScreenTranscript
-		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(
-			messagesPtr,
-			0,
-			1,
-			isTranscript,
-			verbose,
-			bodyCols,
-		)
-		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
-		b.WriteByte('\n')
-	}
+	m.renderMessagePane(&b, vpH, bodyCols, useVp)
 
 	if m.uiScreen != gouDemoScreenTranscript {
 		streamRows := m.promptBottomStreamRows()
@@ -1802,50 +1774,7 @@ func (m *model) View() tea.View {
 		b.WriteByte('\n')
 	}
 
-	if m.uiScreen == gouDemoScreenTranscript {
-		foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.cols)
-		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))
-	} else {
-		// @-mention autocomplete suggestions (above input footer area)
-		if s := m.renderAtSuggestions(); s != "" {
-			b.WriteString(s)
-			b.WriteByte('\n')
-		}
-		if s := m.builtinStatusLineView(); s != "" {
-			b.WriteString(s)
-			b.WriteByte('\n')
-		}
-		b.WriteString(promptAboveInputRuleLine(m.cols))
-		b.WriteByte('\n')
-		// Track cursor line offset before the prompt for Windows IME positioning.
-		// CJK characters are double-width; ConPTY needs explicit cursor coords.
-		promptLineOffset = strings.Count(b.String(), "\n")
-		promptView := userInputViewWithPromptPrefix(m)
-		b.WriteString(promptView)
-		// Agent footer (only when sub-agents exist)
-		if m.agentTasks != nil {
-			agentTasks := m.agentTasks.VisibleTasks()
-			if len(agentTasks) > 0 {
-				mainTask := m.agentTasks.MainTask()
-				if footer := AgentFooterView(mainTask, agentTasks, m.cols); footer != "" {
-					b.WriteByte('\n')
-					b.WriteString(footer)
-				}
-			}
-		}
-		if blk := m.slashResultPanelViewBlock(); blk != "" {
-			b.WriteByte('\n')
-			b.WriteString(blk)
-		}
-		if m.slashListVisible() {
-			vis := m.visibleSlashList()
-			hint := m.slashListFooterHint()
-			if sp := m.slashPicker.View(vis, m.cols, m.height, hint); sp != "" {
-				b.WriteByte('\n')
-				b.WriteString(sp)
-			}
-		}
-	}
+	promptLineOffset = m.promptAreaLayout(&b)
 	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
 	if v := m.permModal.View(m.width); v != "" {
 		out = lipgloss.JoinVertical(lipgloss.Left, out, v)
