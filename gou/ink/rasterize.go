@@ -3,16 +3,22 @@ package ink
 import "image/color"
 
 func Rasterize(node *VNode, screen *Screen) {
-	rasterizeNode(node, screen)
+	rasterizeNode(node, screen, 0, 0)
 }
 
-func rasterizeNode(node *VNode, screen *Screen) {
+// rasterizeNode walks the VNode tree and renders each node at its screen position,
+// accumulating offsets from parent containers so that Layout.X/Y (which are relative
+// to the parent) are translated to absolute screen coordinates.
+func rasterizeNode(node *VNode, screen *Screen, offX, offY int) {
+	absX := node.Layout.X + offX
+	absY := node.Layout.Y + offY
+
 	switch node.Type {
 	case "Text":
-		rasterizeText(node, screen)
+		rasterizeTextAt(node, screen, absX, absY)
 	case "Box":
 		for i := range node.Children {
-			rasterizeNode(&node.Children[i], screen)
+			rasterizeNode(&node.Children[i], screen, absX, absY)
 		}
 	case "ScrollBox":
 		visStart := node.Layout.VisibleRange[0]
@@ -21,12 +27,13 @@ func rasterizeNode(node *VNode, screen *Screen) {
 			visEnd = len(node.Children)
 		}
 		for i := visStart; i < visEnd; i++ {
-			rasterizeNode(&node.Children[i], screen)
+			rasterizeNode(&node.Children[i], screen, absX, absY)
 		}
 	}
 }
 
-func rasterizeText(node *VNode, screen *Screen) {
+// rasterizeTextAt renders a Text node at the given absolute screen position (offX, offY).
+func rasterizeTextAt(node *VNode, screen *Screen, offX, offY int) {
 	content := node.Props.GetString("content")
 	if content == "" {
 		return
@@ -47,8 +54,8 @@ func rasterizeText(node *VNode, screen *Screen) {
 	}
 
 	lines := splitLinesANSI(content)
-	x := node.Layout.X
-	y := node.Layout.Y
+	x := offX
+	y := offY
 
 	for _, line := range lines {
 		wrapped := wordWrapANSI(line, screen.Width-x)

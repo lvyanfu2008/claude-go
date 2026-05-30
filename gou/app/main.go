@@ -73,6 +73,7 @@ import (
 	"goc/gou/segdiff"
 	"goc/gou/suggestions"
 	"goc/gou/textutil"
+	"goc/gou/ink/integration"
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/growthbook"
@@ -741,6 +742,9 @@ type Config struct {
 // Run initializes and runs the TUI application. It blocks until the user exits.
 // Mirrors the combined behavior of TS cli.tsx + main.tsx REPL launch.
 func Run(config_ Config) error {
+	if integration.RunNewEngine() {
+		return nil
+	}
 	if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
 		return fmt.Errorf("claudeinit: %w", err)
 	}
