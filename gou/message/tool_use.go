@@ -122,13 +122,9 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 		return diffLines, nil
 	}
 
-	// In prompt mode, tool results are usually collapsed to 1 line
+	// In prompt mode, show tool result content inline (truncated), matching TS.
 	if !ctx.IsTranscript && !ctx.Verbose {
-		diaglog.Line("[tool-use] RenderToolResultBlock: collapsed to 1 line (prompt mode)")
-		// Generate meaningful summary instead of generic "[Result]"
-		summary := GenerateToolResultSummary(block)
-		// Add (ctrl+o to expand) hint for consistency with other TUI messages
-		return []string{"↳ " + summary + " (ctrl+o to expand)"}, nil
+		return r.renderToolResultInline(block, ctx)
 	}
 
 	if contentStr, ok := block["content"].(string); ok {
@@ -175,16 +171,66 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 
 	return lines, nil
 }
+// extractContentItems extracts text content items from a tool result block.
+func extractContentItems(block map[string]interface{}) []interface{} {
+	if contentStr, ok := block["content"].(string); ok {
+		if contentStr != "" {
+			return []interface{}{map[string]interface{}{"type": "text", "text": contentStr}}
+		}
+		return nil
+	}
+	if contentArr, ok := block["content"].([]interface{}); ok {
+		return contentArr
+	}
+	return nil
+}
+
+
+
+
+
+// renderToolResultInline renders tool result content inline (truncated), matching TS.
+func (r *ToolUseMessageRenderer) renderToolResultInline(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
+	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
+		return diffLines, nil
+	}
+	contentItems := extractContentItems(block)
+	if len(contentItems) == 0 {
+		return nil, nil
+	}
+	width := getContainerWidth(ctx) - 2
+	var lines []string
+	const maxLines = 10
+	for _, item := range contentItems {
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			if itemType, _ := itemMap["type"].(string); itemType == "text" {
+				if text, _ := itemMap["text"].(string); text != "" {
+					textLines := renderMarkdown(text, width, ctx.Theme, ctx.Highlighter)
+					for _, tl := range textLines {
+						if len(lines) >= maxLines {
+							lines = append(lines, "  ...")
+							return lines, nil
+						}
+						lines = append(lines, "  "+tl)
+					}
+				}
+			}
+		}
+	}
+	return lines, nil
+}
+
+
 
 // MeasureToolResultBlock measures a tool_result block.
 func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interface{}, ctx *RenderContext) int {
 	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
 		return len(diffLines)
 	}
-	// In prompt mode, tool results are usually collapsed
+	// In prompt mode, show tool result inline height estimate.
 	if !ctx.IsTranscript && !ctx.Verbose {
-		diaglog.Line("[tool-use] MeasureToolResultBlock: collapsed to 1 line (prompt mode)")
-		return 1
+		inlineLines, _ := r.renderToolResultInline(block, ctx)
+		return len(inlineLines)
 	}
 	diaglog.Line("[tool-use] MeasureToolResultBlock: showing full content (transcript=%v, verbose=%v)", ctx.IsTranscript, ctx.Verbose)
 
