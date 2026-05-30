@@ -242,21 +242,10 @@ func (m *model) loadSlashCommandsOnce() {
 // whitespace+"/token", or F2.
 func (m *model) slashListVisible() bool {
 	m.loadSlashCommandsOnce()
-	if len(m.slashCommands) == 0 {
-		return false
-	}
-	if m.uiScreen != gouDemoScreenPrompt {
-		return false
-	}
-	if m.slashListUser {
-		return true
-	}
+	m.slashPicker.SetCommands(m.slashCommands)
 	v := m.pr.Value()
 	cur := m.pr.CursorRuneIndex()
-	if shouldShowTSSlashList(v, cur) {
-		return true
-	}
-	return findMidInputSlashCommand(v, cur) != nil
+	return m.slashPicker.Visible(v, cur, m.uiScreen == gouDemoScreenPrompt)
 }
 
 func (m *model) syncSlashListAfterPrompt() {
@@ -264,33 +253,12 @@ func (m *model) syncSlashListAfterPrompt() {
 		return
 	}
 	m.loadSlashCommandsOnce()
+	m.slashPicker.SetCommands(m.slashCommands)
 	if !m.slashListVisible() {
-		m.slashListSel = 0
+		m.slashPicker.selection = 0
 		return
 	}
-	vis := m.visibleSlashList()
-	if m.slashListSel >= len(vis) {
-		if len(vis) == 0 {
-			m.slashListSel = 0
-		} else {
-			m.slashListSel = len(vis) - 1
-		}
-	}
-	if m.slashListSel < 0 {
-		m.slashListSel = 0
-	}
-}
-
-// toggleSlashListUser toggles F2 manual list (when input is empty or not in /… mode).
-func (m *model) toggleSlashListUser() {
-	m.loadSlashCommandsOnce()
-	if len(sortedSlashDisplayNames(m.slashCommands)) == 0 {
-		m.slashListUser = false
-		return
-	}
-	m.slashListUser = !m.slashListUser
-	m.slashListSel = 0
-	m.syncSlashListAfterPrompt()
+	m.slashPicker.ClampSelection(m.visibleSlashList())
 }
 
 // isPromptEnterKey is true for a normal Enter (submit) but not Alt+Enter (insert newline in REPL).
@@ -337,14 +305,9 @@ func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
 		return false
 	}
 	if dir < 0 {
-		if m.slashListSel > 0 {
-			m.slashListSel--
-		}
+		m.slashPicker.NavUp()
 	} else {
-		vis := m.visibleSlashList()
-		if m.slashListSel+1 < len(vis) {
-			m.slashListSel++
-		}
+		m.slashPicker.NavDown(m.visibleSlashList())
 	}
 	return true
 }
@@ -406,55 +369,6 @@ func slashPickerMaxListRows(termHeight int) int {
 	}
 	// keep modest so message pane stays primary
 	return min(12, max(3, termHeight/4))
-}
-
-// renderSlashPicker draws a full-width block directly below the input: separator rule, then
-// title + left-aligned list (not a corner overlay).
-func (m *model) renderSlashPicker(width, termHeight int) string {
-	if !m.slashListVisible() {
-		return ""
-	}
-	if width < 1 {
-		width = 40
-	}
-	vis := m.visibleSlashList()
-	maxList := slashPickerMaxListRows(termHeight)
-	var b strings.Builder
-	rule := strings.Repeat("─", max(1, width))
-	b.WriteString(lipgloss.NewStyle().Faint(true).Width(width).Render(rule))
-	b.WriteByte('\n')
-	title := lipgloss.NewStyle().Bold(true).Render("Slash commands  ") +
-		lipgloss.NewStyle().Faint(true).Render(m.slashListFooterHint()+"  F2  Esc  Tab  Enter run")
-	b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(title))
-	b.WriteByte('\n')
-	start := 0
-	idx := m.slashListSel
-	if len(vis) > 0 && idx >= len(vis) {
-		idx = len(vis) - 1
-	}
-	if len(vis) > 0 && idx >= maxList {
-		start = idx - (maxList - 1)
-		if start < 0 {
-			start = 0
-		}
-	}
-	indent := "  "
-	for i := start; i < len(vis) && i < start+maxList; i++ {
-		line := vis[i]
-		if i == idx {
-			b.WriteString(indent)
-			b.WriteString(lipgloss.NewStyle().Reverse(true).Render(line))
-		} else {
-			b.WriteString(indent)
-			b.WriteString(line)
-		}
-		b.WriteByte('\n')
-	}
-	if len(vis) == 0 {
-		b.WriteString(indent)
-		b.WriteString(lipgloss.NewStyle().Faint(true).Render("(no matches)"))
-	}
-	return b.String()
 }
 
 // slashListFooterHint is a short filter hint (leading "/" vs mid-input …/q).

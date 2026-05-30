@@ -191,7 +191,7 @@ func hasAliasPrefix(c *types.Command, qLower string) bool {
 func (m *model) currentSlashQuery() (query string, startMode bool) {
 	v := m.pr.Value()
 	cur := m.pr.CursorRuneIndex()
-	if m.slashListUser {
+	if m.slashPicker.userToggle {
 		// F2: treat as browse-all, unless mid-input is active
 		if mid := findMidInputSlashCommand(v, cur); mid != nil {
 			return mid.partial, false
@@ -209,8 +209,10 @@ func (m *model) currentSlashQuery() (query string, startMode bool) {
 
 func (m *model) visibleSlashList() []string {
 	m.loadSlashCommandsOnce()
-	q, _ := m.currentSlashQuery()
-	return rankedSlashForQuery(m.slashCommands, q)
+	m.slashPicker.SetCommands(m.slashCommands)
+	v := m.pr.Value()
+	cur := m.pr.CursorRuneIndex()
+	return m.slashPicker.FilteredCommands(v, cur)
 }
 
 func (m *model) applySlashTab() {
@@ -221,10 +223,8 @@ func (m *model) applySlashTab() {
 	if len(vis) == 0 {
 		return
 	}
-	if m.slashListSel < 0 || m.slashListSel >= len(vis) {
-		m.slashListSel = 0
-	}
-	pick := vis[m.slashListSel]
+	m.slashPicker.ClampSelection(vis)
+	pick := vis[m.slashPicker.selection]
 	v := m.pr.Value()
 	cur := m.pr.CursorRuneIndex()
 	if mid := findMidInputSlashCommand(v, cur); mid != nil {

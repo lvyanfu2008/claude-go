@@ -567,15 +567,12 @@ type model struct {
 	msgScrollbarW int
 
 	permAsk           *permissionAskOverlay
-	questionUI        *questionModel // non-nil when interactive AskUserQuestion UI is active
+	questionUI        *questionModel   // non-nil when interactive AskUserQuestion UI is active
 	hooksConfigMenu   *hooksConfigMenu // non-nil when interactive hooks config menu is active
-	askAutoFirst      bool           // cached from runner config, used by installAskResolver
+	askAutoFirst      bool             // cached from runner config, used by installAskResolver
 	slashCommands     []types.Command
 	slashCommandsOnce bool
-	// slashListUser: F2 toggles the command list when not in TS auto-suggest (e.g. empty input).
-	// slashListSel is the index in the filtered list shown beside the input (TS-style / suggestions).
-	slashListUser bool
-	slashListSel  int
+	slashPicker       *slashPickerModel
 	// slashResultPanel is local slash text output shown below the input until Esc (prompt screen only).
 	slashResultPanel *string
 
@@ -885,6 +882,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		suggestionEngine:    suggEngine,
 		taskList:            newTaskListModel(st.ConversationID),
 		agentTasks:          newAgentTaskStore(),
+		slashPicker:         newSlashPickerModel(),
 		toolResultState:     toolResultState,
 	}
 }
@@ -1041,7 +1039,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m, nil
 	}
 	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
-		m.slashListUser = false
+		m.slashPicker.Dismiss()
 		return m, m.enterTranscriptScreen()
 	}
 	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
@@ -1105,17 +1103,17 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.lastCtrlC = now
 		m.ctrlCPending = true
 		return m, nil
-		case "esc":
-			if m.slashListVisible() {
-				m.slashListUser = false
-				// If the list is auto-shown (via leading "/"), clear the input
-				// so shouldShowTSSlashList stops returning true.
-				if m.pr.Value() != "" {
-					m.pr.SetValue("")
-				}
-				m.syncSlashListAfterPrompt()
-				return m, nil
+	case "esc":
+		if m.slashListVisible() {
+			m.slashPicker.Dismiss()
+			// If the list is auto-shown (via leading "/"), clear the input
+			// so shouldShowTSSlashList stops returning true.
+			if m.pr.Value() != "" {
+				m.pr.SetValue("")
 			}
+			m.syncSlashListAfterPrompt()
+			return m, nil
+		}
 		if m.slashResultPanel != nil {
 			m.clearSlashResultPanel()
 			m.rebuildHeightCache()
@@ -1129,7 +1127,9 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 		return m, tea.Quit
 	case "f2":
-		m.toggleSlashListUser()
+		m.loadSlashCommandsOnce()
+		m.slashPicker.SetCommands(m.slashCommands)
+		m.slashPicker.ToggleUserManual()
 		return m, nil
 	}
 	if m.uiScreen == gouDemoScreenTranscript {
@@ -1166,7 +1166,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			m.applySlashTab()
 			fullPrompt := strings.TrimRight(m.pr.Value(), "\r\n")
 			m.pr.SetValue("")
-			m.slashListUser = false
+			m.slashPicker.Dismiss()
 			m.syncSlashListAfterPrompt()
 			line := strings.TrimSpace(fullPrompt)
 			if line == "" {
@@ -1842,7 +1842,9 @@ func (m *model) View() tea.View {
 			b.WriteString(blk)
 		}
 		if m.slashListVisible() {
-			if sp := m.renderSlashPicker(m.cols, m.height); sp != "" {
+			vis := m.visibleSlashList()
+			hint := m.slashListFooterHint()
+			if sp := m.slashPicker.View(vis, m.cols, m.height, hint); sp != "" {
 				b.WriteByte('\n')
 				b.WriteString(sp)
 			}
@@ -2828,32 +2830,32 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						MessagesFunc:     func() []types.Message { return m.store.Messages },
 						SystemPrompt:     []string{guidance},
 						NotificationCallback: func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
-					commandqueue.EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
-					// Notify TUI to check for idle auto-submit
-					if send := m.ccbSend; send != nil {
-						send(commandQueueNotifyMsg{})
-					}
-				},
-					ProgressCallback: func(msg *types.Message) {
+							commandqueue.EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
+							// Notify TUI to check for idle auto-submit
+							if send := m.ccbSend; send != nil {
+								send(commandQueueNotifyMsg{})
+							}
+						},
+						ProgressCallback: func(msg *types.Message) {
 							if msg == nil {
 								return
 							}
 							// Parse agent lifecycle events from progress messages
 							if msg.Type == types.MessageTypeProgress && len(msg.Data) > 0 {
 								var data struct {
-									Type             string `json:"type"`
-									AgentID          string `json:"agentId"`
-									AgentType        string `json:"agentType"`
-									Description      string `json:"description"`
-									Name             string `json:"name"`
-									IsBackground     bool   `json:"isBackground"`
-									ParentToolUseID  string `json:"parentToolUseID"`
-									TokenCount       int    `json:"tokenCount"`
-									ToolUseCount     int    `json:"toolUseCount"`
-									LastActivityDesc  string   `json:"lastActivityDesc"`
-									Summary           string   `json:"summary"`
-									RecentActivities  []string `json:"recentActivities"`
-									Status            string   `json:"status"`
+									Type             string   `json:"type"`
+									AgentID          string   `json:"agentId"`
+									AgentType        string   `json:"agentType"`
+									Description      string   `json:"description"`
+									Name             string   `json:"name"`
+									IsBackground     bool     `json:"isBackground"`
+									ParentToolUseID  string   `json:"parentToolUseID"`
+									TokenCount       int      `json:"tokenCount"`
+									ToolUseCount     int      `json:"toolUseCount"`
+									LastActivityDesc string   `json:"lastActivityDesc"`
+									Summary          string   `json:"summary"`
+									RecentActivities []string `json:"recentActivities"`
+									Status           string   `json:"status"`
 								}
 								if json.Unmarshal(msg.Data, &data) == nil {
 									switch data.Type {
@@ -2883,11 +2885,11 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 											send(AgentProgressMsg{
 												AgentID: data.AgentID,
 												Progress: &AgentTaskProgress{
-													Summary:           data.Summary,
-													TokenCount:        data.TokenCount,
-													ToolUseCount:      data.ToolUseCount,
-													LastActivityDesc:  data.LastActivityDesc,
-									RecentActivities:  data.RecentActivities,
+													Summary:          data.Summary,
+													TokenCount:       data.TokenCount,
+													ToolUseCount:     data.ToolUseCount,
+													LastActivityDesc: data.LastActivityDesc,
+													RecentActivities: data.RecentActivities,
 												},
 											})
 										}
@@ -3023,20 +3025,20 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						if partsRes.SessionStartHookMessages != nil {
 							msgsForQ = append(slices.Clone(partsRes.SessionStartHookMessages), msgsForQ...)
 						}
-					// Inject pending background agent notifications as user messages
-					// so the model sees them when the next query starts.
-					if commandqueue.HasPendingNotifications() {
-						for _, cmd := range commandqueue.DrainCommandQueue() {
-							content, _ := json.Marshal([]map[string]any{{
-								"type": "text",
-								"text": "A background agent completed a task:\n" + cmd.Value,
-							}})
-							msgsForQ = append(msgsForQ, types.Message{
-								Type:    "user",
-								Content: content,
-							})
+						// Inject pending background agent notifications as user messages
+						// so the model sees them when the next query starts.
+						if commandqueue.HasPendingNotifications() {
+							for _, cmd := range commandqueue.DrainCommandQueue() {
+								content, _ := json.Marshal([]map[string]any{{
+									"type": "text",
+									"text": "A background agent completed a task:\n" + cmd.Value,
+								}})
+								msgsForQ = append(msgsForQ, types.Message{
+									Type:    "user",
+									Content: content,
+								})
+							}
 						}
-					}
 						if send := m.ccbSend; send != nil {
 							qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
 								send(gouStreamingToolUsesMsg{Uses: uses})
@@ -3114,9 +3116,9 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
 						gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
 							reqID, len(m.store.Messages), len(toolsJSON))
-					// Save params for auto-submit of bg agent notifications
-					qpCopy := qp
-					m.lastQueryParams = &qpCopy
+						// Save params for auto-submit of bg agent notifications
+						qpCopy := qp
+						m.lastQueryParams = &qpCopy
 						m.beginQuerySpinner()
 						m.queryBusy = true
 						m.store.ClearStreamingToolUses()
