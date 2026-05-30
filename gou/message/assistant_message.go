@@ -131,18 +131,18 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 	}
 
 	// Regular assistant text
-	contentWidth := getContainerWidth(ctx) - 4
+	contentWidth := getContainerWidth(ctx) - 3
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
 	lines := renderMarkdown(text, contentWidth, ctx.Theme, ctx.Highlighter)
 
-	// Add "⏺ " prefix to assistant messages and indent all lines by 2 spaces
+	// Add "⏺ " prefix to assistant messages and indent continuation lines by 2 spaces
 	for i, line := range lines {
 		if i == 0 {
-			lines[i] = "  ⏺ " + line
+			lines[i] = "⏺ " + line
 		} else {
-			lines[i] = "    " + line
+			lines[i] = "  " + line
 		}
 	}
 
@@ -171,16 +171,16 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 	// In verbose mode or transcript, show full thinking content.
 	if ctx.Verbose || ctx.IsTranscript {
 		if thinkingBody != "" {
-			contentWidth := getContainerWidth(ctx) - 5
+			contentWidth := getContainerWidth(ctx) - 3
 			if contentWidth < 20 {
 				contentWidth = 20
 			}
 			lines := renderMarkdown(thinkingBody, contentWidth, ctx.Theme, ctx.Highlighter)
 			for i := range lines {
 				if i == 0 {
-					lines[i] = "  💭 " + lines[i]
+					lines[i] = "💭 " + lines[i]
 				} else {
-					lines[i] = "    " + lines[i]
+					lines[i] = "  " + lines[i]
 				}
 			}
 			return lines, nil
