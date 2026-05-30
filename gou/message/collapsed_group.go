@@ -95,7 +95,7 @@ func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message) string {
 	}
 
 	if len(parts) == 0 {
-		return "⟳ Working..."
+		return "● Working..."
 	}
 
 	return fmt.Sprintf("⤿ %s", strings.Join(parts, ", "))

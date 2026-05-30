@@ -59,10 +59,10 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 
 	// Add 2-space gutter + loader or status indicator
 	if isInProgress {
-		lineBuilder.WriteString("⟳ ") // Loading symbol
+		lineBuilder.WriteString("● ") // Loading symbol — matches TS BLACK_CIRCLE
 		diaglog.Line("[tool-use] Showing loading symbol (in progress)")
 	} else {
-		lineBuilder.WriteString("✓ ") // Completed symbol
+		lineBuilder.WriteString("● ") // Completed symbol — matches TS BLACK_CIRCLE
 		diaglog.Line("[tool-use] Showing completed symbol")
 	}
 
