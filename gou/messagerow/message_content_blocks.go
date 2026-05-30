@@ -42,6 +42,21 @@ func FirstContentBlock(msg types.Message) (types.MessageContentBlock, bool) {
 	return blocks[0], true
 }
 
+// FirstToolUseBlock returns the first tool_use content block, skipping thinking/redacted_thinking.
+func FirstToolUseBlock(msg types.Message) (types.MessageContentBlock, bool) {
+	blocks := MessageContentBlocks(msg)
+	for _, b := range blocks {
+		if b.Type == "thinking" || b.Type == "redacted_thinking" {
+			continue
+		}
+		if b.Type == "tool_use" {
+			return b, true
+		}
+		return b, true
+	}
+	return types.MessageContentBlock{}, false
+}
+
 // assistantSingleToolUse returns the tool_use when blocks[0] is the only valid tool_use in content
 // (TS tail pair: text or thinking before tool_use breaks the suffix).
 func assistantSingleToolUse(msg types.Message) (types.MessageContentBlock, bool) {

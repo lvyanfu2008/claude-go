@@ -45,7 +45,7 @@ func attachmentType(msg types.Message) string {
 func getCollapsibleToolInfoGo(msg types.Message) (name string, input map[string]any, info searchOrReadResult, ok bool) {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
-		b, okb := FirstContentBlock(msg)
+		b, okb := FirstToolUseBlock(msg)
 		if !okb || b.Type != "tool_use" || strings.TrimSpace(b.Name) == "" {
 			return "", nil, searchOrReadResult{}, false
 		}
@@ -59,7 +59,7 @@ func getCollapsibleToolInfoGo(msg types.Message) (name string, input map[string]
 		if len(msg.Messages) == 0 {
 			return "", nil, searchOrReadResult{}, false
 		}
-		b, okb := FirstContentBlock(msg.Messages[0])
+		b, okb := FirstToolUseBlock(msg.Messages[0])
 		if !okb || b.Type != "tool_use" {
 			return "", nil, searchOrReadResult{}, false
 		}
@@ -89,7 +89,7 @@ func isTextBreakerInk(msg types.Message) bool {
 func isNonCollapsibleToolUseInk(msg types.Message) bool {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
-		b, ok := FirstContentBlock(msg)
+		b, ok := FirstToolUseBlock(msg)
 		if !ok || b.Type != "tool_use" {
 			return false
 		}
@@ -100,7 +100,7 @@ func isNonCollapsibleToolUseInk(msg types.Message) bool {
 		if len(msg.Messages) == 0 {
 			return false
 		}
-		b, ok := FirstContentBlock(msg.Messages[0])
+		b, ok := FirstToolUseBlock(msg.Messages[0])
 		if !ok || b.Type != "tool_use" {
 			return false
 		}
