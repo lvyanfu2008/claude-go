@@ -55,32 +55,32 @@ func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message) string {
 
 	// Add counts
 	if msg.ReadCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d read", msg.ReadCount))
+		parts = append(parts, fmt.Sprintf("Reading %d files", msg.ReadCount))
 	}
 	if msg.SearchCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d search", msg.SearchCount))
+		parts = append(parts, fmt.Sprintf("Searching %d patterns", msg.SearchCount))
 	}
 	if msg.ListCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d list", msg.ListCount))
+		parts = append(parts, fmt.Sprintf("Listing %d items", msg.ListCount))
 	}
 	if msg.ReplCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d repl", msg.ReplCount))
+		parts = append(parts, fmt.Sprintf("Ran %d repl", msg.ReplCount))
 	}
 	if msg.BashCount != nil && *msg.BashCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d bash", *msg.BashCount))
+		parts = append(parts, fmt.Sprintf("Ran %d commands", *msg.BashCount))
 	}
 
 	// Add MCP calls if any
 	if msg.McpCallCount != nil && *msg.McpCallCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d MCP", *msg.McpCallCount))
+		parts = append(parts, fmt.Sprintf("%d MCP calls", *msg.McpCallCount))
 	}
 
 	// Add memory operations
 	if msg.MemoryReadCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d memory read", msg.MemoryReadCount))
+		parts = append(parts, fmt.Sprintf("Read %d memories", msg.MemoryReadCount))
 	}
 	if msg.MemoryWriteCount > 0 {
-		parts = append(parts, fmt.Sprintf("%d memory write", msg.MemoryWriteCount))
+		parts = append(parts, fmt.Sprintf("Saved %d memories", msg.MemoryWriteCount))
 	}
 
 	// Add Git operations
