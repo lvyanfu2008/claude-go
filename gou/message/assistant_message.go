@@ -167,43 +167,30 @@ func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}
 // renderThinkingBlock renders a thinking block.
 func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	thinkingBody := thinkingBlockString(block)
+	// "∴ Thinking" — dim + italic, matching TS AssistantThinkingMessage
+	const thinkingLabel = "\x1b[2;3m∴ Thinking\x1b[0m"
 
 	// In verbose mode or transcript, show full thinking content.
 	if ctx.Verbose || ctx.IsTranscript {
 		if thinkingBody != "" {
-			contentWidth := getContainerWidth(ctx) - 3
+			contentWidth := getContainerWidth(ctx) - 2
 			if contentWidth < 20 {
 				contentWidth = 20
 			}
 			lines := renderMarkdown(thinkingBody, contentWidth, ctx.Theme, ctx.Highlighter)
-			for i := range lines {
-				if i == 0 {
-					lines[i] = "💭 " + lines[i]
-				} else {
-					lines[i] = "  " + lines[i]
-				}
+			var result []string
+			result = append(result, thinkingLabel)
+			for _, line := range lines {
+				result = append(result, "  " + line)
 			}
-			return lines, nil
+			return result, nil
 		}
-		return []string{"💭 [Thinking...]"}, nil
+		return []string{thinkingLabel}, nil
 	}
 
-	// Normal mode: show at most the first sentence of the thinking content.
-	if thinkingBody != "" {
-		first := FirstSentenceOf(thinkingBody)
-		if first == "" {
-			first = thinkingBody
-		}
-		w := getContainerWidth(ctx) - 3
-		if w > 0 && len(first) > w {
-			first = first[:w] + "..."
-		}
-		return []string{"💭 " + first}, nil
-	}
-
-	return []string{"💭 [Thinking...]"}, nil
+	// Normal mode: show only the thinking label, no content preview.
+	return []string{thinkingLabel}, nil
 }
-
 // sentenceEnd checks whether r is a sentence-ending rune.
 func sentenceEnd(r rune) bool {
 	switch r {

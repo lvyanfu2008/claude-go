@@ -257,11 +257,8 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 			if content != "" {
 				content += "\n\n"
 			}
-			first := message.FirstSentenceOf(m.store.StreamingThinkingText)
-			if first == "" {
-				first = m.store.StreamingThinkingText
-			}
-			content += applyMessagePaneGutter("💭 "+first, m.messageBodyColsForLayout())
+			const thinkingStyle = "\x1b[2;3m"
+			content += applyMessagePaneGutter(thinkingStyle + "∴ Thinking\x1b[0m", m.messageBodyColsForLayout())
 		}
 
 		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
@@ -416,11 +413,8 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 			if content != "" {
 				content += "\n\n"
 			}
-			first := message.FirstSentenceOf(m.store.StreamingThinkingText)
-			if first == "" {
-				first = m.store.StreamingThinkingText
-			}
-			content += applyMessagePaneGutter("💭 "+first, m.messageBodyColsForLayout())
+			const thinkingStyle = "\x1b[2;3m"
+			content += applyMessagePaneGutter(thinkingStyle + "∴ Thinking\x1b[0m", m.messageBodyColsForLayout())
 		}
 
 		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
