@@ -168,56 +168,18 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 	if len(lines) == 0 {
 		return []string{"↳ [Result]"}, nil
 	}
-
-	return lines, nil
-}
-// extractContentItems extracts text content items from a tool result block.
-func extractContentItems(block map[string]interface{}) []interface{} {
-	if contentStr, ok := block["content"].(string); ok {
-		if contentStr != "" {
-			return []interface{}{map[string]interface{}{"type": "text", "text": contentStr}}
-		}
-		return nil
+		return lines, nil
 	}
-	if contentArr, ok := block["content"].([]interface{}); ok {
-		return contentArr
-	}
-	return nil
-}
 
-
-
-
-
-// renderToolResultInline renders tool result content inline (truncated), matching TS.
 func renderToolResultInline(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
 		return diffLines, nil
 	}
-	contentItems := extractContentItems(block)
-	if len(contentItems) == 0 {
+	summary := GenerateToolResultSummary(block)
+	if summary == "" {
 		return nil, nil
 	}
-	width := getContainerWidth(ctx) - 2
-	var lines []string
-	const maxLines = 10
-	for _, item := range contentItems {
-		if itemMap, ok := item.(map[string]interface{}); ok {
-			if itemType, _ := itemMap["type"].(string); itemType == "text" {
-				if text, _ := itemMap["text"].(string); text != "" {
-					textLines := renderMarkdown(text, width, ctx.Theme, ctx.Highlighter)
-					for _, tl := range textLines {
-						if len(lines) >= maxLines {
-							lines = append(lines, "  ...")
-							return lines, nil
-						}
-						lines = append(lines, "  "+tl)
-					}
-				}
-			}
-		}
-	}
-	return lines, nil
+	return []string{"  " + summary}, nil
 }
 
 
