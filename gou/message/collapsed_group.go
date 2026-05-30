@@ -22,8 +22,12 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 	var lines []string
 	width := getContainerWidth(ctx)
 
-	// Build summary line
-	summary := r.buildSummary(msg)
+	// Build summary line — use present progressive when active, past tense when complete
+	inProgress := msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" && ctx.ShouldAnimate
+	summary := r.buildSummary(msg, inProgress)
+	if inProgress {
+		summary += "…"
+	}
 	if len(summary) > width && width > 10 {
 		summary = summary[:width-3] + "..."
 	}
@@ -51,18 +55,30 @@ func (r *CollapsedGroupRenderer) Measure(msg *types.Message, ctx *RenderContext)
 }
 
 // buildSummary builds the summary line for a collapsed group.
-func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message) string {
+func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message, inProgress bool) string {
 	var parts []string
 
-	// Add counts
+	// Add counts — present progressive when active, past tense when complete
 	if msg.ReadCount > 0 {
-		parts = append(parts, fmt.Sprintf("Read %d files", msg.ReadCount))
+		if inProgress {
+			parts = append(parts, fmt.Sprintf("Reading %d files", msg.ReadCount))
+		} else {
+			parts = append(parts, fmt.Sprintf("Read %d files", msg.ReadCount))
+		}
 	}
 	if msg.SearchCount > 0 {
-		parts = append(parts, fmt.Sprintf("Searched for %d patterns", msg.SearchCount))
+		if inProgress {
+			parts = append(parts, fmt.Sprintf("Searching for %d patterns", msg.SearchCount))
+		} else {
+			parts = append(parts, fmt.Sprintf("Searched for %d patterns", msg.SearchCount))
+		}
 	}
 	if msg.ListCount > 0 {
-		parts = append(parts, fmt.Sprintf("Listed %d items", msg.ListCount))
+		if inProgress {
+			parts = append(parts, fmt.Sprintf("Listing %d items", msg.ListCount))
+		} else {
+			parts = append(parts, fmt.Sprintf("Listed %d items", msg.ListCount))
+		}
 	}
 	if msg.ReplCount > 0 {
 		parts = append(parts, fmt.Sprintf("Ran %d repl", msg.ReplCount))
