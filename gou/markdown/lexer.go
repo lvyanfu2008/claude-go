@@ -56,7 +56,7 @@ func trimInlineSegmentEdges(segs []InlineSegment) {
 func hasRichSegments(segs []InlineSegment) bool {
 	for i := range segs {
 		s := segs[i]
-		if s.Code || s.Bold || s.Italic {
+		if s.Code || s.Bold || s.Italic || s.Link {
 			return true
 		}
 	}
@@ -75,6 +75,9 @@ func canMergeInline(a, b InlineSegment) bool {
 	if a.Code != b.Code {
 		return false
 	}
+	if a.Link != b.Link {
+		return false
+	}
 	return a.Bold == b.Bold && a.Italic == b.Italic
 }
 
@@ -91,16 +94,16 @@ func appendMerged(out []InlineSegment, seg InlineSegment) []InlineSegment {
 }
 
 // appendInlineNode flattens goldmark inline nodes into styled segments (code, strong, emphasis, links as text).
-func appendInlineNode(out []InlineSegment, n ast.Node, src []byte, bold, italic bool) []InlineSegment {
+func appendInlineNode(out []InlineSegment, n ast.Node, src []byte, bold, italic, link bool) []InlineSegment {
 	switch t := n.(type) {
 	case *ast.Text:
 		s := segmentText(t, src)
 		if s == "" {
 			return out
 		}
-		return appendMerged(out, InlineSegment{Text: s, Bold: bold, Italic: italic})
+		return appendMerged(out, InlineSegment{Text: s, Bold: bold, Italic: italic, Link: link})
 	case *ast.CodeSpan:
-		return appendMerged(out, InlineSegment{Code: true, Text: textOf(t, src)})
+		return appendMerged(out, InlineSegment{Code: true, Text: textOf(t, src), Link: link})
 	case *ast.Emphasis:
 		b, i := bold, italic
 		switch {
@@ -112,23 +115,24 @@ func appendInlineNode(out []InlineSegment, n ast.Node, src []byte, bold, italic 
 			i = true
 		}
 		for c := t.FirstChild(); c != nil; c = c.NextSibling() {
-			out = appendInlineNode(out, c, src, b, i)
+			out = appendInlineNode(out, c, src, b, i, link)
 		}
 		return out
 	case *ast.Link:
 		for c := t.FirstChild(); c != nil; c = c.NextSibling() {
-			out = appendInlineNode(out, c, src, bold, italic)
+			out = appendInlineNode(out, c, src, bold, italic, true)
 		}
 		return out
 	case *ast.AutoLink:
 		label := string(t.Label(src))
-		return appendMerged(out, InlineSegment{Text: label, Bold: bold, Italic: italic})
+		return appendMerged(out, InlineSegment{Text: label, Bold: bold, Italic: italic, Link: link})
 	case *ast.Image:
-		return out
+		alt := textOf(t, src)
+		return appendMerged(out, InlineSegment{Text: "[Image: " + alt + "]"})
 	default:
 		s := textOf(t, src)
 		if s != "" {
-			return appendMerged(out, InlineSegment{Text: s, Bold: bold, Italic: italic})
+			return appendMerged(out, InlineSegment{Text: s, Bold: bold, Italic: italic, Link: link})
 		}
 		return out
 	}
@@ -138,7 +142,7 @@ func appendInlineNode(out []InlineSegment, n ast.Node, src []byte, bold, italic 
 func paragraphInlineSegments(p *ast.Paragraph, src []byte) []InlineSegment {
 	var out []InlineSegment
 	for c := p.FirstChild(); c != nil; c = c.NextSibling() {
-		out = appendInlineNode(out, c, src, false, false)
+		out = appendInlineNode(out, c, src, false, false, false)
 	}
 	return out
 }
@@ -147,7 +151,7 @@ func paragraphInlineSegments(p *ast.Paragraph, src []byte) []InlineSegment {
 func textBlockInlineSegments(tb *ast.TextBlock, src []byte) []InlineSegment {
 	var out []InlineSegment
 	for c := tb.FirstChild(); c != nil; c = c.NextSibling() {
-		out = appendInlineNode(out, c, src, false, false)
+		out = appendInlineNode(out, c, src, false, false, false)
 	}
 	if len(out) > 0 {
 		return out
@@ -175,7 +179,7 @@ func paragraphTokenFromParagraph(p *ast.Paragraph, src []byte) []Token {
 func headingTokenFromHeading(h *ast.Heading, src []byte) []Token {
 	var segs []InlineSegment
 	for c := h.FirstChild(); c != nil; c = c.NextSibling() {
-		segs = appendInlineNode(segs, c, src, false, false)
+		segs = appendInlineNode(segs, c, src, false, false, false)
 	}
 	if len(segs) == 0 {
 		return []Token{{Type: "heading", Level: h.Level, Text: strings.TrimSpace(textOf(h, src))}}

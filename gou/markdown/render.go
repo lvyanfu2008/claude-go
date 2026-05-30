@@ -120,6 +120,11 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			}
 			b.WriteString("\n\n")
 		case "code":
+			// 语言标签
+			if t.Lang != "" {
+				langTag := theme.Copy().Faint(true).Render("  [" + t.Lang + "]")
+				b.WriteString(langTag + "\n")
+			}
 			// 代码块高亮
 			var highlighted string
 			var highlightErr error
@@ -181,9 +186,9 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			quoted := "> " + strings.ReplaceAll(quoteText, "\n", "\n> ")
 			b.WriteString(quoteStyle.Render(quoted) + "\n\n")
 		case "hr":
-			// 应用淡色样式
+			// 应用淡色样式（全宽横线）
 			hrStyle := theme.Copy().Faint(true)
-			b.WriteString(hrStyle.Render("---") + "\n\n")
+			b.WriteString(hrStyle.Render("──────────────────────────────") + "\n\n")
 		default:
 			if t.Text != "" {
 				b.WriteString(t.Text)
@@ -236,6 +241,18 @@ func applyInlineStyle(seg InlineSegment, theme, inlineCode lipgloss.Style) strin
 			}
 		}
 		return result.String()
+	}
+
+	// 处理链接样式（下划线+蓝色）
+	if seg.Link {
+		style := theme.Copy().Underline(true).Foreground(lipgloss.Color("39"))
+		if seg.Bold {
+			style = style.Bold(true)
+		}
+		if seg.Italic {
+			style = style.Italic(true)
+		}
+		return style.Render(text)
 	}
 
 	style := theme.Copy()

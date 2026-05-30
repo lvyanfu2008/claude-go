@@ -7,6 +7,7 @@ type InlineSegment struct {
 	Code   bool   `json:"code,omitempty"`
 	Bold   bool   `json:"bold,omitempty"`
 	Italic bool   `json:"italic,omitempty"`
+	Link   bool   `json:"link,omitempty"`
 	Text   string `json:"text,omitempty"`
 }
 
