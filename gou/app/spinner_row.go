@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"goc/gou/theme"
+	"goc/types"
 )
 
 // SpinnerRow renders the query-busy spinner line matching TS SpinnerAnimationRow format.
@@ -18,15 +20,15 @@ func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thi
 		verb = "Working"
 	}
 
-	// Slow star glyph animation (changes every ~720ms at 120ms tick)
-	starGlyphs := []string{"✶", "✷", "✸", "✹"}
-	glyph := starGlyphs[(frame/6)%len(starGlyphs)]
+	// Dot spinner animation (changes every tick = 120ms, matching TS SpinnerGlyph)
+	dotGlyphs := []string{"◐", "◓", "◑", "◒"}
+	glyph := dotGlyphs[frame%len(dotGlyphs)]
 
-	darkRed := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true)
+	glyphStyle := lipgloss.NewStyle().Foreground(theme.MessageTypeColor(types.MessageTypeUser)).Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
 
 	var b strings.Builder
-	b.WriteString(darkRed.Render(glyph))
+	b.WriteString(glyphStyle.Render(glyph))
 	b.WriteString(" ")
 	b.WriteString(verb)
 	b.WriteString("…") // … fixed
