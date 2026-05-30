@@ -65,6 +65,11 @@ func RenderTokensPlain(tokens []Token) string {
 			b.WriteString("> ")
 			b.WriteString(strings.ReplaceAll(t.Text, "\n", "\n> "))
 			b.WriteString("\n\n")
+		case "table":
+			if t.Table != nil {
+				b.WriteString(RenderTable(*t.Table, lipgloss.Style{}))
+				b.WriteString("\n\n")
+			}
 		case "hr":
 			b.WriteString("---\n\n")
 		default:
@@ -185,6 +190,11 @@ func RenderTokensWithHighlight(tokens []Token, highlighter *Highlighter, theme l
 			// 添加>前缀并应用样式
 			quoted := "> " + strings.ReplaceAll(quoteText, "\n", "\n> ")
 			b.WriteString(quoteStyle.Render(quoted) + "\n\n")
+		case "table":
+			if t.Table != nil {
+				b.WriteString(RenderTable(*t.Table, theme))
+				b.WriteString("\n\n")
+			}
 		case "hr":
 			// 应用淡色样式（全宽横线）
 			hrStyle := theme.Copy().Faint(true)

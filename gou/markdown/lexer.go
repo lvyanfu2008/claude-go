@@ -328,7 +328,12 @@ func blockTokens(n ast.Node, src []byte) []Token {
 			seg := lines.At(i)
 			code.Write((&seg).Value(src))
 		}
-		return []Token{{Type: "code", Lang: lang, Text: code.String()}}
+		codeStr := code.String()
+		// Detect tables that were wrapped by wrapMarkdownTablesAsCodeBlocks.
+		if tbl, ok := ParseSimpleTable(codeStr); ok {
+			return []Token{{Type: "table", Table: tbl}}
+		}
+		return []Token{{Type: "code", Lang: lang, Text: codeStr}}
 	case *ast.CodeBlock:
 		var code strings.Builder
 		lines := n.Lines()

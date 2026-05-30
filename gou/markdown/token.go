@@ -28,4 +28,6 @@ type Token struct {
 	ListContinuation bool `json:"list_continuation,omitempty"`
 	// Segments is set for paragraph/list_item/blockquote when inline styling exists (code / strong / emphasis).
 	Segments []InlineSegment `json:"segments,omitempty"`
+	// Table holds parsed table data for table-type tokens.
+	Table *TableToken `json:"table,omitempty"`
 }
