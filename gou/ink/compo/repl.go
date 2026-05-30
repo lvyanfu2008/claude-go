@@ -10,7 +10,7 @@ func REPL(ctx *ink.Context, p ink.Props) ink.VNode {
 		Children: []ink.VNode{
 			{
 				Type: "ScrollBox", Key: "messages-scroll",
-				Props: ink.Props{"flexGrow": 1, "stickyBottom": true},
+				Props: ink.Props{"stickyBottom": true},
 				Children: []ink.VNode{Messages(ctx, p)},
 			},
 			StatusLine(ctx),

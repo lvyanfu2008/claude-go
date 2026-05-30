@@ -1,6 +1,7 @@
 package ink
 
 import (
+	"fmt"
 	"strings"
 
 	"goc/gou/theme"
@@ -12,11 +13,9 @@ type RenderEngine struct {
 	Theme      *theme.Palette
 	RootComp   Component
 	Reconciler *Reconciler
-	Diff       *DiffEngine
 
-	prevVTree  *VNode
-	prevScreen *Screen
-	currScreen *Screen
+	prevVTree   *VNode
+	lastMsgRows int
 }
 
 func NewEngine(term *Terminal, store *Store, pal *theme.Palette, root Component) *RenderEngine {
@@ -26,15 +25,14 @@ func NewEngine(term *Terminal, store *Store, pal *theme.Palette, root Component)
 		Theme:      pal,
 		RootComp:   root,
 		Reconciler: &Reconciler{},
-		Diff:       &DiffEngine{},
 	}
 }
 
 func (e *RenderEngine) Render() {
-	w, h := e.Terminal.Size()
+	w, termH := e.Terminal.Size()
 	e.Store.mu.Lock()
 	e.Store.Width = w
-	e.Store.Height = h
+	e.Store.Height = termH
 	e.Store.mu.Unlock()
 
 	ctx := &Context{
@@ -44,29 +42,93 @@ func (e *RenderEngine) Render() {
 	}
 	newTree := e.RootComp(ctx, Props{})
 
-	_ = e.Reconciler.Diff(e.prevVTree, &newTree)
+	e.Reconciler.Diff(e.prevVTree, &newTree)
 	e.prevVTree = &newTree
 
-	ComputeLayout(&newTree, Constraints{MinW: 0, MaxW: w, MinH: 0, MaxH: h})
+	// Layout: messages take natural height, prompt area at bottom.
+	ComputeLayout(&newTree, Constraints{MinW: 0, MaxW: w, MinH: 0, MaxH: termH})
 
-	e.currScreen = NewScreen(w, h)
-	Rasterize(&newTree, e.currScreen)
+	// Rasterize to find content extents.
+	tmp := NewScreen(w, 2048)
+	Rasterize(&newTree, tmp)
 
-	if e.prevScreen == nil {
-		e.Terminal.Write([]byte(eraseDisplay()))
-		e.Terminal.Write([]byte(cursorTo(0, 0)))
-		for row := 0; row < h && row < len(e.currScreen.Cells); row++ {
-			line := renderLineANSI(e.currScreen.Cells[row])
-			e.Terminal.Write([]byte(line))
-			if row < h-1 {
-				e.Terminal.Write([]byte("\r\n"))
-			}
-		}
-	} else {
-		output := e.Diff.Generate(e.prevScreen, e.currScreen)
-		e.Terminal.Write([]byte(output))
+	// Find where messages end and footer (status + prompt) begins.
+	// Messages are in the ScrollBox, footer is StatusLine + PromptInput.
+	// The footer always starts at the second-to-last 3 rows of content.
+	last := lastNonEmptyRow(tmp)
+	totalH := last + 1
+	if totalH == 0 {
+		totalH = 1
 	}
-	e.prevScreen = e.currScreen
+
+	// Footer is the last 3 rows: statusLine, border, prompt text.
+	footerH := 3
+	if totalH < footerH {
+		footerH = totalH
+	}
+	msgH := totalH - footerH
+
+	// Build message buffer and footer buffer.
+	msgRows := NewScreen(w, msgH)
+	for row := 0; row < msgH; row++ {
+		copy(msgRows.Cells[row], tmp.Cells[row])
+	}
+	footerRows := NewScreen(w, footerH)
+	for row := 0; row < footerH; row++ {
+		copy(footerRows.Cells[row], tmp.Cells[msgH+row])
+	}
+
+	if e.lastMsgRows == 0 {
+		// First frame: write messages from current cursor position,
+		// then position footer at bottom of terminal.
+		for row := 0; row < msgH; row++ {
+			line := renderLineANSI(msgRows.Cells[row])
+			e.Terminal.Write([]byte(line))
+			e.Terminal.Write([]byte("\x1b[0K\r\n"))
+		}
+		// Position footer at absolute bottom of terminal.
+		e.writeFooterAtBottom(footerRows, termH, footerH)
+	} else {
+		// Update messages in-place, reposition footer.
+		// Rewind to start of messages.
+		if e.lastMsgRows > 0 {
+			e.Terminal.Write([]byte(fmt.Sprintf("\x1b[%dA", e.lastMsgRows)))
+		}
+		// Write messages.
+		for row := 0; row < msgH; row++ {
+			line := renderLineANSI(msgRows.Cells[row])
+			e.Terminal.Write([]byte(line))
+			e.Terminal.Write([]byte("\x1b[0K\r\n"))
+		}
+		// Clear leftover message rows if messages shrank.
+		if msgH < e.lastMsgRows {
+			for i := msgH; i < e.lastMsgRows; i++ {
+				e.Terminal.Write([]byte("\x1b[0K\r\n"))
+			}
+			e.Terminal.Write([]byte(fmt.Sprintf("\x1b[%dA", e.lastMsgRows-msgH)))
+		}
+		// Reposition and rewrite footer.
+		e.writeFooterAtBottom(footerRows, termH, footerH)
+	}
+	e.lastMsgRows = msgH
+
+	// Position terminal cursor at prompt input.
+	cursorY := termH - 2
+	cursorX := 2 + e.Store.CursorPos
+	if cursorY < 0 {
+		cursorY = 0
+	}
+	e.Terminal.Write([]byte(cursorTo(cursorY, cursorX)))
+}
+
+func (e *RenderEngine) writeFooterAtBottom(footer *Screen, termH, footerH int) {
+	for row := 0; row < footerH; row++ {
+		y := termH - footerH + row
+		line := renderLineANSI(footer.Cells[row])
+		e.Terminal.Write([]byte(cursorTo(y, 0)))
+		e.Terminal.Write([]byte(line))
+		e.Terminal.Write([]byte("\x1b[0K"))
+	}
 }
 
 func renderLineANSI(cells []TermCell) string {
@@ -97,7 +159,7 @@ func renderLineANSI(cells []TermCell) string {
 	if inStyle {
 		buf.WriteString(sgrReset())
 	}
-	return buf.String()
+	return strings.TrimRight(buf.String(), " ")
 }
 
 func (e *RenderEngine) Start() error {
@@ -112,4 +174,15 @@ func (e *RenderEngine) Start() error {
 func (e *RenderEngine) Stop() {
 	e.Store.Stop()
 	e.Terminal.Shutdown()
+}
+
+func lastNonEmptyRow(s *Screen) int {
+	for y := len(s.Cells) - 1; y >= 0; y-- {
+		for _, c := range s.Cells[y] {
+			if c.Rune != 0 {
+				return y
+			}
+		}
+	}
+	return 0
 }

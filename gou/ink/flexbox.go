@@ -166,20 +166,26 @@ func layoutBox(node *VNode, c Constraints) {
 		ComputeLayout(&node.Children[i], childC)
 	}
 
-	// STEP 2: Resolve main axis (grow/shrink for row direction)
+	// STEP 2: Resolve main axis (flexGrow/flexShrink)
+	totalChildMain := 0
+	for i := range node.Children {
+		totalChildMain += childMainSize(&node.Children[i], direction)
+	}
+	totalGap := 0
+	if len(node.Children) > 1 {
+		totalGap = (len(node.Children) - 1) * gap
+	}
+
 	if direction == "row" {
-		totalMain := 0
-		for i := range node.Children {
-			totalMain += childMainSize(&node.Children[i], direction)
-		}
-		if len(node.Children) > 1 {
-			totalMain += (len(node.Children) - 1) * gap
-		}
-		free := innerW - totalMain
+		free := innerW - totalChildMain - totalGap
 		if free > 0 {
 			distributeGrow(node, free, direction)
 		} else if free < 0 {
 			distributeShrink(node, -free, direction)
+		}
+		totalChildMain = 0
+		for i := range node.Children {
+			totalChildMain += childMainSize(&node.Children[i], direction)
 		}
 	}
 
@@ -196,26 +202,24 @@ func layoutBox(node *VNode, c Constraints) {
 		applyCrossStretch(&node.Children[i], align, direction, maxCross)
 	}
 
-	// STEP 4: Position children
-	justify := node.Props.GetString("justifyContent")
-	if justify == "" {
-		justify = "start"
-	}
-
-	totalChildMain := 0
-	for i := range node.Children {
-		totalChildMain += childMainSize(&node.Children[i], direction)
-	}
-	totalGap := 0
-	if len(node.Children) > 1 {
-		totalGap = (len(node.Children) - 1) * gap
-	}
-
+	// STEP 4: Determine container height, apply column flexGrow
 	var h int
 	if direction == "column" {
 		h = totalChildMain + totalGap + 2*pad
+		if c.MaxH > 0 && h < c.MaxH && hasFlexGrowChild(node) {
+			h = c.MaxH
+		}
+		extraH := h - 2*pad - totalChildMain - totalGap
+		if extraH > 0 {
+			distributeGrow(node, extraH, direction)
+		}
 	} else {
 		h = maxCross + 2*pad
+	}
+
+	justify := node.Props.GetString("justifyContent")
+	if justify == "" {
+		justify = "start"
 	}
 
 	freeMain := h - 2*pad - totalChildMain - totalGap
@@ -256,10 +260,6 @@ func layoutScrollBox(node *VNode, c Constraints) {
 	if w <= 0 {
 		w = c.MaxW
 	}
-	h := node.Props.GetInt("height")
-	if h <= 0 {
-		h = c.MaxH
-	}
 
 	innerW := w
 	contentH := 0
@@ -269,6 +269,14 @@ func layoutScrollBox(node *VNode, c Constraints) {
 		child.Layout.X = 0
 		child.Layout.Y = contentH
 		contentH += child.Layout.H
+	}
+
+	h := node.Props.GetInt("height")
+	if h <= 0 {
+		h = c.MaxH
+	}
+	if h <= 0 {
+		h = contentH // natural height from children
 	}
 
 	visStart := 0
@@ -371,4 +379,13 @@ func crossAxisOffset(child *VNode, align, direction string, available int) int {
 	default:
 		return 0
 	}
+}
+
+func hasFlexGrowChild(node *VNode) bool {
+	for i := range node.Children {
+		if node.Children[i].Props.GetInt("flexGrow") > 0 {
+			return true
+		}
+	}
+	return false
 }

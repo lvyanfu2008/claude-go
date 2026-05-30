@@ -13,8 +13,10 @@ type Store struct {
 	StreamingTools []StreamingToolUse
 	ScrollTop      int
 	InputValue     string
+	CursorPos      int
 	IsLoading      bool
 	Width, Height  int
+	meta           map[string]string
 
 	renderCh chan struct{}
 	onRender func()
@@ -48,6 +50,7 @@ func NewStore() *Store {
 	return &Store{
 		renderCh: make(chan struct{}, 1),
 		closeCh:  make(chan struct{}),
+		meta:     make(map[string]string),
 	}
 }
 
@@ -117,4 +120,23 @@ func (s *Store) SetInputValue(v string) {
 	s.InputValue = v
 	s.mu.Unlock()
 	s.ScheduleRender()
+}
+
+func (s *Store) SetCursorPos(pos int) {
+	s.mu.Lock()
+	s.CursorPos = pos
+	s.mu.Unlock()
+	s.ScheduleRender()
+}
+
+func (s *Store) GetMeta(key string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.meta[key]
+}
+
+func (s *Store) SetMeta(key, val string) {
+	s.mu.Lock()
+	s.meta[key] = val
+	s.mu.Unlock()
 }

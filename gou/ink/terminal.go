@@ -37,19 +37,7 @@ func (t *Terminal) Init() error {
 		term.Restore(fd, state)
 	})
 
-	// alternate screen
-	fmt.Fprint(t.stdout, "\x1b[?1049h")
-	t.restoreFuncs = append(t.restoreFuncs, func() {
-		fmt.Fprint(t.stdout, "\x1b[?1049l")
-	})
-
-	// hide cursor
-	fmt.Fprint(t.stdout, "\x1b[?25l")
-	t.restoreFuncs = append(t.restoreFuncs, func() {
-		fmt.Fprint(t.stdout, "\x1b[?25h")
-	})
-
-	// enable SGR mouse tracking
+	// enable SGR mouse tracking (disabled on shutdown)
 	fmt.Fprint(t.stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1006h")
 	t.restoreFuncs = append(t.restoreFuncs, func() {
 		fmt.Fprint(t.stdout, "\x1b[?1006l\x1b[?1002l\x1b[?1000l")
@@ -93,4 +81,27 @@ func (t *Terminal) Shutdown() {
 
 func (t *Terminal) Write(data []byte) (int, error) {
 	return t.stdout.Write(data)
+}
+
+// ReadStdin starts a goroutine that reads raw bytes from stdin
+// and sends them on the returned channel. Callers should read from
+// this channel to receive keyboard input.
+func (t *Terminal) ReadStdin() <-chan []byte {
+	ch := make(chan []byte, 32)
+	go func() {
+		buf := make([]byte, 64)
+		for {
+			n, err := t.stdin.Read(buf)
+			if err != nil {
+				close(ch)
+				return
+			}
+			if n > 0 {
+				data := make([]byte, n)
+				copy(data, buf[:n])
+				ch <- data
+			}
+		}
+	}()
+	return ch
 }
