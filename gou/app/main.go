@@ -619,6 +619,7 @@ type model struct {
 	permissionMode        types.PermissionMode
 	queryBusy             bool
 	queryBusyStartedAt    time.Time
+	lastActivity          time.Time
 	spinnerVerb           string
 	spinnerFrame          int
 	spinnerTokens         int
@@ -1753,7 +1754,7 @@ func (m *model) View() tea.View {
 		}
 		// Spinner row (when query busy, flush left)
 		if m.queryBusy {
-			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.cols)
+			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.lastActivity, m.cols)
 			if spinner != "" {
 				b.WriteString(spinner)
 				b.WriteByte('\n')

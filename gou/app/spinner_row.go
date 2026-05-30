@@ -14,8 +14,10 @@ import (
 	"goc/types"
 )
 
+const spinnerStuckThreshold = 3 * time.Second
+
 // SpinnerRow renders the query-busy spinner line matching TS SpinnerAnimationRow format.
-func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thinking bool, cols int) string {
+func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thinking bool, lastActivity time.Time, cols int) string {
 	if verb == "" {
 		verb = "Working"
 	}
@@ -24,7 +26,13 @@ func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thi
 	dotGlyphs := []string{"◐", "◓", "◑", "◒"}
 	glyph := dotGlyphs[frame%len(dotGlyphs)]
 
-	glyphStyle := lipgloss.NewStyle().Foreground(theme.MessageTypeColor(types.MessageTypeUser)).Bold(true)
+	// Stuck detection: red after 3s of inactivity (matching TS stuck detection)
+	var glyphStyle lipgloss.Style
+	if !lastActivity.IsZero() && time.Since(lastActivity) > spinnerStuckThreshold {
+		glyphStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true) // red
+	} else {
+		glyphStyle = lipgloss.NewStyle().Foreground(theme.MessageTypeColor(types.MessageTypeUser)).Bold(true)
+	}
 	faint := lipgloss.NewStyle().Faint(true)
 
 	var b strings.Builder

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"time"
 
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
@@ -15,6 +16,7 @@ import (
 // Streaming / query-parity / NDJSON stream UI updates (extracted from [model.Update] for navigation).
 
 func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.Cmd) {
+	m.lastActivity = time.Now()
 	// Clear streaming text when a complete message arrives (mirrors TS handleMessageFromStream:
 	// onStreamingText(() => null) for all non-stream_event message types).
 	m.store.ClearStreaming()
@@ -31,6 +33,7 @@ func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.
 // streaming text display. Mirrors TS handleMessageFromStream content_block_delta → text_delta /
 // thinking_delta paths where onStreamingText appends delta text character by character.
 func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, tea.Cmd) {
+	m.lastActivity = time.Now()
 	var wrap struct {
 		Delta struct {
 			Type     string `json:"type"`
@@ -142,6 +145,7 @@ func (m *model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cm
 }
 
 func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
+	m.lastActivity = time.Now()
 	ev := ccbstream.StreamEvent(msg)
 	if gouDemoTrace != nil {
 		switch ev.Type {
