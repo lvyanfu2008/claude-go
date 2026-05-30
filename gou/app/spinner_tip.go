@@ -10,7 +10,7 @@ import (
 
 const (
 	spinnerTipClear       = "Use /clear to start fresh when switching topics and free up context"
-	spinnerTipBtw        = "Use /btw to ask a quick side question without interrupting Claude's current work"
+	spinnerTipBtw         = "Use /btw to ask a quick side question without interrupting Claude's current work"
 	spinnerTipPromptQueue = "Hit Enter to queue up additional messages while Claude is working."
 )
 

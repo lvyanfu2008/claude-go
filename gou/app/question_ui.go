@@ -55,13 +55,13 @@ func parseAskUserQuestionInput(input json.RawMessage) ([]ParsedQuestion, error) 
 type questionModel struct {
 	questions    []ParsedQuestion
 	currentIndex int
-	answers      map[string]string   // questionText → comma-joined labels
-	annotations  map[string]any      // questionText → {preview, notes}
+	answers      map[string]string // questionText → comma-joined labels
+	annotations  map[string]any    // questionText → {preview, notes}
 
-	cursor      int    // option index (0..len(options)-1) or len(options) for "Chat about this"
-	showSubmit  bool   // review screen
-	done        bool
-	cancelled   bool
+	cursor     int  // option index (0..len(options)-1) or len(options) for "Chat about this"
+	showSubmit bool // review screen
+	done       bool
+	cancelled  bool
 
 	width  int
 	height int

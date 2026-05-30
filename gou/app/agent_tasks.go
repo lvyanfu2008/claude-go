@@ -31,12 +31,12 @@ type AgentTaskState struct {
 
 // AgentTaskProgress mirrors TS progress fields.
 type AgentTaskProgress struct {
-	TokenCount        int
-	ToolUseCount      int
-	LastActivity      *time.Time
-	LastActivityDesc  string
-	Summary           string
-	RecentActivities  []string // last N activity descriptions
+	TokenCount       int
+	ToolUseCount     int
+	LastActivity     *time.Time
+	LastActivityDesc string
+	Summary          string
+	RecentActivities []string // last N activity descriptions
 }
 
 // agentTaskStore is the in-memory registry of active/completed agent tasks.

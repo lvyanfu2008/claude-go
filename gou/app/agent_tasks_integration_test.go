@@ -84,7 +84,7 @@ func TestAgentFooterViewIntegration(t *testing.T) {
 		Description: "Done", Status: "completed",
 		StartTime: now.Add(-10 * time.Second), EndTime: &end,
 		EvictAfter: ptrTime(now.Add(20 * time.Second)),
-		Progress: &AgentTaskProgress{TokenCount: 500},
+		Progress:   &AgentTaskProgress{TokenCount: 500},
 	})
 
 	visible := store.VisibleTasks()
@@ -160,7 +160,6 @@ func TestAgentEvictExpiredMultipleTasks(t *testing.T) {
 		t.Fatal("expected a1 to survive eviction")
 	}
 }
-
 
 // TestTaskListActivityDisplay verifies that when an in-progress task has an owner
 // and the agentTasks store has a running agent with matching name, the activity
@@ -239,7 +238,7 @@ func TestNoActivityForCompletedTask(t *testing.T) {
 		ID: "agent-a1", AgentType: "x", Name: "explorer",
 		Status: "running", StartTime: time.Now(),
 		EvictAfter: ptrTime(time.Now().Add(time.Minute)),
-		Progress: &AgentTaskProgress{Summary: "Working"},
+		Progress:   &AgentTaskProgress{Summary: "Working"},
 	})
 
 	tl := newTaskListModel("test-session")
