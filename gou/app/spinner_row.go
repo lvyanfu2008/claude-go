@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"goc/gou/theme"
-	"goc/types"
 )
 
 const spinnerStuckThreshold = 3 * time.Second
@@ -22,16 +20,16 @@ func SpinnerRow(verb string, frame int, startedAt time.Time, tokenCount int, thi
 		verb = "Working"
 	}
 
-	// Dot spinner animation (changes every tick = 120ms, matching TS SpinnerGlyph)
-	dotGlyphs := []string{"◐", "◓", "◑", "◒"}
-	glyph := dotGlyphs[frame%len(dotGlyphs)]
+	// Slow star glyph animation (changes every ~720ms at 120ms tick)
+	starGlyphs := []string{"✶", "✷", "✸", "✹"}
+	glyph := starGlyphs[(frame/6)%len(starGlyphs)]
 
 	// Stuck detection: red after 3s of inactivity (matching TS stuck detection)
 	var glyphStyle lipgloss.Style
 	if !lastActivity.IsZero() && time.Since(lastActivity) > spinnerStuckThreshold {
 		glyphStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true) // red
 	} else {
-		glyphStyle = lipgloss.NewStyle().Foreground(theme.MessageTypeColor(types.MessageTypeUser)).Bold(true)
+		glyphStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true) // dark red
 	}
 	faint := lipgloss.NewStyle().Faint(true)
 
