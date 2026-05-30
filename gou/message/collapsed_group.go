@@ -22,11 +22,12 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 	var lines []string
 	width := getContainerWidth(ctx)
 
-	// Build summary line — use present progressive when active, past tense when complete
-	inProgress := msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" && ctx.ShouldAnimate
+	// in-progress when hint is available (tool_use had pending work).
+	// Don't depend on ShouldAnimate which can flicker false when results arrive.
+	inProgress := msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != ""
 	summary := r.buildSummary(msg, inProgress)
 	if inProgress {
-		summary += "…"
+		summary += "…" // …
 	}
 	if len(summary) > width && width > 10 {
 		summary = summary[:width-3] + "..."
@@ -34,8 +35,8 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 	lines = append(lines, summary)
 
 	// Add hint line if available
-	if msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" && ctx.ShouldAnimate {
-		hint := fmt.Sprintf("  ⎿ %s", *msg.LatestDisplayHint)
+	if inProgress {
+		hint := fmt.Sprintf("  ⎿ %s", *msg.LatestDisplayHint) // ⎿
 		if len(hint) > width && width > 10 {
 			hint = hint[:width-3] + "..."
 		}
@@ -47,8 +48,7 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 
 // Measure measures a collapsed group.
 func (r *CollapsedGroupRenderer) Measure(msg *types.Message, ctx *RenderContext) (int, error) {
-	// Collapsed groups are 1 line when completed, 2 lines when active with hint
-	if msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" && ctx.ShouldAnimate {
+	if msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" {
 		return 2, nil
 	}
 	return 1, nil
@@ -112,7 +112,7 @@ func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message, inProgress boo
 	}
 
 	if len(parts) == 0 {
-		return "● Working..."
+		return "● Working..." // ●
 	}
 
 	return textutil.AssistantBullet() + strings.Join(parts, ", ")
@@ -151,15 +151,10 @@ func (r *CollapsedGroupRenderer) buildGitSummary(msg *types.Message) string {
 
 // ShouldCollapseMessages checks if messages should be collapsed into a group.
 func ShouldCollapseMessages(messages []*types.Message) bool {
-	// Similar to TS shouldCollapseReadSearch function
-	// Based on message types and timing
-	// For now, collapse if all messages are read/search operations
-
 	if len(messages) < 2 {
 		return false
 	}
 
-	// Check if we have consecutive read/search operations
 	readSearchCount := 0
 	for _, msg := range messages {
 		if isReadSearchMessage(msg) {
@@ -174,10 +169,6 @@ func ShouldCollapseMessages(messages []*types.Message) bool {
 
 // CreateCollapsedGroup creates a collapsed group from messages.
 func CreateCollapsedGroup(messages []*types.Message, groupUUID string) *types.Message {
-	// Similar to TS createCollapsedReadSearchGroup function
-	// Create a collapsed read/search group
-
-	// Convert []*types.Message to []types.Message
 	var msgSlice []types.Message
 	for _, msg := range messages {
 		msgSlice = append(msgSlice, *msg)
@@ -189,13 +180,10 @@ func CreateCollapsedGroup(messages []*types.Message, groupUUID string) *types.Me
 		Messages: msgSlice,
 	}
 
-	// Count operations
 	for _, msg := range messages {
-		// Count different types of operations
 		if isReadSearchMessage(msg) {
 			group.ReadCount++
 		}
-		// Add more operation types as needed
 	}
 
 	return group
@@ -207,8 +195,6 @@ func isReadSearchMessage(msg *types.Message) bool {
 		return false
 	}
 
-	// Check if message contains Read, Grep, or Glob tool uses
-	// Simple string matching for now
 	content := string(msg.Content)
 	if len(content) == 0 && msg.Message != nil {
 		content = string(msg.Message)
