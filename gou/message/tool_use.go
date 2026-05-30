@@ -59,10 +59,10 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 
 	// Add 2-space gutter + loader or status indicator
 	if isInProgress {
-		lineBuilder.WriteString("  ⟳ ") // Loading symbol
+		lineBuilder.WriteString("⟳ ") // Loading symbol
 		diaglog.Line("[tool-use] Showing loading symbol (in progress)")
 	} else {
-		lineBuilder.WriteString("  ✓ ") // Completed symbol
+		lineBuilder.WriteString("✓ ") // Completed symbol
 		diaglog.Line("[tool-use] Showing completed symbol")
 	}
 
@@ -86,7 +86,7 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 
 	// Add hint line if in progress and hint available
 	if isInProgress && hint != "" && ctx.ShouldAnimate {
-		hintLine := fmt.Sprintf("    ⎿ %s", hint)
+		hintLine := fmt.Sprintf("  ⎿ %s", hint)
 		if len(hintLine) > width && width > 10 {
 			hintLine = hintLine[:width-3] + "..."
 		}
@@ -128,7 +128,7 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 		// Generate meaningful summary instead of generic "[Result]"
 		summary := GenerateToolResultSummary(block)
 		// Add (ctrl+o to expand) hint for consistency with other TUI messages
-		return []string{"  ↳ " + summary + " (ctrl+o to expand)"}, nil
+		return []string{"↳ " + summary + " (ctrl+o to expand)"}, nil
 	}
 
 	if contentStr, ok := block["content"].(string); ok {
@@ -151,7 +151,7 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 
 	if len(contentItems) == 0 {
 		diaglog.Line("[tool-use] tool_result empty content")
-		return []string{"  ↳ [Empty result]"}, nil
+		return []string{"↳ [Empty result]"}, nil
 	}
 
 	var lines []string
@@ -170,7 +170,7 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 	}
 
 	if len(lines) == 0 {
-		return []string{"  ↳ [Result]"}, nil
+		return []string{"↳ [Result]"}, nil
 	}
 
 	return lines, nil

@@ -209,7 +209,7 @@ func (r *UserMessageRenderer) renderBashOutput(text string, ctx *RenderContext) 
 	if len(output) > 100 {
 		output = output[:100] + "..."
 	}
-	return []string{"    " + output}, nil
+	return []string{"  " + output}, nil
 }
 
 // renderLocalCommandOutput renders local command output.
@@ -224,7 +224,7 @@ func (r *UserMessageRenderer) renderLocalCommandOutput(text string, ctx *RenderC
 	if len(output) > 100 {
 		output = output[:100] + "..."
 	}
-	return []string{"    " + output}, nil
+	return []string{"  " + output}, nil
 }
 
 // renderCommandMessage renders the visible metadata row for a slash command or skill invocation.
@@ -323,7 +323,7 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 		diaglog.Line("[user-message] renderToolResultBlock: collapsed to 1 line (prompt mode)")
 		// Generate meaningful summary instead of generic "[Result]"
 		summary := GenerateToolResultSummary(block)
-		return []string{"  ↳ " + summary + " (ctrl+o to expand)"}, nil
+		return []string{"↳ " + summary + " (ctrl+o to expand)"}, nil
 	}
 
 	if contentStr, ok := block["content"].(string); ok {
@@ -346,7 +346,7 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 
 	if len(contentItems) == 0 {
 		diaglog.Line("[user-message] tool_result empty content")
-		return []string{"  ↳ [Empty result]"}, nil
+		return []string{"↳ [Empty result]"}, nil
 	}
 
 	var lines []string
@@ -365,7 +365,7 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 	}
 
 	if len(lines) == 0 {
-		return []string{"  ↳ [Result]"}, nil
+		return []string{"↳ [Result]"}, nil
 	}
 	if ctx.IsTranscript && len(lines) > transcriptToolResultMaxLines {
 		lines = append([]string(nil), lines[:transcriptToolResultMaxLines]...)

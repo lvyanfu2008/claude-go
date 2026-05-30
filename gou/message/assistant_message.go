@@ -156,7 +156,7 @@ func (r *AssistantMessageRenderer) measureTextBlock(block map[string]interface{}
 	if compactservice.IsRateLimitErrorMessage(text) || compactservice.StartsWithApiErrorPrefix(trimmed) {
 		return 1
 	}
-	contentWidth := getContainerWidth(ctx) - 4
+	contentWidth := getContainerWidth(ctx) - 3
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
@@ -185,7 +185,7 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 			}
 			return lines, nil
 		}
-		return []string{"  💭 [Thinking...]"}, nil
+		return []string{"💭 [Thinking...]"}, nil
 	}
 
 	// Normal mode: show at most the first sentence of the thinking content.
@@ -194,14 +194,14 @@ func (r *AssistantMessageRenderer) renderThinkingBlock(block map[string]interfac
 		if first == "" {
 			first = thinkingBody
 		}
-		w := getContainerWidth(ctx) - 5
+		w := getContainerWidth(ctx) - 3
 		if w > 0 && len(first) > w {
 			first = first[:w] + "..."
 		}
-		return []string{"  💭 " + first}, nil
+		return []string{"💭 " + first}, nil
 	}
 
-	return []string{"  💭 [Thinking...]"}, nil
+	return []string{"💭 [Thinking...]"}, nil
 }
 
 // sentenceEnd checks whether r is a sentence-ending rune.
