@@ -1826,9 +1826,6 @@ func (m *model) View() tea.View {
 		promptLineOffset = strings.Count(b.String(), "\n")
 		promptView := userInputViewWithPromptPrefix(m)
 		b.WriteString(promptView)
-		// Separator line below input area (always shown)
-		b.WriteByte('\n')
-		b.WriteString(promptAboveInputRuleLine(m.cols))
 		// Agent footer (only when sub-agents exist)
 		if m.agentTasks != nil {
 			agentTasks := m.agentTasks.VisibleTasks()
