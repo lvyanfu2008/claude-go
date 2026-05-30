@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"goc/gou/textutil"
 	"goc/types"
 )
 
@@ -55,13 +56,13 @@ func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message) string {
 
 	// Add counts
 	if msg.ReadCount > 0 {
-		parts = append(parts, fmt.Sprintf("Reading %d files", msg.ReadCount))
+		parts = append(parts, fmt.Sprintf("Read %d files", msg.ReadCount))
 	}
 	if msg.SearchCount > 0 {
-		parts = append(parts, fmt.Sprintf("Searching %d patterns", msg.SearchCount))
+		parts = append(parts, fmt.Sprintf("Searched for %d patterns", msg.SearchCount))
 	}
 	if msg.ListCount > 0 {
-		parts = append(parts, fmt.Sprintf("Listing %d items", msg.ListCount))
+		parts = append(parts, fmt.Sprintf("Listed %d items", msg.ListCount))
 	}
 	if msg.ReplCount > 0 {
 		parts = append(parts, fmt.Sprintf("Ran %d repl", msg.ReplCount))
@@ -98,7 +99,7 @@ func (r *CollapsedGroupRenderer) buildSummary(msg *types.Message) string {
 		return "● Working..."
 	}
 
-	return fmt.Sprintf("⤿ %s", strings.Join(parts, ", "))
+	return textutil.AssistantBullet() + strings.Join(parts, ", ")
 }
 
 // buildGitSummary builds Git operation summary.
