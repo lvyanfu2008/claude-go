@@ -2070,7 +2070,7 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 		rows = rows[:maxRows]
 	}
 	if msg.Type == types.MessageTypeUser {
-		return "\n" + styleUserMessageLines(rows, cols) + "\n"
+		return styleUserMessageLines(rows, cols)
 	}
 
 	return strings.Join(rows, "\n")

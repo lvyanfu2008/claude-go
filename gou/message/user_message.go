@@ -191,7 +191,7 @@ func (r *UserMessageRenderer) renderBashInput(text string, ctx *RenderContext) (
 		Width(containerWidth)
 
 	// Apply styling to entire line including prefix
-	fullLine := "  > $ " + cmd
+	fullLine := "❯ $ " + cmd
 	styledLine := userStyle.Render(fullLine)
 	return []string{styledLine}, nil
 }
@@ -259,7 +259,7 @@ func (r *UserMessageRenderer) renderCommandMessage(text string, ctx *RenderConte
 		Foreground(ctx.Theme.UserMessageText).
 		Bold(true).
 		Width(containerWidth)
-	fullLine := "  > " + display
+	fullLine := "❯ " + display
 	return []string{userStyle.Render(fullLine)}, nil
 }
 
@@ -273,9 +273,9 @@ func (r *UserMessageRenderer) styleUserLines(lines []string, ctx *RenderContext)
 		Width(containerWidth)
 	for i, line := range lines {
 		if i == 0 {
-			line = "  > " + line
+			line = "❯ " + line
 		} else {
-			line = "    " + line
+			line = "  " + line
 		}
 		lines[i] = userStyle.Render(line)
 	}
