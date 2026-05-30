@@ -101,7 +101,7 @@ var gouDemoTrace *log.Logger
 var markdownHighlighter *markdown.Highlighter
 
 // messagePaneGutterCols is the uniform left indent for message pane body lines (alignment with wrap width).
-const messagePaneGutterCols = 2
+const messagePaneGutterCols = 0
 
 func messageWrapCols(cols int) int {
 	if cols <= messagePaneGutterCols+8 {
@@ -114,6 +114,9 @@ func messageWrapCols(cols int) int {
 func applyMessagePaneGutter(block string, cols int) string {
 	if block == "" {
 		return ""
+	}
+	if messagePaneGutterCols == 0 {
+		return layout.WrapForViewport(block, cols)
 	}
 	wrapCols := messageWrapCols(cols)
 	wrapped := layout.WrapForViewport(block, wrapCols)
@@ -140,9 +143,9 @@ func applyAssistantStreamingGutter(block string, cols int) string {
 	lines := strings.Split(wrapped, "\n")
 	for i, line := range lines {
 		if i == 0 {
-			lines[i] = "  ⏺ " + line
+			lines[i] = "⏺ " + line
 		} else {
-			lines[i] = "    " + line
+			lines[i] = "  " + line
 		}
 	}
 	return strings.Join(lines, "\n")
