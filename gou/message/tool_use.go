@@ -124,7 +124,7 @@ func (r *ToolUseMessageRenderer) RenderToolResultBlock(block map[string]interfac
 
 	// In prompt mode, show tool result content inline (truncated), matching TS.
 	if !ctx.IsTranscript && !ctx.Verbose {
-		return r.renderToolResultInline(block, ctx)
+		return renderToolResultInline(block, ctx)
 	}
 
 	if contentStr, ok := block["content"].(string); ok {
@@ -190,7 +190,7 @@ func extractContentItems(block map[string]interface{}) []interface{} {
 
 
 // renderToolResultInline renders tool result content inline (truncated), matching TS.
-func (r *ToolUseMessageRenderer) renderToolResultInline(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
+func renderToolResultInline(block map[string]interface{}, ctx *RenderContext) ([]string, error) {
 	if diffLines, ok := writeEditDiffLinesFromToolResultBlock(block); ok {
 		return diffLines, nil
 	}
@@ -229,7 +229,7 @@ func (r *ToolUseMessageRenderer) MeasureToolResultBlock(block map[string]interfa
 	}
 	// In prompt mode, show tool result inline height estimate.
 	if !ctx.IsTranscript && !ctx.Verbose {
-		inlineLines, _ := r.renderToolResultInline(block, ctx)
+		inlineLines, _ := renderToolResultInline(block, ctx)
 		return len(inlineLines)
 	}
 	diaglog.Line("[tool-use] MeasureToolResultBlock: showing full content (transcript=%v, verbose=%v)", ctx.IsTranscript, ctx.Verbose)

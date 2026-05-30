@@ -318,13 +318,11 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 		return diffLines, nil
 	}
 
-	// In prompt mode, tool results are usually collapsed to 1 line
+	// In prompt mode, show tool result content inline (truncated), matching TS.
 	if !ctx.IsTranscript && !ctx.Verbose {
-		diaglog.Line("[user-message] renderToolResultBlock: collapsed to 1 line (prompt mode)")
-		// Generate meaningful summary instead of generic "[Result]"
-		summary := GenerateToolResultSummary(block)
-		return []string{"↳ " + summary + " (ctrl+o to expand)"}, nil
+		return renderToolResultInline(block, ctx)
 	}
+
 
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
@@ -382,8 +380,8 @@ func (r *UserMessageRenderer) measureToolResultBlock(block map[string]interface{
 	}
 	// Tool results are usually collapsed to 1 line in prompt mode
 	if !ctx.IsTranscript && !ctx.Verbose {
-		diaglog.Line("[user-message] measureToolResultBlock: collapsed to 1 line (prompt mode)")
-		return 1
+		inlineLines, _ := renderToolResultInline(block, ctx)
+		return len(inlineLines)
 	}
 	diaglog.Line("[user-message] measureToolResultBlock: showing full content (transcript=%v, verbose=%v)", ctx.IsTranscript, ctx.Verbose)
 	// In transcript or verbose mode, show full content
