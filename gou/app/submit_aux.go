@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"goc/commands"
 	"goc/tools/toolexecution"
@@ -18,14 +17,6 @@ import (
 type permissionAskReply struct {
 	dec toolexecution.PermissionDecision
 	err error
-}
-
-type permissionAskOverlay struct {
-	toolName  string
-	toolUseID string
-	input     json.RawMessage
-	prompt    string
-	replyCh   chan permissionAskReply
 }
 
 // gouPermissionAskMsg is sent from [toolexecution.ExecutionDeps.AskResolver] to the Bubble Tea Update loop.
@@ -198,30 +189,6 @@ func buildUpdatedInputWithAnswers(original json.RawMessage, answers map[string]s
 	return b
 }
 
-func (m *model) finishPermissionAsk(r permissionAskReply) {
-	if m.permAsk != nil && m.permAsk.replyCh != nil {
-		select {
-		case m.permAsk.replyCh <- r:
-		default:
-		}
-	}
-	m.permAsk = nil
-}
-
-// handlePermissionKey returns true when the permission modal is showing (all keys are swallowed).
-func (m *model) handlePermissionKey(msg tea.KeyPressMsg) bool {
-	if m.permAsk == nil {
-		return false
-	}
-	switch msg.String() {
-	case "y", "Y", "enter", "space":
-		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.AllowDecision(), err: nil})
-	case "n", "N", "esc", "q":
-		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("denied by user"), err: nil})
-	}
-	return true
-}
-
 func (m *model) loadSlashCommandsOnce() {
 	if m.slashCommandsOnce {
 		return
@@ -310,33 +277,6 @@ func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
 		m.slashPicker.NavDown(m.visibleSlashList())
 	}
 	return true
-}
-
-func (m *model) renderPermissionModal(width int) string {
-	if m.permAsk == nil {
-		return ""
-	}
-	inPreview := string(m.permAsk.input)
-	if len(inPreview) > 400 {
-		inPreview = inPreview[:400] + "…"
-	}
-	body := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Render("Tool permission"),
-		"",
-		"Tool: "+m.permAsk.toolName+"  id: "+m.permAsk.toolUseID,
-		"",
-		lipgloss.NewStyle().Faint(true).Render("Input (preview):"),
-		inPreview,
-		"",
-		m.permAsk.prompt,
-		"",
-		lipgloss.NewStyle().Bold(true).Render("[Y] allow   [N] deny   [Esc] deny"),
-	)
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(1, 2).
-		Width(min(width-4, 72)).
-		Render(body)
 }
 
 // slashPickerListRows returns the number of list body lines shown (0 if none, 1 for empty hint).

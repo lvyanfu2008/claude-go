@@ -566,7 +566,7 @@ type model struct {
 	msgBodyCols   int
 	msgScrollbarW int
 
-	permAsk           *permissionAskOverlay
+	permModal          *permissionModalModel
 	questionUI        *questionModel   // non-nil when interactive AskUserQuestion UI is active
 	hooksConfigMenu   *hooksConfigMenu // non-nil when interactive hooks config menu is active
 	askAutoFirst      bool             // cached from runner config, used by installAskResolver
@@ -883,6 +883,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		taskList:            newTaskListModel(st.ConversationID),
 		agentTasks:          newAgentTaskStore(),
 		slashPicker:         newSlashPickerModel(),
+		permModal:           newPermissionModalModel(),
 		toolResultState:     toolResultState,
 	}
 }
@@ -1017,15 +1018,16 @@ func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.permAsk != nil && msg.String() == "ctrl+c" {
-		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
+	if m.permModal.IsActive() && msg.String() == "ctrl+c" {
 		if m.queryCancel != nil {
 			m.queryCancel()
 			m.queryCancel = nil
 		}
+		m.permModal.Dismiss()
 		return m, nil
 	}
-	if m.handlePermissionKey(msg) {
+	if m.permModal.IsActive() {
+		m.permModal.Update(msg)
 		return m, nil
 	}
 	if msg.String() == "ctrl+l" ||
@@ -1038,11 +1040,11 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.msgFoldRev++
 		return m, nil
 	}
-	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
+	if m.uiScreen == gouDemoScreenPrompt && msg.String() == "ctrl+o" {
 		m.slashPicker.Dismiss()
 		return m, m.enterTranscriptScreen()
 	}
-	if m.permAsk == nil && m.uiScreen == gouDemoScreenPrompt {
+	if m.uiScreen == gouDemoScreenPrompt {
 		if msg.String() == "f5" {
 			gouDemoTracef("f5 pressed: entering manual render mode (buffering events)")
 			m.manualRenderMode = true
@@ -1258,13 +1260,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.questionUI.originalInput = msg.input
 			return m, nil
 		}
-		m.permAsk = &permissionAskOverlay{
-			toolName:  msg.toolName,
-			toolUseID: msg.toolUseID,
-			input:     msg.input,
-			prompt:    msg.prompt,
-			replyCh:   msg.replyCh,
-		}
+		m.permModal.Activate(msg.toolName, string(msg.input), msg.replyCh)
 		return m, nil
 
 	case gouTranscriptEditorPrepMsg:
@@ -1851,9 +1847,8 @@ func (m *model) View() tea.View {
 		}
 	}
 	out := lipgloss.NewStyle().MaxWidth(m.width).Render(b.String())
-	if m.permAsk != nil {
-		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.width))
-		out = lipgloss.JoinVertical(lipgloss.Left, out, mod)
+	if v := m.permModal.View(m.width); v != "" {
+		out = lipgloss.JoinVertical(lipgloss.Left, out, v)
 	}
 	v := m.wrapRootView(out)
 	if runtime.GOOS == "windows" && m.uiScreen == gouDemoScreenPrompt && m.pr.Focused() {

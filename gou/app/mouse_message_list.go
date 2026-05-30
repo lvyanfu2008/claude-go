@@ -61,7 +61,7 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 	if gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE_SCROLL") {
 		return false, nil
 	}
-	if m.permAsk != nil || m.slashListVisible() {
+	if m.permModal.IsActive() || m.slashListVisible() {
 		return false, nil
 	}
 	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptSearchOpen || m.transcriptDumpMode) {
