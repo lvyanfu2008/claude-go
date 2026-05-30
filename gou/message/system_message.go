@@ -97,7 +97,7 @@ func (r *SystemMessageRenderer) Measure(msg *types.Message, ctx *RenderContext) 
 
 // renderCompactBoundary renders a compact boundary message.
 func (r *SystemMessageRenderer) renderCompactBoundary(msg *types.Message, ctx *RenderContext) ([]string, error) {
-	return []string{"✻ Conversation compacted (ctrl+o to expand)"}, nil
+	return []string{"✻ Conversation compacted (ctrl+o for history)"}, nil
 }
 
 // renderSnipBoundary renders a snip boundary message.
