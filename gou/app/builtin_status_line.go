@@ -88,6 +88,14 @@ func (m *model) tokenWarningDisplayInfo() tokenWarningInfo {
 	}
 }
 
+func formatTokenCount(n int) string {
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000.0)
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+
 func (m *model) builtinStatusLineView() string {
 	if gouDemoBuiltinStatusLineDisabled() || m.uiScreen == gouDemoScreenTranscript {
 		return ""
