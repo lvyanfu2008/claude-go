@@ -40,9 +40,9 @@ type hooksConfigMenu struct {
 	eventCursor int
 
 	// Level 1: SelectMatcher
-	selectedEvent   hookstypes.HookEvent
-	matchers        []string
-	matcherCursor   int
+	selectedEvent    hookstypes.HookEvent
+	matchers         []string
+	matcherCursor    int
 	matcherSourceSet map[string]map[hooksconfig.HookSource]bool
 
 	// Level 2: SelectHook
@@ -52,6 +52,9 @@ type hooksConfigMenu struct {
 
 	// Level 3: ViewHook
 	selectedHook *hooksconfig.IndividualHookConfig
+
+	// Scroll offset for visible window (only items [scrollOffset, scrollOffset+maxVisible) are rendered).
+	scrollOffset int
 
 	// Terminal state
 	done bool
@@ -169,6 +172,33 @@ func (m *hooksConfigMenu) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// maxVisible returns the number of items that can fit in the current mode's viewport.
+func (m *hooksConfigMenu) maxVisible() int {
+	switch m.mode {
+	case hooksModeSelectEvent:
+		// Header: title + subtitle + divider = 3, Footer: blank + footer + bottomHint = 3
+		return max(1, (m.height-6)/2)
+	case hooksModeSelectMatcher:
+		// Header: title + subtitle + divider = 3, Footer: blank + footer = 2
+		return max(1, m.height-5)
+	case hooksModeSelectHook:
+		// Header: title + divider = 2, Footer: blank + footer = 2
+		return max(1, (m.height-4)/2)
+	default:
+		return m.height
+	}
+}
+
+// scrollToCursor ensures the given cursor index is visible within the current viewport.
+func (m *hooksConfigMenu) scrollToCursor(cursor int) {
+	mv := m.maxVisible()
+	if cursor < m.scrollOffset {
+		m.scrollOffset = cursor
+	} else if cursor >= m.scrollOffset+mv {
+		m.scrollOffset = cursor - mv + 1
+	}
+}
+
 func (m *hooksConfigMenu) goBack() {
 	switch m.mode {
 	case hooksModeSelectEvent:
@@ -176,6 +206,7 @@ func (m *hooksConfigMenu) goBack() {
 	case hooksModeSelectMatcher:
 		m.mode = hooksModeSelectEvent
 		m.matcherCursor = 0
+		m.scrollOffset = 0
 	case hooksModeSelectHook:
 		if m.eventMetas[m.selectedEvent].MatcherMetadata != nil {
 			m.mode = hooksModeSelectMatcher
@@ -184,6 +215,7 @@ func (m *hooksConfigMenu) goBack() {
 			m.mode = hooksModeSelectEvent
 		}
 		m.hookCursor = 0
+		m.scrollOffset = 0
 	case hooksModeViewHook:
 		m.mode = hooksModeSelectHook
 		m.selectedHook = nil
@@ -194,10 +226,13 @@ func (m *hooksConfigMenu) moveCursor(delta int) {
 	switch m.mode {
 	case hooksModeSelectEvent:
 		m.eventCursor = clamp(m.eventCursor+delta, 0, len(m.events)-1)
+		m.scrollToCursor(m.eventCursor)
 	case hooksModeSelectMatcher:
 		m.matcherCursor = clamp(m.matcherCursor+delta, 0, len(m.matchers)-1)
+		m.scrollToCursor(m.matcherCursor)
 	case hooksModeSelectHook:
 		m.hookCursor = clamp(m.hookCursor+delta, 0, len(m.hooks)-1)
+		m.scrollToCursor(m.hookCursor)
 	}
 }
 
@@ -218,11 +253,13 @@ func (m *hooksConfigMenu) selectCurrent() {
 				m.matcherSourceSet[mk] = hooksconfig.MatcherSourceSet(matcherMap, mk)
 			}
 			m.matcherCursor = 0
+			m.scrollOffset = 0
 			m.mode = hooksModeSelectMatcher
 		} else {
 			m.selectedMatcher = ""
 			m.hooks = m.grouped[ev][""]
 			m.hookCursor = 0
+			m.scrollOffset = 0
 			m.mode = hooksModeSelectHook
 		}
 
@@ -233,6 +270,7 @@ func (m *hooksConfigMenu) selectCurrent() {
 		m.selectedMatcher = m.matchers[m.matcherCursor]
 		m.hooks = m.grouped[m.selectedEvent][m.selectedMatcher]
 		m.hookCursor = 0
+		m.scrollOffset = 0
 		m.mode = hooksModeSelectHook
 
 	case hooksModeSelectHook:
@@ -285,8 +323,19 @@ func (m *hooksConfigMenu) renderSelectEvent() string {
 		subtitle = m.styles.subtitle.Render("No hooks configured")
 	}
 
+	mv := m.maxVisible()
+	total := len(m.events)
+
 	var lines []string
-	for i, ev := range m.events {
+
+	// Overflow indicator at top
+	if m.scrollOffset > 0 {
+		lines = append(lines, m.styles.eventDesc.Render(fmt.Sprintf("  ↑ %d more above", m.scrollOffset)))
+	}
+
+	end := min(m.scrollOffset+mv, total)
+	for i := m.scrollOffset; i < end; i++ {
+		ev := m.events[i]
 		matchers, ok := m.grouped[ev]
 		count := 0
 		if ok {
@@ -310,6 +359,11 @@ func (m *hooksConfigMenu) renderSelectEvent() string {
 		}
 		lines = append(lines, line)
 		lines = append(lines, m.styles.eventDesc.Render(meta.Summary))
+	}
+
+	// Overflow indicator at bottom
+	if end < total {
+		lines = append(lines, m.styles.eventDesc.Render(fmt.Sprintf("  ↓ %d more below", total-end)))
 	}
 
 	footer := m.styles.footer.Render("Enter to select · Esc to exit · ↑↓ to move")
@@ -337,8 +391,19 @@ func (m *hooksConfigMenu) renderSelectMatcher() string {
 	title := m.styles.title.Render(fmt.Sprintf("%s - Matchers", m.selectedEvent))
 	subtitle := m.styles.subtitle.Render(meta.Summary)
 
+	mv := m.maxVisible()
+	total := len(m.matchers)
+
 	var lines []string
-	for i, mk := range m.matchers {
+
+	// Overflow indicator at top
+	if m.scrollOffset > 0 {
+		lines = append(lines, m.styles.eventDesc.Render(fmt.Sprintf("  ↑ %d more above", m.scrollOffset)))
+	}
+
+	end := min(m.scrollOffset+mv, total)
+	for i := m.scrollOffset; i < end; i++ {
+		mk := m.matchers[i]
 		count := len(m.grouped[m.selectedEvent][mk])
 
 		sources := m.matcherSourceSet[mk]
@@ -365,8 +430,13 @@ func (m *hooksConfigMenu) renderSelectMatcher() string {
 		lines = append(lines, line)
 	}
 
-	if len(lines) == 0 {
+	if total == 0 {
 		lines = append(lines, m.styles.eventDesc.Render("No hooks configured for this event."))
+	}
+
+	// Overflow indicator at bottom
+	if end < total {
+		lines = append(lines, m.styles.eventDesc.Render(fmt.Sprintf("  ↓ %d more below", total-end)))
 	}
 
 	footer := m.styles.footer.Render("Enter to select · Esc back · ↑↓ to move")
@@ -399,8 +469,19 @@ func (m *hooksConfigMenu) renderSelectHook() string {
 		title = m.styles.title.Render(string(m.selectedEvent))
 	}
 
+	mv := m.maxVisible()
+	total := len(m.hooks)
+
 	var lines []string
-	for i, hook := range m.hooks {
+
+	// Overflow indicator at top
+	if m.scrollOffset > 0 {
+		lines = append(lines, m.styles.eventDesc.Render(fmt.Sprintf("  ↑ %d more above", m.scrollOffset)))
+	}
+
+	end := min(m.scrollOffset+mv, total)
+	for i := m.scrollOffset; i < end; i++ {
+		hook := m.hooks[i]
 		typeLabel := hooksconfig.HookTypeLabel(hook.Config)
 		typeStyled := m.styles.hookTypeLabel.Render(fmt.Sprintf("[%s]", typeLabel))
 		displayText := hooksconfig.HookDisplayText(hook.Config)
@@ -420,9 +501,14 @@ func (m *hooksConfigMenu) renderSelectHook() string {
 		lines = append(lines, m.styles.hookSource.Render(sourceHeader))
 	}
 
-	if len(lines) == 0 {
+	if total == 0 {
 		lines = append(lines, m.styles.eventDesc.Render("No hooks configured for this event."))
 		lines = append(lines, m.styles.eventDesc.Render("To add hooks, edit settings.json directly or ask Claude."))
+	}
+
+	// Overflow indicator at bottom
+	if end < total {
+		lines = append(lines, m.styles.eventDesc.Render(fmt.Sprintf("  ↓ %d more below", total-end)))
 	}
 
 	footer := m.styles.footer.Render("Enter to view details · Esc back · ↑↓ to move")

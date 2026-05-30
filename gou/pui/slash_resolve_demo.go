@@ -221,8 +221,11 @@ func handleLocalCommand(
 	}
 
 	// Interactive local commands that need TUI menus.
+	// Must be called from a goroutine to avoid deadlocking on Bubble Tea's
+	// unbuffered message channel: Send is called from within Update(), which
+	// is the only reader of the channel, so a synchronous send would block forever.
 	if name == "hooks" && sendMsg != nil {
-		sendMsg(GouHooksMenuMsg{Cwd: cwd})
+		go sendMsg(GouHooksMenuMsg{Cwd: cwd})
 		return &processuserinput.ProcessUserInputBaseResult{
 			Messages:    nil,
 			ShouldQuery: false,
