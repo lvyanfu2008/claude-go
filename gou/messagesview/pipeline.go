@@ -1,6 +1,7 @@
 package messagesview
 
 import (
+	"goc/gou/messagerow"
 	"goc/types"
 )
 
@@ -14,6 +15,8 @@ type ScrollListOpts struct {
 	VirtualScrollEnabled bool
 	// Verbose is TS verbose mode (skips grouping, renders tools as single blocks).
 	Verbose bool
+	// ResolvedToolUseIDs is the set of tool_use_ids that have resolved results (non-nil for collapse).
+	ResolvedToolUseIDs map[string]struct{}
 }
 
 // MessagesForScrollList returns UI-ordered messages for virtual scroll, search haystack,
@@ -28,6 +31,10 @@ func MessagesForScrollList(messages []types.Message, o ScrollListOpts) []types.M
 	work = FilterShouldShowUserMessage(work, o.TranscriptMode)
 	work = ReorderMessagesInUI(work)
 	work = ApplyGrouping(work, o.Verbose)
+	// Collapse consecutive Read/Grep/Glob tool_use + tool_result pairs into summary groups
+	if !o.TranscriptMode {
+		work = messagerow.CollapseReadSearchGroupsInList(work, o.ResolvedToolUseIDs)
+	}
 	// Apply transcript tail after grouping to ensure correct message count
 	work = maybeTranscriptTail(work, o.TranscriptMode, o.ShowAllInTranscript, o.VirtualScrollEnabled)
 	return work
