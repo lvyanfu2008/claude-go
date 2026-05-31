@@ -7,6 +7,10 @@ import (
 	"goc/gou/ink/vdom"
 )
 
+func init() {
+	runewidth.DefaultCondition.EastAsianWidth = false
+}
+
 // ComputeLayout walks the VNode tree post-order and computes LayoutResult for each node.
 func ComputeLayout(node *vdom.VNode, constraints vdom.Constraints) {
 	switch node.Type {
