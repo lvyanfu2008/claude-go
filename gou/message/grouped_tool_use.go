@@ -3,6 +3,7 @@ package message
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"goc/types"
@@ -176,21 +177,21 @@ func extractToolName(msg *types.Message) string {
 
 	// Simple string matching for common tools
 	// In production, should parse JSON properly
-	if contains(content, `"name":"Read"`) {
+	if strings.Contains(content, `"name":"Read"`) {
 		return "Read"
-	} else if contains(content, `"name":"Grep"`) {
+	} else if strings.Contains(content, `"name":"Grep"`) {
 		return "Grep"
-	} else if contains(content, `"name":"Glob"`) {
+	} else if strings.Contains(content, `"name":"Glob"`) {
 		return "Glob"
-	} else if contains(content, `"name":"Bash"`) {
+	} else if strings.Contains(content, `"name":"Bash"`) {
 		return "Bash"
-	} else if contains(content, `"name":"Write"`) {
+	} else if strings.Contains(content, `"name":"Write"`) {
 		return "Write"
-	} else if contains(content, `"name":"Edit"`) {
+	} else if strings.Contains(content, `"name":"Edit"`) {
 		return "Edit"
-	} else if contains(content, `"name":"WebFetch"`) {
+	} else if strings.Contains(content, `"name":"WebFetch"`) {
 		return "WebFetch"
-	} else if contains(content, `"name":"WebSearch"`) {
+	} else if strings.Contains(content, `"name":"WebSearch"`) {
 		return "WebSearch"
 	}
 

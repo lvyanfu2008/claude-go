@@ -17,7 +17,6 @@ import (
 // MessageRendererIntegration integrates the new message rendering system into gou-demo.
 type MessageRendererIntegration struct {
 	dispatcher   *message.Dispatcher
-	processor    *message.Processor
 	virtualList  *message.VirtualList
 	currentTheme *theme.Palette
 	highlighter  *markdown.Highlighter
@@ -27,7 +26,6 @@ type MessageRendererIntegration struct {
 func NewMessageRendererIntegration(highlighter *markdown.Highlighter) *MessageRendererIntegration {
 	return &MessageRendererIntegration{
 		dispatcher:   message.NewDispatcher(),
-		processor:    message.NewProcessor(),
 		virtualList:  message.NewVirtualList(),
 		currentTheme: theme.ActivePalette(),
 		highlighter:  highlighter,
@@ -38,14 +36,6 @@ func NewMessageRendererIntegration(highlighter *markdown.Highlighter) *MessageRe
 func (mri *MessageRendererIntegration) UpdateTheme(themeName string) {
 	theme.InitFromThemeName(themeName)
 	mri.currentTheme = theme.ActivePalette()
-}
-
-// ProcessMessages processes messages for display.
-// Note: This method is kept for compatibility but messages are now processed
-// by the VirtualList during rendering.
-func (mri *MessageRendererIntegration) ProcessMessages(messages []*types.Message, isTranscript bool) []*types.Message {
-	// Return messages as-is - processing is now done by VirtualList
-	return messages
 }
 
 // RenderMessage renders a single message.
