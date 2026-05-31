@@ -48,14 +48,14 @@ func colorToANSIBG(c color.Color) string {
 	return fmt.Sprintf("48;2;%d;%d;%d", uint8(r>>8), uint8(g>>8), uint8(b>>8))
 }
 
-func sgrReset() string { return "\x1b[0m" }
+func SgrReset() string { return "\x1b[0m" }
 
-func cursorTo(row, col int) string {
+func CursorTo(row, col int) string {
 	return fmt.Sprintf("\x1b[%d;%dH", row+1, col+1)
 }
 
-func cursorUp(n int) string   { return fmt.Sprintf("\x1b[%dA", n) }
-func cursorDown(n int) string { return fmt.Sprintf("\x1b[%dB", n) }
-func eraseToEnd() string      { return "\x1b[0K" }
-func eraseLine() string       { return "\x1b[2K" }
-func eraseDisplay() string    { return "\x1b[2J" }
+func CursorUp(n int) string   { return fmt.Sprintf("\x1b[%dA", n) }
+func CursorDown(n int) string { return fmt.Sprintf("\x1b[%dB", n) }
+func EraseToEnd() string      { return "\x1b[0K" }
+func EraseLine() string       { return "\x1b[2K" }
+func EraseDisplay() string    { return "\x1b[2J" }
