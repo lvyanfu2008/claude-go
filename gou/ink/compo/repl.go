@@ -13,13 +13,13 @@ func REPL(ctx *ink.Context, p ink.Props) ink.VNode {
 		return TranscriptScreen(ctx, ctx.Store.GetMessages(), searchQuery, showAll)
 	}
 
-	msgs := ctx.Store.GetMessages()
-	// Inject streaming into message count
-	msgCount := len(msgs)
-	if ctx.Store.StreamingText() != "" {
-		msgCount++
+	// Build message rows as direct VirtualList children so each row
+	// has its own height entry in VirtualScrollState.
+	msgRows := MessageRows(ctx)
+	msgCount := len(msgRows)
+	if msgCount == 0 {
+		msgCount = 1 // ensure at least one row so VirtualScrollState is valid
 	}
-	msgCount += len(ctx.Store.StreamingTools())
 
 	viewportH := ctx.Store.Height() - 3 // status line + prompt area
 	if viewportH < 5 {
@@ -30,18 +30,19 @@ func REPL(ctx *ink.Context, p ink.Props) ink.VNode {
 	vs.ScrollTop = ctx.Store.ScrollTop()
 	vs.StickyBottom = true
 
+	kids := []ink.VNode{
+		{
+			Type: "VirtualList", Key: "messages-scroll",
+			Props: ink.Props{"stickyBottom": true, "flexGrow": 1, "virtualScroll": vs},
+			Children: msgRows,
+		},
+		StatusLine(ctx),
+		Spinner(ctx, ctx.Store.IsLoading(), "Thinking..."),
+		PromptInput(ctx),
+	}
 	return ink.VNode{
 		Type: "Box", Key: "repl",
 		Props: ink.Props{"direction": "column"},
-		Children: []ink.VNode{
-			{
-				Type: "VirtualList", Key: "messages-scroll",
-				Props: ink.Props{"stickyBottom": true, "flexGrow": 1, "virtualScroll": vs},
-				Children: []ink.VNode{Messages(ctx, p)},
-			},
-			StatusLine(ctx),
-			Spinner(ctx, ctx.Store.IsLoading(), "Thinking..."),
-			PromptInput(ctx),
-		},
+		Children: kids,
 	}
 }

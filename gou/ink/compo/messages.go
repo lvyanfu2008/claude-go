@@ -2,8 +2,19 @@ package compo
 
 import "goc/gou/ink"
 
-// Messages renders all messages with streaming integration.
+// Messages renders all messages with streaming integration as a single Box.
 func Messages(ctx *ink.Context, p ink.Props) ink.VNode {
+	return ink.VNode{
+		Type:     "Box",
+		Props:    ink.Props{"direction": "column"},
+		Children: MessageRows(ctx),
+	}
+}
+
+// MessageRows returns individual VNode rows for each message (including
+// streaming placeholders). Each row is a direct child for VirtualList so
+// virtual scrolling can track per-row heights.
+func MessageRows(ctx *ink.Context) []ink.VNode {
 	store := ctx.Store
 	rawMsgs := store.GetMessages()
 
@@ -27,12 +38,7 @@ func Messages(ctx *ink.Context, p ink.Props) ink.VNode {
 	for i, msg := range msgs {
 		children[i] = MessageRow(ctx, msg)
 	}
-
-	return ink.VNode{
-		Type: "Box",
-		Props:    ink.Props{"direction": "column"},
-		Children: children,
-	}
+	return children
 }
 
 // MessageRow dispatches to the appropriate message renderer based on type.
