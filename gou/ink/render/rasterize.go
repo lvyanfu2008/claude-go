@@ -102,11 +102,14 @@ func writeANSILine(screen *Screen, line string, startX, y int, base CellStyle) {
 			}
 		}
 		// Write visible character, accounting for display width (CJK = 2 cells).
-		// Double-width characters occupy two terminal columns; the continuation
-		// cell is left unset (zero rune) so the diff engine treats it as unchanged.
+		// Double-width characters occupy two terminal columns. Set the second
+		// cell to a space so diff comparisons work reliably across redraws.
 		rw := runewidth.RuneWidth(r)
 		if col >= 0 && col < screen.Width {
 			screen.Cells[y][col] = TermCell{Rune: r, Style: cur}
+			if rw > 1 && col+1 < screen.Width {
+				screen.Cells[y][col+1] = TermCell{Rune: ' ', Style: cur}
+			}
 		}
 		col += rw
 		i++
