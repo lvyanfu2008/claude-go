@@ -276,6 +276,138 @@ func applyInlineStyle(seg InlineSegment, theme, inlineCode lipgloss.Style) strin
 	return style.Render(text)
 }
 
+// RenderTokensStyled renders markdown tokens with lipgloss styles matching TS
+// styleMarkdownTokens behavior. Strips raw markdown syntax (#, ```, >, ---)
+// and applies styles: headings are bold with level indentation, code blocks
+// use syntax highlighting (with faint backtick fence fallback), blockquotes
+// are italic, horizontal rules are faint. Paragraphs/list_items apply inline
+// styles for bold, italic, and inline code.
+func RenderTokensStyled(
+	toks []Token,
+	highlighter *Highlighter,
+	cols int,
+	baseStyle lipgloss.Style,
+	codeStyle lipgloss.Style,
+	boldStyle lipgloss.Style,
+	italicStyle lipgloss.Style,
+	inlineCodeStyle lipgloss.Style,
+) string {
+	if len(toks) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, t := range toks {
+		switch t.Type {
+		case "heading":
+			lv := min(max(t.Level, 1), 6)
+			levelPad := strings.Repeat(" ", (lv-1)*2)
+			if len(t.Segments) > 0 {
+				inner := renderInlineSegments(t.Segments, baseStyle, boldStyle, italicStyle, inlineCodeStyle)
+				parts = append(parts, levelPad+boldStyle.Render(strings.TrimSpace(inner)))
+			} else {
+				parts = append(parts, levelPad+boldStyle.Render(strings.TrimSpace(t.Text)))
+			}
+		case "code":
+			var highlighted string
+			if highlighter != nil {
+				h, err := highlighter.HighlightCode(t.Text, t.Lang)
+				if err == nil && h != "" {
+					highlighted = h
+				}
+			}
+			if highlighted != "" {
+				parts = append(parts, baseStyle.Render(highlighted))
+			} else {
+				cb := "```" + t.Lang + "\n" + t.Text
+				if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
+					cb += "\n"
+				}
+				cb += "```"
+				parts = append(parts, codeStyle.Render(cb))
+			}
+		case "list_item":
+			indent := strings.Repeat(" ", t.ListIndent)
+			var prefix string
+			if t.ListContinuation {
+				prefix = indent + "   "
+			} else if t.ListOrdered && t.ListIndex > 0 {
+				prefix = indent + fmt.Sprintf("%d. ", t.ListIndex)
+			} else {
+				prefix = indent + "- "
+			}
+			if len(t.Segments) > 0 {
+				inner := renderInlineSegments(t.Segments, baseStyle, boldStyle, italicStyle, inlineCodeStyle)
+				parts = append(parts, prefix+inner)
+			} else {
+				parts = append(parts, baseStyle.Render(prefix+t.Text))
+			}
+		case "blockquote":
+			var inner string
+			if len(t.Segments) > 0 {
+				inner = renderInlineSegments(t.Segments, baseStyle, boldStyle, italicStyle, inlineCodeStyle)
+			} else {
+				inner = t.Text
+			}
+			quoted := "> " + strings.ReplaceAll(inner, "\n", "\n> ")
+			parts = append(parts, italicStyle.Render(quoted))
+		case "hr":
+			parts = append(parts, baseStyle.Faint(true).Render("---"))
+		case "paragraph":
+			if len(t.Segments) > 0 {
+				parts = append(parts, renderInlineSegments(t.Segments, baseStyle, boldStyle, italicStyle, inlineCodeStyle))
+			} else {
+				parts = append(parts, baseStyle.Render(t.Text))
+			}
+		default:
+			if t.Text != "" {
+				parts = append(parts, baseStyle.Render(t.Text))
+			}
+		}
+	}
+	var b strings.Builder
+	for i, part := range parts {
+		if i > 0 {
+			if toks[i-1].Type == "list_item" {
+				b.WriteByte('\n')
+			} else {
+				b.WriteString("\n\n")
+			}
+		}
+		b.WriteString(part)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// renderInlineSegments renders inline segments with per-role styles.
+// Bold/italic segments get boldStyle/italicStyle; code segments get inlineCodeStyle;
+// plain text gets baseStyle.
+func renderInlineSegments(segs []InlineSegment, baseStyle, boldStyle, italicStyle, inlineCodeStyle lipgloss.Style) string {
+	if len(segs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, seg := range segs {
+		txt := seg.Text
+		if seg.Code {
+			b.WriteString(inlineCodeStyle.Render(txt))
+			continue
+		}
+		var st lipgloss.Style
+		switch {
+		case seg.Bold && seg.Italic:
+			st = baseStyle.Copy().Bold(true).Italic(true)
+		case seg.Bold:
+			st = boldStyle
+		case seg.Italic:
+			st = italicStyle
+		default:
+			st = baseStyle
+		}
+		b.WriteString(st.Render(txt))
+	}
+	return b.String()
+}
+
 // NormalizeStreamingForLexer closes an odd number of ``` fences so goldmark can parse
 // in-flight assistant output (Markdown.tsx StreamingMarkdown incomplete tree pattern).
 func NormalizeStreamingForLexer(s string) string {
