@@ -1,6 +1,10 @@
 package render
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/mattn/go-runewidth"
+)
 
 type DiffEngine struct {
 	cursorX, cursorY int
@@ -86,12 +90,13 @@ func (d *DiffEngine) flushRun(buf *strings.Builder, run []TermCell, style CellSt
 	for _, c := range run {
 		if c.Rune == 0 {
 			buf.WriteByte(' ')
+			d.cursorX++
 		} else {
 			buf.WriteRune(c.Rune)
+			d.cursorX += runewidth.RuneWidth(c.Rune)
 		}
 	}
 	buf.WriteString(SgrReset())
-	d.cursorX += len(run)
 }
 
 func rowsEqual(a, b []TermCell) bool {
