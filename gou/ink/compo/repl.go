@@ -33,7 +33,7 @@ func REPL(ctx *ink.Context, p ink.Props) ink.VNode {
 	kids := []ink.VNode{
 		{
 			Type: "VirtualList", Key: "messages-scroll",
-			Props: ink.Props{"stickyBottom": true, "flexGrow": 1, "virtualScroll": vs},
+			Props: ink.Props{"height": viewportH, "flexGrow": 1, "virtualScroll": vs},
 			Children: msgRows,
 		},
 		StatusLine(ctx),

@@ -349,9 +349,18 @@ func layoutVirtualList(node *vdom.VNode, c vdom.Constraints) {
 		}
 	}
 
+	// Report content height as Layout.H so flexbox distributeGrow can
+	// add the extra space to reach the viewport height. The actual
+	// viewport height (prop "height" or c.MaxH) is used internally
+	// for StickyBottom gap and clipping.
+	reportedH := totalH
+	if reportedH > h {
+		reportedH = h
+	}
+
 	node.Layout = vdom.LayoutResult{
 		W:            w,
-		H:            h,
+		H:            reportedH,
 		ContentH:     totalH,
 		OverflowTop:  from,
 		VisibleRange: [2]int{from, to},
