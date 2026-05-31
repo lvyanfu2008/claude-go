@@ -41,13 +41,14 @@ func RunNewEngine() bool {
 
 	engine := ink.NewEngine(term, store, pal, compo.REPL)
 
-	if err := engine.Terminal.Init(); err != nil {
-		panic(err)
-	}
-	defer engine.Terminal.Shutdown()
-
-	// Seed welcome message
-	store.SetOnRender(func() {})
+	// Seed initial state for StoreReader-compatible components
+	store.SetWidth(80)
+	store.SetHeight(24)
+	store.SetMessages([]ink.Message{
+		{UUID: "welcome", Type: "system",
+			ContentBlocks: []ink.ContentBlock{{Type: "informational", Content: "Welcome! Type a message and press Enter."}},
+		},
+	})
 
 	if err := engine.Run(); err != nil {
 		panic(err)

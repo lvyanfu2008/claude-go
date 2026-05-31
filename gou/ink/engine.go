@@ -128,6 +128,7 @@ func (e *RenderEngine) render() {
 
 	ctx := &vdom.Context{
 		Theme:    e.Theme,
+		Store:    e.Store,
 		Schedule: e.Store.ScheduleRender,
 	}
 	newTree := e.RootComp(ctx, vdom.Props{})
