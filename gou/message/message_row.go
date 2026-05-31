@@ -1,6 +1,10 @@
 package message
 
 import (
+	"encoding/json"
+	"strings"
+
+	"goc/gou/messagerow"
 	"goc/types"
 )
 
@@ -209,4 +213,54 @@ func hasStreamingTools(msg *types.Message, streaming map[string]struct{}) bool {
 		}
 	}
 	return false
+}
+
+// StreamingToolUse represents an in-flight tool_use from the store.
+type StreamingToolUse struct {
+	Name  string
+	Input string
+}
+
+// RenderStreamingTail renders streaming content (text, thinking, tool uses) that
+// hasn't been committed to messages yet. Mirrors TS behavior where streaming
+// appears as continuation of the last assistant message.
+func RenderStreamingTail(
+	streamingText string,
+	streamingThinking string,
+	streamingToolUses []StreamingToolUse,
+	ctx *RenderContext,
+) []string {
+	var lines []string
+
+	// Streaming thinking
+	if strings.TrimSpace(streamingThinking) != "" {
+		lines = append(lines, "\x1b[2;3m∴ Thinking\x1b[0m")
+	}
+
+	// Streaming text
+	if strings.TrimSpace(streamingText) != "" {
+		textLines := renderMarkdown(streamingText, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
+		for _, l := range textLines {
+			lines = append(lines, "⏺ "+l)
+		}
+	}
+
+	// Streaming tool uses
+	for _, tu := range streamingToolUses {
+		facing, paren, hint := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.Input))
+		line := "  ⎿ " + facing
+		if paren != "" {
+			line += " (" + paren + ")"
+		}
+		line += "…"
+		if hint != "" {
+			line += "\n     " + hint
+		}
+		if ctx.ShowToolUseCtrlOHint {
+			line += " (ctrl+o to expand)"
+		}
+		lines = append(lines, line)
+	}
+
+	return lines
 }
