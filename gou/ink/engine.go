@@ -116,14 +116,17 @@ func (e *RenderEngine) onKey(key core.ParsedKey) {
 		e.submitInput()
 	case key.Key == "up":
 		e.scrollMessages(-3)
+		e.Store.SetMeta("stickyBottom", "0") // user scrolled away
 	case key.Key == "down":
 		e.scrollMessages(3)
 	case key.Key == "pgup":
 		e.scrollMessages(-e.Store.Height() / 2)
+		e.Store.SetMeta("stickyBottom", "0")
 	case key.Key == "pgdn":
 		e.scrollMessages(e.Store.Height() / 2)
 	case key.Key == "end":
 		e.scrollToBottom()
+		e.Store.SetMeta("stickyBottom", "1")
 	case key.Key == "backspace":
 		e.deleteBeforeCursor()
 	case key.Key == "left":
@@ -153,7 +156,9 @@ func (e *RenderEngine) submitInput() {
 		Type: "user",
 		ContentBlocks: []vdom.ContentBlock{{Type: "text", Content: val}},
 	})
-	e.scrollToBottom()
+	if e.Store.GetMeta("stickyBottom") != "0" {
+		e.scrollToBottom()
+	}
 	e.Store.SetMessages(msgs)
 	e.Store.SetInputValue("")
 	e.Store.SetCursorPos(0)

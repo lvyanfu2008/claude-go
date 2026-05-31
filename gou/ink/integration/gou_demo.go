@@ -44,6 +44,7 @@ func RunNewEngine() bool {
 	// Seed initial state for StoreReader-compatible components
 	store.SetWidth(80)
 	store.SetHeight(24)
+	store.SetMeta("stickyBottom", "1")
 	store.SetMessages([]ink.Message{
 		{UUID: "welcome", Type: "system",
 			ContentBlocks: []ink.ContentBlock{{Type: "informational", Content: "Welcome! Type a message and press Enter."}},

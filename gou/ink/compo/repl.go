@@ -28,7 +28,7 @@ func REPL(ctx *ink.Context, p ink.Props) ink.VNode {
 
 	vs := ink.NewVirtualScrollState(msgCount, viewportH)
 	vs.ScrollTop = ctx.Store.ScrollTop()
-	vs.StickyBottom = true
+	vs.StickyBottom = ctx.Store.GetMeta("stickyBottom") != "0"
 
 	kids := []ink.VNode{
 		{
