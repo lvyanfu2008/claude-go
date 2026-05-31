@@ -37,12 +37,6 @@ func (t *Terminal) Init() error {
 		term.Restore(fd, state)
 	})
 
-	// enable SGR mouse tracking (disabled on shutdown)
-	fmt.Fprint(t.stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1006h")
-	t.restoreFuncs = append(t.restoreFuncs, func() {
-		fmt.Fprint(t.stdout, "\x1b[?1006l\x1b[?1002l\x1b[?1000l")
-	})
-
 	w, h, err := term.GetSize(fd)
 	if err == nil {
 		t.width, t.height = w, h
@@ -77,6 +71,59 @@ func (t *Terminal) Shutdown() {
 		t.restoreFuncs[i]()
 	}
 	signal.Stop(make(chan os.Signal, 1))
+}
+
+// EnableMouse sends SGR mouse tracking enable sequences.
+func (t *Terminal) EnableMouse() {
+	fmt.Fprint(t.stdout, "\x1b[?1000h\x1b[?1002h\x1b[?1006h")
+}
+
+// DisableMouse sends SGR mouse tracking disable sequences.
+func (t *Terminal) DisableMouse() {
+	fmt.Fprint(t.stdout, "\x1b[?1006l\x1b[?1002l\x1b[?1000l")
+}
+
+// EnableKittyKbd sends the Kitty keyboard protocol enable sequence.
+func (t *Terminal) EnableKittyKbd() {
+	fmt.Fprint(t.stdout, "\x1b[>1u")
+	t.restoreFuncs = append(t.restoreFuncs, func() {
+		fmt.Fprint(t.stdout, "\x1b[<u")
+	})
+}
+
+// EnableBracketedPaste sends the bracketed paste enable sequence.
+func (t *Terminal) EnableBracketedPaste() {
+	fmt.Fprint(t.stdout, "\x1b[?2004h")
+	t.restoreFuncs = append(t.restoreFuncs, func() {
+		fmt.Fprint(t.stdout, "\x1b[?2004l")
+	})
+}
+
+// EnterAltScreen switches to the alternate screen buffer.
+func (t *Terminal) EnterAltScreen() {
+	fmt.Fprint(t.stdout, "\x1b[?1049h")
+	t.restoreFuncs = append(t.restoreFuncs, func() {
+		fmt.Fprint(t.stdout, "\x1b[?1049l")
+	})
+}
+
+// Read returns the raw stdin byte channel.
+func (t *Terminal) Read() <-chan []byte {
+	return t.ReadStdin()
+}
+
+// ResizeCh returns a channel that receives struct{} on SIGWINCH.
+func (t *Terminal) ResizeCh() <-chan struct{} {
+	ch := make(chan struct{}, 8)
+	go func() {
+		for range t.resizeCh {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
+	}()
+	return ch
 }
 
 func (t *Terminal) Write(data []byte) (int, error) {
