@@ -1,6 +1,10 @@
 package ink
 
 import (
+	"fmt"
+	"os"
+	"time"
+
 	"goc/gou/ink/core"
 	"goc/gou/ink/layout"
 	"goc/gou/ink/render"
@@ -192,6 +196,7 @@ func (e *RenderEngine) submitInput() {
 	if val == "" {
 		return
 	}
+	logf("ink", "submitInput: val=%q cursor=%d msgs=%d", val, e.Store.CursorPos(), len(e.Store.GetMessages()))
 	msgs := e.Store.GetMessages()
 	msgs = append(msgs, vdom.Message{
 		UUID: "user-" + itoa(len(msgs)),
@@ -212,6 +217,7 @@ func (e *RenderEngine) insertRunes(runes []rune) {
 	if pos > len(val) {
 		pos = len(val)
 	}
+	logf("ink", "insertRunes: runes=%q val_before=%q pos=%d", string(runes), string(val), pos)
 	val = append(val[:pos], append(runes, val[pos:]...)...)
 	e.Store.SetInputValue(string(val))
 	e.Store.SetCursorPos(pos + len(runes))
@@ -274,6 +280,16 @@ func (e *RenderEngine) toggleTranscript() {
 		e.Store.SetMeta("uiScreen", "prompt")
 	} else {
 		e.Store.SetMeta("uiScreen", "transcript")
+	}
+}
+
+func logf(tag, format string, args ...interface{}) {
+	// Write debug log to stderr when GOU_DEMO_LOG_STDERR is set.
+	if os.Getenv("GOU_DEMO_LOG_STDERR") == "1" {
+		ts := time.Now().Format("15:04:05.000")
+		fmt.Fprintf(os.Stderr, "[%s %s] ", ts, tag)
+		fmt.Fprintf(os.Stderr, format, args...)
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 }
 
