@@ -111,14 +111,12 @@ func (s *Store) SetInputValue(v string) {
 	s.mu.Lock()
 	s.inputValue = v
 	s.mu.Unlock()
-	s.ScheduleRender()
 }
 
 func (s *Store) SetCursorPos(v int) {
 	s.mu.Lock()
 	s.cursorPos = v
 	s.mu.Unlock()
-	s.ScheduleRender()
 }
 
 func (s *Store) SetLoading(v bool) {

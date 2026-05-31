@@ -167,6 +167,7 @@ func (e *RenderEngine) insertRunes(runes []rune) {
 	val = append(val[:pos], append(runes, val[pos:]...)...)
 	e.Store.SetInputValue(string(val))
 	e.Store.SetCursorPos(pos + len(runes))
+	e.Store.ScheduleRender()
 }
 
 func (e *RenderEngine) deleteBeforeCursor() {
@@ -176,6 +177,7 @@ func (e *RenderEngine) deleteBeforeCursor() {
 		val = append(val[:pos-1], val[pos:]...)
 		e.Store.SetInputValue(string(val))
 		e.Store.SetCursorPos(pos - 1)
+		e.Store.ScheduleRender()
 	}
 }
 
@@ -185,6 +187,7 @@ func (e *RenderEngine) deleteAfterCursor() {
 	if pos < len(val) {
 		val = append(val[:pos], val[pos+1:]...)
 		e.Store.SetInputValue(string(val))
+		e.Store.ScheduleRender()
 	}
 }
 
@@ -198,6 +201,7 @@ func (e *RenderEngine) moveCursor(delta int) {
 		pos = maxPos
 	}
 	e.Store.SetCursorPos(pos)
+	e.Store.ScheduleRender()
 }
 
 func (e *RenderEngine) scrollMessages(delta int) {
