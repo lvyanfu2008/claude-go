@@ -1,6 +1,7 @@
 package app
 
 import (
+	"goc/gou/app/message"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -34,7 +35,7 @@ func (m *Model) renderMessagePane(b *strings.Builder, vpH, bodyCols int, useVp b
 			verbose,
 			bodyCols,
 		)
-		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
+		b.WriteString(message.JoinLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
 		b.WriteByte('\n')
 	}
 }

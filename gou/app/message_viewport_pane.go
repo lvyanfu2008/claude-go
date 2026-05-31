@@ -1,6 +1,7 @@
 package app
 
 import (
+	"goc/gou/app/message"
 	"fmt"
 	"os"
 	"strings"
@@ -193,14 +194,14 @@ func (m *Model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	if totalH < vpH {
 		totalH = vpH
 	}
-	return joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.msgViewport.YOffset(), m.msgScrollbarW)
+	return message.JoinLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.msgViewport.YOffset(), m.msgScrollbarW)
 }
 
 func (m *Model) handleMsgViewportMouseWheel(delta int) {
 	if delta == 0 {
 		return
 	}
-	n := messageListMouseWheelStep(listViewportH(m))
+	n := message.ListMouseWheelStep(listViewportH(m))
 	if delta < 0 {
 		m.msgViewport.ScrollDown(n)
 	} else {

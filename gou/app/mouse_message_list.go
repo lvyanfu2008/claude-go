@@ -1,6 +1,7 @@
 package app
 
 import (
+	"goc/gou/app/message"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -102,7 +103,7 @@ func (m *Model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			}
 			return true, nil
 		}
-		step := messageListMouseWheelStep(listViewportH(m))
+		step := message.ListMouseWheelStep(listViewportH(m))
 		switch msg.Button {
 		case tea.MouseWheelUp:
 			m.sticky = false
