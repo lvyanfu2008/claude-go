@@ -28,6 +28,9 @@ func (r *GroupedToolUseRenderer) Render(msg *types.Message, ctx *RenderContext) 
 
 	// Build header line
 	header := fmt.Sprintf("%s ×%d", formatToolName(msg.ToolName), len(msg.Messages))
+	if ctx.ShouldAnimate {
+		header = "● " + header
+	}
 	if len(header) > width && width > 10 {
 		header = header[:width-3] + "..."
 	}

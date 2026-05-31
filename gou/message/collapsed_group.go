@@ -22,11 +22,14 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 	var lines []string
 	width := getContainerWidth(ctx)
 
-	// in-progress when hint is available (tool_use had pending work).
-	// Don't depend on ShouldAnimate which can flicker false when results arrive.
-	inProgress := msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != ""
+	// Use ctx.IsActiveCollapsedGroup as the primary in-progress indicator,
+	// falling back to hint presence for legacy support.
+	inProgress := ctx.IsActiveCollapsedGroup
+	if !inProgress {
+		inProgress = msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != ""
+	}
 	summary := r.buildSummary(msg, inProgress)
-	if inProgress {
+	if inProgress && ctx.ShouldAnimate {
 		summary += "…" // …
 	}
 	if len(summary) > width && width > 10 {

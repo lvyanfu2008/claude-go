@@ -93,16 +93,57 @@ func (r *ToolUseMessageRenderer) RenderToolUseBlock(block map[string]interface{}
 		lines = append(lines, hintLine)
 	}
 
+	// Check resolved state for resolved stats or ctrl+o hint
+	resolved := false
+	if ctx.ResolvedToolUseIDs != nil {
+		_, resolved = ctx.ResolvedToolUseIDs[id]
+	}
+
+	if ctx.ShowResolvedToolStats && resolved {
+		// Show resolved hint with stats (mirrors TS TranscriptResolvedHintExtra)
+		facing, _, _ := messagerow.ToolChromeParts(name, inputJSON)
+		hint, extra := messagerow.TranscriptResolvedHintExtra(facing, inputJSON)
+		if hint != "" {
+			lines = append(lines, "  ⎿  "+hint)
+			if extra != "" {
+				lines = append(lines, "     "+extra)
+			}
+		}
+	} else if !resolved && ctx.ShowToolUseCtrlOHint {
+		// Append ctrl+o hint to last line
+		if len(lines) > 0 {
+			lines[len(lines)-1] += " (ctrl+o to expand)"
+		}
+	}
+
 	return lines, nil
 }
 
 // MeasureToolUseBlock measures a tool_use block.
 func (r *ToolUseMessageRenderer) MeasureToolUseBlock(block map[string]interface{}, ctx *RenderContext, isInProgress bool) int {
-	// Tool use blocks are 1 line when completed, 2 lines when in progress with hint
+	lines := 1
+
+	// Hint line when in progress and animating
 	if isInProgress && ctx.ShouldAnimate {
-		return 2
+		lines++
 	}
-	return 1
+
+	// Resolved stats lines
+	if ctx.ShowResolvedToolStats {
+		toolUseID, _ := block["id"].(string)
+		resolved := false
+		if ctx.ResolvedToolUseIDs != nil {
+			_, resolved = ctx.ResolvedToolUseIDs[toolUseID]
+		}
+		if resolved {
+			lines++ // hint line
+			lines++ // extra line (conservative; may or may not be present)
+		}
+	}
+
+	// ctrl+o hint is appended inline, no extra line needed
+
+	return lines
 }
 
 // RenderToolResultBlock renders a tool_result block.
