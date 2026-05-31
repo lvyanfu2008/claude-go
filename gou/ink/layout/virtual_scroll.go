@@ -47,6 +47,12 @@ func (vs *VirtualScrollState) ComputeRange() (from, to, offsetTop int, totalH in
 	totalH = vs.Offsets[n]
 
 	scrollTop := vs.ScrollTop
+	if scrollTop == -1 {
+		scrollTop = totalH - vs.ViewportH // sentinel: exactly bottom
+		if scrollTop < 0 {
+			scrollTop = 0
+		}
+	}
 	if scrollTop < 0 {
 		scrollTop = 0
 	}
@@ -56,6 +62,9 @@ func (vs *VirtualScrollState) ComputeRange() (from, to, offsetTop int, totalH in
 
 	// Binary-search for the first row whose end > (scrollTop - overscan).
 	lo := scrollTop - vs.Overscan
+	if vs.ScrollTop == -1 {
+		lo = scrollTop // sentinel: exact bottom, no overscan shift
+	}
 	if lo < 0 {
 		lo = 0
 	}
@@ -76,6 +85,9 @@ func (vs *VirtualScrollState) ComputeRange() (from, to, offsetTop int, totalH in
 	// Extend the visible range until we have enough content for the
 	// viewport + 2x overscan.
 	needed := vs.ViewportH + 2*vs.Overscan
+	if vs.ScrollTop == -1 {
+		needed = vs.ViewportH // sentinel: exact fit, no overscan overflow
+	}
 	if needed <= 0 {
 		needed = vs.ViewportH
 	}

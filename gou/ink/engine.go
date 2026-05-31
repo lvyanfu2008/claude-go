@@ -211,7 +211,11 @@ func (e *RenderEngine) moveCursor(delta int) {
 }
 
 func (e *RenderEngine) scrollMessages(delta int) {
-	newTop := e.Store.ScrollTop() + delta
+	newTop := e.Store.ScrollTop()
+	if newTop == -1 {
+		newTop = len(e.Store.GetMessages()) // resolve sentinel
+	}
+	newTop += delta
 	if newTop < 0 {
 		newTop = 0
 	}
@@ -219,9 +223,7 @@ func (e *RenderEngine) scrollMessages(delta int) {
 }
 
 func (e *RenderEngine) scrollToBottom() {
-	// Each message is ~1-3 rows. Using len(messages) as estimate is close
-	// enough to actual totalH — ComputeRange clamps it precisely.
-	e.Store.SetScrollTop(len(e.Store.GetMessages()))
+	e.Store.SetScrollTop(-1) // sentinel: ComputeRange resolves to actual bottom
 }
 
 func (e *RenderEngine) toggleTranscript() {
