@@ -114,6 +114,11 @@ func NewAtom[T any](initial T) *Atom[T] {
 	return store.NewAtom[T](initial)
 }
 
+// DefineAtom defines a named atom in the store with the given initial value.
+func DefineAtom[T any](s *Store, key string, initial T) *Atom[T] {
+	return store.DefineAtom[T](s, key, initial)
+}
+
 // NewTypedSelector creates a type-safe memoized Selector over the given atom deps.
 func NewTypedSelector[T any](deps []AtomReader, compute func() T) *TypedSelector[T] {
 	return store.NewTypedSelector[T](deps, compute)
