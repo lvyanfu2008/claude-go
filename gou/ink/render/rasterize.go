@@ -1,15 +1,19 @@
-package ink
+package render
 
-import "image/color"
+import (
+	"image/color"
 
-func Rasterize(node *VNode, screen *Screen) {
+	"goc/gou/ink/vdom"
+)
+
+func Rasterize(node *vdom.VNode, screen *Screen) {
 	rasterizeNode(node, screen, 0, 0)
 }
 
 // rasterizeNode walks the VNode tree and renders each node at its screen position,
 // accumulating offsets from parent containers so that Layout.X/Y (which are relative
 // to the parent) are translated to absolute screen coordinates.
-func rasterizeNode(node *VNode, screen *Screen, offX, offY int) {
+func rasterizeNode(node *vdom.VNode, screen *Screen, offX, offY int) {
 	absX := node.Layout.X + offX
 	absY := node.Layout.Y + offY
 
@@ -35,7 +39,7 @@ func rasterizeNode(node *VNode, screen *Screen, offX, offY int) {
 // rasterizeTextAt renders a Text node at the given absolute screen position.
 // It is ANSI-aware: embedded SGR escape codes in the content modify the
 // current CellStyle, so markdown-rendered bold/italic/color text works correctly.
-func rasterizeTextAt(node *VNode, screen *Screen, offX, offY int) {
+func rasterizeTextAt(node *vdom.VNode, screen *Screen, offX, offY int) {
 	content := node.Props.GetString("content")
 	if content == "" {
 		return
@@ -172,4 +176,18 @@ func toColor(v interface{}) color.Color {
 		return c
 	}
 	return nil
+}
+
+// splitLinesANSI splits a string into lines by '\n'.
+func splitLinesANSI(s string) []string {
+	var lines []string
+	start := 0
+	for i, r := range s {
+		if r == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	lines = append(lines, s[start:])
+	return lines
 }

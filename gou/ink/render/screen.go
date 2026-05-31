@@ -1,4 +1,4 @@
-package ink
+package render
 
 import "image/color"
 

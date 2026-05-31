@@ -1,4 +1,4 @@
-package ink
+package core
 
 import (
 	"fmt"

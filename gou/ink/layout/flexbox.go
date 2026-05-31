@@ -1,12 +1,14 @@
-package ink
+package layout
 
 import (
-	"github.com/mattn/go-runewidth"
 	"strings"
+
+	"github.com/mattn/go-runewidth"
+	"goc/gou/ink/vdom"
 )
 
 // ComputeLayout walks the VNode tree post-order and computes LayoutResult for each node.
-func ComputeLayout(node *VNode, constraints Constraints) {
+func ComputeLayout(node *vdom.VNode, constraints vdom.Constraints) {
 	switch node.Type {
 	case "Text":
 		layoutText(node, constraints)
@@ -15,14 +17,14 @@ func ComputeLayout(node *VNode, constraints Constraints) {
 	case "ScrollBox":
 		layoutScrollBox(node, constraints)
 	default:
-		node.Layout = LayoutResult{W: 0, H: 0}
+		node.Layout = vdom.LayoutResult{W: 0, H: 0}
 	}
 }
 
-func layoutText(node *VNode, c Constraints) {
+func layoutText(node *vdom.VNode, c vdom.Constraints) {
 	content := node.Props.GetString("content")
 	if content == "" {
-		node.Layout = LayoutResult{}
+		node.Layout = vdom.LayoutResult{}
 		return
 	}
 
@@ -37,7 +39,7 @@ func layoutText(node *VNode, c Constraints) {
 		lines = append(lines, wrapped...)
 	}
 
-	node.Layout = LayoutResult{
+	node.Layout = vdom.LayoutResult{
 		W: maxLineWidth(lines, maxW),
 		H: len(lines),
 	}
@@ -139,7 +141,7 @@ func stripANSIStr(s string) string {
 }
 
 // layoutBox: full flexbox
-func layoutBox(node *VNode, c Constraints) {
+func layoutBox(node *vdom.VNode, c vdom.Constraints) {
 	direction := node.Props.GetString("direction")
 	if direction == "" {
 		direction = "column"
@@ -155,7 +157,7 @@ func layoutBox(node *VNode, c Constraints) {
 
 	// STEP 1: Compute all children preferred sizes
 	for i := range node.Children {
-		childC := Constraints{
+		childC := vdom.Constraints{
 			MinW: node.Children[i].Props.GetInt("minWidth"),
 			MaxW: innerW,
 		}
@@ -212,6 +214,10 @@ func layoutBox(node *VNode, c Constraints) {
 		extraH := h - 2*pad - totalChildMain - totalGap
 		if extraH > 0 {
 			distributeGrow(node, extraH, direction)
+			totalChildMain = 0
+			for i := range node.Children {
+				totalChildMain += childMainSize(&node.Children[i], direction)
+			}
 		}
 	} else {
 		h = maxCross + 2*pad
@@ -252,10 +258,10 @@ func layoutBox(node *VNode, c Constraints) {
 		cur += gap
 	}
 
-	node.Layout = LayoutResult{W: w, H: h}
+	node.Layout = vdom.LayoutResult{W: w, H: h}
 }
 
-func layoutScrollBox(node *VNode, c Constraints) {
+func layoutScrollBox(node *vdom.VNode, c vdom.Constraints) {
 	w := node.Props.GetInt("width")
 	if w <= 0 {
 		w = c.MaxW
@@ -265,7 +271,7 @@ func layoutScrollBox(node *VNode, c Constraints) {
 	contentH := 0
 	for i := range node.Children {
 		child := &node.Children[i]
-		ComputeLayout(child, Constraints{MinW: 0, MaxW: innerW})
+		ComputeLayout(child, vdom.Constraints{MinW: 0, MaxW: innerW})
 		child.Layout.X = 0
 		child.Layout.Y = contentH
 		contentH += child.Layout.H
@@ -282,7 +288,7 @@ func layoutScrollBox(node *VNode, c Constraints) {
 	visStart := 0
 	visEnd := len(node.Children)
 
-	node.Layout = LayoutResult{
+	node.Layout = vdom.LayoutResult{
 		W:            w,
 		H:            h,
 		ContentH:     contentH,
@@ -291,21 +297,21 @@ func layoutScrollBox(node *VNode, c Constraints) {
 	}
 }
 
-func childMainSize(child *VNode, direction string) int {
+func childMainSize(child *vdom.VNode, direction string) int {
 	if direction == "column" {
 		return child.Layout.H
 	}
 	return child.Layout.W
 }
 
-func childCrossSize(child *VNode, direction string) int {
+func childCrossSize(child *vdom.VNode, direction string) int {
 	if direction == "column" {
 		return child.Layout.W
 	}
 	return child.Layout.H
 }
 
-func distributeGrow(node *VNode, free int, direction string) {
+func distributeGrow(node *vdom.VNode, free int, direction string) {
 	totalGrow := 0
 	for i := range node.Children {
 		totalGrow += node.Children[i].Props.GetInt("flexGrow")
@@ -327,7 +333,7 @@ func distributeGrow(node *VNode, free int, direction string) {
 	}
 }
 
-func distributeShrink(node *VNode, overflow int, direction string) {
+func distributeShrink(node *vdom.VNode, overflow int, direction string) {
 	totalShrink := 0
 	for i := range node.Children {
 		sh := node.Children[i].Props.GetInt("flexShrink")
@@ -359,7 +365,7 @@ func distributeShrink(node *VNode, overflow int, direction string) {
 	}
 }
 
-func applyCrossStretch(child *VNode, align, direction string, maxCross int) {
+func applyCrossStretch(child *vdom.VNode, align, direction string, maxCross int) {
 	if align == "stretch" {
 		if direction == "column" {
 			child.Layout.W = maxCross
@@ -369,7 +375,7 @@ func applyCrossStretch(child *VNode, align, direction string, maxCross int) {
 	}
 }
 
-func crossAxisOffset(child *VNode, align, direction string, available int) int {
+func crossAxisOffset(child *vdom.VNode, align, direction string, available int) int {
 	childCross := childCrossSize(child, direction)
 	switch align {
 	case "center":
@@ -381,7 +387,7 @@ func crossAxisOffset(child *VNode, align, direction string, available int) int {
 	}
 }
 
-func hasFlexGrowChild(node *VNode) bool {
+func hasFlexGrowChild(node *vdom.VNode) bool {
 	for i := range node.Children {
 		if node.Children[i].Props.GetInt("flexGrow") > 0 {
 			return true

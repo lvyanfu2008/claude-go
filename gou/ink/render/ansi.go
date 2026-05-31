@@ -1,4 +1,4 @@
-package ink
+package render
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func styleToSGR(s CellStyle) string {
+func StyleToSGR(s CellStyle) string {
 	var codes []string
 	if s.Bold {
 		codes = append(codes, "1")
