@@ -62,3 +62,11 @@ func (a *Atom[T]) Version() uint64 {
 	defer a.mu.RUnlock()
 	return a.version
 }
+
+// SetInterface provides type-erased access to Set. It is used by Transaction.Set
+// via the AtomSetter interface.
+func (a *Atom[T]) SetInterface(val interface{}) {
+	if v, ok := val.(T); ok {
+		a.Set(v)
+	}
+}
