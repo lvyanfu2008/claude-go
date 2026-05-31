@@ -27,6 +27,24 @@ type RenderContext struct {
 	Style           string // "condensed" or empty
 	IsUserContinuation bool
 	Highlighter     *markdown.Highlighter
+
+	// NEW: per-message context (computed by MessageRow)
+	IsActiveCollapsedGroup bool
+	IsInProgress           bool
+
+	// NEW: shared state (same across all messages in a render pass)
+	InProgressToolUseIDs map[string]struct{}
+	StreamingToolUseIDs  map[string]struct{}
+	ResolvedToolUseIDs   map[string]struct{}
+
+	// NEW: transcript features
+	SearchHighlight       string
+	ShowToolUseCtrlOHint  bool
+	ShowResolvedToolStats bool
+
+	// NEW: streaming state
+	StreamingText         string
+	StreamingThinkingText string
 }
 
 // Renderer is the interface for message renderers.
