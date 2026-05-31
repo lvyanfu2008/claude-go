@@ -113,8 +113,24 @@ type Context struct {
 	hookIndex int
 }
 
+// HookState represents the state of a single hook within a component fiber.
+type HookState struct {
+	state      interface{}
+	deps       []interface{}
+	cleanup    func()
+	memoized   interface{}
+	effectRun  bool
+}
+
 // Fiber is the internal representation of a VNode during reconciliation.
-// Fields will be expanded in the Fiber Reconciler task.
-type Fiber struct{}
+type Fiber struct {
+	vnode       *VNode
+	child       *Fiber
+	sibling     *Fiber
+	returnFiber *Fiber
+	effectTag   EffectTag
+	hooks       []HookState
+	deleted     bool
+}
 
 type Component func(ctx *Context, props Props) VNode
