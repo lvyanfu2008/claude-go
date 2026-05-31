@@ -38,11 +38,14 @@ func (d *DiffEngine) Generate(prev, curr *Screen) string {
 					run = nil
 					inRun = false
 				}
-				d.cursorX = col + 1
 				continue
 			}
 
 			if !inRun {
+				// Position cursor at the changed column if needed
+				if d.cursorX != col {
+					d.writeCursorTo(&buf, d.cursorY, col)
+				}
 				runStyle = currCell.Style
 				inRun = true
 			} else if !currCell.Style.Equals(runStyle) {
@@ -58,6 +61,12 @@ func (d *DiffEngine) Generate(prev, curr *Screen) string {
 	}
 	buf.WriteString(SgrReset())
 	return buf.String()
+}
+
+func (d *DiffEngine) writeCursorTo(buf *strings.Builder, row, col int) {
+	d.cursorY = row
+	d.cursorX = col
+	buf.WriteString(CursorTo(row, col))
 }
 
 func (d *DiffEngine) moveTo(buf *strings.Builder, row, col int) {
