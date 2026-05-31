@@ -337,6 +337,18 @@ func layoutVirtualList(node *vdom.VNode, c vdom.Constraints) {
 		h = c.MaxH
 	}
 
+	// StickyBottom: push content to the bottom of the viewport when it
+	// fits entirely on screen, matching chat-app behaviour where new
+	// messages appear at the bottom.
+	if vs.StickyBottom && totalH < h {
+		gap := h - totalH
+		for i := range node.Children {
+			if i >= from && i < to {
+				node.Children[i].Layout.Y += gap
+			}
+		}
+	}
+
 	node.Layout = vdom.LayoutResult{
 		W:            w,
 		H:            h,
