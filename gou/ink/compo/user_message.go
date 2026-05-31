@@ -15,7 +15,7 @@ func UserMessage(ctx *ink.Context, msg ink.Message) ink.VNode {
 		case "text":
 			children = append(children, userTextContent(ctx, block))
 		case "tool_result":
-			children = append(children, userToolResult(ctx, block))
+			children = append(children, ToolResultBlock(ctx, block))
 		}
 	}
 	if len(children) == 0 {
@@ -38,26 +38,6 @@ func userTextContent(ctx *ink.Context, block ink.ContentBlock) ink.VNode {
 		},
 	}
 	return Row(1, prefix, Markdown(ctx, block.Content, ctx.Store.Width()-5))
-}
-
-func userToolResult(ctx *ink.Context, block ink.ContentBlock) ink.VNode {
-	prefix := "  ⎿ "
-	switch block.State {
-	case "error":
-		return Row(1,
-			ink.VNode{Type: "Text", Props: ink.Props{"content": prefix + "✗ Error:", "color": ctx.Theme.ToolError}},
-			ink.VNode{Type: "Text", Props: ink.Props{"content": truncateLine(block.Content, ctx.Store.Width()-12), "dim": true}},
-		)
-	case "rejected":
-		return ink.VNode{Type: "Text", Props: ink.Props{"content": prefix + "Permission denied", "dim": true}}
-	default:
-		summary := truncateLine(stripMarkdown(block.Content), ctx.Store.Width()-10)
-		return Row(1,
-			ink.VNode{Type: "Text", Props: ink.Props{"content": prefix, "dim": true}},
-			ink.VNode{Type: "Text", Props: ink.Props{"content": summary, "dim": true}},
-			ink.VNode{Type: "Text", Props: ink.Props{"content": "  (ctrl+o to expand)", "dim": true}},
-		)
-	}
 }
 
 func truncateLine(s string, maxW int) string {

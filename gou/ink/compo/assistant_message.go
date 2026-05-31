@@ -19,7 +19,11 @@ func AssistantMessage(ctx *ink.Context, msg ink.Message) ink.VNode {
 		case "text":
 			children = append(children, Markdown(ctx, block.Content, ctx.Store.Width()))
 		case "tool_use":
-			children = append(children, AssistantToolUse(ctx, block))
+			if isEditTool(block.Name) {
+				children = append(children, FileEditDiff(ctx, block))
+			} else {
+				children = append(children, AssistantToolUse(ctx, block))
+			}
 		}
 	}
 	if len(children) == 0 {
