@@ -94,6 +94,24 @@ func allToolUsesResolved(msg *types.Message, resolved map[string]struct{}) bool 
 	if resolved == nil || len(resolved) == 0 {
 		return false
 	}
+	// For collapsed_read_search, check nested Messages
+	if msg.Type == types.MessageTypeCollapsedReadSearch {
+		for i := range msg.Messages {
+			if !allToolUsesResolved(&msg.Messages[i], resolved) {
+				return false
+			}
+		}
+		return true
+	}
+	// For grouped_tool_use, check nested Messages
+	if msg.Type == types.MessageTypeGroupedToolUse {
+		for i := range msg.Messages {
+			if !allToolUsesResolved(&msg.Messages[i], resolved) {
+				return false
+			}
+		}
+		return true
+	}
 	content, err := parseMessageContent(msg)
 	if err != nil {
 		return true // can't determine, assume resolved
@@ -109,12 +127,33 @@ func allToolUsesResolved(msg *types.Message, resolved map[string]struct{}) bool 
 			}
 		}
 	}
-	return hasToolUse // false if no tool_use blocks (not in progress)
+	if !hasToolUse {
+		return true // vacuous truth: no tool_use blocks means all resolved
+	}
+	return true // all tool_use blocks found in resolved set
 }
 
 // hasAnyToolInProgress checks if any tool_use in the message is in the in-progress set.
 func hasAnyToolInProgress(msg *types.Message, inProgress map[string]struct{}) bool {
 	if inProgress == nil || len(inProgress) == 0 {
+		return false
+	}
+	// For collapsed_read_search, check nested Messages
+	if msg.Type == types.MessageTypeCollapsedReadSearch {
+		for i := range msg.Messages {
+			if hasAnyToolInProgress(&msg.Messages[i], inProgress) {
+				return true
+			}
+		}
+		return false
+	}
+	// For grouped_tool_use, check nested Messages
+	if msg.Type == types.MessageTypeGroupedToolUse {
+		for i := range msg.Messages {
+			if hasAnyToolInProgress(&msg.Messages[i], inProgress) {
+				return true
+			}
+		}
 		return false
 	}
 	content, err := parseMessageContent(msg)
@@ -136,6 +175,24 @@ func hasAnyToolInProgress(msg *types.Message, inProgress map[string]struct{}) bo
 // hasStreamingTools checks if any tool_use in the message is in the streaming set.
 func hasStreamingTools(msg *types.Message, streaming map[string]struct{}) bool {
 	if streaming == nil || len(streaming) == 0 {
+		return false
+	}
+	// For collapsed_read_search, check nested Messages
+	if msg.Type == types.MessageTypeCollapsedReadSearch {
+		for i := range msg.Messages {
+			if hasStreamingTools(&msg.Messages[i], streaming) {
+				return true
+			}
+		}
+		return false
+	}
+	// For grouped_tool_use, check nested Messages
+	if msg.Type == types.MessageTypeGroupedToolUse {
+		for i := range msg.Messages {
+			if hasStreamingTools(&msg.Messages[i], streaming) {
+				return true
+			}
+		}
 		return false
 	}
 	content, err := parseMessageContent(msg)
