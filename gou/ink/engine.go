@@ -115,9 +115,9 @@ func (e *RenderEngine) onKey(key core.ParsedKey) {
 	case key.Key == "enter":
 		e.submitInput()
 	case key.Key == "up":
-		e.scrollMessages(-1)
+		e.scrollMessages(-3)
 	case key.Key == "down":
-		e.scrollMessages(1)
+		e.scrollMessages(3)
 	case key.Key == "pgup":
 		e.scrollMessages(-e.Store.Height() / 2)
 	case key.Key == "pgdn":
@@ -156,6 +156,7 @@ func (e *RenderEngine) submitInput() {
 	e.Store.SetMessages(msgs)
 	e.Store.SetInputValue("")
 	e.Store.SetCursorPos(0)
+	e.scrollToBottom()
 }
 
 func (e *RenderEngine) insertRunes(runes []rune) {
