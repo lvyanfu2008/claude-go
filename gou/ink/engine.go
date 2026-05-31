@@ -98,20 +98,128 @@ func (e *RenderEngine) onKey(key core.ParsedKey) {
 	switch {
 	case key.Key == "c" && key.Mod&core.Ctrl != 0:
 		e.Quit()
-	case key.Key == "enter":
-		e.Store.ScheduleRender()
-	case key.Key == "up":
-	case key.Key == "down":
 	case key.Key == "esc":
+		e.Quit()
+	case key.Key == "enter":
+		e.submitInput()
+	case key.Key == "up":
+		e.scrollMessages(-1)
+	case key.Key == "down":
+		e.scrollMessages(1)
+	case key.Key == "pgup":
+		e.scrollMessages(-e.Store.Height() / 2)
+	case key.Key == "pgdn":
+		e.scrollMessages(e.Store.Height() / 2)
+	case key.Key == "end":
+		e.scrollToBottom()
+	case key.Key == "backspace":
+		e.deleteBeforeCursor()
+	case key.Key == "left":
+		e.moveCursor(-1)
+	case key.Key == "right":
+		e.moveCursor(1)
+	case key.Key == "home":
+		e.Store.SetCursorPos(0)
+	case key.Key == "delete":
+		e.deleteAfterCursor()
 	default:
 		if len(key.Runes) > 0 {
-			_ = key.Runes
+			e.insertRunes(key.Runes)
 		}
 	}
 }
 
+// submitInput appends the current input as a user message and clears the input.
+func (e *RenderEngine) submitInput() {
+	val := e.Store.InputValue()
+	if val == "" {
+		return
+	}
+	msgs := e.Store.GetMessages()
+	msgs = append(msgs, vdom.Message{
+		UUID: "user-" + itoa(len(msgs)),
+		Type: "user",
+		ContentBlocks: []vdom.ContentBlock{{Type: "text", Content: val}},
+	})
+	e.Store.SetMessages(msgs)
+	e.Store.SetInputValue("")
+	e.Store.SetCursorPos(0)
+}
+
+func (e *RenderEngine) insertRunes(runes []rune) {
+	val := []rune(e.Store.InputValue())
+	pos := e.Store.CursorPos()
+	if pos > len(val) {
+		pos = len(val)
+	}
+	val = append(val[:pos], append(runes, val[pos:]...)...)
+	e.Store.SetInputValue(string(val))
+	e.Store.SetCursorPos(pos + len(runes))
+}
+
+func (e *RenderEngine) deleteBeforeCursor() {
+	val := []rune(e.Store.InputValue())
+	pos := e.Store.CursorPos()
+	if pos > 0 && len(val) > 0 {
+		val = append(val[:pos-1], val[pos:]...)
+		e.Store.SetInputValue(string(val))
+		e.Store.SetCursorPos(pos - 1)
+	}
+}
+
+func (e *RenderEngine) deleteAfterCursor() {
+	val := []rune(e.Store.InputValue())
+	pos := e.Store.CursorPos()
+	if pos < len(val) {
+		val = append(val[:pos], val[pos+1:]...)
+		e.Store.SetInputValue(string(val))
+	}
+}
+
+func (e *RenderEngine) moveCursor(delta int) {
+	pos := e.Store.CursorPos() + delta
+	maxPos := len([]rune(e.Store.InputValue()))
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > maxPos {
+		pos = maxPos
+	}
+	e.Store.SetCursorPos(pos)
+}
+
+func (e *RenderEngine) scrollMessages(delta int) {
+	// Read scrollTop from store and adjust.
+	// The VirtualScrollState in layout handles the actual viewport.
+	// For now, we store a synthetic scrollTop in meta.
+	// Future: wire to a scrollTop atom.
+}
+
+func (e *RenderEngine) scrollToBottom() {
+	// Future: wire to scrollTop atom.
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	s := ""
+	for n > 0 {
+		s = string(rune('0'+n%10)) + s
+		n /= 10
+	}
+	return s
+}
+
 func (e *RenderEngine) handleResize() {
 	e.prevScreen = nil // force full repaint
+	w, h := e.Terminal.Size()
+	if w > 0 {
+		e.Store.SetWidth(w)
+	}
+	if h > 0 {
+		e.Store.SetHeight(h)
+	}
 	e.Store.ScheduleRender()
 }
 
@@ -125,6 +233,10 @@ func (e *RenderEngine) render() {
 	if h <= 0 {
 		h = 24
 	}
+
+	// Sync terminal dimensions into store so components see current size.
+	e.Store.SetWidth(w)
+	e.Store.SetHeight(h)
 
 	ctx := &vdom.Context{
 		Theme:    e.Theme,
