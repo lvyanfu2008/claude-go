@@ -146,6 +146,12 @@ func (r *UserMessageRenderer) renderTextBlock(block map[string]interface{}, ctx 
 
 	// Regular user prompt
 	containerWidth := getContainerWidth(ctx)
+
+	// Apply search highlight before markdown rendering
+	if ctx.SearchHighlight != "" {
+		text = highlightSearchPlain(text, ctx.SearchHighlight)
+	}
+
 	lines := renderMarkdown(text, containerWidth, ctx.Theme, ctx.Highlighter)
 	return r.styleUserLines(lines, ctx), nil
 }
@@ -271,7 +277,11 @@ func (r *UserMessageRenderer) styleUserLines(lines []string, ctx *RenderContext)
 		Width(containerWidth)
 	for i, line := range lines {
 		if i == 0 {
-			line = "❯ " + line
+			if ctx.IsUserContinuation {
+				line = "  " + line
+			} else {
+				line = "❯ " + line
+			}
 		} else {
 			line = "  " + line
 		}
@@ -321,6 +331,15 @@ func (r *UserMessageRenderer) renderToolResultBlock(block map[string]interface{}
 		return renderToolResultInline(block, ctx)
 	}
 
+	// Show resolved tool stats in transcript mode
+	if ctx.ShowResolvedToolStats {
+		toolUseID, _ := block["tool_use_id"].(string)
+		if toolUseID != "" && ctx.ResolvedToolUseIDs != nil {
+			if _, resolved := ctx.ResolvedToolUseIDs[toolUseID]; resolved {
+				return []string{"  ⎿  result available (ctrl+o to expand)"}, nil
+			}
+		}
+	}
 
 	if contentStr, ok := block["content"].(string); ok {
 		// content is a string - wrap it as a text block
