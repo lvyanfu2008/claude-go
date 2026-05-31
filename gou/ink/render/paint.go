@@ -36,6 +36,17 @@ func (d *DiffEngine) Generate(prev, curr *Screen) string {
 			prevCell := safeCell(prev, row, col)
 			currCell := curr.Cells[row][col]
 
+			// Continuation cells for double-width characters — terminal handles these.
+			// Emitting spaces here would overwrite the second half of CJK glyphs.
+			if currCell.Rune == 0 {
+				if inRun {
+					d.flushRun(&buf, run, runStyle)
+					run = nil
+					inRun = false
+				}
+				continue
+			}
+
 			if prevCell.Equals(currCell) {
 				if inRun {
 					d.flushRun(&buf, run, runStyle)
@@ -62,6 +73,7 @@ func (d *DiffEngine) Generate(prev, curr *Screen) string {
 		if inRun {
 			d.flushRun(&buf, run, runStyle)
 		}
+		buf.WriteString(EraseToEnd())
 	}
 	buf.WriteString(SgrReset())
 	return buf.String()
