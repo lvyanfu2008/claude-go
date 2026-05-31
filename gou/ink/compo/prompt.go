@@ -16,8 +16,8 @@ const (
 //   ❯ hello wo█rld                (prefix + text with inverted cursor)
 //   model | cwd                    (status line)
 func PromptInput(ctx *ink.Context) ink.VNode {
-	val := ctx.Store.InputValue
-	cursor := ctx.Store.CursorPos
+	val := ctx.Store.InputValue()
+	cursor := ctx.Store.CursorPos()
 	if cursor > len([]rune(val)) {
 		cursor = len([]rune(val))
 	}
@@ -61,7 +61,7 @@ func PromptInput(ctx *ink.Context) ink.VNode {
 }
 
 func borderLine(ctx *ink.Context) ink.VNode {
-	w := ctx.Store.Width
+	w := ctx.Store.Width()
 	if w < 10 {
 		w = 80
 	}

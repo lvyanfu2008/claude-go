@@ -8,13 +8,13 @@ func Messages(ctx *ink.Context, p ink.Props) ink.VNode {
 	rawMsgs := store.GetMessages()
 
 	// Inject streaming as in-progress messages
-	if store.StreamingText != "" {
+	if store.StreamingText() != "" {
 		rawMsgs = append(rawMsgs, ink.Message{
 			UUID: "__streaming_text__", Type: "assistant",
-			ContentBlocks: []ink.ContentBlock{{Type: "text", Content: store.StreamingText}},
+			ContentBlocks: []ink.ContentBlock{{Type: "text", Content: store.StreamingText()}},
 		})
 	}
-	for _, st := range store.StreamingTools {
+	for _, st := range store.StreamingTools() {
 		rawMsgs = append(rawMsgs, ink.Message{
 			UUID: "__streaming_tool_" + st.UUID + "__", Type: "assistant",
 			ContentBlocks: []ink.ContentBlock{{Type: "tool_use", Name: st.Name, Input: st.Input, State: "running"}},

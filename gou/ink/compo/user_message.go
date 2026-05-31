@@ -36,7 +36,7 @@ func userTextContent(ctx *ink.Context, block ink.ContentBlock) ink.VNode {
 			"bold":    true,
 		},
 	}
-	return Row(1, prefix, Markdown(ctx, block.Content, ctx.Store.Width-5))
+	return Row(1, prefix, Markdown(ctx, block.Content, ctx.Store.Width()-5))
 }
 
 func userToolResult(ctx *ink.Context, block ink.ContentBlock) ink.VNode {
@@ -52,7 +52,7 @@ func userToolResult(ctx *ink.Context, block ink.ContentBlock) ink.VNode {
 	default:
 		return Row(1,
 			ink.VNode{Type: "Text", Props: ink.Props{"content": prefix, "dim": true}},
-			Markdown(ctx, block.Content, ctx.Store.Width-6),
+			Markdown(ctx, block.Content, ctx.Store.Width()-6),
 		)
 	}
 }
