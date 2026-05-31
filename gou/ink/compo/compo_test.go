@@ -32,6 +32,7 @@ func (s *testStore) StreamingTools() []ink.StreamingToolUse { return s.streaming
 func (s *testStore) InputValue() string                     { return s.inputValue }
 func (s *testStore) CursorPos() int                         { return s.cursorPos }
 func (s *testStore) IsLoading() bool                        { return s.isLoading }
+func (s *testStore) ScrollTop() int                          { return 0 }
 func (s *testStore) Width() int                             { return s.width }
 func (s *testStore) Height() int                            { return s.height }
 func (s *testStore) GetMeta(key string) string {

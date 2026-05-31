@@ -100,6 +100,16 @@ func (e *RenderEngine) onKey(key core.ParsedKey) {
 		e.Quit()
 	case key.Key == "o" && key.Mod&core.Ctrl != 0:
 		e.toggleTranscript()
+	case key.Key == "e" && key.Mod&core.Ctrl != 0:
+		cur := e.Store.GetMeta("transcriptShowAll")
+		if cur == "1" {
+			e.Store.SetMeta("transcriptShowAll", "0")
+		} else {
+			e.Store.SetMeta("transcriptShowAll", "1")
+		}
+	case key.Key == "[" && key.Mod == 0 && e.Store.GetMeta("transcriptSearchQuery") == "":
+		e.Store.SetMeta("transcriptShowAll", "1")
+		e.Store.SetMeta("uiScreen", "transcript")
 	case key.Key == "esc":
 		e.Quit()
 	case key.Key == "enter":
@@ -250,6 +260,15 @@ func (e *RenderEngine) render() {
 	e.Store.SetWidth(w)
 	e.Store.SetHeight(h)
 
+	// Terminal tab title
+	if e.Terminal != nil {
+		title := "gou-demo"
+		if e.Store.IsLoading() || e.Store.StreamingText() != "" {
+			title = "… " + title
+		}
+		e.writeTermTitle(title)
+	}
+
 	ctx := &vdom.Context{
 		Theme:    e.Theme,
 		Store:    e.Store,
@@ -285,6 +304,11 @@ func (e *RenderEngine) render() {
 	for y := 0; y < h && y < cur.Height; y++ {
 		copy(e.prevScreen.Cells[y][:w], cur.Cells[y][:w])
 	}
+}
+
+func (e *RenderEngine) writeTermTitle(title string) {
+	// OSC 0 sets both icon name and window title
+	e.Terminal.Write([]byte("\x1b]0;" + title + "\a"))
 }
 
 // Quit signals the main event loop to exit cleanly.  Safe to call multiple

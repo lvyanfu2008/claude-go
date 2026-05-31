@@ -11,6 +11,7 @@ type StoreReader interface {
 	InputValue() string
 	CursorPos() int
 	IsLoading() bool
+	ScrollTop() int
 	Width() int
 	Height() int
 	GetMeta(key string) string
