@@ -163,13 +163,11 @@ func (s *Store) SetMeta(key, val string) {
 }
 
 func NewStore() *Store {
-	s := &Store{
+	return &Store{
 		atoms:    make(map[string]interface{}),
 		renderCh: make(chan struct{}, 1),
 		closeCh:  make(chan struct{}),
 	}
-	go s.RunRenderLoop()
-	return s
 }
 
 func DefineAtom[T any](s *Store, key string, initial T) *Atom[T] {

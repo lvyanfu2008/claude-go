@@ -13,6 +13,9 @@ func TestStoreDefineAtom(t *testing.T) {
 
 func TestStoreBatchCommit(t *testing.T) {
 	s := NewStore()
+	go s.RunRenderLoop()
+	defer s.Stop()
+
 	a := DefineAtom(s, "count", 0)
 	b := DefineAtom(s, "text", "")
 
@@ -50,6 +53,9 @@ func TestStoreDefineAtomTyped(t *testing.T) {
 
 func TestStoreRenderCoalesce(t *testing.T) {
 	s := NewStore()
+	go s.RunRenderLoop()
+	defer s.Stop()
+
 	renders := 0
 	s.SetOnRender(func() { renders++ })
 
