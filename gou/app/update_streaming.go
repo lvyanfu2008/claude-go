@@ -15,7 +15,7 @@ import (
 
 // Streaming / query-parity / NDJSON stream UI updates (extracted from [model.Update] for navigation).
 
-func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.Cmd) {
 	m.lastActivity = time.Now()
 	// Clear streaming text when a complete message arrives (mirrors TS handleMessageFromStream:
 	// onStreamingText(() => null) for all non-stream_event message types).
@@ -32,7 +32,7 @@ func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.
 // handleUpdateGouStreamEvent processes raw SSE stream events (content_block_delta) for incremental
 // streaming text display. Mirrors TS handleMessageFromStream content_block_delta → text_delta /
 // thinking_delta paths where onStreamingText appends delta text character by character.
-func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, tea.Cmd) {
 	m.lastActivity = time.Now()
 	var wrap struct {
 		Delta struct {
@@ -61,7 +61,7 @@ func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, te
 	return m, nil
 }
 
-func (m *model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (tea.Model, tea.Cmd) {
 	if msg.Uses == nil {
 		m.store.ClearStreamingToolUses()
 	} else {
@@ -86,7 +86,7 @@ func (m *model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (t
 	return m, nil
 }
 
-func (m *model) handleUpdateGouSpinnerTick(_ gouSpinnerTickMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateGouSpinnerTick(_ gouSpinnerTickMsg) (tea.Model, tea.Cmd) {
 	if !m.queryBusy {
 		return m, nil
 	}
@@ -94,7 +94,7 @@ func (m *model) handleUpdateGouSpinnerTick(_ gouSpinnerTickMsg) (tea.Model, tea.
 	return m, spinnerTickCmd()
 }
 
-func (m *model) handleUpdateGouMemoryAppend(msg gouMemoryAppendMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateGouMemoryAppend(msg gouMemoryAppendMsg) (tea.Model, tea.Cmd) {
 	m.store.AppendMessage(msg.Msg)
 	m.rebuildHeightCache()
 	if m.uiScreen != gouDemoScreenTranscript {
@@ -104,7 +104,7 @@ func (m *model) handleUpdateGouMemoryAppend(msg gouMemoryAppendMsg) (tea.Model, 
 	return m, nil
 }
 
-func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cmd) {
 	m.queryBusy = false
 	m.queryCancel = nil
 	m.ctrlCPending = false
@@ -130,7 +130,7 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 	return m, nil
 }
 
-func (m *model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cmd) {
 	switch msg.Phase {
 	case "started":
 		m.preCompactVerb = m.spinnerVerb
@@ -144,7 +144,7 @@ func (m *model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cm
 	return m, nil
 }
 
-func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 	m.lastActivity = time.Now()
 	ev := ccbstream.StreamEvent(msg)
 	if gouDemoTrace != nil {

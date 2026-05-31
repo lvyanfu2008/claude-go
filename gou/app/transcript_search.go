@@ -12,7 +12,7 @@ import (
 	"goc/types"
 )
 
-func (m *model) clearTranscriptSearchState() {
+func (m *Model) clearTranscriptSearchState() {
 	m.transcriptSearchOpen = false
 	m.transcriptSearchQuery = ""
 	m.transcriptSearchHits = nil
@@ -127,7 +127,7 @@ func highlightSearchPlain(s, needle string, hl lipgloss.Style) string {
 	return b.String()
 }
 
-func (m *model) transcriptSearchHighlightNeedle() string {
+func (m *Model) transcriptSearchHighlightNeedle() string {
 	if m.uiScreen != gouDemoScreenTranscript || m.transcriptDumpMode {
 		return ""
 	}
@@ -138,7 +138,7 @@ func (m *model) transcriptSearchHighlightNeedle() string {
 	return q
 }
 
-func (m *model) rebuildTranscriptSearchMatches() {
+func (m *Model) rebuildTranscriptSearchMatches() {
 	msgView := m.messagesForScroll()
 	st := m.transcriptStreamingToolsForView()
 	rowN := len(msgView) + len(st)
@@ -175,7 +175,7 @@ func (m *model) rebuildTranscriptSearchMatches() {
 	m.scrollTranscriptToMessageIndex(hits[m.transcriptSearchCursor])
 }
 
-func (m *model) scrollTranscriptToMessageIndex(msgIdx int) {
+func (m *Model) scrollTranscriptToMessageIndex(msgIdx int) {
 	keys := m.scrollItemKeys()
 	if msgIdx < 0 || msgIdx >= len(keys) {
 		return
@@ -188,7 +188,7 @@ func (m *model) scrollTranscriptToMessageIndex(msgIdx int) {
 	m.sticky = false
 }
 
-func (m *model) transcriptSearchStep(delta int) {
+func (m *Model) transcriptSearchStep(delta int) {
 	h := m.transcriptSearchHits
 	if len(h) == 0 {
 		return
@@ -197,7 +197,7 @@ func (m *model) transcriptSearchStep(delta int) {
 	m.scrollTranscriptToMessageIndex(h[m.transcriptSearchCursor])
 }
 
-func (m *model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
+func (m *Model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
 	if !m.transcriptSearchOpen {
 		return false
 	}
@@ -229,7 +229,7 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
 }
 
 // handleTranscriptKey returns (handled, cmd). cmd may be non-nil when bracket dump prints to scrollback (TS).
-func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
+func (m *Model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	if m.uiScreen != gouDemoScreenTranscript {
 		return false, nil
 	}
@@ -403,7 +403,7 @@ func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 // transcriptAfterManualScroll pins scrollTop after leaving sticky-bottom (sentinel ~1<<30) so virtualscroll
 // stays valid. We only clamp when scrollTop is still in the huge range: without heightCache (e.g. tests),
 // full clamp can pin to 0 and break small scrollTop values; the next View also clamps when !sticky.
-func (m *model) transcriptAfterManualScroll() {
+func (m *Model) transcriptAfterManualScroll() {
 	if m.sticky {
 		return
 	}
@@ -414,7 +414,7 @@ func (m *model) transcriptAfterManualScroll() {
 }
 
 // transcriptScrollByKeyType handles Kitty / disambiguated keys where msg.String() is not "up"/"down" (see handleTranscriptKey string switch).
-func (m *model) transcriptScrollByKeyType(msg tea.KeyPressMsg) bool {
+func (m *Model) transcriptScrollByKeyType(msg tea.KeyPressMsg) bool {
 	switch msg.Key().Code {
 	case tea.KeyUp:
 		m.sticky = false
@@ -450,7 +450,7 @@ func (m *model) transcriptScrollByKeyType(msg tea.KeyPressMsg) bool {
 	}
 }
 
-func transcriptSearchStatusLines(m *model) []string {
+func transcriptSearchStatusLines(m *Model) []string {
 	if m.uiScreen != gouDemoScreenTranscript {
 		return nil
 	}

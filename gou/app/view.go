@@ -78,7 +78,7 @@ import (
 	"goc/types"
 )
 
-func (m *model) View() tea.View {
+func (m *Model) View() tea.View {
 	// When the interactive hooks config menu is active, render it instead of the normal view.
 	if m.hooksConfigMenu != nil {
 		return m.wrapRootView(m.hooksConfigMenu.View().Content)
@@ -168,7 +168,7 @@ func (m *model) View() tea.View {
 	return v
 }
 
-func (m *model) wrapRootView(content string) tea.View {
+func (m *Model) wrapRootView(content string) tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = gouDemoAltScreenEnabled() && !m.suspendAltScreenForScrollbackDump
 	if gouDemoMouseCellMotionEnabled() {
@@ -181,7 +181,7 @@ func (m *model) wrapRootView(content string) tea.View {
 	return v
 }
 
-func (m *model) showToolUseCtrlOExpandHint() bool {
+func (m *Model) showToolUseCtrlOExpandHint() bool {
 	return m.uiScreen == gouDemoScreenPrompt && !m.transcriptDumpMode
 }
 
@@ -223,7 +223,7 @@ func userMessageHasPromptText(msg types.Message) bool {
 // tool_result/advisor_tool_result stubs (ToolBodyOmitted), with no other visible segments.
 // Matches actual [SegmentsFromMessageOpts] output so unknown content block types or API quirks
 // do not leave a lone "↩ tool_result tool_use_id=…" line under assistant ⎿ summaries.
-func (m *model) userMessageRendersOnlyFoldedToolStubs(msg types.Message) bool {
+func (m *Model) userMessageRendersOnlyFoldedToolStubs(msg types.Message) bool {
 	if msg.Type != types.MessageTypeUser {
 		return false
 	}
@@ -261,7 +261,7 @@ func (m *model) userMessageRendersOnlyFoldedToolStubs(msg types.Message) bool {
 // skipOmittableToolResultUserRow hides user messages that only render folded tool_result stubs
 // (prompt always; transcript unless ctrl+e show-all or dump).
 // The assistant tool_use row already shows the summary; omitting avoids duplicate ↩ tool_result lines.
-func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
+func (m *Model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	if messagerow.VerboseToolOutputEnabled() {
 		return false
 	}
@@ -287,7 +287,7 @@ func userPromptPrefixStyled(userMsgRowBg bool) string {
 }
 
 // userInputViewWithPromptPrefix prepends the same dim "> " as user rows on the first line of the bottom input.
-func userInputViewWithPromptPrefix(m *model) string {
+func userInputViewWithPromptPrefix(m *Model) string {
 	v := m.pr.View()
 	prefix := userPromptPrefixStyled(false)
 	lines := strings.Split(v, "\n")
@@ -371,7 +371,7 @@ func segmentJoinSeparator(prev, cur messagerow.Segment) string {
 
 // transcriptAssistantPairBlankLine is true when the UI inserts one empty line between consecutive
 // assistant rows in transcript (breathing room before the next ⏺ block).
-func transcriptAssistantPairBlankLine(m *model, a, b types.Message) bool {
+func transcriptAssistantPairBlankLine(m *Model, a, b types.Message) bool {
 	if m == nil || m.uiScreen != gouDemoScreenTranscript {
 		return false
 	}
@@ -752,7 +752,7 @@ func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
 }
 
 // handleTraditionalScrollKey handles scroll keys when not using viewport (traditional virtual scrolling).
-func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
+func (m *Model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "down":
 		m.sticky = false
@@ -805,7 +805,7 @@ func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	return nil
 }
-func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea.Cmd) {
+func (m *Model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	gouDemoTracef("enter input=%q", previewForTrace(line, 120))
 	cwd, _ := os.Getwd()

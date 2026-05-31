@@ -11,7 +11,7 @@ import (
 )
 
 // syncAtSuggestions runs after every prompt Update to refresh the @ suggestion list.
-func (m *model) syncAtSuggestions() {
+func (m *Model) syncAtSuggestions() {
 	if m.suggestionEngine == nil {
 		return
 	}
@@ -37,7 +37,7 @@ func (m *model) syncAtSuggestions() {
 
 // handleAtSuggestKeys handles keyboard input when the @ suggestion list is visible.
 // Returns: 0 = not handled, 1 = handled.
-func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
+func (m *Model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
 	if m.uiScreen != gouDemoScreenPrompt || !m.suggVisible || len(m.suggestions) == 0 {
 		return 0
 	}
@@ -93,7 +93,7 @@ func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
 }
 
 // applySuggestion replaces the @token at the cursor with the selected suggestion value.
-func (m *model) applySuggestion(item suggestions.ScoredItem) {
+func (m *Model) applySuggestion(item suggestions.ScoredItem) {
 	value := m.pr.Value()
 	cursor := m.pr.CursorRuneIndex()
 	_, rng := extractCompletionTokenForApply(value, cursor)
@@ -135,7 +135,7 @@ func extractCompletionTokenForApply(value string, cursor int) (string, suggestio
 }
 
 // renderAtSuggestions renders the suggestion list above the prompt input (footer area).
-func (m *model) renderAtSuggestions() string {
+func (m *Model) renderAtSuggestions() string {
 	if !m.suggVisible || len(m.suggestions) == 0 || m.uiScreen != gouDemoScreenPrompt {
 		return ""
 	}
@@ -192,7 +192,7 @@ func (m *model) renderAtSuggestions() string {
 }
 
 // refreshAgentSuggestions updates the suggestion engine's agent list from the loaded slash commands.
-func (m *model) refreshAgentSuggestions() {
+func (m *Model) refreshAgentSuggestions() {
 	if m.suggestionEngine == nil {
 		return
 	}

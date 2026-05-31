@@ -33,6 +33,7 @@
 package app
 
 import (
+	"goc/gou/app/iface"
 	"context"
 	"os"
 	"time"
@@ -57,7 +58,7 @@ import (
 	"goc/types"
 )
 
-type model struct {
+type Model struct {
 	store  *conversation.Store
 	pr     prompt.Model
 	width  int
@@ -220,7 +221,7 @@ type model struct {
 	toolResultState *toolresultpersist.ContentReplacementState
 }
 
-func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot) *model {
+func NewModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot) *Model {
 	pr := prompt.New()
 	pr.SetEnterSubmits(gouDemoPromptEnterSubmits())
 
@@ -248,7 +249,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
 		toolResultState = toolresultpersist.NewContentReplacementState()
 	}
-	return &model{
+	return &Model{
 		store:               st,
 		pr:                  pr,
 		sticky:              true,
@@ -278,7 +279,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	}
 }
 
-func (m *model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	if gouDemoKittyKeyboardEnabled() {
 		cmds = append(cmds, func() tea.Msg {
@@ -296,3 +297,43 @@ func (m *model) Init() tea.Cmd {
 	}
 	return tea.Batch(cmds...)
 }
+
+
+// ---- iface.StoreReader implementation ----
+
+func (m *Model) Messages() []types.Message                  { return m.store.Messages }
+func (m *Model) ConversationID() string                     { return m.store.ConversationID }
+func (m *Model) StreamingToolUses() []conversation.StreamingToolUse { return m.store.StreamingToolUses }
+func (m *Model) HasStreaming() bool                         { return m.store.HasStreaming() }
+func (m *Model) StreamingText() string                      { return m.store.StreamingText }
+func (m *Model) StreamingThinkingText() string              { return m.store.StreamingThinkingText }
+
+// ---- iface.ScrollState implementation ----
+
+func (m *Model) ScrollTop() int     { return m.scrollTop }
+func (m *Model) SetScrollTop(v int) { m.scrollTop = v }
+func (m *Model) Sticky() bool       { return m.sticky }
+func (m *Model) SetSticky(v bool)   { m.sticky = v }
+
+// ---- iface.LayoutInfo implementation ----
+
+func (m *Model) Width() int      { return m.width }
+func (m *Model) Height() int     { return m.height }
+func (m *Model) Cols() int       { return m.cols }
+func (m *Model) BodyCols() int   { return m.msgBodyCols }
+func (m *Model) ScrollbarW() int { return m.msgScrollbarW }
+
+// ---- iface.ScreenState implementation ----
+
+func (m *Model) IsTranscript() bool { return m.uiScreen == gouDemoScreenTranscript }
+func (m *Model) ShowAll() bool      { return m.transcriptShowAll }
+func (m *Model) DumpMode() bool     { return m.transcriptDumpMode }
+func (m *Model) SearchOpen() bool   { return m.transcriptSearchOpen }
+
+// Compile-time interface satisfaction checks.
+var (
+	_ iface.StoreReader = (*Model)(nil)
+	_ iface.ScrollState = (*Model)(nil)
+	_ iface.LayoutInfo  = (*Model)(nil)
+	_ iface.ScreenState = (*Model)(nil)
+)

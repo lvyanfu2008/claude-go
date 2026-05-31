@@ -30,7 +30,7 @@ func gouDemoToolUseSummaryDelay() time.Duration {
 	return time.Duration(n) * time.Millisecond
 }
 
-func (m *model) syncMsgFirstShownAt() {
+func (m *Model) syncMsgFirstShownAt() {
 	if m.msgFirstShownAt == nil {
 		m.msgFirstShownAt = make(map[string]time.Time)
 	}
@@ -69,7 +69,7 @@ func (m *model) syncMsgFirstShownAt() {
 	}
 }
 
-func (m *model) suppressToolUseSummaryLine(msg types.Message) bool {
+func (m *Model) suppressToolUseSummaryLine(msg types.Message) bool {
 	if msg.Type != types.MessageTypeAssistant {
 		return false
 	}
@@ -85,7 +85,7 @@ func (m *model) suppressToolUseSummaryLine(msg types.Message) bool {
 	return time.Since(t0) < d
 }
 
-func (m *model) anyToolSummaryDelayPending() bool {
+func (m *Model) anyToolSummaryDelayPending() bool {
 	d := gouDemoToolUseSummaryDelay()
 	if d <= 0 || m.uiScreen != gouDemoScreenPrompt {
 		return false
@@ -108,7 +108,7 @@ func (m *model) anyToolSummaryDelayPending() bool {
 	return false
 }
 
-func (m *model) handleUpdateToolSummaryDelayTick(_ gouToolSummaryDelayTickMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateToolSummaryDelayTick(_ gouToolSummaryDelayTickMsg) (tea.Model, tea.Cmd) {
 	d := gouDemoToolUseSummaryDelay()
 	if d <= 0 {
 		return m, nil

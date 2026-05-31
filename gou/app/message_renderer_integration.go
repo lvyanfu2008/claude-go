@@ -149,7 +149,7 @@ func (mri *MessageRendererIntegration) InvalidateAllCache() {
 // Integration with existing model
 
 // integrateMessageRenderer integrates the new renderer into the existing model.
-func (m *model) integrateMessageRenderer() {
+func (m *Model) integrateMessageRenderer() {
 	if m.msgRenderer == nil {
 		m.msgRenderer = NewMessageRendererIntegration(markdownHighlighter)
 		// Set default theme
@@ -158,7 +158,7 @@ func (m *model) integrateMessageRenderer() {
 }
 
 // renderMessagesWithNewRenderer renders messages using the new renderer.
-func (m *model) renderMessagesWithNewRenderer() string {
+func (m *Model) renderMessagesWithNewRenderer() string {
 	m.integrateMessageRenderer()
 
 	// UI-ordered messages (same as Messages.tsx / messagesForScroll: drops progress, etc.)
@@ -192,21 +192,21 @@ func (m *model) renderMessagesWithNewRenderer() string {
 }
 
 // Update model struct to include renderer
-func (m *model) initMessageRenderer() {
+func (m *Model) initMessageRenderer() {
 	m.integrateMessageRenderer()
 }
 
 // Hook into existing update and view methods
 
 // In update methods, invalidate cache when messages change
-func (m *model) invalidateMessageCache() {
+func (m *Model) invalidateMessageCache() {
 	if m.msgRenderer != nil {
 		m.msgRenderer.InvalidateAllCache()
 	}
 }
 
 // In view method, use new renderer
-func (m *model) renderMessagePaneWithNewRenderer() string {
+func (m *Model) renderMessagePaneWithNewRenderer() string {
 	m.integrateMessageRenderer()
 
 	messagesPtr := m.messagePtrSliceForNewRenderer()
@@ -376,7 +376,7 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 }
 
 // tryBuildFullMessagePaneContentWithNewRenderer builds the full scrollable document for bubbles/viewport using the new renderer.
-func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
+func (m *Model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 	m.integrateMessageRenderer()
 
 	messagesPtr := m.messagePtrSliceForNewRenderer()

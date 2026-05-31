@@ -66,7 +66,7 @@ type hooksConfigMenu struct {
 
 // newHooksConfigMenuFromMsg creates a hooksConfigMenu from a GouHooksMenuMsg.
 // It loads merged hooks from hookexec and groups them for display.
-func (m *model) newHooksConfigMenuFromMsg(msg pui.GouHooksMenuMsg) *hooksConfigMenu {
+func (m *Model) newHooksConfigMenuFromMsg(msg pui.GouHooksMenuMsg) *hooksConfigMenu {
 	cwd := msg.Cwd
 	if cwd == "" {
 		cwd, _ = os.Getwd()

@@ -6,7 +6,7 @@ import (
 
 // Layout / resize reactions (extracted from [model.Update]).
 
-func (m *model) handleUpdateWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleUpdateWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	oldCols := m.cols
 	oldH := m.height
 	m.width = msg.Width

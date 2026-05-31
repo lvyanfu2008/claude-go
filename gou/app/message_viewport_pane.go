@@ -23,7 +23,7 @@ func gouDemoBubblesViewport() bool {
 }
 
 // msgViewportWanted is true when the bubbles/viewport message pane is available (new renderer drives both prompt and transcript).
-func (m *model) msgViewportWanted() bool {
+func (m *Model) msgViewportWanted() bool {
 	result := m.useMsgViewport && !m.msgViewportFallback
 	//diaglog.Line("[viewport] msgViewportWanted: useMsgViewport=%v, msgViewportFallback=%v, returning %v", m.useMsgViewport, m.msgViewportFallback, result)
 	return result
@@ -31,7 +31,7 @@ func (m *model) msgViewportWanted() bool {
 
 // messagePaneContentSig changes when the message list body should be rebuilt for the viewport pane.
 // msgFoldRev bumps on ctrl+y so fold toggles always rebuild even if other fields unchanged.
-func (m *model) messagePaneContentSig() string {
+func (m *Model) messagePaneContentSig() string {
 	chunk := (len(m.store.StreamingText) + len(m.store.StreamingThinkingText)) / 32
 	return fmt.Sprintf("%d|%d|%d|%v|%d", len(m.store.Messages), len(m.store.StreamingToolUses), chunk, m.msgFoldAll, m.msgFoldRev)
 }
@@ -69,7 +69,7 @@ func gouDemoMsgViewportKeyMap() viewport.KeyMap {
 	}
 }
 
-func (m *model) msgViewportSyncGeometry() {
+func (m *Model) msgViewportSyncGeometry() {
 	if !m.msgViewportWanted() {
 		diaglog.Line("[viewport] msgViewportSyncGeometry: msgViewportWanted=false, returning")
 		return
@@ -105,7 +105,7 @@ func (m *model) msgViewportSyncGeometry() {
 // It skips rebuild if the content signature is unchanged (unless vpNeedResizeContent forces it).
 // On rebuild failure, it sets msgViewportFallback=true so the caller falls back to the old renderer.
 // When sticky (auto-scroll), it calls GotoBottom after a no-op or successful content refresh.
-func (m *model) applyMsgViewportContentFromView() {
+func (m *Model) applyMsgViewportContentFromView() {
 	// Viewport 不可用时直接返回（例如 fallback 模式）
 	if !m.msgViewportWanted() {
 		diaglog.Line("[viewport] applyMsgViewportContentFromView: msgViewportWanted=false, returning")
@@ -146,7 +146,7 @@ func (m *model) applyMsgViewportContentFromView() {
 }
 
 // maybeTeaResetHistoryBrowseMouse clears go-tui/test.go history-browse mode and re-enables SGR mouse if needed.
-func (m *model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
+func (m *Model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
 	if !m.msgHistoryBrowseMouseOff {
 		return nil
 	}
@@ -156,7 +156,7 @@ func (m *model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
 
 // handleMsgViewportScrollKey forwards list keys through bubbles/viewport.Update (go-tui/main pattern) plus
 // GotoTop/GotoBottom bindings not in the default viewport keymap.
-func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
+func (m *Model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	diaglog.Line("[viewport] handleMsgViewportScrollKey: key=%s, viewport width=%d, height=%d", msg.String(), m.msgViewport.Width(), m.msgViewport.Height())
 	var cmd tea.Cmd
 	m.msgViewport, cmd = m.msgViewport.Update(msg)
@@ -180,7 +180,7 @@ func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 
 // messagePaneViewportBlock renders the message list using bubbles/viewport.
 // Caller must run msgViewportSyncGeometry + applyMsgViewportContentFromView first.
-func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
+func (m *Model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	msgArea := m.msgViewport.View()
 	lines := strings.Split(msgArea, "\n")
 	for len(lines) < vpH {
@@ -196,7 +196,7 @@ func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	return joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.msgViewport.YOffset(), m.msgScrollbarW)
 }
 
-func (m *model) handleMsgViewportMouseWheel(delta int) {
+func (m *Model) handleMsgViewportMouseWheel(delta int) {
 	if delta == 0 {
 		return
 	}

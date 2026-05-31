@@ -42,7 +42,7 @@ func clampTranscriptFreeze(freezeN, nMsgs int) int {
 	return freezeN
 }
 
-func (m *model) transcriptEffectiveN() int {
+func (m *Model) transcriptEffectiveN() int {
 	if m.uiScreen != gouDemoScreenTranscript {
 		return len(m.store.Messages)
 	}
@@ -53,7 +53,7 @@ func (m *model) transcriptEffectiveN() int {
 }
 
 // messagesForScroll returns UI-ordered messages (TS Messages.tsx pre-VirtualMessageList pipeline) for virtual scroll and transcript export.
-func (m *model) messagesForScroll() []types.Message {
+func (m *Model) messagesForScroll() []types.Message {
 	var raw []types.Message
 	if m.uiScreen == gouDemoScreenTranscript {
 		n := m.transcriptEffectiveN()
@@ -84,7 +84,7 @@ func (m *model) messagesForScroll() []types.Message {
 // pipeline: progress dropped, null attachments dropped, reorder, grouping, etc.) as pointers for
 // [MessageRendererIntegration] and [message.VirtualList]. This matches TS: progress is not a top-level
 // message row; it is associated with tool use via progressMessagesForMessage / lookups.
-func (m *model) messagePtrSliceForNewRenderer() []*types.Message {
+func (m *Model) messagePtrSliceForNewRenderer() []*types.Message {
 	view := m.messagesForScroll()
 	if len(view) == 0 {
 		return nil
@@ -146,7 +146,7 @@ func groupStreamingTools(uses []conversation.StreamingToolUse) []GroupedStreamin
 }
 
 // transcriptStreamingToolsForView returns grouped streaming tools while in transcript (REPL.tsx).
-func (m *model) transcriptStreamingToolsForView() []GroupedStreamingTool {
+func (m *Model) transcriptStreamingToolsForView() []GroupedStreamingTool {
 	if m.uiScreen != gouDemoScreenTranscript || m.transcriptFrozen == nil {
 		return nil
 	}
@@ -161,7 +161,7 @@ func (m *model) transcriptStreamingToolsForView() []GroupedStreamingTool {
 	return groupStreamingTools(u)
 }
 
-func (m *model) scrollItemKeys() []string {
+func (m *Model) scrollItemKeys() []string {
 	msgView := m.messagesForScroll()
 	keys := make([]string, 0, len(msgView)+len(m.transcriptStreamingToolsForView()))
 	for i := range msgView {
@@ -171,7 +171,7 @@ func (m *model) scrollItemKeys() []string {
 	return keys
 }
 
-func (m *model) transcriptStreamingToolScrollKeys() []string {
+func (m *Model) transcriptStreamingToolScrollKeys() []string {
 	tools := m.transcriptStreamingToolsForView()
 	out := make([]string, len(tools))
 	for i := range tools {
@@ -180,7 +180,7 @@ func (m *model) transcriptStreamingToolScrollKeys() []string {
 	return out
 }
 
-func (m *model) enterTranscriptScreen() tea.Cmd {
+func (m *Model) enterTranscriptScreen() tea.Cmd {
 	m.clearSlashResultPanel()
 	m.clearTranscriptSearchState()
 	m.promptSavedScrollTop = m.scrollTop
@@ -201,7 +201,7 @@ func (m *model) enterTranscriptScreen() tea.Cmd {
 	return m.maybeTeaResetHistoryBrowseMouse()
 }
 
-func (m *model) exitTranscriptScreen() {
+func (m *Model) exitTranscriptScreen() {
 	m.clearTranscriptSearchState()
 	m.suspendAltScreenForScrollbackDump = false
 	m.uiScreen = gouDemoScreenPrompt
@@ -224,7 +224,7 @@ func (m *model) exitTranscriptScreen() {
 }
 
 // exitTranscriptScreenWithPostCmd exits transcript mode; kept for call sites that expect a tea.Cmd return.
-func (m *model) exitTranscriptScreenWithPostCmd() tea.Cmd {
+func (m *Model) exitTranscriptScreenWithPostCmd() tea.Cmd {
 	m.exitTranscriptScreen()
 	return nil
 }
@@ -249,7 +249,7 @@ func transcriptFooterLines(narrow, showAll, dumpMode bool) []string {
 	return []string{line}
 }
 
-func transcriptChromeFootLines(m *model, narrow bool) []string {
+func transcriptChromeFootLines(m *Model, narrow bool) []string {
 	lines := transcriptFooterLines(narrow, m.transcriptShowAll, m.transcriptDumpMode)
 	if extra := transcriptSearchStatusLines(m); len(extra) > 0 {
 		lines = append(lines, extra...)

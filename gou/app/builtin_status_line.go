@@ -61,7 +61,7 @@ type tokenWarningInfo struct {
 	autoCompactOn bool
 }
 
-func (m *model) tokenWarningDisplayInfo() tokenWarningInfo {
+func (m *Model) tokenWarningDisplayInfo() tokenWarningInfo {
 	if len(m.store.Messages) == 0 {
 		return tokenWarningInfo{}
 	}
@@ -96,7 +96,7 @@ func formatTokenCount(n int) string {
 }
 
 
-func (m *model) builtinStatusLineView() string {
+func (m *Model) builtinStatusLineView() string {
 	if gouDemoBuiltinStatusLineDisabled() || m.uiScreen == gouDemoScreenTranscript {
 		return ""
 	}

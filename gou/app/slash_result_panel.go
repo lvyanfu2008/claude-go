@@ -19,7 +19,7 @@ func slashResultPanelMaxBodyLines(termHeight int) int {
 }
 
 // slashResultPanelLayout returns separator, wrapped body lines, and hint when the panel should show.
-func (m *model) slashResultPanelLayout() (sep string, body []string, hint string) {
+func (m *Model) slashResultPanelLayout() (sep string, body []string, hint string) {
 	if m.slashResultPanel == nil || m.uiScreen != gouDemoScreenPrompt {
 		return "", nil, ""
 	}
@@ -48,7 +48,7 @@ func (m *model) slashResultPanelLayout() (sep string, body []string, hint string
 	return sep, lines, hint
 }
 
-func (m *model) slashResultPanelChromeExtra() int {
+func (m *Model) slashResultPanelChromeExtra() int {
 	_, body, _ := m.slashResultPanelLayout()
 	if len(body) == 0 {
 		return 0
@@ -57,7 +57,7 @@ func (m *model) slashResultPanelChromeExtra() int {
 	return 1 + len(body) + 1
 }
 
-func (m *model) slashResultPanelViewBlock() string {
+func (m *Model) slashResultPanelViewBlock() string {
 	sep, body, hint := m.slashResultPanelLayout()
 	if len(body) == 0 {
 		return ""
@@ -125,7 +125,7 @@ func extractSlashLocalPanelText(r *processuserinput.ProcessUserInputBaseResult) 
 	return strings.Join(parts, "\n\n")
 }
 
-func (m *model) applySlashResultPanelFromSubmit(line string, r *processuserinput.ProcessUserInputBaseResult, out pui.ApplyProcessUserInputBaseResultOutcome) {
+func (m *Model) applySlashResultPanelFromSubmit(line string, r *processuserinput.ProcessUserInputBaseResult, out pui.ApplyProcessUserInputBaseResultOutcome) {
 	if m.uiScreen != gouDemoScreenPrompt {
 		m.slashResultPanel = nil
 		return
@@ -145,6 +145,6 @@ func ptrCloneString(s string) *string {
 	return p
 }
 
-func (m *model) clearSlashResultPanel() {
+func (m *Model) clearSlashResultPanel() {
 	m.slashResultPanel = nil
 }

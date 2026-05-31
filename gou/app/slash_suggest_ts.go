@@ -188,7 +188,7 @@ func hasAliasPrefix(c *types.Command, qLower string) bool {
 // currentSlashQuery returns the filter string and whether the primary mode is
 // start-of-line slash (as opposed to mid-input). For F2-only with an empty line,
 // query is "" and startMode is true.
-func (m *model) currentSlashQuery() (query string, startMode bool) {
+func (m *Model) currentSlashQuery() (query string, startMode bool) {
 	v := m.pr.Value()
 	cur := m.pr.CursorRuneIndex()
 	if m.slashPicker.userToggle {
@@ -207,7 +207,7 @@ func (m *model) currentSlashQuery() (query string, startMode bool) {
 	return "", true
 }
 
-func (m *model) visibleSlashList() []string {
+func (m *Model) visibleSlashList() []string {
 	m.loadSlashCommandsOnce()
 	m.slashPicker.SetCommands(m.slashCommands)
 	v := m.pr.Value()
@@ -215,7 +215,7 @@ func (m *model) visibleSlashList() []string {
 	return m.slashPicker.FilteredCommands(v, cur)
 }
 
-func (m *model) applySlashTab() {
+func (m *Model) applySlashTab() {
 	if m.uiScreen != gouDemoScreenPrompt {
 		return
 	}
@@ -236,7 +236,7 @@ func (m *model) applySlashTab() {
 
 // replaceValueRunes replaces the mid-input slash token with pick + a trailing space, preserving
 // the rest of the buffer. pick is a display name like "/compact".
-func (m *model) replaceValueRunes(pick string, mid *midSlashInfo) {
+func (m *Model) replaceValueRunes(pick string, mid *midSlashInfo) {
 	v := m.pr.Value()
 	rs := []rune(v)
 	if mid.startRune+mid.tokenLen > len(rs) {

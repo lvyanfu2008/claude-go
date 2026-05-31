@@ -13,7 +13,7 @@ func absInt(n int) int {
 
 // mouseYInMessageListPane reports whether screen row y falls in the virtual message list
 // (title row(s) above, stream strip / prompt below). Coords are 0-based from top of terminal.
-func (m *model) mouseYInMessageListPane(y int) bool {
+func (m *Model) mouseYInMessageListPane(y int) bool {
 	if m.height <= 0 {
 		return false
 	}
@@ -26,7 +26,7 @@ func (m *model) mouseYInMessageListPane(y int) bool {
 // clampScrollTopForVirtualList pins scrollTop to [0, max(0, totalContentHeight−viewportH)] when not sticky.
 // After sticky-bottom (scrollTop sentinel ~1<<30), the first manual scroll leaves a huge scrollTop; without
 // clamping, the new renderer's ComputeVisibleRange cannot scroll back toward the tail.
-func (m *model) clampScrollTopForVirtualList() {
+func (m *Model) clampScrollTopForVirtualList() {
 	if m.sticky {
 		return
 	}
@@ -57,7 +57,7 @@ func (m *model) clampScrollTopForVirtualList() {
 // go-tui/main/test.go: when bubbles viewport is at top, wheel-up in the pane can disable SGR mouse so the
 // terminal scrollback wheel works (GOU_DEMO_MSG_HISTORY_MOUSE_RELEASE).
 // Returns whether the event was consumed and an optional tea.Cmd (e.g. Println hint; mouse mode is declarative via View).
-func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
+func (m *Model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 	if gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE_SCROLL") {
 		return false, nil
 	}

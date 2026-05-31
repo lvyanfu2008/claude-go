@@ -7,7 +7,7 @@ import (
 )
 
 // renderMessagePane renders the message list area (viewport or virtual-scroll path).
-func (m *model) renderMessagePane(b *strings.Builder, vpH, bodyCols int, useVp bool) {
+func (m *Model) renderMessagePane(b *strings.Builder, vpH, bodyCols int, useVp bool) {
 	if useVp {
 		// Bubbles viewport + new renderer (applyMsgViewportContentFromView populates the full document).
 		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
@@ -40,7 +40,7 @@ func (m *model) renderMessagePane(b *strings.Builder, vpH, bodyCols int, useVp b
 }
 
 // promptAreaLayout renders everything below the message pane.
-func (m *model) promptAreaLayout(b *strings.Builder) (promptLineOffset int) {
+func (m *Model) promptAreaLayout(b *strings.Builder) (promptLineOffset int) {
 	if m.uiScreen == gouDemoScreenTranscript {
 		foot := joinFooterLines(transcriptChromeFootLines(m, m.cols > 0 && m.cols < 80), m.cols)
 		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.cols).Render(foot))

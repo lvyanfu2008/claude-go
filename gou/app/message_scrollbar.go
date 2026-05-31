@@ -13,7 +13,7 @@ import (
 )
 
 // messageBodyColsForLayout returns wrap width for message rows (excludes TUI scrollbar column when active).
-func (m *model) messageBodyColsForLayout() int {
+func (m *Model) messageBodyColsForLayout() int {
 	if m.msgBodyCols > 0 {
 		return m.msgBodyCols
 	}
@@ -34,7 +34,7 @@ func messageListMouseWheelStep(vpH int) int {
 }
 
 // messageScrollContentHeight returns total wrapped height (terminal rows) of the virtual message list.
-func (m *model) messageScrollContentHeight() int {
+func (m *Model) messageScrollContentHeight() int {
 	keys := m.scrollItemKeys()
 	if len(keys) == 0 {
 		return 0
@@ -103,7 +103,7 @@ func joinMessagePaneLinesWithScrollbar(lines []string, bodyCols, vpH, totalH, sc
 }
 
 // fillMessageHeightCache fills heightCache for all scroll keys at the given wrap width (hl = search needle).
-func (m *model) fillMessageHeightCache(cols int, hl string) {
+func (m *Model) fillMessageHeightCache(cols int, hl string) {
 	if m.heightCache == nil {
 		m.heightCache = make(map[string]int)
 	}

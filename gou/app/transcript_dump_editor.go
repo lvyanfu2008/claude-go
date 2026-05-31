@@ -48,7 +48,7 @@ func stripTranscriptExportTrailingSpaces(s string) string {
 	return transcriptTrailingSpaceRE.ReplaceAllString(s, "")
 }
 
-func exportTranscriptWidth(m *model) int {
+func exportTranscriptWidth(m *Model) int {
 	w := m.cols - 6
 	if w < 80 {
 		w = max(80, m.width-6)
@@ -74,7 +74,7 @@ func parseExternalEditorFromEnv() (bin string, args []string, display string) {
 	return parts[0], parts[1:], ed
 }
 
-func transcriptExportPlain(m *model, wrapCols int) string {
+func transcriptExportPlain(m *Model, wrapCols int) string {
 	if wrapCols < 1 {
 		wrapCols = 80
 	}
@@ -149,7 +149,7 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 	return stripTranscriptExportTrailingSpaces(b.String())
 }
 
-func transcriptPlainBodyFromMessage(m *model, msg types.Message, wrapCols int) string {
+func transcriptPlainBodyFromMessage(m *Model, msg types.Message, wrapCols int) string {
 	opts := m.messagerowOpts(msg)
 	segs := messagerow.SegmentsFromMessageOpts(msg, opts)
 
@@ -231,7 +231,7 @@ func scheduleTranscriptEditorStatusClear(gen int) tea.Cmd {
 	})
 }
 
-func (m *model) transcriptEditorPrepCmd(gen int) tea.Cmd {
+func (m *Model) transcriptEditorPrepCmd(gen int) tea.Cmd {
 	w := exportTranscriptWidth(m)
 	return func() tea.Msg {
 		text := transcriptExportPlain(m, w)
@@ -261,7 +261,7 @@ func slicesCloneStrings(s []string) []string {
 	return out
 }
 
-func (m *model) handleTranscriptEditorChainMsg(msg tea.Msg) tea.Cmd {
+func (m *Model) handleTranscriptEditorChainMsg(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case gouTranscriptEditorPrepMsg:
 		if msg.Gen != m.transcriptEditorGen {

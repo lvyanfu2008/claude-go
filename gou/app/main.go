@@ -491,7 +491,7 @@ func spinnerTickCmd() tea.Cmd {
 	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouSpinnerTickMsg{} })
 }
 
-func (m *model) beginQuerySpinner() {
+func (m *Model) beginQuerySpinner() {
 	m.queryBusyStartedAt = time.Now()
 	m.spinnerVerb = pickSpinnerVerb()
 	m.spinnerFrame = 0
@@ -501,7 +501,7 @@ func (m *model) beginQuerySpinner() {
 	}
 }
 
-func (m *model) endQuerySpinner() {
+func (m *Model) endQuerySpinner() {
 	m.spinnerVerb = ""
 	m.queryBusyStartedAt = time.Time{}
 	m.spinnerFrame = 0
@@ -521,7 +521,7 @@ func padStreamRows(rows []string, h int) []string {
 	return rows
 }
 
-func (m *model) promptBottomStreamRows() []string {
+func (m *Model) promptBottomStreamRows() []string {
 	h := m.streamH
 	if h < 1 {
 		h = 1
@@ -610,7 +610,7 @@ func Run(config_ Config) error {
 
 	mcpCmdPath := strings.TrimSpace(config_.MCPCommandsJSONPath)
 	mcpToolPath := strings.TrimSpace(config_.MCPToolsJSONPath)
-	m := newModel(st, mcpCmdPath, mcpToolPath, nil)
+	m := NewModel(st, mcpCmdPath, mcpToolPath, nil)
 	m.taskList.setAgentTasks(m.agentTasks)
 
 	opts := []tea.ProgramOption{}
@@ -639,13 +639,13 @@ func Run(config_ Config) error {
 	if runErr != nil {
 		fmt.Fprintln(os.Stderr, runErr)
 	}
-	if m, ok := res.(*model); ok && gouDemoAltScreenEnabled() && (gouDemoEnvTruthy("GOU_DEMO_DUMP_ON_EXIT") || m.transcriptDumpMode) {
+	if m, ok := res.(*Model); ok && gouDemoAltScreenEnabled() && (gouDemoEnvTruthy("GOU_DEMO_DUMP_ON_EXIT") || m.transcriptDumpMode) {
 		fmt.Print(transcriptExportPlain(m, exportTranscriptWidth(m)) + "\n")
 	}
 	return runErr
 }
 
-func (m *model) maybeRecordTranscript() {
+func (m *Model) maybeRecordTranscript() {
 	if m.transcript == nil {
 		return
 	}
@@ -657,7 +657,7 @@ func (m *model) maybeRecordTranscript() {
 }
 
 // BindCCB wires Bubble Tea Send and whether real HTTP streaming parity is allowed.
-func (m *model) BindCCB(send func(tea.Msg), inline bool) {
+func (m *Model) BindCCB(send func(tea.Msg), inline bool) {
 	m.ccbSend = send
 	m.ccbInline = inline
 }
@@ -668,7 +668,7 @@ func teaGlobalRedrawCmd() tea.Cmd {
 	return func() tea.Msg { return tea.ClearScreen() }
 }
 
-func (m *model) inputAreaHeight() int {
+func (m *Model) inputAreaHeight() int {
 	h := m.pr.LineCount()
 	if m.suggVisible && len(m.suggestions) > 0 {
 		visibleRows := min(6, len(m.suggestions))
@@ -702,7 +702,7 @@ func promptAboveInputRuleLine(cols int) string {
 }
 
 // bottomChromeHeight is prompt input height or transcript footer height (TS transcript has no prompt).
-func (m *model) bottomChromeHeight() int {
+func (m *Model) bottomChromeHeight() int {
 	if m.uiScreen != gouDemoScreenTranscript {
 		h := m.inputAreaHeight()
 		h += m.slashResultPanelChromeExtra()
@@ -732,11 +732,11 @@ func (m *model) bottomChromeHeight() int {
 	return max(4, n+1)
 }
 
-func (m *model) hasCompletedAgents() bool {
+func (m *Model) hasCompletedAgents() bool {
 	return m.agentTasks != nil && m.agentTasks.HasCompletedTasks()
 }
 
-func (m *model) evictCompletedAgents() {
+func (m *Model) evictCompletedAgents() {
 	if m.agentTasks != nil {
 		m.agentTasks.EvictCompleted()
 	}

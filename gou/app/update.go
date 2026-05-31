@@ -56,7 +56,7 @@ import (
 	"goc/types"
 )
 
-func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.msgHistoryBrowseMouseOff {
 		m.msgHistoryBrowseMouseOff = false
 		m2, cmd := m.handleKeyMsgPreserving(msg)
@@ -68,7 +68,7 @@ func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m.handleKeyMsgPreserving(msg)
 }
 
-func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.permModal.IsActive() && msg.String() == "ctrl+c" {
 		if m.queryCancel != nil {
 			m.queryCancel()
@@ -249,7 +249,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	return m, nil
 }
 
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// When the interactive hooks config menu is active, delegate all updates to it.
 	if m.hooksConfigMenu != nil {
 		hm, _ := m.hooksConfigMenu.Update(msg)
@@ -439,7 +439,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // taskListViewMaxDisplay matches the line budget for [model.View] (task list after stream rows); keep in sync with that block.
-func (m *model) taskListViewMaxDisplay() int {
+func (m *Model) taskListViewMaxDisplay() int {
 	if m.height <= 10 {
 		return 0
 	}
@@ -450,7 +450,7 @@ func (m *model) taskListViewMaxDisplay() int {
 // that the task list can occupy. [listViewportH] must subtract this so the full frame
 // (title + messages + stream strip + task block + status + input) does not exceed [model.height]
 // and the input area stays visible.
-func (m *model) taskListViewReservedRows() int {
+func (m *Model) taskListViewReservedRows() int {
 	if m.uiScreen == gouDemoScreenTranscript {
 		return 0
 	}
@@ -465,7 +465,7 @@ func (m *model) taskListViewReservedRows() int {
 	return 2 + md
 }
 
-func listViewportH(m *model) int {
+func listViewportH(m *Model) int {
 	streamReserve := m.streamH
 	if m.uiScreen == gouDemoScreenTranscript {
 		streamReserve = 0
@@ -487,7 +487,7 @@ func listViewportH(m *model) int {
 	return h
 }
 
-func (m *model) statusLineString() string {
+func (m *Model) statusLineString() string {
 	if !gouDemoStatusLineEnabled() {
 		return ""
 	}
@@ -498,7 +498,7 @@ func (m *model) statusLineString() string {
 	return lipgloss.NewStyle().Faint(true).Render(s)
 }
 
-func (m *model) rebuildHeightCache() {
+func (m *Model) rebuildHeightCache() {
 	m.rebuildHeightCacheCalls++
 	m.syncMsgFirstShownAt()
 
@@ -547,7 +547,7 @@ func (m *model) rebuildHeightCache() {
 //   - non-attachment: at least 1 row when non-empty measure path would otherwise undercount
 //
 // Transcript search highlight (searchHL) only affected the old messagerow path; Measure does not widen/wrap on hl.
-func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
+func (m *Model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 	if m.uiScreen == gouDemoScreenPrompt {
 		active := m.queryBusy &&
 			len(m.store.Messages) > 0 &&
@@ -583,7 +583,7 @@ func (m *model) messagerowOpts(msg types.Message) *messagerow.RenderOpts {
 	}
 }
 
-func (m *model) measureMessageRows(msg types.Message, cols int, searchHL string) int {
+func (m *Model) measureMessageRows(msg types.Message, cols int, searchHL string) int {
 	_ = searchHL
 	if m.skipFoldedToolResultStubInPrompt(msg) {
 		return 0
@@ -641,7 +641,7 @@ func extractPartialJSONField(input string, field string) string {
 	return input[idx : idx+end]
 }
 
-func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, cols int, searchHL string) int {
+func (m *Model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, cols int, searchHL string) int {
 	if !group.IsGroup {
 		tu := group.Single
 		head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
@@ -691,7 +691,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 	return messagePaneGutterRowCount(block, cols)
 }
 
-func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, cols, h int, searchHL string) string {
+func (m *Model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, cols, h int, searchHL string) string {
 	var block string
 	if !group.IsGroup {
 		tu := group.Single

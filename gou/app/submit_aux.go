@@ -119,7 +119,7 @@ func sortedSlashDisplayNames(commands []types.Command) []string {
 	return names
 }
 
-func (m *model) installAskResolver(te *toolexecution.ExecutionDeps, askAutoFirst bool) {
+func (m *Model) installAskResolver(te *toolexecution.ExecutionDeps, askAutoFirst bool) {
 	if m.ccbSend == nil {
 		return
 	}
@@ -189,7 +189,7 @@ func buildUpdatedInputWithAnswers(original json.RawMessage, answers map[string]s
 	return b
 }
 
-func (m *model) loadSlashCommandsOnce() {
+func (m *Model) loadSlashCommandsOnce() {
 	if m.slashCommandsOnce {
 		return
 	}
@@ -207,7 +207,7 @@ func (m *model) loadSlashCommandsOnce() {
 
 // slashListVisible is true when the command list should show: leading "/" (TS), mid-input
 // whitespace+"/token", or F2.
-func (m *model) slashListVisible() bool {
+func (m *Model) slashListVisible() bool {
 	m.loadSlashCommandsOnce()
 	m.slashPicker.SetCommands(m.slashCommands)
 	v := m.pr.Value()
@@ -215,7 +215,7 @@ func (m *model) slashListVisible() bool {
 	return m.slashPicker.Visible(v, cur, m.uiScreen == gouDemoScreenPrompt)
 }
 
-func (m *model) syncSlashListAfterPrompt() {
+func (m *Model) syncSlashListAfterPrompt() {
 	if m.uiScreen != gouDemoScreenPrompt {
 		return
 	}
@@ -242,7 +242,7 @@ func isPromptEnterKey(msg tea.KeyPressMsg) bool {
 
 // handleSlashListNavKey handles ↑/↓/Tab for the inline slash list. Must run before message
 // viewport scroll so ↑/↓ change selection instead of the transcript (see main.handleKeyMsgPreserving).
-func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
+func (m *Model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
 	if m.uiScreen != gouDemoScreenPrompt || !m.slashListVisible() {
 		return false
 	}
@@ -294,7 +294,7 @@ func slashPickerListRows(vis []string, maxListRows int) int {
 }
 
 // slashListChromeExtra is the terminal row count for the slash list below the input (rule + list block).
-func (m *model) slashListChromeExtra() int {
+func (m *Model) slashListChromeExtra() int {
 	if !m.slashListVisible() {
 		return 0
 	}
@@ -312,7 +312,7 @@ func slashPickerMaxListRows(termHeight int) int {
 }
 
 // slashListFooterHint is a short filter hint (leading "/" vs mid-input …/q).
-func (m *model) slashListFooterHint() string {
+func (m *Model) slashListFooterHint() string {
 	q, start := m.currentSlashQuery()
 	v := m.pr.Value()
 	cur := m.pr.CursorRuneIndex()
