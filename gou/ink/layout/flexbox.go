@@ -16,6 +16,8 @@ func ComputeLayout(node *vdom.VNode, constraints vdom.Constraints) {
 		layoutBox(node, constraints)
 	case "ScrollBox":
 		layoutScrollBox(node, constraints)
+	case "VirtualList":
+		layoutVirtualList(node, constraints)
 	default:
 		node.Layout = vdom.LayoutResult{W: 0, H: 0}
 	}
@@ -294,6 +296,49 @@ func layoutScrollBox(node *vdom.VNode, c vdom.Constraints) {
 		ContentH:     contentH,
 		OverflowTop:  0,
 		VisibleRange: [2]int{visStart, visEnd},
+	}
+}
+
+// layoutVirtualList computes layout for a virtual-scrolled list.
+// The VNode must carry a *VirtualScrollState in props["virtualScroll"].
+// Only children in the visible [from, to) range are laid out; the rest are
+// skipped and their cached heights are used instead.
+func layoutVirtualList(node *vdom.VNode, c vdom.Constraints) {
+	w := node.Props.GetInt("width")
+	if w <= 0 {
+		w = c.MaxW
+	}
+	vs, ok := node.Props["virtualScroll"].(*VirtualScrollState)
+	if !ok || vs == nil {
+		layoutScrollBox(node, c)
+		return
+	}
+	from, to, offsetTop, totalH := vs.ComputeRange()
+	if to > len(node.Children) {
+		to = len(node.Children)
+	}
+	for i := range node.Children {
+		if i >= from && i < to {
+			childC := vdom.Constraints{MinW: 0, MaxW: w}
+			ComputeLayout(&node.Children[i], childC)
+			node.Children[i].Layout.Y = vs.offsetsUpTo(i) - offsetTop
+			node.Children[i].Layout.X = 0
+			h := node.Children[i].Layout.H
+			vs.UpdateHeight(i, h)
+		}
+	}
+
+	h := node.Props.GetInt("height")
+	if h <= 0 {
+		h = c.MaxH
+	}
+
+	node.Layout = vdom.LayoutResult{
+		W:            w,
+		H:            h,
+		ContentH:     totalH,
+		OverflowTop:  from,
+		VisibleRange: [2]int{from, to},
 	}
 }
 
