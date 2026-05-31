@@ -50,8 +50,8 @@ func (r *AssistantMessageRenderer) Measure(msg *types.Message, ctx *RenderContex
 	}
 
 	totalLines := 0
-	for _, block := range content {
-		blockLines := r.measureContentBlock(block, ctx)
+	for i, block := range content {
+		blockLines := r.measureContentBlock(block, ctx, i, content)
 		totalLines += blockLines
 	}
 
@@ -104,7 +104,7 @@ func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface
 }
 
 // measureContentBlock measures a content block.
-func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interface{}, ctx *RenderContext) int {
+func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interface{}, ctx *RenderContext, index int, content []map[string]interface{}) int {
 	blockType, _ := block["type"].(string)
 
 	switch blockType {
@@ -118,7 +118,15 @@ func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interfac
 			r.toolUseRenderer = &ToolUseMessageRenderer{}
 		}
 		isInProgress := ctx.IsInProgress
-		return r.toolUseRenderer.MeasureToolUseBlock(block, ctx, isInProgress)
+		lines := r.toolUseRenderer.MeasureToolUseBlock(block, ctx, isInProgress)
+		// Account for ⎿ prefix when switching from text to tool_use
+		if index > 0 {
+			prevType, _ := content[index-1]["type"].(string)
+			if prevType == "text" {
+				lines += 1
+			}
+		}
+		return lines
 	case "tool_result":
 		if r.toolUseRenderer == nil {
 			r.toolUseRenderer = &ToolUseMessageRenderer{}
