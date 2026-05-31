@@ -59,7 +59,6 @@ import (
 	"goc/gou/layout"
 	"goc/gou/markdown"
 	"goc/gou/prompt"
-	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
 	"goc/modelenv"
@@ -97,29 +96,6 @@ func applyMessagePaneGutter(block string, cols int) string {
 	lines := strings.Split(wrapped, "\n")
 	for i := range lines {
 		lines[i] = prefix + lines[i]
-	}
-	return strings.Join(lines, "\n")
-}
-
-// applyAssistantStreamingGutter wraps streaming assistant text to (cols − 4) with a "⏺ "
-// lead on the first line and 4-space indent on continuation lines, matching the completed
-// assistant text layout in [goumsg.AssistantMessageRenderer.renderTextBlock].
-func applyAssistantStreamingGutter(block string, cols int) string {
-	if block == "" {
-		return ""
-	}
-	wrapCols := cols - 4
-	if wrapCols < 20 {
-		wrapCols = 20
-	}
-	wrapped := layout.WrapForViewport(block, wrapCols)
-	lines := strings.Split(wrapped, "\n")
-	for i, line := range lines {
-		if i == 0 {
-			lines[i] = textutil.AssistantBullet() + line
-		} else {
-			lines[i] = "  " + line
-		}
 	}
 	return strings.Join(lines, "\n")
 }

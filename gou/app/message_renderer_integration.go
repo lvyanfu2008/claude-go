@@ -1,17 +1,13 @@
 package app
 
 import (
-	"encoding/json"
 	"strings"
 
 	"goc/ccb-engine/diaglog"
 	"goc/gou/markdown"
 	"goc/gou/message"
-	"goc/gou/messagerow"
 	"goc/gou/theme"
 	"goc/types"
-
-	"charm.land/lipgloss/v2"
 )
 
 // MessageRendererIntegration integrates the new message rendering system into gou-demo.
@@ -233,129 +229,30 @@ func (m *Model) renderMessagePaneWithNewRenderer() string {
 		shouldShowDot,
 	)
 
-	// Add streaming tools and streaming text if needed
-	// In TS side, streaming elements appear as part of the ongoing assistant response
+	// Add streaming tail using unified renderer
 	if m.uiScreen != gouDemoScreenTranscript {
-		hasStreamingElements := false
-
-		// Add streaming thinking text (truncated like post-completion renderThinkingBlock)
-		if strings.TrimSpace(m.store.StreamingThinkingText) != "" {
-			hasStreamingElements = true
-			if content != "" {
-				content += "\n\n"
-			}
-			const thinkingStyle = "\x1b[2;3m"
-			content += applyMessagePaneGutter(thinkingStyle + "∴ Thinking\x1b[0m", m.messageBodyColsForLayout())
+		streamingCtx := &message.RenderContext{
+			Width:                width,
+			Theme:                m.msgRenderer.currentTheme,
+			IsTranscript:         false,
+			Verbose:              verbose,
+			ShouldAnimate:        shouldAnimate,
+			ShouldShowDot:        shouldShowDot,
+			Highlighter:          m.msgRenderer.highlighter,
+			ShowToolUseCtrlOHint: true,
 		}
-
-		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
-		if strings.TrimSpace(m.store.StreamingText) != "" {
-			hasStreamingElements = true
+		streamingToolUses := messageStreamingToolUses(m)
+		tailLines := message.RenderStreamingTail(
+			m.store.StreamingText,
+			m.store.StreamingThinkingText,
+			streamingToolUses,
+			streamingCtx,
+		)
+		if len(tailLines) > 0 {
 			if content != "" {
 				content += "\n"
 			}
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
-			content += applyAssistantStreamingGutter(md, m.messageBodyColsForLayout())
-		}
-
-		// Add streaming tools
-		streamingToolUses := m.store.StreamingToolUses
-
-		if len(streamingToolUses) > 0 {
-			hasStreamingElements = true
-			grouped := groupStreamingTools(streamingToolUses)
-			for _, group := range grouped {
-				if content != "" {
-					content += "\n"
-				}
-				var sb strings.Builder
-
-				if !group.IsGroup {
-					tu := group.Single
-					// 对于单个搜索/读取工具，也显示活动状态
-					name := strings.TrimSpace(tu.Name)
-					if name == "Grep" || name == "Glob" || name == "Read" || name == "View" || name == "LS" || name == "SemanticSearch" {
-						// 当作单个项目的分组处理
-						var searchCount, readCount, listCount int
-						switch name {
-						case "Grep", "Glob", "SemanticSearch":
-							searchCount = 1
-						case "Read", "View":
-							readCount = 1
-						case "LS":
-							listCount = 1
-						}
-						summary := messagerow.SearchReadSummaryText(true, searchCount, readCount, listCount, 0, 0, 0, 0, 0, nil, nil, nil) + "…"
-						toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-						sb.WriteString(toolTitle)
-						// 添加路径提示
-						path := extractPartialJSONField(tu.UnparsedInput, "file_path")
-						if path == "" {
-							path = extractPartialJSONField(tu.UnparsedInput, "path")
-						}
-						if path == "" {
-							path = extractPartialJSONField(tu.UnparsedInput, "pattern")
-						}
-						if path == "" {
-							path = extractPartialJSONField(tu.UnparsedInput, "glob")
-						}
-						if path == "" {
-							path = "..."
-						}
-						sb.WriteByte('\n')
-						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
-					} else {
-						// 所有工具都显示活动状态
-						activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
-						if activityLine == "" {
-							// 如果没有活动描述，使用工具名
-							facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-							if facing == "" {
-								facing = tu.Name
-							}
-							activityLine = facing
-							if p := strings.TrimSpace(paren); p != "" {
-								activityLine += " " + p
-							}
-						}
-						// 添加省略号表示正在执行
-						activityLine += "…"
-						// 添加交互提示
-						toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-						sb.WriteString(toolTitle)
-					}
-				} else {
-					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil) + "…"
-					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-					sb.WriteString(toolTitle)
-					for _, item := range group.Items {
-						path := extractPartialJSONField(item.UnparsedInput, "file_path")
-						if path == "" {
-							path = extractPartialJSONField(item.UnparsedInput, "path")
-						}
-						if path == "" {
-							path = extractPartialJSONField(item.UnparsedInput, "pattern")
-						}
-						if path == "" {
-							path = "..."
-						}
-						sb.WriteByte('\n')
-						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
-					}
-				}
-				content += applyMessagePaneGutter(sb.String(), m.messageBodyColsForLayout())
-			}
-		}
-
-		// If we added streaming elements but there's no assistant message yet,
-		// we might need to add an assistant header
-		if hasStreamingElements && content != "" {
-			// Check if we need to add assistant header
-			// Simplified logic: if last message is user or no messages, add header
-			// Actually, looking at TS side behavior: streaming elements
-			// appear as continuation of assistant response, not with separate header
-			// So we might NOT need to add header here
-			// For now, keep it simple - no automatic header
+			content += strings.Join(tailLines, "\n")
 		}
 	}
 
@@ -388,131 +285,44 @@ func (m *Model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 		shouldShowDot,
 	)
 
-	// Add streaming tools and streaming text if needed (similar to renderMessagePaneWithNewRenderer)
+	// Add streaming tail using unified renderer
 	if m.uiScreen != gouDemoScreenTranscript {
-		hasStreamingElements := false
-
-		// Add streaming thinking text (truncated like post-completion renderThinkingBlock)
-		if strings.TrimSpace(m.store.StreamingThinkingText) != "" {
-			hasStreamingElements = true
-			if content != "" {
-				content += "\n\n"
-			}
-			const thinkingStyle = "\x1b[2;3m"
-			content += applyMessagePaneGutter(thinkingStyle + "∴ Thinking\x1b[0m", m.messageBodyColsForLayout())
+		streamingCtx := &message.RenderContext{
+			Width:                width,
+			Theme:                m.msgRenderer.currentTheme,
+			IsTranscript:         false,
+			Verbose:              verbose,
+			ShouldAnimate:        shouldAnimate,
+			ShouldShowDot:        shouldShowDot,
+			Highlighter:          m.msgRenderer.highlighter,
+			ShowToolUseCtrlOHint: true,
 		}
-
-		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
-		if strings.TrimSpace(m.store.StreamingText) != "" {
-			hasStreamingElements = true
+		streamingToolUses := messageStreamingToolUses(m)
+		tailLines := message.RenderStreamingTail(
+			m.store.StreamingText,
+			m.store.StreamingThinkingText,
+			streamingToolUses,
+			streamingCtx,
+		)
+		if len(tailLines) > 0 {
 			if content != "" {
 				content += "\n"
 			}
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
-			content += applyAssistantStreamingGutter(md, m.messageBodyColsForLayout())
-		}
-
-		// Add streaming tools
-		streamingToolUses := m.store.StreamingToolUses
-
-		if len(streamingToolUses) > 0 {
-			hasStreamingElements = true
-			grouped := groupStreamingTools(streamingToolUses)
-			for _, group := range grouped {
-				if content != "" {
-					content += "\n"
-				}
-				var sb strings.Builder
-
-				if !group.IsGroup {
-					tu := group.Single
-					// 对于单个搜索/读取工具，也显示活动状态
-					name := strings.TrimSpace(tu.Name)
-					if name == "Grep" || name == "Glob" || name == "Read" || name == "View" || name == "LS" || name == "SemanticSearch" {
-						// 当作单个项目的分组处理
-						var searchCount, readCount, listCount int
-						switch name {
-						case "Grep", "Glob", "SemanticSearch":
-							searchCount = 1
-						case "Read", "View":
-							readCount = 1
-						case "LS":
-							listCount = 1
-						}
-						summary := messagerow.SearchReadSummaryText(true, searchCount, readCount, listCount, 0, 0, 0, 0, 0, nil, nil, nil) + "…"
-						toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-						sb.WriteString(toolTitle)
-						// 添加路径提示
-						path := extractPartialJSONField(tu.UnparsedInput, "file_path")
-						if path == "" {
-							path = extractPartialJSONField(tu.UnparsedInput, "path")
-						}
-						if path == "" {
-							path = extractPartialJSONField(tu.UnparsedInput, "pattern")
-						}
-						if path == "" {
-							path = extractPartialJSONField(tu.UnparsedInput, "glob")
-						}
-						if path == "" {
-							path = "..."
-						}
-						sb.WriteByte('\n')
-						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
-					} else {
-						// 所有工具都显示活动状态
-						activityLine := messagerow.ActivityLineForToolUse(tu.Name, json.RawMessage(tu.UnparsedInput))
-						if activityLine == "" {
-							// 如果没有活动描述，使用工具名
-							facing, paren, _ := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.UnparsedInput))
-							if facing == "" {
-								facing = tu.Name
-							}
-							activityLine = facing
-							if p := strings.TrimSpace(paren); p != "" {
-								activityLine += " " + p
-							}
-						}
-						// 添加省略号表示正在执行
-						activityLine += "…"
-						// 添加交互提示
-						toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-						sb.WriteString(toolTitle)
-					}
-				} else {
-					summary := messagerow.SearchReadSummaryText(true, group.SearchCount, group.ReadCount, group.ListCount, 0, 0, 0, 0, 0, nil, nil, nil) + "…"
-					toolTitle := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(summary) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
-					sb.WriteString(toolTitle)
-					for _, item := range group.Items {
-						path := extractPartialJSONField(item.UnparsedInput, "file_path")
-						if path == "" {
-							path = extractPartialJSONField(item.UnparsedInput, "path")
-						}
-						if path == "" {
-							path = extractPartialJSONField(item.UnparsedInput, "pattern")
-						}
-						if path == "" {
-							path = "..."
-						}
-						sb.WriteByte('\n')
-						sb.WriteString(lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path))
-					}
-				}
-				content += applyMessagePaneGutter(sb.String(), m.messageBodyColsForLayout())
-			}
-		}
-
-		// If we added streaming elements but there's no assistant message yet,
-		// we might need to add an assistant header
-		if hasStreamingElements && content != "" {
-			// Check if we need to add assistant header
-			// Simplified logic: if last message is user or no messages, add header
-			// Actually, looking at TS side behavior: streaming elements
-			// appear as continuation of assistant response, not with separate header
-			// So we might NOT need to add header here
-			// For now, keep it simple - no automatic header
+			content += strings.Join(tailLines, "\n")
 		}
 	}
 
-
 	return content, true
+}
+
+// messageStreamingToolUses converts store streaming tool uses to the message package format.
+func messageStreamingToolUses(m *Model) []message.StreamingToolUse {
+	var result []message.StreamingToolUse
+	for _, tu := range m.store.StreamingToolUses {
+		result = append(result, message.StreamingToolUse{
+			Name:  tu.Name,
+			Input: tu.UnparsedInput,
+		})
+	}
+	return result
 }
