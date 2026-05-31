@@ -8,7 +8,7 @@ import (
 
 const (
 	promptPrefix      = "❯ " // ❯
-	promptPlaceholder = "Type a message..."
+	promptPlaceholder = ""
 )
 
 // PromptInput renders the input area matching claude-code TS:
