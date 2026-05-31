@@ -98,6 +98,8 @@ func (e *RenderEngine) onKey(key core.ParsedKey) {
 	switch {
 	case key.Key == "c" && key.Mod&core.Ctrl != 0:
 		e.Quit()
+	case key.Key == "o" && key.Mod&core.Ctrl != 0:
+		e.toggleTranscript()
 	case key.Key == "esc":
 		e.Quit()
 	case key.Key == "enter":
@@ -189,14 +191,24 @@ func (e *RenderEngine) moveCursor(delta int) {
 }
 
 func (e *RenderEngine) scrollMessages(delta int) {
-	// Read scrollTop from store and adjust.
-	// The VirtualScrollState in layout handles the actual viewport.
-	// For now, we store a synthetic scrollTop in meta.
-	// Future: wire to a scrollTop atom.
+	newTop := e.Store.ScrollTop() + delta
+	if newTop < 0 {
+		newTop = 0
+	}
+	e.Store.SetScrollTop(newTop)
 }
 
 func (e *RenderEngine) scrollToBottom() {
-	// Future: wire to scrollTop atom.
+	e.Store.SetScrollTop(1<<31 - 1) // max int, clamped by renderer
+}
+
+func (e *RenderEngine) toggleTranscript() {
+	cur := e.Store.GetMeta("uiScreen")
+	if cur == "transcript" {
+		e.Store.SetMeta("uiScreen", "prompt")
+	} else {
+		e.Store.SetMeta("uiScreen", "transcript")
+	}
 }
 
 func itoa(n int) string {

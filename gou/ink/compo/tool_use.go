@@ -57,7 +57,14 @@ func AssistantToolUse(ctx *ink.Context, block ink.ContentBlock) ink.VNode {
 	}
 
 	if block.State == "resolved" && block.Result != nil {
-		children = append(children, userToolResult(ctx, *block.Result))
+		// Show truncated result with expand hint
+		summary := truncateLine(stripMarkdown(block.Result.Content), ctx.Store.Width()-8)
+		children = append(children,
+			ink.VNode{Type: "Text", Props: ink.Props{
+				"content": "  ⎿ " + summary + "  (ctrl+o to expand)",
+				"dim":     true,
+			}},
+		)
 	}
 
 	return ink.VNode{

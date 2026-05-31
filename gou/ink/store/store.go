@@ -23,6 +23,7 @@ type Store struct {
 	cursorPos      int
 	isLoading      bool
 	width, height  int
+	scrollTop      int
 	meta           map[string]string
 }
 
@@ -137,6 +138,19 @@ func (s *Store) SetHeight(v int) {
 	s.mu.Lock()
 	s.height = v
 	s.mu.Unlock()
+}
+
+func (s *Store) ScrollTop() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.scrollTop
+}
+
+func (s *Store) SetScrollTop(v int) {
+	s.mu.Lock()
+	s.scrollTop = v
+	s.mu.Unlock()
+	s.ScheduleRender()
 }
 
 func (s *Store) SetMeta(key, val string) {
