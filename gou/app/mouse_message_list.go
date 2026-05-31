@@ -69,17 +69,21 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.MouseWheelMsg:
+		case tea.MouseWheelMsg:
 		if !m.mouseYInMessageListPane(msg.Y) {
 			return false, nil
 		}
 		if m.msgViewportWanted() && gouDemoMsgHistoryBrowseReleaseEnabled() && gouDemoMouseCellMotionEnabled() &&
 			msg.Button == tea.MouseWheelUp && !msg.Mod.Contains(tea.ModShift) && m.msgViewport.AtTop() {
 			m.msgHistoryBrowseMouseOff = true
-			return true, tea.Println("\n📜 History browse: mouse wheel uses host buffer; press any key to return…")
+			return true, nil
+		}
+		// Wheel-down while mouse is released: recapture and resume TUI scrolling.
+		if m.msgHistoryBrowseMouseOff && msg.Button == tea.MouseWheelDown {
+			m.msgHistoryBrowseMouseOff = false
+			return true, nil
 		}
 		if m.msgViewportWanted() {
-			//diaglog.Line("[mouse] tryHandleMessageListMouse: using viewport, button=%v, viewport height=%d", msg.Button, m.msgViewport.Height())
 			switch msg.Button {
 			case tea.MouseWheelUp:
 				m.handleMsgViewportMouseWheel(1)
@@ -96,7 +100,6 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			default:
 				return false, nil
 			}
-			//diaglog.Line("[mouse] tryHandleMessageListMouse: viewport scrolled, yOffset=%d, totalLines=%d", m.msgViewport.YOffset(), m.msgViewport.TotalLineCount())
 			return true, nil
 		}
 		step := messageListMouseWheelStep(listViewportH(m))
@@ -114,13 +117,12 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 		default:
 			return false, nil
 		}
-		// Clamp scrollTop if it's too large (e.g., from sticky-bottom sentinel 1<<30)
 		if !m.sticky && m.scrollTop >= 1<<20 {
 			m.clampScrollTopForVirtualList()
 		}
 		return true, nil
 
-	case tea.MouseClickMsg:
+case tea.MouseClickMsg:
 		if msg.Button == tea.MouseLeft && !msg.Mod.Contains(tea.ModShift) {
 			if m.mouseYInMessageListPane(msg.Y) {
 				m.msgListMouseDragging = true
