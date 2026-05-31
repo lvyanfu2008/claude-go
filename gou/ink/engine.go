@@ -214,13 +214,9 @@ func (e *RenderEngine) scrollMessages(delta int) {
 }
 
 func (e *RenderEngine) scrollToBottom() {
-	// Estimate total content height from message count so scrollTop is
-	// reasonably close to the actual bottom, allowing arrow-up to work.
-	est := len(e.Store.GetMessages()) * 10
-	if est < e.Store.Height() {
-		est = e.Store.Height()
-	}
-	e.Store.SetScrollTop(est)
+	// Each message is ~1-3 rows. Using len(messages) as estimate is close
+	// enough to actual totalH — ComputeRange clamps it precisely.
+	e.Store.SetScrollTop(len(e.Store.GetMessages()))
 }
 
 func (e *RenderEngine) toggleTranscript() {
