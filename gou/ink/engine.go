@@ -79,18 +79,60 @@ func (e *RenderEngine) Run() error {
 }
 
 func (e *RenderEngine) handleInput(raw []byte) {
-	switch {
-	case core.IsMouseEvent(raw):
-		// Mouse events: routed to store for component access
+	if core.IsMouseEvent(raw) {
 		ev, ok := core.DecodeMouse(raw)
 		if ok {
 			_ = ev // TODO: route to component handler
 		}
-	case core.IsBracketedPasteStart(raw):
-		// Bracketed paste: accumulate content (future)
+		return
+	}
+	if core.IsBracketedPasteStart(raw) {
+		return
+	}
+
+	// Process each keystroke individually. A single read may contain
+	// multiple key presses (e.g. user types fast). Escape sequences
+	// consume all remaining bytes; single-byte controls and UTF-8
+	// runes advance one key at a time.
+	for i := 0; i < len(raw); {
+		b := raw[i]
+		switch {
+		case b == 27 && i+1 < len(raw):
+			// Escape sequence — parse consumes the rest
+			e.onKey(e.keyParser.Parse(raw[i:]))
+			return
+		case b == 13 || b == 9 || b == 127:
+			e.onKey(e.keyParser.Parse(raw[i : i+1]))
+			i++
+		case b < 32:
+			// Other control character (e.g. Ctrl+letter)
+			e.onKey(e.keyParser.Parse(raw[i : i+1]))
+			i++
+		default:
+			// Printable ASCII or UTF-8 multi-byte
+			r, sz := rune(b), 1
+			if b >= 0xC0 {
+				r, sz = decodeRune(raw[i:])
+			}
+			if r != 0 && sz > 0 {
+				e.onKey(e.keyParser.Parse(raw[i : i+sz]))
+			}
+			i += sz
+		}
+	}
+}
+
+func decodeRune(b []byte) (rune, int) {
+	if len(b) < 2 { return rune(b[0]), 1 }
+	switch {
+	case b[0] < 0xE0:
+		return rune(b[0]&0x1F)<<6 | rune(b[1]&0x3F), 2
+	case b[0] < 0xF0:
+		if len(b) < 3 { return rune(b[0]), 1 }
+		return rune(b[0]&0x0F)<<12 | rune(b[1]&0x3F)<<6 | rune(b[2]&0x3F), 3
 	default:
-		key := e.keyParser.Parse(raw)
-		e.onKey(key)
+		if len(b) < 4 { return rune(b[0]), 1 }
+		return rune(b[0]&0x07)<<18 | rune(b[1]&0x3F)<<12 | rune(b[2]&0x3F)<<6 | rune(b[3]&0x3F), 4
 	}
 }
 
