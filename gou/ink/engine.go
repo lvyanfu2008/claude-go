@@ -153,10 +153,10 @@ func (e *RenderEngine) submitInput() {
 		Type: "user",
 		ContentBlocks: []vdom.ContentBlock{{Type: "text", Content: val}},
 	})
+	e.scrollToBottom()
 	e.Store.SetMessages(msgs)
 	e.Store.SetInputValue("")
 	e.Store.SetCursorPos(0)
-	e.scrollToBottom()
 }
 
 func (e *RenderEngine) insertRunes(runes []rune) {
@@ -214,7 +214,13 @@ func (e *RenderEngine) scrollMessages(delta int) {
 }
 
 func (e *RenderEngine) scrollToBottom() {
-	e.Store.SetScrollTop(1<<31 - 1) // max int, clamped by renderer
+	// Estimate total content height from message count so scrollTop is
+	// reasonably close to the actual bottom, allowing arrow-up to work.
+	est := len(e.Store.GetMessages()) * 10
+	if est < e.Store.Height() {
+		est = e.Store.Height()
+	}
+	e.Store.SetScrollTop(est)
 }
 
 func (e *RenderEngine) toggleTranscript() {
