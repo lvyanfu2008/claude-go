@@ -24,7 +24,7 @@ func rasterizeNode(node *vdom.VNode, screen *Screen, offX, offY int) {
 		for i := range node.Children {
 			rasterizeNode(&node.Children[i], screen, absX, absY)
 		}
-	case "ScrollBox":
+	case "ScrollBox", "VirtualList":
 		visStart := node.Layout.VisibleRange[0]
 		visEnd := node.Layout.VisibleRange[1]
 		if visEnd > len(node.Children) {

@@ -16,6 +16,7 @@ type Terminal struct {
 	width, height int
 	resizeCh      chan [2]int
 	restoreFuncs  []func()
+	stdinCh       chan []byte // lazily created by Read()
 }
 
 func NewTerminal() *Terminal {
@@ -109,7 +110,10 @@ func (t *Terminal) EnterAltScreen() {
 
 // Read returns the raw stdin byte channel.
 func (t *Terminal) Read() <-chan []byte {
-	return t.ReadStdin()
+	if t.stdinCh == nil {
+		t.stdinCh = t.startStdinReader()
+	}
+	return t.stdinCh
 }
 
 // ResizeCh returns a channel that receives struct{} on SIGWINCH.
@@ -130,10 +134,9 @@ func (t *Terminal) Write(data []byte) (int, error) {
 	return t.stdout.Write(data)
 }
 
-// ReadStdin starts a goroutine that reads raw bytes from stdin
-// and sends them on the returned channel. Callers should read from
-// this channel to receive keyboard input.
-func (t *Terminal) ReadStdin() <-chan []byte {
+// startStdinReader starts a goroutine that reads raw bytes from stdin
+// and sends them on the returned channel. Called once by Read().
+func (t *Terminal) startStdinReader() chan []byte {
 	ch := make(chan []byte, 32)
 	go func() {
 		buf := make([]byte, 64)
