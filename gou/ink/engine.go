@@ -284,13 +284,15 @@ func (e *RenderEngine) toggleTranscript() {
 }
 
 func logf(tag, format string, args ...interface{}) {
-	// Write debug log to stderr when GOU_DEMO_LOG_STDERR is set.
-	if os.Getenv("GOU_DEMO_LOG_STDERR") == "1" {
-		ts := time.Now().Format("15:04:05.000")
-		fmt.Fprintf(os.Stderr, "[%s %s] ", ts, tag)
-		fmt.Fprintf(os.Stderr, format, args...)
-		fmt.Fprintf(os.Stderr, "\n")
+	f, err := os.OpenFile("/tmp/ink-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
 	}
+	defer f.Close()
+	ts := time.Now().Format("15:04:05.000")
+	fmt.Fprintf(f, "[%s %s] ", ts, tag)
+	fmt.Fprintf(f, format, args...)
+	fmt.Fprintf(f, "\n")
 }
 
 func itoa(n int) string {
