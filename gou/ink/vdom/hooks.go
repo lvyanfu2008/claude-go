@@ -13,8 +13,8 @@ func UseState[T any](ctx *Context, fiber *Fiber, initial T) (T, func(T)) {
 	if hs.effectRun {
 		return hs.state.(T), func(v T) {
 			hs.state = v
-			if ctx.schedule != nil {
-				ctx.schedule()
+			if ctx.Schedule != nil {
+				ctx.Schedule()
 			}
 		}
 	}
@@ -22,8 +22,8 @@ func UseState[T any](ctx *Context, fiber *Fiber, initial T) (T, func(T)) {
 	hs.effectRun = true
 	return initial, func(v T) {
 		hs.state = v
-		if ctx.schedule != nil {
-			ctx.schedule()
+		if ctx.Schedule != nil {
+			ctx.Schedule()
 		}
 	}
 }

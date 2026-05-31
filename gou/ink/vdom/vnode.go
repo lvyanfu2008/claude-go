@@ -106,7 +106,7 @@ func Unbounded() Constraints {
 type Context struct {
 	Theme    *theme.Palette
 	Store    StoreReader
-	schedule func()
+	Schedule func()
 
 	// Internal: current fiber during reconciliation
 	fiber     *Fiber
