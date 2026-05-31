@@ -116,21 +116,24 @@ func wrapText(text string, width int) []string {
 	return strings.Split(wrapped, "\n")
 }
 
-// renderMarkdown renders markdown text with theme.
+// renderMarkdown renders markdown text with theme using the styled renderer.
 func renderMarkdown(text string, width int, palette *theme.Palette, highlighter *markdown.Highlighter) []string {
 	if text == "" {
 		return []string{""}
 	}
 
-	// Parse markdown
 	tokens := markdown.ParseWithGoldmark(text)
 
-	// Convert palette to lipgloss style for markdown rendering
-	style := paletteToLipglossStyle(palette)
-	inlineCode := lipgloss.NewStyle().Foreground(palette.InlineCode)
+	baseStyle := lipgloss.NewStyle().Foreground(palette.Default)
+	codeStyle := lipgloss.NewStyle().Faint(true)
+	boldStyle := lipgloss.NewStyle().Foreground(palette.Heading).Bold(true)
+	italicStyle := lipgloss.NewStyle().Italic(true)
+	inlineCodeStyle := lipgloss.NewStyle().Foreground(palette.InlineCode)
 
-	// Render with highlighting
-	rendered := markdown.RenderTokensWithHighlight(tokens, highlighter, style, inlineCode)
+	rendered := markdown.RenderTokensStyled(
+		tokens, highlighter, width,
+		baseStyle, codeStyle, boldStyle, italicStyle, inlineCodeStyle,
+	)
 
 	// Split into lines and wrap if needed
 	lines := strings.Split(rendered, "\n")
@@ -157,13 +160,6 @@ func renderMarkdown(text string, width int, palette *theme.Palette, highlighter 
 	}
 
 	return result
-}
-
-// paletteToLipglossStyle converts a theme palette to a lipgloss style for markdown rendering.
-func paletteToLipglossStyle(palette *theme.Palette) lipgloss.Style {
-	// Create a basic style with heading color
-	style := lipgloss.NewStyle().Foreground(palette.Heading)
-	return style
 }
 
 // getContainerWidth returns the effective container width.
