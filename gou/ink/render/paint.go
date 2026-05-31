@@ -1,9 +1,13 @@
-package ink
+package render
 
 import "strings"
 
 type DiffEngine struct {
 	cursorX, cursorY int
+}
+
+func NewDiffEngine() *DiffEngine {
+	return &DiffEngine{}
 }
 
 func (d *DiffEngine) Generate(prev, curr *Screen) string {
@@ -52,12 +56,12 @@ func (d *DiffEngine) Generate(prev, curr *Screen) string {
 			d.flushRun(&buf, run, runStyle)
 		}
 	}
-	buf.WriteString(sgrReset())
+	buf.WriteString(SgrReset())
 	return buf.String()
 }
 
 func (d *DiffEngine) moveTo(buf *strings.Builder, row, col int) {
-	buf.WriteString(cursorTo(row, col))
+	buf.WriteString(CursorTo(row, col))
 	d.cursorY = row
 	d.cursorX = col
 }
@@ -66,7 +70,7 @@ func (d *DiffEngine) flushRun(buf *strings.Builder, run []TermCell, style CellSt
 	if len(run) == 0 {
 		return
 	}
-	sgr := styleToSGR(style)
+	sgr := StyleToSGR(style)
 	if sgr != "" {
 		buf.WriteString(sgr)
 	}
@@ -77,7 +81,7 @@ func (d *DiffEngine) flushRun(buf *strings.Builder, run []TermCell, style CellSt
 			buf.WriteRune(c.Rune)
 		}
 	}
-	buf.WriteString(sgrReset())
+	buf.WriteString(SgrReset())
 	d.cursorX += len(run)
 }
 
