@@ -2,6 +2,7 @@ package render
 
 import (
 	"image/color"
+	"github.com/mattn/go-runewidth"
 
 	"goc/gou/ink/vdom"
 )
@@ -93,11 +94,17 @@ func writeANSILine(screen *Screen, line string, startX, y int, base CellStyle) {
 				continue
 			}
 		}
-		// Write visible character
+		// Write visible character, accounting for display width (CJK = 2 cells)
+		rw := 1
 		if col >= 0 && col < screen.Width {
 			screen.Cells[y][col] = TermCell{Rune: r, Style: cur}
+			// For double-width characters, clear the continuation cell
+			rw = runewidth.RuneWidth(r)
+			if rw > 1 && col+1 < screen.Width {
+				screen.Cells[y][col+1] = TermCell{Rune: 0, Style: cur}
+			}
 		}
-		col++
+		col += rw
 		i++
 	}
 }
