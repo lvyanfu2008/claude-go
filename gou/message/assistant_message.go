@@ -32,7 +32,7 @@ func (r *AssistantMessageRenderer) Render(msg *types.Message, ctx *RenderContext
 
 	var lines []string
 	for i, block := range content {
-		blockLines, err := r.renderContentBlock(block, ctx, i, len(content))
+		blockLines, err := r.renderContentBlock(block, ctx, i, len(content), content)
 		if err != nil {
 			return []string{fmt.Sprintf("Error rendering block: %v", err)}, nil
 		}
@@ -59,7 +59,7 @@ func (r *AssistantMessageRenderer) Measure(msg *types.Message, ctx *RenderContex
 }
 
 // renderContentBlock renders a content block.
-func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface{}, ctx *RenderContext, index, total int) ([]string, error) {
+func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface{}, ctx *RenderContext, index, total int, content []map[string]interface{}) ([]string, error) {
 	blockType, _ := block["type"].(string)
 
 	diaglog.Line("[assistant-message] renderContentBlock: type=%s, index=%d/%d, isTranscript=%v, verbose=%v",
@@ -76,9 +76,20 @@ func (r *AssistantMessageRenderer) renderContentBlock(block map[string]interface
 			r.toolUseRenderer = &ToolUseMessageRenderer{}
 		}
 		// Check if this tool use is in progress (streaming)
-		isInProgress := false // TODO: Determine if tool use is in progress
+		isInProgress := ctx.IsInProgress
 		diaglog.Line("[assistant-message] rendering tool_use block, isInProgress=%v", isInProgress)
-		return r.toolUseRenderer.RenderToolUseBlock(block, ctx, isInProgress)
+		blockLines, err := r.toolUseRenderer.RenderToolUseBlock(block, ctx, isInProgress)
+		if err != nil {
+			return nil, err
+		}
+		// Insert ⎿ prefix when switching from text to tool_use (TS MessageResponse)
+		if index > 0 {
+			prevType, _ := content[index-1]["type"].(string)
+			if prevType == "text" {
+				blockLines = append([]string{"  ⎿"}, blockLines...)
+			}
+		}
+		return blockLines, nil
 	case "tool_result":
 		// Assistant rows often interleave tool_use + tool_result; same chrome as [ToolUseMessageRenderer].
 		if r.toolUseRenderer == nil {
@@ -106,7 +117,7 @@ func (r *AssistantMessageRenderer) measureContentBlock(block map[string]interfac
 		if r.toolUseRenderer == nil {
 			r.toolUseRenderer = &ToolUseMessageRenderer{}
 		}
-		isInProgress := false // TODO: Determine if tool use is in progress
+		isInProgress := ctx.IsInProgress
 		return r.toolUseRenderer.MeasureToolUseBlock(block, ctx, isInProgress)
 	case "tool_result":
 		if r.toolUseRenderer == nil {
@@ -129,6 +140,11 @@ func (r *AssistantMessageRenderer) renderTextBlock(block map[string]interface{},
 	}
 	if compactservice.StartsWithApiErrorPrefix(trimmed) {
 		return r.renderApiError(text, ctx)
+	}
+
+	// Apply search highlight before markdown rendering
+	if ctx.SearchHighlight != "" {
+		text = highlightSearchPlain(text, ctx.SearchHighlight)
 	}
 
 	// Regular assistant text

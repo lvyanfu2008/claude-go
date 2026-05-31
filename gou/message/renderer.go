@@ -169,3 +169,29 @@ func getContainerWidth(ctx *RenderContext) int {
 	}
 	return ctx.Width
 }
+
+// highlightSearchPlain wraps matching substrings with ANSI reverse-video.
+func highlightSearchPlain(haystack, needle string) string {
+	if strings.TrimSpace(needle) == "" {
+		return haystack
+	}
+	hlStyle := "\x1b[7m"
+	reset := "\x1b[0m"
+	lower := strings.ToLower(haystack)
+	needleLower := strings.ToLower(needle)
+	var b strings.Builder
+	idx := 0
+	for {
+		pos := strings.Index(lower[idx:], needleLower)
+		if pos < 0 {
+			b.WriteString(haystack[idx:])
+			break
+		}
+		b.WriteString(haystack[idx : idx+pos])
+		b.WriteString(hlStyle)
+		b.WriteString(haystack[idx+pos : idx+pos+len(needle)])
+		b.WriteString(reset)
+		idx += pos + len(needle)
+	}
+	return b.String()
+}
