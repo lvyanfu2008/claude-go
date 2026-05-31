@@ -7,10 +7,49 @@ import (
 	"goc/gou/theme"
 )
 
+// testStore implements ink.StoreReader for testing.
+type testStore struct {
+	messages     []ink.Message
+	streamingText string
+	streamingTools []ink.StreamingToolUse
+	inputValue   string
+	cursorPos    int
+	isLoading    bool
+	width        int
+	height       int
+	meta         map[string]string
+}
+
+func newTestStore() *testStore {
+	return &testStore{
+		meta: make(map[string]string),
+	}
+}
+
+func (s *testStore) GetMessages() []ink.Message            { return s.messages }
+func (s *testStore) StreamingText() string                  { return s.streamingText }
+func (s *testStore) StreamingTools() []ink.StreamingToolUse { return s.streamingTools }
+func (s *testStore) InputValue() string                     { return s.inputValue }
+func (s *testStore) CursorPos() int                         { return s.cursorPos }
+func (s *testStore) IsLoading() bool                        { return s.isLoading }
+func (s *testStore) Width() int                             { return s.width }
+func (s *testStore) Height() int                            { return s.height }
+func (s *testStore) GetMeta(key string) string {
+	if s.meta != nil {
+		return s.meta[key]
+	}
+	return ""
+}
+
+// Setters for test setup.
+func (s *testStore) AppendMessage(msg ink.Message) {
+	s.messages = append(s.messages, msg)
+}
+
 func TestMessagesComponent(t *testing.T) {
-	store := ink.NewStore()
-	store.Width = 80
-	store.Height = 24
+	store := newTestStore()
+	store.width = 80
+	store.height = 24
 
 	store.AppendMessage(ink.Message{
 		UUID: "u1", Type: "user",
@@ -34,9 +73,7 @@ func TestMessagesComponent(t *testing.T) {
 	})
 
 	pal := theme.ActivePalette()
-	// Try to get a palette
 	if pal == nil {
-		// fallback: use Default if that exists
 		pal = &theme.Palette{}
 	}
 
@@ -48,7 +85,6 @@ func TestMessagesComponent(t *testing.T) {
 	screen := ink.NewScreen(80, 24)
 	ink.Rasterize(&tree, screen)
 
-	// Verify user message text appears
 	found := false
 	for y := 0; y < 24; y++ {
 		for x := 0; x < 75; x++ {
@@ -66,9 +102,9 @@ func TestMessagesComponent(t *testing.T) {
 }
 
 func TestFullREPLRender(t *testing.T) {
-	store := ink.NewStore()
-	store.Width = 80
-	store.Height = 24
+	store := newTestStore()
+	store.width = 80
+	store.height = 24
 
 	pal := theme.ActivePalette()
 	if pal == nil {
@@ -86,7 +122,6 @@ func TestFullREPLRender(t *testing.T) {
 	screen := ink.NewScreen(80, 24)
 	ink.Rasterize(&tree, screen)
 
-	// Should have rendered without error and have some content
 	hasContent := false
 	for y := 0; y < 24 && !hasContent; y++ {
 		for x := 0; x < 80 && !hasContent; x++ {

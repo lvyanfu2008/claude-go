@@ -9,8 +9,8 @@ func REPL(ctx *ink.Context, p ink.Props) ink.VNode {
 		Props: ink.Props{"direction": "column"},
 		Children: []ink.VNode{
 			{
-				Type: "ScrollBox", Key: "messages-scroll",
-				Props: ink.Props{"stickyBottom": true},
+				Type: "VirtualList", Key: "messages-scroll",
+				Props: ink.Props{"stickyBottom": true, "flexGrow": 1, "virtualScroll": true},
 				Children: []ink.VNode{Messages(ctx, p)},
 			},
 			StatusLine(ctx),
