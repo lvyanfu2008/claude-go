@@ -476,10 +476,6 @@ func listViewportH(m *Model) int {
 	}
 	if m.uiScreen != gouDemoScreenTranscript {
 		h -= m.taskListViewReservedRows()
-		// Reserve space for spinner
-		if m.queryBusy {
-			h-- // spinner row
-		}
 	}
 	if h < 3 {
 		h = 3

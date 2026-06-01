@@ -498,6 +498,10 @@ func padStreamRows(rows []string, h int) []string {
 
 func (m *Model) promptBottomStreamRows() []string {
 	h := m.streamH
+	// Spinner replaces one row of stream reserve, keeping total screen height constant.
+	if m.queryBusy {
+		h--
+	}
 	if h < 1 {
 		h = 1
 	}
