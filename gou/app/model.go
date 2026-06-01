@@ -165,7 +165,6 @@ type Model struct {
 	vpNeedResizeContent bool
 	msgFoldAll          bool
 	msgFoldRev          int
-	msgViewportFallback bool
 	// msgHistoryBrowseMouseOff mirrors go-tui/main/test.go: at viewport top, wheel-up disables SGR mouse so the
 	// terminal scrollback wheel works; any key runs EnableMouseCellMotion + ClearScreen (see Update).
 	msgHistoryBrowseMouseOff bool

@@ -25,8 +25,7 @@ func gouDemoBubblesViewport() bool {
 
 // msgViewportWanted is true when the bubbles/viewport message pane is available (new renderer drives both prompt and transcript).
 func (m *Model) msgViewportWanted() bool {
-	result := m.useMsgViewport && !m.msgViewportFallback
-	return result
+	return m.useMsgViewport
 }
 
 // messagePaneContentSig changes when the message list body should be rebuilt for the viewport pane.
@@ -102,42 +101,33 @@ func (m *Model) msgViewportSyncGeometry() {
 
 // applyMsgViewportContentFromView rebuilds bubbles/viewport content from the new renderer.
 // It skips rebuild if the content signature is unchanged (unless vpNeedResizeContent forces it).
-// On rebuild failure, it sets msgViewportFallback=true so the caller falls back to the old renderer.
 // When sticky (auto-scroll), it calls GotoBottom after a no-op or successful content refresh.
 func (m *Model) applyMsgViewportContentFromView() {
-	// Viewport 不可用时直接返回（例如 fallback 模式）
 	if !m.msgViewportWanted() {
 		diaglog.Line("[viewport] applyMsgViewportContentFromView: msgViewportWanted=false, returning")
 		return
 	}
 
-	// 计算内容签名，与上次对比判断是否需要重建
 	sig := m.messagePaneContentSig()
 	if sig == m.lastVpContentSig && !m.vpNeedResizeContent {
-		// 内容未变化：仅 sticky 模式下滚动到底部保持跟随
 		if m.sticky {
 			m.msgViewport.GotoBottom()
 		}
 		return
 	}
 
-	// 内容有变化：用新渲染器生成完整文档内容
 	s, ok := m.tryBuildFullMessagePaneContentWithNewRenderer()
 	if !ok {
-		// 新渲染器失败：切回 fallback 模式，清除签名以便下次完整重建
-		diaglog.Line("[viewport] applyMsgViewportContentFromView: build failed, setting fallback")
-		m.msgViewportFallback = true
+		diaglog.Line("[viewport] applyMsgViewportContentFromView: build failed")
 		m.lastVpContentSig = ""
 		m.vpNeedResizeContent = false
 		return
 	}
 
-	// 将构建好的内容设置到 viewport 中，更新签名标记
 	m.msgViewport.SetContent(s)
 	m.lastVpContentSig = sig
 	m.vpNeedResizeContent = false
 
-	// sticky 模式下自动滚动到底部
 	if m.sticky {
 		m.msgViewport.GotoBottom()
 	}

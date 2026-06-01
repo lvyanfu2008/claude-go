@@ -1,43 +1,15 @@
 package app
 
 import (
-	"goc/gou/app/message"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 )
 
-// renderMessagePane renders the message list area (viewport or virtual-scroll path).
+// renderMessagePane renders the message list area using the bubbles/viewport path.
 func (m *Model) renderMessagePane(b *strings.Builder, vpH, bodyCols int, useVp bool) {
-	if useVp {
-		// Bubbles viewport + new renderer (applyMsgViewportContentFromView populates the full document).
-		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
-		b.WriteByte('\n')
-	} else {
-		// New renderer without bubbles viewport: virtual slice uses m.scrollTop; scrollbar reflects renderer totals.
-		msgPaneContent := m.renderMessagePaneWithNewRenderer()
-		lines := strings.Split(msgPaneContent, "\n")
-		if len(lines) > vpH {
-			lines = lines[:vpH]
-		}
-		for len(lines) < vpH {
-			lines = append(lines, "")
-		}
-		m.integrateMessageRenderer()
-		messagesPtr := m.messagePtrSliceForNewRenderer()
-		isTranscript := m.uiScreen == gouDemoScreenTranscript
-		verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(
-			messagesPtr,
-			0,
-			1,
-			isTranscript,
-			verbose,
-			bodyCols,
-		)
-		b.WriteString(message.JoinLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.scrollTop, m.msgScrollbarW))
-		b.WriteByte('\n')
-	}
+	b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
+	b.WriteByte('\n')
 }
 
 // promptAreaLayout renders everything below the message pane.

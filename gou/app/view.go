@@ -37,12 +37,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"goc/ccb-engine/diaglog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,8 +56,6 @@ import (
 	"goc/gou/markdown"
 	"goc/gou/messagerow"
 	"goc/gou/pui"
-	"goc/gou/segdiff"
-	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/growthbook"
 	"goc/hookexec"
@@ -99,9 +95,6 @@ func (m *Model) View() tea.View {
 	if useVp {
 		m.msgViewportSyncGeometry()
 		m.applyMsgViewportContentFromView()
-		if m.msgViewportFallback {
-			useVp = false
-		}
 	}
 
 	var b strings.Builder
@@ -306,69 +299,6 @@ func toolRowLeadPrefix(userRow bool) string {
 	return baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(glyph)
 }
 
-// prefixToolGlyphFirstLine prepends the dim tool lead (⏺ / ●) to the first line of rendered assistant text.
-func prefixToolGlyphFirstLine(body string) string {
-	if body == "" {
-		return toolRowLeadPrefix(false)
-	}
-	p := toolRowLeadPrefix(false)
-	i := strings.IndexByte(body, '\n')
-	if i < 0 {
-		return p + body
-	}
-	return p + body[:i] + body[i:]
-}
-
-func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
-	if resolved == nil || toolUseID == "" {
-		return false
-	}
-	_, ok := resolved[toolUseID]
-	return ok
-}
-
-// toolUseResolvedForDisplay treats a tool as resolved if it is in the resolved map, or (when detail is on)
-// if tool_result payload exists for that id — avoids stale resolved maps skipping ⏺+⎿ stats.
-func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, toolUseID string, allowResultPayloadAsResolved bool) bool {
-	if toolUseID == "" {
-		return false
-	}
-	if resolved != nil {
-		if _, ok := resolved[toolUseID]; ok {
-			return true
-		}
-	}
-	if allowResultPayloadAsResolved && toolResultByID != nil {
-		raw, ok := toolResultByID[toolUseID]
-		if ok && len(raw) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// toolUseSummaryLineResolvedForDisplay is true when every merged tool_use id in a SegToolUseSummaryLine has a result (or resolved map entry).
-func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, seg messagerow.Segment, allowResultPayloadAsResolved bool) bool {
-	ids := seg.ToolUseIDs
-	if len(ids) == 0 {
-		return toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, allowResultPayloadAsResolved)
-	}
-	for _, id := range ids {
-		if !toolUseResolvedForDisplay(resolved, toolResultByID, id, allowResultPayloadAsResolved) {
-			return false
-		}
-	}
-	return true
-}
-
-// segmentJoinSeparator inserts an extra blank line after assistant prose before a merged Grep/Glob/Read summary line.
-func segmentJoinSeparator(prev, cur messagerow.Segment) string {
-	if prev.Kind == messagerow.SegTextMarkdown && strings.TrimSpace(prev.Text) != "" && cur.Kind == messagerow.SegToolUseSummaryLine {
-		return "\n\n"
-	}
-	return "\n"
-}
-
 // transcriptAssistantPairBlankLine is true when the UI inserts one empty line between consecutive
 // assistant rows in transcript (breathing room before the next ⏺ block).
 func transcriptAssistantPairBlankLine(m *Model, a, b types.Message) bool {
@@ -378,17 +308,6 @@ func transcriptAssistantPairBlankLine(m *Model, a, b types.Message) bool {
 	return a.Type == types.MessageTypeAssistant && b.Type == types.MessageTypeAssistant
 }
 
-// priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
-// One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
-func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
-	for j := 0; j < idx && j < len(segs); j++ {
-		if segs[j].Kind == messagerow.SegTextMarkdown && strings.TrimSpace(segs[j].Text) != "" {
-			return true
-		}
-	}
-	return false
-}
-
 // baseMsgStyle adds the user-message row background so nested lipgloss.Render calls do not reset ANSI and punch holes in the gray bar.
 func baseMsgStyle(userRow bool) lipgloss.Style {
 	s := lipgloss.NewStyle()
@@ -396,196 +315,6 @@ func baseMsgStyle(userRow bool) lipgloss.Style {
 		s = s.Background(theme.UserMessageBackground())
 	}
 	return s
-}
-
-func logg(kind string, r string) {
-	//return
-	diaglog.Line("[goc/formatMessageSegments] seg kind=%s out=%s", kind, r)
-}
-
-// formatMessageSegments mirrors Message.tsx per-block branches (text→markdown, tool_use/tool_result/thinking).
-// assistantLeadGlyph prefixes the first non-empty assistant text segment (TS-style ⏺ before the opening sentence).
-// searchHL applies transcript search highlight to visible plain substrings (TS useSearchHighlight).
-// showResolvedToolStats enables ⎿ TranscriptResolvedHintExtra for resolved Search/Read when tool_result JSON is available (prompt + transcript).
-// userRow: when true, all lipgloss spans use the same row background as styleUserMessageLines (user-authored rows).
-func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint bool, resolved map[string]struct{}, assistantLeadGlyph bool, searchHL string, toolResultByID map[string]json.RawMessage, showResolvedToolStats bool, userRow bool) string {
-	hlSt := transcriptSearchHLStyle()
-	withHL := func(s string) string {
-		if strings.TrimSpace(searchHL) == "" {
-			return s
-		}
-		return highlightSearchPlain(s, searchHL, hlSt)
-	}
-	var b strings.Builder
-	var lastSegIdx int = -1
-	assistantTextLeadDone := false
-	for i, seg := range segs {
-		var piece string
-		switch seg.Kind {
-		case messagerow.SegTextMarkdown:
-			textForMd := seg.Text
-			if strings.TrimSpace(searchHL) != "" {
-				textForMd = highlightSearchPlain(seg.Text, searchHL, hlSt)
-			}
-			md := styleMarkdownTokens(markdown.CachedLexer(textForMd), cols, userRow)
-			if assistantLeadGlyph && !assistantTextLeadDone && strings.TrimSpace(seg.Text) != "" {
-				assistantTextLeadDone = true
-				md = prefixToolGlyphFirstLine(md)
-			}
-			piece = md
-			logg("SegTextMarkdown", piece)
-		case messagerow.SegToolUse:
-			if seg.ToolFacing != "" {
-				row1 := ""
-				if !priorNonEmptyAssistantText(segs, i) {
-					row1 = toolRowLeadPrefix(userRow)
-				}
-				row1 += baseMsgStyle(userRow).Foreground(theme.ToolUseAccent()).Bold(true).Render(withHL(seg.ToolFacing))
-				if p := strings.TrimSpace(seg.ToolParen); p != "" {
-					row1 += " (" + withHL(p) + ")"
-				}
-				var toolLines []string
-				toolLines = append(toolLines, row1)
-				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, showResolvedToolStats)
-				if showResolvedToolStats && res {
-					var raw json.RawMessage
-					if toolResultByID != nil {
-						raw = toolResultByID[seg.ToolUseID]
-					}
-					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
-					if hint != "" {
-						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
-						if extra != "" {
-							toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
-						}
-					}
-				} else if !res {
-					if act := strings.TrimSpace(seg.Text); act != "" {
-						actLine := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(withHL(act) + "…")
-						if toolUseCtrlOHint {
-							actLine += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-						}
-						toolLines = append(toolLines, actLine)
-					}
-					if h := strings.TrimSpace(seg.ToolHint); h != "" {
-						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
-					}
-				}
-				piece = strings.Join(toolLines, "\n")
-			} else {
-				line := baseMsgStyle(userRow).Foreground(theme.ToolUseAccent()).Bold(true).Render("⚙ " + withHL(seg.Text))
-				if toolUseCtrlOHint {
-					line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-				}
-				piece = line
-			}
-			logg("SegToolUse", piece)
-		case messagerow.SegToolResult:
-			piece = segdiff.FormatToolResultSegmentForTranscript(seg, userRow, toolUseCtrlOHint, cols, withHL, baseMsgStyle)
-			logg("SegToolResult", piece)
-		case messagerow.SegThinking:
-			body := textutil.LinkifyOSC8(seg.Text)
-			piece = baseMsgStyle(userRow).Bold(true).Render("● " + withHL(body))
-			logg("SegThinking", piece)
-		case messagerow.SegDisplayHint:
-			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			logg("SegDisplayHint", piece)
-		case messagerow.SegServerToolUse:
-			if seg.ToolFacing != "" {
-				row1 := ""
-				if !priorNonEmptyAssistantText(segs, i) {
-					row1 = toolRowLeadPrefix(userRow)
-				}
-				row1 += baseMsgStyle(userRow).Foreground(theme.ServerAccent()).Bold(true).Render(withHL(seg.ToolFacing))
-				if p := strings.TrimSpace(seg.ToolParen); p != "" {
-					row1 += " (" + withHL(p) + ")"
-				}
-				var toolLines []string
-				toolLines = append(toolLines, row1)
-				res := toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, showResolvedToolStats)
-				if showResolvedToolStats && res {
-					var raw json.RawMessage
-					if toolResultByID != nil {
-						raw = toolResultByID[seg.ToolUseID]
-					}
-					hint, extra := messagerow.TranscriptResolvedHintExtra(seg.ToolFacing, raw)
-					if hint != "" {
-						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(hint))))
-						if extra != "" {
-							toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("     "+textutil.LinkifyOSC8(withHL(extra))))
-						}
-					}
-				} else if !res {
-					if act := strings.TrimSpace(seg.Text); act != "" {
-						actLine := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(withHL(act) + "…")
-						if toolUseCtrlOHint {
-							actLine += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-						}
-						toolLines = append(toolLines, actLine)
-					}
-					if h := strings.TrimSpace(seg.ToolHint); h != "" {
-						toolLines = append(toolLines, baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render("  ⎿  "+textutil.LinkifyOSC8(withHL(h))))
-					}
-				}
-				piece = strings.Join(toolLines, "\n")
-			} else {
-				line := baseMsgStyle(userRow).Foreground(theme.ServerAccent()).Bold(true).Render("⎈ " + withHL(seg.Text))
-				if toolUseCtrlOHint {
-					line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-				}
-				piece = line
-			}
-			logg("SegServerToolUse", piece)
-		case messagerow.SegAdvisorToolResult:
-			st := baseMsgStyle(userRow).Foreground(theme.AdvisorAccent())
-			if seg.IsToolError {
-				st = baseMsgStyle(userRow).Foreground(theme.ToolError())
-			}
-			body := textutil.LinkifyOSC8(seg.Text)
-			line := st.Render("✧ " + withHL(body))
-			if seg.ToolBodyOmitted && toolUseCtrlOHint {
-				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-			}
-			piece = line
-			logg("SegAdvisorToolResult", piece)
-		case messagerow.SegGroupedToolUse:
-			piece = baseMsgStyle(userRow).Foreground(theme.GroupedAccent()).Bold(true).Render("▦ " + withHL(seg.Text))
-			logg("SegGroupedToolUse", piece)
-		case messagerow.SegCollapsedReadSearch:
-			piece = baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			logg("SegCollapsedReadSearch", piece)
-		case messagerow.SegToolUseSummaryLine:
-			line := baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			if !toolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg, showResolvedToolStats) && toolUseCtrlOHint {
-				line += baseMsgStyle(userRow).Faint(true).Render(" (ctrl+o to expand)")
-			}
-			piece = "  " + line
-			logg("SegToolUseSummaryLine", piece)
-		case messagerow.SegSkillListingAvailable:
-			n := seg.Num
-			if n < 1 {
-				n = 1
-			}
-			word := "skills"
-			if n == 1 {
-				word = "skill"
-			}
-			piece = baseMsgStyle(userRow).Bold(true).Render(strconv.Itoa(n)) + baseMsgStyle(userRow).Render(" "+word+" available")
-			logg("SegSkillListingAvailable", piece)
-		default:
-			piece = baseMsgStyle(userRow).Faint(true).Render(textutil.LinkifyOSC8(withHL(seg.Text)))
-			logg("default", piece)
-		}
-		if piece == "" {
-			continue
-		}
-		if b.Len() > 0 && lastSegIdx >= 0 {
-			b.WriteString(segmentJoinSeparator(segs[lastSegIdx], segs[i]))
-		}
-		b.WriteString(piece)
-		lastSegIdx = i
-	}
-	return strings.TrimSpace(b.String())
 }
 
 // styleMarkdownInlineSegments renders paragraph/list_item runs with TS-style inline `code` color

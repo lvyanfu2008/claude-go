@@ -22,7 +22,7 @@ func (m *Model) handleUpdateWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cm
 	if oldCols != m.cols || oldH != m.height || len(m.heightCache) == 0 {
 		m.rebuildHeightCache()
 	}
-	if m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt && !m.msgViewportFallback {
+	if m.useMsgViewport && m.uiScreen == gouDemoScreenPrompt {
 		m.vpNeedResizeContent = true
 		m.lastVpContentSig = ""
 		m.lastVpGeom = ""
