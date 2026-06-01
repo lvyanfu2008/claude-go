@@ -256,6 +256,11 @@ func (m *Model) renderMessagePaneWithNewRenderer() string {
 		if len(tailLines) > 0 {
 			if content != "" {
 				content += "\n"
+				// Add blank line before streaming tail when the last committed
+				// message would have spacing with an assistant message.
+				if len(messagesPtr) > 0 && messagesPtr[len(messagesPtr)-1].Type != types.MessageTypeAssistant {
+					content += "\n"
+				}
 			}
 			content += strings.Join(tailLines, "\n")
 		}
@@ -314,6 +319,11 @@ func (m *Model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 		if len(tailLines) > 0 {
 			if content != "" {
 				content += "\n"
+				// Add blank line before streaming tail when the last committed
+				// message would have spacing with an assistant message.
+				if len(messagesPtr) > 0 && messagesPtr[len(messagesPtr)-1].Type != types.MessageTypeAssistant {
+					content += "\n"
+				}
 			}
 			content += strings.Join(tailLines, "\n")
 		}
