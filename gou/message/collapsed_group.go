@@ -47,7 +47,7 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 
 // Measure measures a collapsed group.
 func (r *CollapsedGroupRenderer) Measure(msg *types.Message, ctx *RenderContext) (int, error) {
-	if msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" {
+	if r.isGroupInProgress(msg, ctx) && msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != "" {
 		return 2, nil
 	}
 	return 1, nil

@@ -277,11 +277,18 @@ func formatStreamingToolLine(tu StreamingToolUse, ctx *RenderContext) string {
 		line += " (" + paren + ")"
 	}
 	line += "…"
-	if hint != "" {
-		line += "\n     " + hint
+	if hint != "" && hint != paren {
+		line += " " + truncateToWidth(hint, 80)
 	}
 	if ctx.ShowToolUseCtrlOHint {
 		line += " (ctrl+o to expand)"
 	}
 	return line
+}
+
+func truncateToWidth(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-1] + "…"
 }
