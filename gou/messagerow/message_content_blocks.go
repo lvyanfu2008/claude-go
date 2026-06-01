@@ -42,17 +42,13 @@ func FirstContentBlock(msg types.Message) (types.MessageContentBlock, bool) {
 	return blocks[0], true
 }
 
-// FirstToolUseBlock returns the first tool_use content block, skipping thinking/redacted_thinking.
+// FirstToolUseBlock returns the first tool_use content block, skipping non-tool_use blocks.
 func FirstToolUseBlock(msg types.Message) (types.MessageContentBlock, bool) {
 	blocks := MessageContentBlocks(msg)
 	for _, b := range blocks {
-		if b.Type == "thinking" || b.Type == "redacted_thinking" {
-			continue
-		}
 		if b.Type == "tool_use" {
 			return b, true
 		}
-		return b, true
 	}
 	return types.MessageContentBlock{}, false
 }
