@@ -237,11 +237,15 @@ func RenderStreamingTail(
 		lines = append(lines, "\x1b[2;3m∴ Thinking\x1b[0m")
 	}
 
-	// Streaming text
+	// Streaming text — only first line gets the ⏺ bullet (matches committed AssistantMessageRenderer)
 	if strings.TrimSpace(streamingText) != "" {
 		textLines := renderMarkdown(streamingText, getContainerWidth(ctx), ctx.Theme, ctx.Highlighter)
-		for _, l := range textLines {
-			lines = append(lines, "⏺ "+l)
+		for i, l := range textLines {
+			if i == 0 {
+				lines = append(lines, "⏺ "+l)
+			} else {
+				lines = append(lines, "  "+l)
+			}
 		}
 	}
 

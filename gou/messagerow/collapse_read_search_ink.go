@@ -171,15 +171,13 @@ func isCollapsibleToolResultInk(msg types.Message, toolUseIDs map[string]struct{
 func getToolUseIdsFromMessageInk(msg types.Message) []string {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
-		b, ok := FirstContentBlock(msg)
-		if !ok || b.Type != "tool_use" {
-			return nil
+		var ids []string
+		for _, b := range MessageContentBlocks(msg) {
+			if b.Type == "tool_use" && strings.TrimSpace(b.ID) != "" {
+				ids = append(ids, strings.TrimSpace(b.ID))
+			}
 		}
-		id := strings.TrimSpace(b.ID)
-		if id == "" {
-			return nil
-		}
-		return []string{id}
+		return ids
 	case types.MessageTypeGroupedToolUse:
 		var ids []string
 		for _, m := range msg.Messages {
@@ -198,22 +196,31 @@ func countToolUsesInk(msg types.Message) int {
 	if msg.Type == types.MessageTypeGroupedToolUse {
 		return len(msg.Messages)
 	}
-	// TS countToolUses: non-grouped assistant returns 1.
+	// Count tool_use blocks in a single assistant message
+	count := 0
+	for _, b := range MessageContentBlocks(msg) {
+		if b.Type == "tool_use" {
+			count++
+		}
+	}
+	if count > 0 {
+		return count
+	}
 	return 1
 }
 
 func getFilePathsFromReadMessageInk(msg types.Message) []string {
 	var paths []string
-	// TS getFilePathsFromReadMessage uses getFirstContentItem only.
 	collect := func(m types.Message) {
-		b, ok := FirstContentBlock(m)
-		if !ok || b.Type != "tool_use" || strings.TrimSpace(b.Name) != "Read" {
-			return
-		}
-		in := decodeToolInputMap(b.Input)
-		fp := strFromMap(in, "file_path")
-		if strings.TrimSpace(fp) != "" {
-			paths = append(paths, fp)
+		for _, b := range MessageContentBlocks(m) {
+			if b.Type != "tool_use" || strings.TrimSpace(b.Name) != "Read" {
+				continue
+			}
+			in := decodeToolInputMap(b.Input)
+			fp := strFromMap(in, "file_path")
+			if strings.TrimSpace(fp) != "" {
+				paths = append(paths, fp)
+			}
 		}
 	}
 	switch msg.Type {

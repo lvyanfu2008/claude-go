@@ -100,13 +100,28 @@ func strFromMap(m map[string]any, key string) string {
 	}
 }
 
-// ActivityLineForToolUse returns a single-line user-facing activity string, or "" if unknown.
+// ActivityLineForToolUse returns a single-line user-facing activity string (present continuous), or "" if unknown.
 // Checks the tool behavior registry first, then falls back to the hardcoded switch.
 func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
+	return activityLineForToolUseTense(toolName, input, true)
+}
+
+// ActivityLineForToolUseResolved returns past-tense ("Searched", "Read", "Wrote") when isActive is false,
+// present continuous ("Searching", "Reading", "Writing") when true. Mirrors TS getActivityDescription vs getToolUseSummary.
+func ActivityLineForToolUseResolved(toolName string, input json.RawMessage, isActive bool) string {
+	return activityLineForToolUseTense(toolName, input, isActive)
+}
+
+func activityLineForToolUseTense(toolName string, input json.RawMessage, isActive bool) string {
 	name := strings.TrimSpace(toolName)
 
-	// Check registered ActivityDescriber first.
+	// Check registered ActivityDescriber first (always present continuous).
 	if desc := tool.GetActivityDescription(name, input); desc != "" {
+		if !isActive {
+			if past := activityPastTense(name, input); past != "" {
+				return past
+			}
+		}
 		return desc
 	}
 
@@ -115,13 +130,23 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 	case "Read":
 		fp := strFromMap(m, "file_path")
 		if fp == "" {
-			return "Reading file"
+			if isActive {
+				return "Reading file"
+			}
+			return "Read file"
 		}
-		return "Reading " + truncateToolSummary(DisplayPathForActivity(fp))
+		d := DisplayPathForActivity(fp)
+		if isActive {
+			return "Reading " + truncateToolSummary(d)
+		}
+		return "Read " + truncateToolSummary(d)
 	case "Bash", "BashZog":
 		cmd := strFromMap(m, "command")
 		if cmd == "" {
-			return "Running command"
+			if isActive {
+				return "Running command"
+			}
+			return "Ran command"
 		}
 		desc := strFromMap(m, "description")
 		if strings.TrimSpace(desc) == "" {
@@ -129,59 +154,112 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 		} else {
 			desc = truncateToolSummary(desc)
 		}
-		return "Running " + desc
+		if isActive {
+			return "Running " + desc
+		}
+		return "Ran " + desc
 	case "Glob":
 		pat := strFromMap(m, "pattern")
 		if pat == "" {
-			return "Finding files"
+			if isActive {
+				return "Finding files"
+			}
+			return "Found files"
 		}
-		return "Finding " + truncateToolSummary(pat)
+		if isActive {
+			return "Finding " + truncateToolSummary(pat)
+		}
+		return "Found " + truncateToolSummary(pat)
 	case "Grep":
 		pat := strFromMap(m, "pattern")
 		if pat == "" {
-			return "Searching"
+			if isActive {
+				return "Searching"
+			}
+			return "Searched"
 		}
-		return "Searching for " + truncateToolSummary(pat)
+		if isActive {
+			return "Searching for " + truncateToolSummary(pat)
+		}
+		return "Searched for " + truncateToolSummary(pat)
 	case "WebFetch":
 		u := strFromMap(m, "url")
 		if u == "" {
-			return "Fetching web page"
+			if isActive {
+				return "Fetching web page"
+			}
+			return "Fetched web page"
 		}
-		return "Fetching " + truncateToolSummary(u)
+		if isActive {
+			return "Fetching " + truncateToolSummary(u)
+		}
+		return "Fetched " + truncateToolSummary(u)
 	case "WebSearch":
 		q := strFromMap(m, "query")
 		if q == "" {
-			return "Searching the web"
+			if isActive {
+				return "Searching the web"
+			}
+			return "Searched the web"
 		}
-		return "Searching for " + truncateToolSummary(q)
+		if isActive {
+			return "Searching for " + truncateToolSummary(q)
+		}
+		return "Searched for " + truncateToolSummary(q)
 	case "Write":
 		fp := strFromMap(m, "file_path")
 		if fp == "" {
-			return "Writing file"
+			if isActive {
+				return "Writing file"
+			}
+			return "Wrote file"
 		}
-		return "Writing " + truncateToolSummary(DisplayPathForActivity(fp))
+		d := DisplayPathForActivity(fp)
+		if isActive {
+			return "Writing " + truncateToolSummary(d)
+		}
+		return "Wrote " + truncateToolSummary(d)
 	case "Edit":
 		fp := strFromMap(m, "file_path")
 		if fp == "" {
-			return "Editing file"
+			if isActive {
+				return "Editing file"
+			}
+			return "Edited file"
 		}
-		return "Editing " + truncateToolSummary(DisplayPathForActivity(fp))
+		d := DisplayPathForActivity(fp)
+		if isActive {
+			return "Editing " + truncateToolSummary(d)
+		}
+		return "Edited " + truncateToolSummary(d)
 	case "NotebookEdit":
 		np := strFromMap(m, "notebook_path")
 		if np == "" {
-			return "Editing notebook"
+			if isActive {
+				return "Editing notebook"
+			}
+			return "Edited notebook"
 		}
-		return "Editing notebook " + truncateToolSummary(DisplayPathForActivity(np))
+		if isActive {
+			return "Editing notebook " + truncateToolSummary(DisplayPathForActivity(np))
+		}
+		return "Edited notebook " + truncateToolSummary(DisplayPathForActivity(np))
 	case "Agent", "Task":
 		d := strFromMap(m, "description")
 		if strings.TrimSpace(d) == "" {
-			return "Running task"
+			if isActive {
+				return "Running task"
+			}
+			return "Completed task"
 		}
 		return d
 	case "PowerShell":
 		cmd := strFromMap(m, "command")
 		if cmd == "" {
-			return "Running command"
+			if isActive {
+				return "Running command"
+			}
+			return "Ran command"
 		}
 		desc := strFromMap(m, "description")
 		if strings.TrimSpace(desc) == "" {
@@ -189,7 +267,10 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 		} else {
 			desc = truncateToolSummary(desc)
 		}
-		return "Running " + desc
+		if isActive {
+			return "Running " + desc
+		}
+		return "Ran " + desc
 	case "Snip":
 		ids := m["message_ids"]
 		if arr, ok := ids.([]any); ok && len(arr) > 0 {
@@ -199,6 +280,32 @@ func ActivityLineForToolUse(toolName string, input json.RawMessage) string {
 	default:
 		return ""
 	}
+}
+
+// activityPastTense maps registered activity descriptions to past tense when possible.
+func activityPastTense(toolName string, input json.RawMessage) string {
+	m := decodeToolInputMap(input)
+	switch strings.TrimSpace(toolName) {
+	case "Grep":
+		pat := strFromMap(m, "pattern")
+		if pat == "" {
+			return "Searched"
+		}
+		return "Searched for " + truncateToolSummary(pat)
+	case "Glob":
+		pat := strFromMap(m, "pattern")
+		if pat == "" {
+			return "Found"
+		}
+		return "Found " + truncateToolSummary(pat)
+	case "Read":
+		fp := strFromMap(m, "file_path")
+		if fp == "" {
+			return "Read file"
+		}
+		return "Read " + truncateToolSummary(DisplayPathForActivity(fp))
+	}
+	return ""
 }
 
 // grepGlobReadSummaryLine returns one line matching SearchReadSummaryText parts for a single search/read op.
@@ -227,7 +334,8 @@ func ActivitySegmentForToolBlock(b types.MessageContentBlock, kind SegmentKind, 
 			return []Segment{{Kind: SegToolUseSummaryLine, Text: sl, ToolUseID: b.ID}}
 		}
 	}
-	line := ActivityLineForToolUse(b.Name, b.Input)
+	isActive := toolUseIsActiveForSummary(b.ID, opts)
+	line := ActivityLineForToolUseResolved(b.Name, b.Input, isActive)
 	if line == "" {
 		k := "tool_use"
 		if kind == SegServerToolUse {

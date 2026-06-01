@@ -41,7 +41,7 @@ func (m *Model) clampScrollTopForVirtualList() {
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
 	width := m.messageBodyColsForLayout()
 
-	totalHeight := m.msgRenderer.ComputeTotalHeight(messagesPtr, isTranscript, verbose, width)
+	totalHeight := m.msgRenderer.ComputeTotalHeight(messagesPtr, isTranscript, verbose, width, m.resolvedToolIDs)
 	maxTop := totalHeight - vpH
 	if maxTop < 0 {
 		maxTop = 0

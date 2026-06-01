@@ -35,17 +35,18 @@ func (mri *MessageRendererIntegration) UpdateTheme(themeName string) {
 }
 
 // RenderMessage renders a single message.
-func (mri *MessageRendererIntegration) RenderMessage(msg *types.Message, width int, isTranscript, verbose, shouldAnimate, shouldShowDot bool) string {
+func (mri *MessageRendererIntegration) RenderMessage(msg *types.Message, width int, isTranscript, verbose, shouldAnimate, shouldShowDot bool, resolvedToolUseIDs map[string]struct{}) string {
 	ctx := &message.RenderContext{
-		Width:         width,
-		Theme:         mri.currentTheme,
-		IsTranscript:  isTranscript,
-		IsStatic:      isTranscript, // Transcript mode is static
-		ShouldAnimate: shouldAnimate,
-		ShouldShowDot: shouldShowDot,
-		AddMargin:     true,
-		Verbose:       verbose,
-		Highlighter:   mri.highlighter,
+		Width:              width,
+		Theme:              mri.currentTheme,
+		IsTranscript:       isTranscript,
+		IsStatic:           isTranscript, // Transcript mode is static
+		ShouldAnimate:      shouldAnimate,
+		ShouldShowDot:      shouldShowDot,
+		AddMargin:          true,
+		Verbose:            verbose,
+		Highlighter:        mri.highlighter,
+		ResolvedToolUseIDs: resolvedToolUseIDs,
 	}
 
 	// Process the single message (though processing typically works on message sequences)
@@ -59,45 +60,45 @@ func (mri *MessageRendererIntegration) RenderMessage(msg *types.Message, width i
 }
 
 // ComputeVisibleRange computes the visible range for virtual scrolling.
-func (mri *MessageRendererIntegration) ComputeVisibleRange(messages []*types.Message, scrollTop, viewportHeight int, isTranscript, verbose bool, width int) (startIdx, endIdx int, totalHeight int) {
+func (mri *MessageRendererIntegration) ComputeVisibleRange(messages []*types.Message, scrollTop, viewportHeight int, isTranscript, verbose bool, width int, resolvedToolUseIDs map[string]struct{}) (startIdx, endIdx int, totalHeight int) {
 	ctx := &message.RenderContext{
-		Width:         width, // Use actual width for measurement
-		Theme:         mri.currentTheme,
-		IsTranscript:  isTranscript,
-		IsStatic:      isTranscript,
-		ShouldAnimate: false, // Measurement doesn't need animation
-		ShouldShowDot: false,
-		AddMargin:     true,
-		Verbose:       verbose,
-		Highlighter:   mri.highlighter,
+		Width:              width, // Use actual width for measurement
+		Theme:              mri.currentTheme,
+		IsTranscript:       isTranscript,
+		IsStatic:           isTranscript,
+		ShouldAnimate:      false, // Measurement doesn't need animation
+		ShouldShowDot:      false,
+		AddMargin:          true,
+		Verbose:            verbose,
+		Highlighter:        mri.highlighter,
+		ResolvedToolUseIDs: resolvedToolUseIDs,
 	}
 
 	return mri.virtualList.ComputeVisibleRange(messages, scrollTop, viewportHeight, ctx)
 }
 
 // ComputeTotalHeight computes the total height of all messages.
-func (mri *MessageRendererIntegration) ComputeTotalHeight(messages []*types.Message, isTranscript, verbose bool, width int) int {
+func (mri *MessageRendererIntegration) ComputeTotalHeight(messages []*types.Message, isTranscript, verbose bool, width int, resolvedToolUseIDs map[string]struct{}) int {
 	if len(messages) == 0 {
 		return 0
 	}
-	_, _, totalHeight := mri.ComputeVisibleRange(messages, 0, 1, isTranscript, verbose, width)
+	_, _, totalHeight := mri.ComputeVisibleRange(messages, 0, 1, isTranscript, verbose, width, resolvedToolUseIDs)
 	return totalHeight
 }
 
 // RenderVisibleRange renders the visible range of messages.
-func (mri *MessageRendererIntegration) RenderVisibleRange(messages []*types.Message, startIdx, endIdx int, width int, isTranscript, verbose, shouldAnimate, shouldShowDot bool) string {
-	//	len(messages), startIdx, endIdx, width, isTranscript, verbose, shouldAnimate)
-
+func (mri *MessageRendererIntegration) RenderVisibleRange(messages []*types.Message, startIdx, endIdx int, width int, isTranscript, verbose, shouldAnimate, shouldShowDot bool, resolvedToolUseIDs map[string]struct{}) string {
 	ctx := &message.RenderContext{
-		Width:         width,
-		Theme:         mri.currentTheme,
-		IsTranscript:  isTranscript,
-		IsStatic:      isTranscript,
-		ShouldAnimate: shouldAnimate,
-		ShouldShowDot: shouldShowDot,
-		AddMargin:     true,
-		Verbose:       verbose,
-		Highlighter:   mri.highlighter,
+		Width:              width,
+		Theme:              mri.currentTheme,
+		IsTranscript:       isTranscript,
+		IsStatic:           isTranscript,
+		ShouldAnimate:      shouldAnimate,
+		ShouldShowDot:      shouldShowDot,
+		AddMargin:          true,
+		Verbose:            verbose,
+		Highlighter:        mri.highlighter,
+		ResolvedToolUseIDs: resolvedToolUseIDs,
 	}
 
 	lines, err := mri.virtualList.RenderRange(messages, startIdx, endIdx, ctx)
@@ -166,6 +167,7 @@ func (m *Model) renderMessagesWithNewRenderer() string {
 		verbose,
 		shouldAnimate,
 		shouldShowDot,
+		m.resolvedToolIDs,
 	)
 
 	// Note: This function doesn't handle streaming elements
@@ -215,6 +217,7 @@ func (m *Model) renderMessagePaneWithNewRenderer() string {
 		isTranscript,
 		verbose,
 		width,
+		m.resolvedToolIDs,
 	)
 
 	// Render only visible range
@@ -227,6 +230,7 @@ func (m *Model) renderMessagePaneWithNewRenderer() string {
 		verbose,
 		shouldAnimate,
 		shouldShowDot,
+		m.resolvedToolIDs,
 	)
 
 	// Add streaming tail using unified renderer
@@ -240,6 +244,7 @@ func (m *Model) renderMessagePaneWithNewRenderer() string {
 			ShouldShowDot:        shouldShowDot,
 			Highlighter:          m.msgRenderer.highlighter,
 			ShowToolUseCtrlOHint: true,
+			ResolvedToolUseIDs:   m.resolvedToolIDs,
 		}
 		streamingToolUses := messageStreamingToolUses(m)
 		tailLines := message.RenderStreamingTail(
@@ -283,6 +288,7 @@ func (m *Model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 		verbose,
 		shouldAnimate,
 		shouldShowDot,
+		m.resolvedToolIDs,
 	)
 
 	// Add streaming tail using unified renderer
@@ -296,6 +302,7 @@ func (m *Model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 			ShouldShowDot:        shouldShowDot,
 			Highlighter:          m.msgRenderer.highlighter,
 			ShowToolUseCtrlOHint: true,
+			ResolvedToolUseIDs:   m.resolvedToolIDs,
 		}
 		streamingToolUses := messageStreamingToolUses(m)
 		tailLines := message.RenderStreamingTail(

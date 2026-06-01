@@ -1,6 +1,7 @@
 package message
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -22,12 +23,7 @@ func (r *CollapsedGroupRenderer) Render(msg *types.Message, ctx *RenderContext) 
 	var lines []string
 	width := getContainerWidth(ctx)
 
-	// Use ctx.IsActiveCollapsedGroup as the primary in-progress indicator,
-	// falling back to hint presence for legacy support.
-	inProgress := ctx.IsActiveCollapsedGroup
-	if !inProgress {
-		inProgress = msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != ""
-	}
+	inProgress := r.isGroupInProgress(msg, ctx)
 	summary := r.buildSummary(msg, inProgress)
 	if inProgress && ctx.ShouldAnimate {
 		summary += "…" // …
@@ -55,6 +51,70 @@ func (r *CollapsedGroupRenderer) Measure(msg *types.Message, ctx *RenderContext)
 		return 2, nil
 	}
 	return 1, nil
+}
+
+// isGroupInProgress determines whether a collapsed group is still in progress.
+// Uses ctx.IsActiveCollapsedGroup as primary indicator, then checks if all tool_use_ids
+// in the group are resolved via ctx.ResolvedToolUseIDs. Falls back to hint presence for
+// backward compatibility.
+func (r *CollapsedGroupRenderer) isGroupInProgress(msg *types.Message, ctx *RenderContext) bool {
+	if ctx.IsActiveCollapsedGroup {
+		return true
+	}
+	// Check resolved IDs — if we have IDs and all are resolved, the group is done.
+	if ctx.ResolvedToolUseIDs != nil && len(ctx.ResolvedToolUseIDs) > 0 {
+		toolUseIDs := collectToolUseIDsFromMessages(msg.Messages)
+		if len(toolUseIDs) > 0 {
+			for _, id := range toolUseIDs {
+				if _, resolved := ctx.ResolvedToolUseIDs[id]; !resolved {
+					// Unresolved: show as active only if we have a hint to display.
+					return msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != ""
+				}
+			}
+			return false
+		}
+	}
+	// Fall back to hint presence (legacy).
+	return msg.LatestDisplayHint != nil && *msg.LatestDisplayHint != ""
+}
+
+// collectToolUseIDsFromMessages extracts all tool_use IDs from a slice of messages.
+func collectToolUseIDsFromMessages(msgs []types.Message) []string {
+	var ids []string
+	for _, msg := range msgs {
+		switch msg.Type {
+		case types.MessageTypeAssistant:
+			b, ok := firstToolUseBlock(msg)
+			if ok && strings.TrimSpace(b.ID) != "" {
+				ids = append(ids, b.ID)
+			}
+		case types.MessageTypeGroupedToolUse:
+			for _, m := range msg.Messages {
+				b, ok := firstToolUseBlock(m)
+				if ok && strings.TrimSpace(b.ID) != "" {
+					ids = append(ids, b.ID)
+				}
+			}
+		}
+	}
+	return ids
+}
+
+// firstToolUseBlock returns the first tool_use block from a message content array.
+func firstToolUseBlock(msg types.Message) (types.MessageContentBlock, bool) {
+	if len(msg.Content) == 0 {
+		return types.MessageContentBlock{}, false
+	}
+	var blocks []types.MessageContentBlock
+	if json.Unmarshal(msg.Content, &blocks) != nil {
+		return types.MessageContentBlock{}, false
+	}
+	for _, b := range blocks {
+		if b.Type == "tool_use" {
+			return b, true
+		}
+	}
+	return types.MessageContentBlock{}, false
 }
 
 // buildSummary builds the summary line for a collapsed group.

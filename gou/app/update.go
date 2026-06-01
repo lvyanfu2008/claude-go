@@ -596,14 +596,15 @@ func (m *Model) measureMessageRows(msg types.Message, cols int, searchHL string)
 	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
 	cw := cols
 	ctx := &goumsg.RenderContext{
-		Width:          cols,
-		Theme:          m.msgRenderer.Palette(),
-		IsTranscript:   isTranscript,
-		IsStatic:       isTranscript,
-		Verbose:        verbose,
-		Highlighter:    markdownHighlighter,
-		AddMargin:      true,
-		ContainerWidth: &cw,
+		Width:              cols,
+		Theme:              m.msgRenderer.Palette(),
+		IsTranscript:       isTranscript,
+		IsStatic:           isTranscript,
+		Verbose:            verbose,
+		Highlighter:        markdownHighlighter,
+		AddMargin:          true,
+		ContainerWidth:     &cw,
+		ResolvedToolUseIDs: m.resolvedToolIDs,
 	}
 	h, err := m.msgRenderer.MeasureMessage(&msg, ctx)
 	if err != nil {
