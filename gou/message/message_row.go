@@ -2,7 +2,9 @@ package message
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
+	"time"
 
 	"goc/gou/messagerow"
 	"goc/types"
@@ -249,22 +251,37 @@ func RenderStreamingTail(
 		}
 	}
 
-	// Streaming tool uses
-	for _, tu := range streamingToolUses {
-		facing, paren, hint := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.Input))
-		line := "  ⎿ " + facing
-		if paren != "" {
-			line += " (" + paren + ")"
+	// Streaming tool uses — when multiple are active, rotate through them
+	// one at a time to keep output height stable (avoids layout jumping).
+	if len(streamingToolUses) > 0 {
+		if len(streamingToolUses) == 1 {
+			tu := streamingToolUses[0]
+			lines = append(lines, formatStreamingToolLine(tu, ctx))
+		} else {
+			idx := int(time.Now().UnixMilli()/2000) % len(streamingToolUses)
+			tu := streamingToolUses[idx]
+			line := formatStreamingToolLine(tu, ctx)
+			line += fmt.Sprintf("  +%d more", len(streamingToolUses)-1)
+			lines = append(lines, line)
 		}
-		line += "…"
-		if hint != "" {
-			line += "\n     " + hint
-		}
-		if ctx.ShowToolUseCtrlOHint {
-			line += " (ctrl+o to expand)"
-		}
-		lines = append(lines, line)
 	}
 
 	return lines
+}
+
+// formatStreamingToolLine formats a single streaming tool use as a display line.
+func formatStreamingToolLine(tu StreamingToolUse, ctx *RenderContext) string {
+	facing, paren, hint := messagerow.ToolChromeParts(tu.Name, json.RawMessage(tu.Input))
+	line := "  ⎿ " + facing
+	if paren != "" {
+		line += " (" + paren + ")"
+	}
+	line += "…"
+	if hint != "" {
+		line += "\n     " + hint
+	}
+	if ctx.ShowToolUseCtrlOHint {
+		line += " (ctrl+o to expand)"
+	}
+	return line
 }
