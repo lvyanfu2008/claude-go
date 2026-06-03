@@ -1,6 +1,9 @@
 package tools
 
-import "goc/types"
+import (
+	"goc/appstate"
+	"goc/types"
+)
 
 // Config is passed from [skilltools.ParityToolRunner] into unconditional tool runners.
 type Config struct {
@@ -31,4 +34,7 @@ type Config struct {
 	// so that child agent progress messages can be associated with the correct parent tool_use
 	// via ParentToolUseID. Set by the InvokeTool closure in executeAgentWithOpts.
 	ToolUseID string
+	// AppStateStore is the session-scoped state store, used by EnterPlanMode/ExitPlanMode
+	// to atomically update ToolPermissionContext and plan-mode flag fields.
+	AppStateStore *appstate.Store
 }

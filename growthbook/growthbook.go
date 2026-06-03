@@ -526,6 +526,18 @@ func GetTenguBrambleLintel() int {
 	return 1
 }
 
+// IsTenguPlanAutoMode returns true if the "tengu_plan_auto_mode" gate is enabled.
+// Mirrors getFeatureValue_CACHED_MAY_BE_STALE('tengu_plan_auto_mode', false).
+func IsTenguPlanAutoMode() bool {
+	return DefaultManager().IsOn("tengu_plan_auto_mode")
+}
+
+// IsTenguTranscriptClassifier returns true if the "tengu_transcript_classifier" gate is enabled.
+// Mirrors TS isAutoModeGateEnabled() via TRANSCRIPT_CLASSIFIER feature.
+func IsTenguTranscriptClassifier() bool {
+	return DefaultManager().IsOn("tengu_transcript_classifier")
+}
+
 // Init initializes the GrowthBook manager
 func Init(config ...Config) {
 	manager := DefaultManager()

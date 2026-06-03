@@ -24,6 +24,20 @@ func NormalizeMessagesForAPI(messages []types.Message, tools []ToolSpec, opts Op
 	}
 
 	reorderedMessages := reorderAttachmentsForAPI(messages)
+
+	// Inject dynamic attachments (plan_mode, auto_mode, exit/reentry) based on current appstate
+	if opts.AppState != nil {
+		dynamicAtts := BuildDynamicAttachments(opts.AppState, reorderedMessages, opts)
+		for _, att := range dynamicAtts {
+			attMsg := types.Message{Type: types.MessageTypeAttachment, Attachment: att}
+			reorderedMessages = append(reorderedMessages, attMsg)
+		}
+		// Clear one-shot flags after building attachments
+		opts.AppState.NeedsPlanModeExitAttachment = false
+		opts.AppState.NeedsAutoModeExitAttachment = false
+		opts.AppState.HasExitedPlanMode = false
+	}
+
 	var filtered []types.Message
 	for _, m := range reorderedMessages {
 		if (m.Type == types.MessageTypeUser || m.Type == types.MessageTypeAssistant) && isTruthy(m.IsVirtual) {

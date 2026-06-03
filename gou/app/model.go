@@ -33,6 +33,7 @@
 package app
 
 import (
+	"goc/appstate"
 	"goc/gou/app/iface"
 	"context"
 	"os"
@@ -111,6 +112,10 @@ type Model struct {
 
 	// readFileState is the session-scoped read file state, used by /files and tool execution.
 	readFileState *localtools.ReadFileState
+
+	// appStateStore is the session-scoped state store, used by plan mode tools to update
+	// ToolPermissionContext and other runtime state fields atomically.
+	appStateStore *appstate.Store
 
 	// tsBridge when non-nil supplies in-process snapshot for commands/tools/prompt parts (tests; former TS bridge removed).
 	tsBridge *tscontext.Snapshot
@@ -275,6 +280,7 @@ func NewModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		slashPicker:         newSlashPickerModel(),
 		permModal:           newPermissionModalModel(),
 		toolResultState:     toolResultState,
+		appStateStore:       appstate.NewStore(appstate.DefaultAppState()),
 	}
 }
 

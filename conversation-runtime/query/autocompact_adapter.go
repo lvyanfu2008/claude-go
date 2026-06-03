@@ -252,7 +252,9 @@ func defaultPostCompactAttachments() compactservice.PostCompactAttachmentProvide
 		}
 
 		// TODO: When host provides ReadFileState, add file re-injection here.
-		// TODO: When host provides plan store, add plan/plan_mode attachments.
+		// TODO(plan-mode): When compaction adapter has access to appstate.Store, call
+		// BuildDynamicAttachments to re-inject plan_mode/auto_mode attachments after compaction.
+		// See messagesapi/dynamic_attachments.go.
 		// TODO: When host provides tool/agent/MCP definitions, add delta attachments.
 
 		return out, nil

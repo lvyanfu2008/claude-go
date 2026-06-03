@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"goc/appstate"
 	"goc/ccb-engine/bashzog"
 	"goc/tools/bashtool"
 	"goc/tools/localtools"
@@ -55,6 +56,9 @@ type ParityToolRunner struct {
 	// ToolPermission is the parent's permission context propagated to child agents
 	// for bubble-mode permission enforcement (TS PermissionUpdate parity).
 	ToolPermission *types.ToolPermissionContextData
+	// AppStateStore is the session-scoped state store, used by EnterPlanMode/ExitPlanMode
+	// to atomically update ToolPermissionContext and plan-mode flag fields.
+	AppStateStore *appstate.Store
 }
 
 func (r *ParityToolRunner) roots() []string {
@@ -121,6 +125,7 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 		ProgressCallback:     r.ProgressCallback,
 		NotificationCallback: r.NotificationCallback,
 		ToolPermission:       r.ToolPermission,
+		AppStateStore:        r.AppStateStore,
 	}
 	s, isErr, perr := tools.Run(ctx, name, input, cfg)
 	if perr == nil || !tools.IsNotHandled(perr) {

@@ -125,7 +125,7 @@ func (m *Model) View() tea.View {
 		}
 		// Spinner row (when query busy, flush left)
 		if m.queryBusy {
-			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, false, m.lastActivity, m.cols)
+			spinner := SpinnerRow(m.spinnerVerb, m.spinnerFrame, m.queryBusyStartedAt, m.spinnerTokens, m.store.StreamingThinkingText != "", m.lastActivity, m.cols)
 			if spinner != "" {
 				b.WriteString(spinner)
 				b.WriteByte('\n')
@@ -861,6 +861,7 @@ func (m *Model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 								return tools.NotebookEditFromEdit(absPath, oldString, newString, replaceAll, roots)
 							},
 						},
+						AppStateStore: m.appStateStore,
 					}
 					if params.RuntimeContext != nil && params.RuntimeContext.ToolPermissionContext != nil {
 						runner.ToolPermission = params.RuntimeContext.ToolPermissionContext

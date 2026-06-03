@@ -94,6 +94,15 @@ type AppState struct {
 	InitialMessage                *InitialMessage          `json:"initialMessage"`
 	PendingPlanVerification       *PendingPlanVerification `json:"pendingPlanVerification,omitempty"`
 	DenialTracking                *DenialTrackingState     `json:"denialTracking,omitempty"`
+	// NeedsPlanModeExitAttachment is set true by ExitPlanMode to inject plan_mode_exit on next API call.
+	// Mirrors TS STATE.needsPlanModeExitAttachment.
+	NeedsPlanModeExitAttachment bool `json:"needsPlanModeExitAttachment"`
+	// HasExitedPlanMode is set true by ExitPlanMode to inject plan_mode_reentry on next plan mode entry.
+	// Mirrors TS hasExitedPlanModeInSession() flag.
+	HasExitedPlanMode bool `json:"hasExitedPlanMode"`
+	// NeedsAutoModeExitAttachment is set true when auto mode is deactivated during plan mode transitions.
+	// Mirrors TS STATE.needsAutoModeExitAttachment.
+	NeedsAutoModeExitAttachment bool `json:"needsAutoModeExitAttachment"`
 	// ActiveOverlays: TS ReadonlySet<string> — list for JSON.
 	ActiveOverlays []string     `json:"activeOverlays"`
 	FastMode       *bool        `json:"fastMode,omitempty"`

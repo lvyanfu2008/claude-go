@@ -1,5 +1,7 @@
 package messagesapi
 
+import "goc/appstate"
+
 // Options replaces TS feature gates and Statsig checks for the Go API-normalize path.
 type Options struct {
 	// ToolSearchEnabled mirrors isToolSearchEnabledOptimistic().
@@ -49,6 +51,10 @@ type Options struct {
 	// stripping the last assistant's trailing thinking would drop that on replay. Mirrors
 	// getAPIProvider() === 'openai' in TS normalize (set via OptionsFromEnv + CLAUDE_CODE_USE_OPENAI).
 	SkipStripTrailingThinking bool
+
+	// AppState is the current appstate snapshot, used by dynamic attachment injection.
+	// When nil, dynamic attachments are skipped.
+	AppState *appstate.AppState
 }
 
 // DefaultOptions matches typical CLI defaults (most gates off).
