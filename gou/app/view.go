@@ -71,6 +71,7 @@ import (
 	"goc/tools/toolexecution"
 	"goc/tools/toolresultpersist"
 	"goc/tools/toolsearchwire"
+	"goc/appstate"
 	"goc/types"
 )
 
@@ -623,6 +624,10 @@ func (m *Model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 		if gouDemoEnvTruthy("GOU_DEMO_NON_INTERACTIVE") {
 			normOpts.NonInteractive = true
 		}
+		// Wire plan_mode/auto_mode dynamic attachments from session state
+		if st := m.appStateStore.GetState(); true {
+			normOpts.AppState = &st
+		}
 		tryMsgs := func() (json.RawMessage, error) {
 			return ccbhydrate.MessagesJSONNormalized(m.store.Messages, toolSpecs, normOpts)
 		}
@@ -738,6 +743,13 @@ func (m *Model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 					m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
 					m.rebuildHeightCache()
 				} else {
+					// Clear one-shot plan/auto mode attachment flags after they've been consumed
+					m.appStateStore.Update(func(prev appstate.AppState) appstate.AppState {
+						prev.NeedsPlanModeExitAttachment = false
+						prev.NeedsAutoModeExitAttachment = false
+						prev.HasExitedPlanMode = false
+						return prev
+					})
 					// When dynamic tool loading is active, prepend <available-deferred-tools>
 					// so the model knows which tools to discover via ToolSearch.
 					msgsBefore := len(msgsJSON)
