@@ -50,16 +50,13 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/mattn/go-isatty"
-
 	"goc/ccb-engine/apilog"
-	"goc/ccb-engine/debugpath"
-	"goc/ccb-engine/settingsfile"
 	"goc/claudeinit"
 	"goc/commands"
 	"goc/compactservice"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
+	config "goc/gou/app/config"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
@@ -93,36 +90,8 @@ import (
 	"goc/types"
 )
 
-// gouDemoTrace is set by setupGouDemoTrace from GOU_DEMO_LOG_FILE or GOU_DEMO_LOG.
-var gouDemoTrace *log.Logger
-
 // markdownHighlighter is the global code highlighter instance
 var markdownHighlighter *markdown.Highlighter
-
-// messagePaneGutterCols is the uniform left indent for message pane body lines (alignment with wrap width).
-const messagePaneGutterCols = 2
-
-func messageWrapCols(cols int) int {
-	if cols <= messagePaneGutterCols+8 {
-		return max(8, cols)
-	}
-	return cols - messagePaneGutterCols
-}
-
-// applyMessagePaneGutter wraps block to (cols − gutter) and prefixes each line with two spaces.
-func applyMessagePaneGutter(block string, cols int) string {
-	if block == "" {
-		return ""
-	}
-	wrapCols := messageWrapCols(cols)
-	wrapped := layout.WrapForViewport(block, wrapCols)
-	prefix := strings.Repeat(" ", messagePaneGutterCols)
-	lines := strings.Split(wrapped, "\n")
-	for i := range lines {
-		lines[i] = prefix + lines[i]
-	}
-	return strings.Join(lines, "\n")
-}
 
 // applyAssistantStreamingGutter wraps streaming assistant text to (cols − 4) with a "⏺ "
 // lead on the first line and 4-space indent on continuation lines, matching the completed
@@ -147,251 +116,6 @@ func applyAssistantStreamingGutter(block string, cols int) string {
 	return strings.Join(lines, "\n")
 }
 
-// messagePaneGutterRowCount matches [applyMessagePaneGutter] line count for height cache parity.
-func messagePaneGutterRowCount(block string, cols int) int {
-	g := applyMessagePaneGutter(block, cols)
-	if g == "" {
-		return 1
-	}
-	return max(1, strings.Count(g, "\n")+1)
-}
-
-// wrapHeadingForMessagePane wraps heading content to (messageWrapCols − levelPad) so after [applyMessagePaneGutter]
-// each physical line still includes the ATX level indent on continuations (not only the global two spaces).
-func wrapHeadingForMessagePane(content string, levelPad string, cols int) string {
-	if strings.TrimSpace(content) == "" {
-		return content
-	}
-	innerW := messageWrapCols(cols) - len(levelPad)
-	if innerW < 8 {
-		innerW = max(8, messageWrapCols(cols)-2)
-	}
-	wrapped := layout.WrapForViewport(content, innerW)
-	if levelPad == "" {
-		return wrapped
-	}
-	lines := strings.Split(wrapped, "\n")
-	for i := range lines {
-		lines[i] = levelPad + lines[i]
-	}
-	return strings.Join(lines, "\n")
-}
-
-// gouDemoMergedSystemLocale mirrors apiparity.GouDemo: user + project settings.go.json / settings.local.json language/outputStyle with env override.
-// resolveToolProjectRoot returns CCB_ENGINE_PROJECT_ROOT if set, else the nearest Go project marker from cwd, else abs(cwd).
-func resolveToolProjectRoot(cwd string) string {
-	if r := strings.TrimSpace(os.Getenv("CCB_ENGINE_PROJECT_ROOT")); r != "" {
-		if a, err := filepath.Abs(r); err == nil {
-			return a
-		}
-	}
-	if pr, err := settingsfile.FindClaudeProjectRoot(cwd); err == nil {
-		return pr
-	}
-	if a, err := filepath.Abs(cwd); err == nil {
-		return a
-	}
-	return cwd
-}
-
-func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) {
-	projRoot := settingsfile.ProjectRootLastResolved()
-	locLang, locStyleKey, err := settingsfile.MergeGouDemoLocalePrefs(projRoot, true)
-	if err != nil {
-		gouDemoTracef("MergeGouDemoLocalePrefs: %v", err)
-		locLang, locStyleKey = "", ""
-	}
-	lang = strings.TrimSpace(os.Getenv("CLAUDE_CODE_LANGUAGE"))
-	if lang == "" {
-		lang = locLang
-	}
-	on, op := commands.ResolveGouDemoOutputStyle(
-		os.Getenv("CLAUDE_CODE_OUTPUT_STYLE_NAME"),
-		os.Getenv("CLAUDE_CODE_OUTPUT_STYLE_PROMPT"),
-		locStyleKey,
-	)
-	return lang, on, op
-}
-
-func defaultGouDemoTracePath() string {
-	p := debugpath.ResolveLogPath()
-	if p != "" {
-		return p
-	}
-	return filepath.Join(os.TempDir(), fmt.Sprintf("gou-demo-trace-%d.txt", os.Getpid()))
-}
-
-func setupGouDemoTrace() (cleanup func()) {
-	path := strings.TrimSpace(os.Getenv("GOU_DEMO_LOG_FILE"))
-	flags := log.LstdFlags | log.Lmicroseconds
-	if path != "" {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			log.Printf("gou-demo: mkdir %q: %v", filepath.Dir(path), err)
-		}
-		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Printf("gou-demo: GOU_DEMO_LOG_FILE %q: %v", path, err)
-			return func() {}
-		}
-		debugpath.MaybeUpdateLatestSymlink(path)
-		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
-		return func() { _ = f.Close() }
-	}
-	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_LOG")))
-	if v != "1" && v != "true" && v != "yes" && v != "on" {
-		return func() {}
-	}
-	// GOU_DEMO_LOG=1: writing to stderr while the TUI runs may corrupt line order and layout.
-	if gouDemoEnvTruthy("GOU_DEMO_LOG_STDERR") {
-		gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
-		return func() {}
-	}
-	if isatty.IsTerminal(os.Stderr.Fd()) {
-		p := defaultGouDemoTracePath()
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			fmt.Fprintf(os.Stderr, "[gou-demo] trace mkdir %q: %v; falling back to stderr\n", filepath.Dir(p), err)
-			gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
-			return func() {}
-		}
-		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[gou-demo] trace open %q: %v; falling back to stderr\n", p, err)
-			gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
-			return func() {}
-		}
-		debugpath.MaybeUpdateLatestSymlink(p)
-		gouDemoTrace = log.New(f, "[gou-demo] ", flags)
-		lp := debugpath.LatestLinkPathFor(p)
-		if lp != "" {
-			gouDemoTrace.Printf("trace -> %s points to %s (TTY: stderr+TUI garbles; or GOU_DEMO_LOG_FILE=...)", lp, p)
-		} else {
-			gouDemoTrace.Printf("trace -> %s (TTY: stderr+TUI garbles output; use this file or GOU_DEMO_LOG_FILE=...)", p)
-		}
-		return func() { _ = f.Close() }
-	}
-	gouDemoTrace = log.New(os.Stderr, "[gou-demo] ", flags)
-	return func() {}
-}
-
-func gouDemoTracef(format string, args ...any) {
-	if gouDemoTrace != nil {
-		gouDemoTrace.Printf(format, args...)
-	}
-}
-
-// gouDemoLogToolUseContext dumps ProcessUserInputContext / ToolUseContext JSON when CLAUDE_CODE_LOG_TOOL_USE_CONTEXT
-// or GOU_DEMO_LOG_TOOL_USE_CONTEXT is set (requires GOU_DEMO_LOG=1 or GOU_DEMO_LOG_FILE so [gouDemoTrace] is configured — stderr+TUI is avoided by default).
-// Values: 1|true|summary — summary snapshot; full — entire serializable context (large). JSON is one-line (no indent).
-func gouDemoLogToolUseContext(rc *types.ProcessUserInputContextData) {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv("CLAUDE_CODE_LOG_TOOL_USE_CONTEXT")))
-	if v == "" {
-		v = strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_LOG_TOOL_USE_CONTEXT")))
-	}
-	if v == "" {
-		return
-	}
-	full := v == "full"
-	if !full && v != "1" && v != "true" && v != "yes" && v != "on" && v != "summary" {
-		return
-	}
-	if gouDemoTrace == nil {
-		return
-	}
-	b, err := types.FormatProcessInputContextForLog(rc, full)
-	if err != nil {
-		gouDemoTracef("ToolUseContext log: marshal: %v", err)
-		return
-	}
-	mode := "summary"
-	if full {
-		mode = "full"
-	}
-	gouDemoTrace.Printf("ToolUseContext (%s JSON):\n%s\n", mode, string(b))
-}
-
-func gouDemoEnvTruthy(key string) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
-}
-
-func gouDemoEnvFalsy(key string) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	return v == "0" || v == "false" || v == "no" || v == "off"
-}
-
-func gouDemoStatusLineEnabled() bool {
-	return gouDemoEnvTruthy("GOU_DEMO_STATUS_LINE")
-}
-
-func gouDemoEnvWantsApiBodyLog() bool {
-	return gouDemoEnvTruthy("CLAUDE_CODE_LOG_API_REQUEST_BODY") || gouDemoEnvTruthy("CLAUDE_CODE_LOG_API_RESPONSE_BODY")
-}
-
-func gouDemoHasLLMKeys() bool {
-	for _, k := range []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY"} {
-		if strings.TrimSpace(os.Getenv(k)) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// gouDemoWarnApilogExpectations prints stderr hints when CLAUDE_CODE_LOG_API_* cannot produce HTTP body logs.
-func gouDemoWarnApilogExpectations(ccbInline bool) {
-	if !gouDemoEnvWantsApiBodyLog() {
-		return
-	}
-	if !ccbInline {
-		fmt.Fprintf(os.Stderr,
-			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but this run has real HTTP / streaming parity disabled (GOU_DEMO_CCB_INLINE=0).\n"+
-				"           No HTTP → apilog will not append request/response lines. Unset GOU_DEMO_CCB_INLINE and set ANTHROPIC_API_KEY plus GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 for real API logs.\n")
-		return
-	}
-	if !gouDemoHasLLMKeys() {
-		fmt.Fprintf(os.Stderr,
-			"[gou-demo] CLAUDE_CODE_LOG_API_* is set, but no ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or OPENAI_API_KEY is set.\n"+
-				"           Put keys in ~/.claude/settings.go.json or project .claude/settings.go.json env, or export them.\n")
-	}
-}
-
-func previewForTrace(s string, max int) string {
-	if max <= 0 {
-		max = 120
-	}
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return string(r[:max]) + fmt.Sprintf("…(%d runes)", len(r))
-}
-
-// gouQueryYieldMsg carries one assistant or user row from [query.Query] streaming parity (non-ccbstream protocol).
-type gouQueryYieldMsg struct {
-	Message types.Message
-}
-
-// gouStreamEventMsg carries a raw SSE stream event (content_block_delta) for incremental streaming text display.
-// Mirrors TS stream_event yields in handleMessageFromStream → onStreamingText.
-type gouStreamEventMsg struct {
-	Raw json.RawMessage
-}
-
-// gouStreamingToolUsesMsg carries in-flight tool_use snapshots from [query.QueryDeps.OnStreamingToolUses].
-// Uses==nil clears the store (Anthropic message_stop); non-nil replaces the live list (may be empty).
-type gouStreamingToolUsesMsg struct {
-	Uses []query.StreamingToolUseLive
-}
-
-// gouQueryDoneMsg marks completion of a query streaming parity turn (Err set on failure).
-type gouQueryDoneMsg struct {
-	Err error
-}
-
-// gouMemoryAppendMsg appends a system message on the main thread (e.g. subtype memory_saved from extract-memories).
-type gouMemoryAppendMsg struct {
-	Msg types.Message
-}
-
 // AgentRegisteredMsg is sent when a new agent task is registered.
 type AgentRegisteredMsg struct {
 	Task *AgentTaskState
@@ -413,101 +137,10 @@ type AgentCompletedMsg struct {
 // AgentTaskTickMsg is sent by the 1s tick timer for coordinator panel refresh.
 type AgentTaskTickMsg struct{}
 
-// compactPhaseMsg carries auto-compact phase updates for spinner verb changes.
-// Phase values: "started", "summarizing", "done".
-type compactPhaseMsg struct {
-	Phase string
+func setupGouDemoTrace() (cleanup func()) {
+	return config.SetupTrace()
 }
 
-func gouDemoAnthropicAPIKey() string {
-	k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
-	if k != "" {
-		return k
-	}
-	return strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN"))
-}
-
-// gouDemoPreferQueryStreamingParity is true when env gates parity and an Anthropic key is present (HTTP path usable).
-func gouDemoPreferQueryStreamingParity() bool {
-	if gouDemoAnthropicAPIKey() == "" {
-		return false
-	}
-	cfg := query.BuildQueryConfig()
-	return query.StreamingParityPathEnabled(cfg)
-}
-
-// gouDemoQueryMainLoopModel is the model id for HTTP streaming parity + ParityToolRunner.
-// /model sets CLAUDE_CODE_MODEL in-process; that must override ToolUseContext.Options from
-// [pui.BuildDemoParams] when they disagree (otherwise the API keeps an older id).
-func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string {
-	if cm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MODEL")); cm != "" {
-		return cm
-	}
-	if params != nil && params.RuntimeContext != nil {
-		if m := strings.TrimSpace(params.RuntimeContext.ToolUseContext.Options.MainLoopModel); m != "" {
-			return m
-		}
-	}
-	return modelenv.EffectiveMainLoopModel()
-}
-
-// gouDemoUserContextMapForQuery copies live user context for [query.PrependUserContext].
-// Values must be raw (no <system-reminder> wrapper): TS prependUserContext wraps once per #key/value.
-// Do not pass [querycontext.FormatUserContextReminder] here — that string is already wrapped for ccbhydrate lead-in only.
-func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string {
-	if len(uc) == 0 {
-		return nil
-	}
-	out := make(map[string]string)
-	for k, v := range uc {
-		if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
-			continue
-		}
-		out[k] = v
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// runQueryStreamingParityTurn runs [query.Query] in a goroutine and forwards whole messages to the Bubble Tea program.
-func runQueryStreamingParityTurn(ctx context.Context, programSend func(tea.Msg), qp query.QueryParams) {
-	go func() {
-		for y, err := range query.Query(ctx, qp) {
-			if err != nil {
-				if programSend != nil {
-					programSend(gouQueryDoneMsg{Err: err})
-				}
-				return
-			}
-			if y.StreamEvent != nil && programSend != nil {
-				programSend(gouStreamEventMsg{Raw: y.StreamEvent})
-			}
-			if y.Message != nil && programSend != nil {
-				programSend(gouQueryYieldMsg{Message: *y.Message})
-			}
-			if y.Terminal != nil {
-				// Query encodes model/stream failures on Terminal.Error (second iter return is always nil err).
-				var doneErr error
-				if y.Terminal.Error != nil {
-					doneErr = y.Terminal.Error
-				}
-				if programSend != nil {
-					programSend(gouQueryDoneMsg{Err: doneErr})
-				}
-				return
-			}
-		}
-	}()
-}
-
-// teardropAsterisk matches TS constants/figures.ts TEARDROP_ASTERISK (Spinner.tsx).
-const teardropAsterisk = "\u273b"
-
-func spinnerTickCmd() tea.Cmd {
-	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return gouSpinnerTickMsg{} })
-}
 
 func (m *model) beginQuerySpinner() {
 	m.queryBusyStartedAt = time.Now()
@@ -699,29 +332,9 @@ type model struct {
 	toolResultState *toolresultpersist.ContentReplacementState
 }
 
-// Config is the runtime configuration for the TUI app.
-type Config struct {
-	// SessionID is the conversation session ID. Auto-generated when empty.
-	SessionID string
-	// PermissionMode sets the tool permission mode for the session.
-	PermissionMode types.PermissionMode
-	// CWD is the working directory. Defaults to os.Getwd() when empty.
-	CWD string
-	// TranscriptPath is an optional JSON file to load initial messages from.
-	TranscriptPath string
-	// ReplayCCPath is an optional NDJSON stream file to replay before starting the TUI.
-	ReplayCCPath string
-	// StreamStdin feeds NDJSON stream events from stdin before opening the TUI.
-	StreamStdin bool
-	// MCPCommandsJSONPath overrides the path for MCP command definitions.
-	MCPCommandsJSONPath string
-	// MCPToolsJSONPath overrides the path for MCP tool definitions.
-	MCPToolsJSONPath string
-}
-
 // Run initializes and runs the TUI application. It blocks until the user exits.
 // Mirrors the combined behavior of TS cli.tsx + main.tsx REPL launch.
-func Run(config_ Config) error {
+func Run(config_ config.Config) error {
 	if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
 		return fmt.Errorf("claudeinit: %w", err)
 	}
@@ -874,8 +487,8 @@ func (m *model) maybeRecordTranscript() {
 	}
 	msgs := slices.Clone(m.store.Messages)
 	_, err := m.transcript.RecordTranscript(context.Background(), msgs, sessiontranscript.RecordOpts{AllMessages: msgs})
-	if err != nil && gouDemoTrace != nil {
-		gouDemoTracef("RecordTranscript: %v", err)
+	if err != nil {
+		config.Tracef("RecordTranscript: %v", err)
 	}
 }
 
@@ -2948,7 +2561,7 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 						m.store.ClearStreamingToolUses()
 						ctx, cancel := context.WithCancel(context.Background())
 						m.queryCancel = cancel
-						runQueryStreamingParityTurn(ctx, m.ccbSend, qp)
+						config.RunQueryStreamingParityTurn(ctx, m.ccbSend, qp)
 						usedCCB = true
 					} else {
 						m.store.AppendMessage(pui.SystemNotice(
@@ -2981,3 +2594,35 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 	gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
 	return m, cmd
 }
+
+// ---------------------------------------------------------------------------
+// Backward-compat aliases; migrate callers to config. prefix over time.
+// ---------------------------------------------------------------------------
+
+// Type aliases for messages moved to config.
+type gouQueryYieldMsg = config.QueryYieldMsg
+type gouStreamEventMsg = config.StreamEventMsg
+type gouStreamingToolUsesMsg = config.StreamingToolUsesMsg
+type gouQueryDoneMsg = config.QueryDoneMsg
+type gouMemoryAppendMsg = config.MemoryAppendMsg
+type compactPhaseMsg = config.CompactPhaseMsg
+
+// Const alias (var, since Go does not support const aliases).
+var teardropAsterisk = config.TeardropAsterisk
+
+func gouDemoEnvTruthy(k string) bool                                         { return config.EnvTruthy(k) }
+func gouDemoEnvFalsy(k string) bool                                          { return config.EnvFalsy(k) }
+func gouDemoStatusLineEnabled() bool                                         { return config.StatusLineEnabled() }
+func gouDemoTracef(f string, a ...any)                                       { config.Tracef(f, a...) }
+func gouDemoLogToolUseContext(rc *types.ProcessUserInputContextData)          { config.LogToolUseContext(rc) }
+func gouDemoWarnApilogExpectations(ccbInline bool)                           { config.WarnAPILogExpectations(ccbInline) }
+func gouDemoPreferQueryStreamingParity() bool                                { return config.PreferQueryStreamingParity() }
+func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string { return config.QueryMainLoopModel(params) }
+func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string   { return config.UserContextMapForQuery(uc) }
+func resolveToolProjectRoot(cwd string) string                               { return config.ResolveToolProjectRoot(cwd) }
+func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) { return config.MergedSystemLocale() }
+func previewForTrace(s string, max int) string                               { return config.PreviewForTrace(s, max) }
+func applyMessagePaneGutter(block string, cols int) string                   { return config.ApplyMessagePaneGutter(block, cols) }
+func messagePaneGutterRowCount(block string, cols int) int                   { return config.MessagePaneGutterRowCount(block, cols) }
+func wrapHeadingForMessagePane(content string, levelPad string, cols int) string { return config.WrapHeadingForMessagePane(content, levelPad, cols) }
+func spinnerTickCmd() tea.Cmd                                                { return config.SpinnerTickCmd() }

@@ -139,7 +139,6 @@ func (m *model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cm
 
 func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 	ev := ccbstream.StreamEvent(msg)
-	if gouDemoTrace != nil {
 		switch ev.Type {
 		case "assistant_delta":
 			gouDemoTracef("ui ccbstream.Msg assistant_delta textLen=%d", len(ev.Text))
@@ -148,7 +147,6 @@ func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 		default:
 			gouDemoTracef("ui ccbstream.Msg type=%s", ev.Type)
 		}
-	}
 	ccbstream.Apply(m.store, ev)
 	if ccbStreamEventNeedsFullHeightRebuild(ev) {
 		m.rebuildHeightCache()
