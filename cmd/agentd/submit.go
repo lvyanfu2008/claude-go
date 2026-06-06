@@ -13,6 +13,7 @@ import (
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
 	"goc/gou/conversation"
+	"goc/tools/toolexecution"
 	"goc/gou/pui"
 	"goc/messagesapi"
 	"goc/modelenv"
@@ -128,6 +129,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	qp := query.QueryParams{
 		Messages:      store.Messages,
 		SystemPrompt:  query.SystemPrompt(fetchResult.DefaultSystemPrompt),
+		CanUseTool:     canUseToolFn(permBridge),
 		UserContext:   fetchResult.UserContext,
 		SystemContext: fetchResult.SystemContext,
 	}
@@ -185,6 +187,22 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 	}
 }
 
+
+func canUseToolFn(b engine.PermissionBridge) toolexecution.QueryCanUseToolFn {
+	if b == nil {
+		return nil
+	}
+	return func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
+		pd, err := b.AskPermission(ctx, toolName, input)
+		if err != nil {
+			return toolexecution.DenyDecision(err.Error()), err
+		}
+		if pd.Allow {
+			return toolexecution.AllowDecision(), nil
+		}
+		return toolexecution.DenyDecision(pd.Reason), nil
+	}
+}
 
 func recordAgentdTranscript(store *conversation.Store, sessionID, cwd string) {
 	tr := &sessiontranscript.Store{

@@ -1,6 +1,2 @@
-/bin/
-/vendor
-ceb.exe
-.harness
-claude
-.claude/worktrees/
+# Hermes agentd binary (root level)
+/agentd
