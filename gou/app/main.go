@@ -49,7 +49,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"goc/ccb-engine/apilog"
 	"goc/claudeinit"
-	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/gou/app/components/input"
 	"goc/gou/app/components/messages"
 	"goc/gou/app/components/tasks"
@@ -311,7 +310,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 
 	sessionMemState := sessionmemory.NewState()
 	var toolResultState *toolresultpersist.ContentReplacementState
-	if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
+	if !config.EnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
 		toolResultState = toolresultpersist.NewContentReplacementState()
 	}
 	m := &model{
@@ -522,7 +521,7 @@ func listViewportH(m *model) int {
 		streamReserve = 0
 	}
 	h := m.Layout.Height - m.Layout.TitleH - streamReserve - m.bottomChromeHeight() - 1
-	if gouDemoStatusLineEnabled() && m.statusLineString() != "" {
+	if config.StatusLineEnabled() && m.statusLineString() != "" {
 		h--
 	}
 	if m.Screen.Mode != state.ScreenTranscript {
@@ -542,7 +541,7 @@ func listViewportH(m *model) int {
 }
 
 func (m *model) statusLineString() string {
-	if !gouDemoStatusLineEnabled() {
+	if !config.StatusLineEnabled() {
 		return ""
 	}
 	n := len(m.Conversation.Store.Messages)
@@ -721,7 +720,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		// 添加交互提示
 		toolLine := toolRowLeadPrefix(false) + lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render(activityLine) + lipgloss.NewStyle().Faint(true).Render(messagerow.CtrlOToExpandHint)
 		block := head + "\n" + toolLine
-		return messagePaneGutterRowCount(block, cols)
+		return config.MessagePaneGutterRowCount(block, cols)
 	}
 
 	head := lipgloss.NewStyle().Bold(true).Foreground(theme.MessageTypeColor(types.MessageTypeAssistant)).Render(string(types.MessageTypeAssistant))
@@ -742,7 +741,7 @@ func (m *model) measureTranscriptStreamingToolRow(group GroupedStreamingTool, co
 		treeLine := lipgloss.NewStyle().Foreground(theme.ToolUseAccent()).Render("  ⎿  " + path)
 		block += "\n" + treeLine
 	}
-	return messagePaneGutterRowCount(block, cols)
+	return config.MessagePaneGutterRowCount(block, cols)
 }
 
 func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, cols, h int, searchHL string) string {
@@ -897,10 +896,6 @@ func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	return false
 }
 
-// userPromptPrefixStyled delegates to input.UserPromptPrefixStyled.
-func userPromptPrefixStyled(userMsgRowBg bool) string {
-	return input.UserPromptPrefixStyled(userMsgRowBg)
-}
 
 // userInputViewWithPromptPrefix delegates to input.UserInputViewWithPromptPrefix.
 func userInputViewWithPromptPrefix(m *model) string {
@@ -912,7 +907,7 @@ func withUserPromptPointerIfNeeded(msg types.Message, body string) string {
 	if msg.Type != types.MessageTypeUser || !userMessageHasPromptText(msg) || body == "" {
 		return body
 	}
-	prefix := userPromptPrefixStyled(true)
+	prefix := input.UserPromptPrefixStyled(true)
 	lines := strings.Split(body, "\n")
 	if len(lines) == 0 {
 		return prefix
@@ -994,10 +989,6 @@ func toolRowLeadPrefix(userRow bool) string {
 	return messages.ToolRowLeadPrefix(userRow)
 }
 
-// prefixToolGlyphFirstLine prepends the dim tool lead (⏺ / ●) to the first line of rendered assistant text.
-func prefixToolGlyphFirstLine(body string) string {
-	return messages.PrefixToolGlyphFirstLine(body)
-}
 
 func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 	if resolved == nil || toolUseID == "" {
@@ -1017,10 +1008,6 @@ func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResu
 	return messages.ToolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg.ToolUseIDs, seg.ToolUseID, allowResultPayloadAsResolved)
 }
 
-// segmentJoinSeparator delegates to messages.SegmentJoinSeparator.
-func segmentJoinSeparator(prev, cur messagerow.Segment) string {
-	return messages.SegmentJoinSeparator(prev, cur)
-}
 
 // transcriptAssistantPairBlankLine delegates to messages.TranscriptAssistantPairBlankLine.
 func transcriptAssistantPairBlankLine(m *model, a, b types.Message) bool {
@@ -1070,7 +1057,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			md := styleMarkdownTokens(markdown.CachedLexer(textForMd), cols, userRow)
 			if assistantLeadGlyph && !assistantTextLeadDone && strings.TrimSpace(seg.Text) != "" {
 				assistantTextLeadDone = true
-				md = prefixToolGlyphFirstLine(md)
+				md = messages.PrefixToolGlyphFirstLine(md)
 			}
 			piece = md
 			logg("SegTextMarkdown", piece)
@@ -1220,7 +1207,7 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 			continue
 		}
 		if b.Len() > 0 && lastSegIdx >= 0 {
-			b.WriteString(segmentJoinSeparator(segs[lastSegIdx], segs[i]))
+			b.WriteString(messages.SegmentJoinSeparator(segs[lastSegIdx], segs[i]))
 		}
 		b.WriteString(piece)
 		lastSegIdx = i
@@ -1324,30 +1311,9 @@ type compactPhaseMsg = config.CompactPhaseMsg
 var teardropAsterisk = config.TeardropAsterisk
 
 func gouDemoEnvTruthy(k string) bool                                 { return config.EnvTruthy(k) }
-func gouDemoEnvFalsy(k string) bool                                  { return config.EnvFalsy(k) }
-func gouDemoStatusLineEnabled() bool                                 { return config.StatusLineEnabled() }
 func gouDemoTracef(f string, a ...any)                               { config.Tracef(f, a...) }
-func gouDemoLogToolUseContext(rc *types.ProcessUserInputContextData) { config.LogToolUseContext(rc) }
 func gouDemoWarnApilogExpectations(ccbInline bool)                   { config.WarnAPILogExpectations(ccbInline) }
-func gouDemoPreferQueryStreamingParity() bool                        { return config.PreferQueryStreamingParity() }
-func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string {
-	return config.QueryMainLoopModel(params)
-}
-func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string {
-	return config.UserContextMapForQuery(uc)
-}
-func resolveToolProjectRoot(cwd string) string { return config.ResolveToolProjectRoot(cwd) }
-func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) {
-	return config.MergedSystemLocale()
-}
-func previewForTrace(s string, max int) string { return config.PreviewForTrace(s, max) }
 func applyMessagePaneGutter(block string, cols int) string {
 	return config.ApplyMessagePaneGutter(block, cols)
-}
-func messagePaneGutterRowCount(block string, cols int) int {
-	return config.MessagePaneGutterRowCount(block, cols)
-}
-func wrapHeadingForMessagePane(content string, levelPad string, cols int) string {
-	return config.WrapHeadingForMessagePane(content, levelPad, cols)
 }
 func spinnerTickCmd() tea.Cmd { return config.SpinnerTickCmd() }
