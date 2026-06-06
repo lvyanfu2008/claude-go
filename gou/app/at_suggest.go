@@ -6,31 +6,32 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	state "goc/gou/app/state"
 	"goc/gou/suggestions"
 	"goc/types"
 )
 
 // syncAtSuggestions runs after every prompt Update to refresh the @ suggestion list.
 func (m *model) syncAtSuggestions() {
-	if m.suggestionEngine == nil {
+	if m.Input.SuggestionEngine == nil {
 		return
 	}
-	prevVisible := m.suggVisible
-	value := m.pr.Value()
-	cursor := m.pr.CursorRuneIndex()
-	result := m.suggestionEngine.Update(value, cursor)
+	prevVisible := m.Input.SuggVisible
+	value := m.Input.PR.Value()
+	cursor := m.Input.PR.CursorRuneIndex()
+	result := m.Input.SuggestionEngine.Update(value, cursor)
 	if result == nil || !result.HasResults {
-		m.suggVisible = false
-		m.suggestions = nil
-		m.selectedSuggIdx = 0
+		m.Input.SuggVisible = false
+		m.Input.Suggestions = nil
+		m.Input.SelectedSuggIdx = 0
 	} else {
-		m.suggestions = result.Items
-		if m.selectedSuggIdx >= len(m.suggestions) {
-			m.selectedSuggIdx = 0
+		m.Input.Suggestions = result.Items
+		if m.Input.SelectedSuggIdx >= len(m.Input.Suggestions) {
+			m.Input.SelectedSuggIdx = 0
 		}
-		m.suggVisible = true
+		m.Input.SuggVisible = true
 	}
-	if prevVisible != m.suggVisible {
+	if prevVisible != m.Input.SuggVisible {
 		m.rebuildHeightCache()
 	}
 }
@@ -38,55 +39,55 @@ func (m *model) syncAtSuggestions() {
 // handleAtSuggestKeys handles keyboard input when the @ suggestion list is visible.
 // Returns: 0 = not handled, 1 = handled.
 func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
-	if m.uiScreen != gouDemoScreenPrompt || !m.suggVisible || len(m.suggestions) == 0 {
+	if m.Screen.Mode != state.ScreenPrompt || !m.Input.SuggVisible || len(m.Input.Suggestions) == 0 {
 		return 0
 	}
 	k := msg.Key()
 	switch msg.String() {
 	case "tab":
-		m.applySuggestion(m.suggestions[m.selectedSuggIdx])
+		m.applySuggestion(m.Input.Suggestions[m.Input.SelectedSuggIdx])
 		return 1
 	case "up":
-		if m.selectedSuggIdx > 0 {
-			m.selectedSuggIdx--
+		if m.Input.SelectedSuggIdx > 0 {
+			m.Input.SelectedSuggIdx--
 		} else {
-			m.selectedSuggIdx = len(m.suggestions) - 1
+			m.Input.SelectedSuggIdx = len(m.Input.Suggestions) - 1
 		}
 		return 1
 	case "down":
-		if m.selectedSuggIdx+1 < len(m.suggestions) {
-			m.selectedSuggIdx++
+		if m.Input.SelectedSuggIdx+1 < len(m.Input.Suggestions) {
+			m.Input.SelectedSuggIdx++
 		} else {
-			m.selectedSuggIdx = 0
+			m.Input.SelectedSuggIdx = 0
 		}
 		return 1
 	case "esc":
-		m.suggVisible = false
-		m.suggestionEngine.Dismiss()
+		m.Input.SuggVisible = false
+		m.Input.SuggestionEngine.Dismiss()
 		return 1
 	}
 	// Arrow key codes (non-string forms from some terminals)
 	if !k.Mod.Contains(tea.ModShift) {
 		if k.Code == tea.KeyUp {
-			if m.selectedSuggIdx > 0 {
-				m.selectedSuggIdx--
+			if m.Input.SelectedSuggIdx > 0 {
+				m.Input.SelectedSuggIdx--
 			} else {
-				m.selectedSuggIdx = len(m.suggestions) - 1
+				m.Input.SelectedSuggIdx = len(m.Input.Suggestions) - 1
 			}
 			return 1
 		}
 		if k.Code == tea.KeyDown {
-			if m.selectedSuggIdx+1 < len(m.suggestions) {
-				m.selectedSuggIdx++
+			if m.Input.SelectedSuggIdx+1 < len(m.Input.Suggestions) {
+				m.Input.SelectedSuggIdx++
 			} else {
-				m.selectedSuggIdx = 0
+				m.Input.SelectedSuggIdx = 0
 			}
 			return 1
 		}
 	}
 	// Enter: apply suggestion without submitting (user continues typing)
 	if isPromptEnterKey(msg) {
-		m.applySuggestion(m.suggestions[m.selectedSuggIdx])
+		m.applySuggestion(m.Input.Suggestions[m.Input.SelectedSuggIdx])
 		return 1
 	}
 	return 0
@@ -94,8 +95,8 @@ func (m *model) handleAtSuggestKeys(msg tea.KeyPressMsg) int {
 
 // applySuggestion replaces the @token at the cursor with the selected suggestion value.
 func (m *model) applySuggestion(item suggestions.ScoredItem) {
-	value := m.pr.Value()
-	cursor := m.pr.CursorRuneIndex()
+	value := m.Input.PR.Value()
+	cursor := m.Input.PR.CursorRuneIndex()
 	_, rng := extractCompletionTokenForApply(value, cursor)
 	rs := []rune(value)
 	rep := "@" + item.Value + " "
@@ -103,9 +104,9 @@ func (m *model) applySuggestion(item suggestions.ScoredItem) {
 	b.WriteString(string(rs[:rng.Start]))
 	b.WriteString(rep)
 	b.WriteString(string(rs[rng.End:]))
-	m.pr.SetValue(b.String())
-	m.suggVisible = false
-	m.selectedSuggIdx = 0
+	m.Input.PR.SetValue(b.String())
+	m.Input.SuggVisible = false
+	m.Input.SelectedSuggIdx = 0
 }
 
 // extractCompletionTokenForApply finds the @token to replace when applying a suggestion.
@@ -136,24 +137,24 @@ func extractCompletionTokenForApply(value string, cursor int) (string, suggestio
 
 // renderAtSuggestions renders the suggestion list above the prompt input (footer area).
 func (m *model) renderAtSuggestions() string {
-	if !m.suggVisible || len(m.suggestions) == 0 || m.uiScreen != gouDemoScreenPrompt {
+	if !m.Input.SuggVisible || len(m.Input.Suggestions) == 0 || m.Screen.Mode != state.ScreenPrompt {
 		return ""
 	}
-	width := m.cols
+	width := m.Layout.Cols
 	if width < 40 {
 		width = 40
 	}
 	maxVisible := 6
-	if len(m.suggestions) < maxVisible {
-		maxVisible = len(m.suggestions)
+	if len(m.Input.Suggestions) < maxVisible {
+		maxVisible = len(m.Input.Suggestions)
 	}
 	// Center the visible window on selectedSuggIdx
-	start := m.selectedSuggIdx - maxVisible/2
+	start := m.Input.SelectedSuggIdx - maxVisible/2
 	if start < 0 {
 		start = 0
 	}
-	if start+maxVisible > len(m.suggestions) {
-		start = len(m.suggestions) - maxVisible
+	if start+maxVisible > len(m.Input.Suggestions) {
+		start = len(m.Input.Suggestions) - maxVisible
 	}
 	if start < 0 {
 		start = 0
@@ -166,8 +167,8 @@ func (m *model) renderAtSuggestions() string {
 	b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(title))
 	b.WriteByte('\n')
 
-	for i := start; i < len(m.suggestions) && i < start+maxVisible; i++ {
-		item := m.suggestions[i]
+	for i := start; i < len(m.Input.Suggestions) && i < start+maxVisible; i++ {
+		item := m.Input.Suggestions[i]
 		icon := item.Icon
 		if icon == "" {
 			switch item.Type {
@@ -182,7 +183,7 @@ func (m *model) renderAtSuggestions() string {
 			}
 		}
 		line := "  " + icon + " " + item.Label
-		if i == m.selectedSuggIdx {
+		if i == m.Input.SelectedSuggIdx {
 			line = lipgloss.NewStyle().Reverse(true).Render("  " + icon + " " + item.Label)
 		}
 		b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(line))
@@ -193,11 +194,11 @@ func (m *model) renderAtSuggestions() string {
 
 // refreshAgentSuggestions updates the suggestion engine's agent list from the loaded slash commands.
 func (m *model) refreshAgentSuggestions() {
-	if m.suggestionEngine == nil {
+	if m.Input.SuggestionEngine == nil {
 		return
 	}
 	var agents []suggestions.AgentDef
-	for _, cmd := range m.slashCommands {
+	for _, cmd := range m.Input.SlashCommands {
 		if cmd.Agent != nil {
 			agents = append(agents, suggestions.AgentDef{
 				Name:        types.GetCommandName(cmd),
@@ -206,5 +207,5 @@ func (m *model) refreshAgentSuggestions() {
 			})
 		}
 	}
-	m.suggestionEngine.SetAgents(agents)
+	m.Input.SuggestionEngine.SetAgents(agents)
 }

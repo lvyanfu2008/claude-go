@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 func slashResultPanelMaxBodyLines(termHeight int) int {
@@ -20,20 +21,20 @@ func slashResultPanelMaxBodyLines(termHeight int) int {
 
 // slashResultPanelLayout returns separator, wrapped body lines, and hint when the panel should show.
 func (m *model) slashResultPanelLayout() (sep string, body []string, hint string) {
-	if m.slashResultPanel == nil || m.uiScreen != gouDemoScreenPrompt {
+	if m.Input.SlashResultPanel == nil || m.Screen.Mode != state.ScreenPrompt {
 		return "", nil, ""
 	}
-	raw := strings.TrimSpace(*m.slashResultPanel)
+	raw := strings.TrimSpace(*m.Input.SlashResultPanel)
 	if raw == "" {
 		return "", nil, ""
 	}
-	cols := m.cols
+	cols := m.Layout.Cols
 	if cols < 1 {
 		cols = 40
 	}
 	wrapped := layout.WrapForViewport(raw, cols)
 	fullLines := strings.Split(wrapped, "\n")
-	maxB := slashResultPanelMaxBodyLines(m.height)
+	maxB := slashResultPanelMaxBodyLines(m.Layout.Height)
 	truncated := len(fullLines) > maxB
 	lines := fullLines
 	if truncated {
@@ -126,17 +127,17 @@ func extractSlashLocalPanelText(r *processuserinput.ProcessUserInputBaseResult) 
 }
 
 func (m *model) applySlashResultPanelFromSubmit(line string, r *processuserinput.ProcessUserInputBaseResult, out pui.ApplyProcessUserInputBaseResultOutcome) {
-	if m.uiScreen != gouDemoScreenPrompt {
-		m.slashResultPanel = nil
+	if m.Screen.Mode != state.ScreenPrompt {
+		m.Input.SlashResultPanel = nil
 		return
 	}
 	if strings.HasPrefix(line, "/") && r != nil && !out.HadExecutionRequest && !out.EffectiveShouldQuery && len(r.Messages) > 0 {
 		if txt := extractSlashLocalPanelText(r); txt != "" {
-			m.slashResultPanel = ptrCloneString(txt)
+			m.Input.SlashResultPanel = ptrCloneString(txt)
 			return
 		}
 	}
-	m.slashResultPanel = nil
+	m.Input.SlashResultPanel = nil
 }
 
 func ptrCloneString(s string) *string {
@@ -146,5 +147,5 @@ func ptrCloneString(s string) *string {
 }
 
 func (m *model) clearSlashResultPanel() {
-	m.slashResultPanel = nil
+	m.Input.SlashResultPanel = nil
 }

@@ -18,6 +18,7 @@ import (
 	"goc/gou/messagerow"
 	"goc/gou/messagesview"
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 // TS REPL.tsx: [ → dumpMode + showAll; plain dump to scrollback (Printf).
@@ -48,9 +49,9 @@ func stripTranscriptExportTrailingSpaces(s string) string {
 }
 
 func exportTranscriptWidth(m *model) int {
-	w := m.cols - 6
+	w := m.Layout.Cols - 6
 	if w < 80 {
-		w = max(80, m.width-6)
+		w = max(80, m.Layout.Width-6)
 	}
 	if w < 80 {
 		w = 80
@@ -78,10 +79,10 @@ func transcriptExportPlain(m *model, wrapCols int) string {
 		wrapCols = 80
 	}
 	// Respect current screen mode for filters (prompt vs transcript).
-	isInTranscript := m.uiScreen == gouDemoScreenTranscript
-	showAll := m.transcriptShowAll || m.transcriptDumpMode
+	isInTranscript := m.Screen.Mode == state.ScreenTranscript
+	showAll := m.Screen.ShowAll || m.Screen.DumpMode
 
-	raw := slices.Clone(m.store.Messages)
+	raw := slices.Clone(m.Conversation.Store.Messages)
 	// VirtualScrollEnabled must be true to avoid 30-message truncation in maybeTranscriptTail.
 	msgView := messagesview.MessagesForScrollList(raw, messagesview.ScrollListOpts{
 		TranscriptMode:       isInTranscript,
@@ -263,39 +264,39 @@ func slicesCloneStrings(s []string) []string {
 func (m *model) handleTranscriptEditorChainMsg(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case gouTranscriptEditorPrepMsg:
-		if msg.Gen != m.transcriptEditorGen {
-			m.transcriptEditorBusy = false
+		if msg.Gen != m.Screen.EditorGen {
+			m.Screen.EditorBusy = false
 			return nil
 		}
 		if msg.Err != nil {
-			m.transcriptEditorBusy = false
-			m.transcriptEditorStatus = fmt.Sprintf("render failed: %v", msg.Err)
-			return scheduleTranscriptEditorStatusClear(m.transcriptEditorGen)
+			m.Screen.EditorBusy = false
+			m.Screen.EditorStatus = fmt.Sprintf("render failed: %v", msg.Err)
+			return scheduleTranscriptEditorStatusClear(m.Screen.EditorGen)
 		}
 		if msg.Bin == "" {
-			m.transcriptEditorBusy = false
-			m.transcriptEditorStatus = fmt.Sprintf("wrote %s · no $VISUAL/$EDITOR set", msg.Path)
-			return scheduleTranscriptEditorStatusClear(m.transcriptEditorGen)
+			m.Screen.EditorBusy = false
+			m.Screen.EditorStatus = fmt.Sprintf("wrote %s · no $VISUAL/$EDITOR set", msg.Path)
+			return scheduleTranscriptEditorStatusClear(m.Screen.EditorGen)
 		}
-		m.transcriptEditorStatus = fmt.Sprintf("opening %s", msg.Path)
+		m.Screen.EditorStatus = fmt.Sprintf("opening %s", msg.Path)
 		c := editorExecCommand(msg.Bin, msg.Args, msg.Path)
 		return tea.ExecProcess(c, func(err error) tea.Msg {
 			return gouTranscriptEditorExecDoneMsg{Gen: msg.Gen, Err: err}
 		})
 	case gouTranscriptEditorExecDoneMsg:
-		if msg.Gen != m.transcriptEditorGen {
+		if msg.Gen != m.Screen.EditorGen {
 			return nil
 		}
-		m.transcriptEditorBusy = false
+		m.Screen.EditorBusy = false
 		if msg.Err != nil {
-			m.transcriptEditorStatus = fmt.Sprintf("editor: %v", msg.Err)
+			m.Screen.EditorStatus = fmt.Sprintf("editor: %v", msg.Err)
 		}
-		return scheduleTranscriptEditorStatusClear(m.transcriptEditorGen)
+		return scheduleTranscriptEditorStatusClear(m.Screen.EditorGen)
 	case gouTranscriptEditorClearStatusMsg:
-		if msg.Gen != m.transcriptEditorGen {
+		if msg.Gen != m.Screen.EditorGen {
 			return nil
 		}
-		m.transcriptEditorStatus = ""
+		m.Screen.EditorStatus = ""
 		return nil
 	default:
 		return nil

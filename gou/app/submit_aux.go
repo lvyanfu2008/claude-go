@@ -13,6 +13,7 @@ import (
 	"goc/commands"
 	"goc/tools/toolexecution"
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 type permissionAskReply struct {
@@ -129,7 +130,7 @@ func sortedSlashDisplayNames(commands []types.Command) []string {
 }
 
 func (m *model) installAskResolver(te *toolexecution.ExecutionDeps, askAutoFirst bool) {
-	if m.ccbSend == nil {
+	if m.Query.CCBSend == nil {
 		return
 	}
 	switch strings.TrimSpace(strings.ToLower(os.Getenv("GOU_QUERY_ASK_STRATEGY"))) {
@@ -139,7 +140,7 @@ func (m *model) installAskResolver(te *toolexecution.ExecutionDeps, askAutoFirst
 		}
 		return
 	}
-	send := m.ccbSend
+	send := m.Query.CCBSend
 	te.AskResolver = func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {
 		ch := make(chan permissionAskReply, 1)
 
@@ -199,18 +200,18 @@ func buildUpdatedInputWithAnswers(original json.RawMessage, answers map[string]s
 }
 
 func (m *model) finishPermissionAsk(r permissionAskReply) {
-	if m.permAsk != nil && m.permAsk.replyCh != nil {
+	if m.Modal.Permission != nil && m.Modal.Permission.(*permissionAskOverlay).replyCh != nil {
 		select {
-		case m.permAsk.replyCh <- r:
+		case m.Modal.Permission.(*permissionAskOverlay).replyCh <- r:
 		default:
 		}
 	}
-	m.permAsk = nil
+	m.Modal.Permission = nil
 }
 
 // handlePermissionKey returns true when the permission modal is showing (all keys are swallowed).
 func (m *model) handlePermissionKey(msg tea.KeyPressMsg) bool {
-	if m.permAsk == nil {
+	if m.Modal.Permission == nil {
 		return false
 	}
 	switch msg.String() {
@@ -223,18 +224,18 @@ func (m *model) handlePermissionKey(msg tea.KeyPressMsg) bool {
 }
 
 func (m *model) loadSlashCommandsOnce() {
-	if m.slashCommandsOnce {
+	if m.Input.SlashCommandsOnce {
 		return
 	}
-	m.slashCommandsOnce = true
+	m.Input.SlashCommandsOnce = true
 	cwd, _ := os.Getwd()
 	lc, err := commands.GetCommandsWithDefaults(context.Background(), cwd)
 	if err != nil {
 		gouDemoTracef("slash picker: GetCommands: %v", err)
-		m.slashCommands = nil
+		m.Input.SlashCommands = nil
 		return
 	}
-	m.slashCommands = lc
+	m.Input.SlashCommands = lc
 	m.refreshAgentSuggestions()
 }
 
@@ -242,17 +243,17 @@ func (m *model) loadSlashCommandsOnce() {
 // whitespace+"/token", or F2.
 func (m *model) slashListVisible() bool {
 	m.loadSlashCommandsOnce()
-	if len(m.slashCommands) == 0 {
+	if len(m.Input.SlashCommands) == 0 {
 		return false
 	}
-	if m.uiScreen != gouDemoScreenPrompt {
+	if m.Screen.Mode != state.ScreenPrompt {
 		return false
 	}
 	if m.slashListUser {
 		return true
 	}
-	v := m.pr.Value()
-	cur := m.pr.CursorRuneIndex()
+	v := m.Input.PR.Value()
+	cur := m.Input.PR.CursorRuneIndex()
 	if shouldShowTSSlashList(v, cur) {
 		return true
 	}
@@ -260,7 +261,7 @@ func (m *model) slashListVisible() bool {
 }
 
 func (m *model) syncSlashListAfterPrompt() {
-	if m.uiScreen != gouDemoScreenPrompt {
+	if m.Screen.Mode != state.ScreenPrompt {
 		return
 	}
 	m.loadSlashCommandsOnce()
@@ -284,7 +285,7 @@ func (m *model) syncSlashListAfterPrompt() {
 // toggleSlashListUser toggles F2 manual list (when input is empty or not in /… mode).
 func (m *model) toggleSlashListUser() {
 	m.loadSlashCommandsOnce()
-	if len(sortedSlashDisplayNames(m.slashCommands)) == 0 {
+	if len(sortedSlashDisplayNames(m.Input.SlashCommands)) == 0 {
 		m.slashListUser = false
 		return
 	}
@@ -308,7 +309,7 @@ func isPromptEnterKey(msg tea.KeyPressMsg) bool {
 // handleSlashListNavKey handles ↑/↓/Tab for the inline slash list. Must run before message
 // viewport scroll so ↑/↓ change selection instead of the transcript (see main.handleKeyMsgPreserving).
 func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
-	if m.uiScreen != gouDemoScreenPrompt || !m.slashListVisible() {
+	if m.Screen.Mode != state.ScreenPrompt || !m.slashListVisible() {
 		return false
 	}
 	if msg.String() == "tab" || msg.Key().Code == tea.KeyTab {
@@ -350,22 +351,22 @@ func (m *model) handleSlashListNavKey(msg tea.KeyPressMsg) bool {
 }
 
 func (m *model) renderPermissionModal(width int) string {
-	if m.permAsk == nil {
+	if m.Modal.Permission == nil {
 		return ""
 	}
-	inPreview := string(m.permAsk.input)
+	inPreview := string(m.Modal.Permission.(*permissionAskOverlay).input)
 	if len(inPreview) > 400 {
 		inPreview = inPreview[:400] + "…"
 	}
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.NewStyle().Bold(true).Render("Tool permission"),
 		"",
-		"Tool: "+m.permAsk.toolName+"  id: "+m.permAsk.toolUseID,
+		"Tool: "+m.Modal.Permission.(*permissionAskOverlay).toolName+"  id: "+m.Modal.Permission.(*permissionAskOverlay).toolUseID,
 		"",
 		lipgloss.NewStyle().Faint(true).Render("Input (preview):"),
 		inPreview,
 		"",
-		m.permAsk.prompt,
+		m.Modal.Permission.(*permissionAskOverlay).prompt,
 		"",
 		lipgloss.NewStyle().Bold(true).Render("[Y] allow   [N] deny   [Esc] deny"),
 	)
@@ -395,7 +396,7 @@ func (m *model) slashListChromeExtra() int {
 	if !m.slashListVisible() {
 		return 0
 	}
-	rows := slashPickerListRows(m.visibleSlashList(), slashPickerMaxListRows(m.height))
+	rows := slashPickerListRows(m.visibleSlashList(), slashPickerMaxListRows(m.Layout.Height))
 	// 1 faint rule, 1 title line, then list rows
 	return 1 + 1 + rows
 }
@@ -460,8 +461,8 @@ func (m *model) renderSlashPicker(width, termHeight int) string {
 // slashListFooterHint is a short filter hint (leading "/" vs mid-input …/q).
 func (m *model) slashListFooterHint() string {
 	q, start := m.currentSlashQuery()
-	v := m.pr.Value()
-	cur := m.pr.CursorRuneIndex()
+	v := m.Input.PR.Value()
+	cur := m.Input.PR.CursorRuneIndex()
 	if !start && findMidInputSlashCommand(v, cur) != nil {
 		if strings.TrimSpace(q) == "" {
 			return "…/…  ↑/↓"

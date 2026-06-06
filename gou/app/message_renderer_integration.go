@@ -10,6 +10,7 @@ import (
 	"goc/gou/messagerow"
 	"goc/gou/theme"
 	"goc/types"
+	state "goc/gou/app/state"
 
 	"charm.land/lipgloss/v2"
 )
@@ -166,10 +167,10 @@ func (m *model) renderMessagesWithNewRenderer() string {
 
 	// Determine rendering parameters
 	width := m.messageBodyColsForLayout()
-	isTranscript := m.uiScreen == gouDemoScreenTranscript
-	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
-	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
+	isTranscript := m.Screen.Mode == state.ScreenTranscript
+	verbose := m.Screen.ShowAll || (m.Screen.Mode == state.ScreenTranscript && m.Screen.SearchOpen)
+	shouldAnimate := m.Screen.Mode == state.ScreenPrompt && m.Conversation.Store.HasStreaming()
+	shouldShowDot := m.Screen.Mode == state.ScreenPrompt && m.Conversation.Store.HasStreaming()
 
 	// Use RenderVisibleRange to render all messages with proper processing
 	// This ensures messages are processed (grouped, collapsed) before rendering
@@ -211,18 +212,18 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 
 	messagesPtr := m.messagePtrSliceForNewRenderer()
 	//diaglog.Line("[new-renderer] renderMessagePaneWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s'",
-	//	len(messagesPtr), len(m.store.StreamingToolUses), m.store.StreamingText)
+	//	len(messagesPtr), len(m.Conversation.Store.StreamingToolUses), m.Conversation.Store.StreamingText)
 
 	// Determine rendering parameters
 	width := m.messageBodyColsForLayout()
-	isTranscript := m.uiScreen == gouDemoScreenTranscript
-	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
-	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
+	isTranscript := m.Screen.Mode == state.ScreenTranscript
+	verbose := m.Screen.ShowAll || (m.Screen.Mode == state.ScreenTranscript && m.Screen.SearchOpen)
+	shouldAnimate := m.Screen.Mode == state.ScreenPrompt && m.Conversation.Store.HasStreaming()
+	shouldShowDot := m.Screen.Mode == state.ScreenPrompt && m.Conversation.Store.HasStreaming()
 
 	// Get viewport height
 	vpH := listViewportH(m)
-	scrollTop := m.scrollTop
+	scrollTop := m.Scroll.Top
 
 	// Compute visible range using virtual list
 	startIdx, endIdx, _ := m.msgRenderer.ComputeVisibleRange(
@@ -248,34 +249,34 @@ func (m *model) renderMessagePaneWithNewRenderer() string {
 
 	// Add streaming tools and streaming text if needed
 	// In TS side, streaming elements appear as part of the ongoing assistant response
-	if m.uiScreen != gouDemoScreenTranscript {
+	if m.Screen.Mode != state.ScreenTranscript {
 		hasStreamingElements := false
 
 		// Add streaming thinking text (truncated like post-completion renderThinkingBlock)
-		if strings.TrimSpace(m.store.StreamingThinkingText) != "" {
+		if strings.TrimSpace(m.Conversation.Store.StreamingThinkingText) != "" {
 			hasStreamingElements = true
 			if content != "" {
 				content += "\n\n"
 			}
-			first := message.FirstSentenceOf(m.store.StreamingThinkingText)
+			first := message.FirstSentenceOf(m.Conversation.Store.StreamingThinkingText)
 			if first == "" {
-				first = m.store.StreamingThinkingText
+				first = m.Conversation.Store.StreamingThinkingText
 			}
 			content += applyMessagePaneGutter("💭 "+first, m.messageBodyColsForLayout())
 		}
 
 		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
-		if strings.TrimSpace(m.store.StreamingText) != "" {
+		if strings.TrimSpace(m.Conversation.Store.StreamingText) != "" {
 			hasStreamingElements = true
 			if content != "" {
 				content += "\n"
 			}
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
+			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.Conversation.Store.StreamingText), m.messageBodyColsForLayout(), false)
 			content += applyAssistantStreamingGutter(md, m.messageBodyColsForLayout())
 		}
 
 		// Add streaming tools
-		streamingToolUses := m.store.StreamingToolUses
+		streamingToolUses := m.Conversation.Store.StreamingToolUses
 
 		if len(streamingToolUses) > 0 {
 			hasStreamingElements = true
@@ -384,14 +385,14 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 
 	messagesPtr := m.messagePtrSliceForNewRenderer()
 	//diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: messages count=%d, streamingTools=%d, streamingText='%s', uiScreen=%v, msgViewportWanted=%v",
-	//	len(messagesPtr), len(m.store.StreamingToolUses), m.store.StreamingText, m.uiScreen, m.msgViewportWanted())
+	//	len(messagesPtr), len(m.Conversation.Store.StreamingToolUses), m.Conversation.Store.StreamingText, m.Screen.Mode, m.msgViewportWanted())
 
 	// Determine rendering parameters
 	width := m.messageBodyColsForLayout()
-	isTranscript := m.uiScreen == gouDemoScreenTranscript
-	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
-	shouldAnimate := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
-	shouldShowDot := m.uiScreen == gouDemoScreenPrompt && m.store.HasStreaming()
+	isTranscript := m.Screen.Mode == state.ScreenTranscript
+	verbose := m.Screen.ShowAll || (m.Screen.Mode == state.ScreenTranscript && m.Screen.SearchOpen)
+	shouldAnimate := m.Screen.Mode == state.ScreenPrompt && m.Conversation.Store.HasStreaming()
+	shouldShowDot := m.Screen.Mode == state.ScreenPrompt && m.Conversation.Store.HasStreaming()
 
 	// Render all messages using the new renderer
 	content := m.msgRenderer.RenderVisibleRange(
@@ -407,34 +408,34 @@ func (m *model) tryBuildFullMessagePaneContentWithNewRenderer() (string, bool) {
 	//diaglog.Line("[new-renderer] tryBuildFullMessagePaneContentWithNewRenderer: RenderVisibleRange returned, content length=%d", len(content))
 
 	// Add streaming tools and streaming text if needed (similar to renderMessagePaneWithNewRenderer)
-	if m.uiScreen != gouDemoScreenTranscript {
+	if m.Screen.Mode != state.ScreenTranscript {
 		hasStreamingElements := false
 
 		// Add streaming thinking text (truncated like post-completion renderThinkingBlock)
-		if strings.TrimSpace(m.store.StreamingThinkingText) != "" {
+		if strings.TrimSpace(m.Conversation.Store.StreamingThinkingText) != "" {
 			hasStreamingElements = true
 			if content != "" {
 				content += "\n\n"
 			}
-			first := message.FirstSentenceOf(m.store.StreamingThinkingText)
+			first := message.FirstSentenceOf(m.Conversation.Store.StreamingThinkingText)
 			if first == "" {
-				first = m.store.StreamingThinkingText
+				first = m.Conversation.Store.StreamingThinkingText
 			}
 			content += applyMessagePaneGutter("💭 "+first, m.messageBodyColsForLayout())
 		}
 
 		// Add streaming text (before tools: mirrors TS where text arrives before tool_use)
-		if strings.TrimSpace(m.store.StreamingText) != "" {
+		if strings.TrimSpace(m.Conversation.Store.StreamingText) != "" {
 			hasStreamingElements = true
 			if content != "" {
 				content += "\n"
 			}
-			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.store.StreamingText), m.messageBodyColsForLayout(), false)
+			md := styleMarkdownTokens(markdown.CachedLexerStreaming(m.Conversation.Store.StreamingText), m.messageBodyColsForLayout(), false)
 			content += applyAssistantStreamingGutter(md, m.messageBodyColsForLayout())
 		}
 
 		// Add streaming tools
-		streamingToolUses := m.store.StreamingToolUses
+		streamingToolUses := m.Conversation.Store.StreamingToolUses
 
 		if len(streamingToolUses) > 0 {
 			hasStreamingElements = true

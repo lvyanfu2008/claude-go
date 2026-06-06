@@ -4,11 +4,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+	state "goc/gou/app/state"
 )
 
 func TestCoordinatorViewEmpty(t *testing.T) {
 	store := newAgentTaskStore()
-	m := &model{agentTasks: store}
+	m := &model{Agent: &state.Agent{Tasks: store}}
 	view := m.agentCoordinatorView()
 	if view != "" {
 		t.Fatalf("expected empty view, got %q", view)
@@ -36,7 +37,7 @@ func TestCoordinatorViewWithRunningTask(t *testing.T) {
 		Progress:    &AgentTaskProgress{TokenCount: 4200, LastActivity: ptrTime(time.Now())},
 	})
 
-	m := &model{agentTasks: store}
+	m := &model{Agent: &state.Agent{Tasks: store}}
 	view := m.agentCoordinatorView()
 	if !strings.Contains(view, "main") {
 		t.Fatal("expected 'main' row")
@@ -67,7 +68,7 @@ func TestCoordinatorViewCompletedTask(t *testing.T) {
 		Progress:    &AgentTaskProgress{TokenCount: 3100},
 	})
 
-	m := &model{agentTasks: store}
+	m := &model{Agent: &state.Agent{Tasks: store}}
 	view := m.agentCoordinatorView()
 	if !strings.Contains(view, agentPauseIcon) {
 		t.Fatal("expected pause icon for completed task")
@@ -93,7 +94,7 @@ func TestCoordinatorViewMultipleTasks(t *testing.T) {
 		EvictAfter: ptrTime(now.Add(time.Minute)),
 	})
 
-	m := &model{agentTasks: store}
+	m := &model{Agent: &state.Agent{Tasks: store}}
 	view := m.agentCoordinatorView()
 	lines := strings.Split(strings.TrimSpace(view), "\n")
 	// main + 2 task rows = 3 lines

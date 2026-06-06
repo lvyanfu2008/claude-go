@@ -10,5 +10,6 @@ type Viewport struct {
 	NeedResizeContent     bool
 	FoldAll               bool
 	FoldRev               int
+	Fallback              bool
 	HistoryBrowseMouseOff bool
 }

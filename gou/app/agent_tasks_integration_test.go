@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	state "goc/gou/app/state"
 )
 
 // TestAgentFullLifecycle verifies register -> progress -> complete -> visible -> evict.
@@ -66,11 +67,11 @@ func TestAgentFullLifecycle(t *testing.T) {
 
 // TestCoordinatorViewIntegration verifies multiple agents in different states render correctly.
 func TestCoordinatorViewIntegration(t *testing.T) {
-	m := &model{agentTasks: newAgentTaskStore()}
+	m := &model{Agent: &state.Agent{Tasks: newAgentTaskStore()}}
 	now := time.Now()
 
 	// Running agent
-	m.agentTasks.Register(&AgentTaskState{
+	m.Agent.Tasks.(*agentTaskStore).Register(&AgentTaskState{
 		ID: "a1", AgentType: "explore", Name: "explorer",
 		Description: "Searching", Status: "running",
 		StartTime: now, EvictAfter: ptrTime(now.Add(time.Minute)),
@@ -79,7 +80,7 @@ func TestCoordinatorViewIntegration(t *testing.T) {
 
 	// Completed agent
 	end := now.Add(-5 * time.Second)
-	m.agentTasks.Register(&AgentTaskState{
+	m.Agent.Tasks.(*agentTaskStore).Register(&AgentTaskState{
 		ID: "a2", AgentType: "plan", Name: "planner",
 		Description: "Done", Status: "completed",
 		StartTime: now.Add(-10 * time.Second), EndTime: &end,

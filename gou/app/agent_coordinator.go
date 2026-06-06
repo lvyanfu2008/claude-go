@@ -19,10 +19,10 @@ const (
 // agentCoordinatorView renders the agent coordinator panel matching TS CoordinatorTaskPanel.
 // Returns empty string when no tasks are visible.
 func (m *model) agentCoordinatorView() string {
-	if m.agentTasks == nil {
+	if m.Agent == nil || m.Agent.Tasks == nil {
 		return ""
 	}
-	tasks := m.agentTasks.VisibleTasks()
+	tasks := m.Agent.Tasks.(*agentTaskStore).VisibleTasks()
 	if len(tasks) == 0 {
 		return ""
 	}

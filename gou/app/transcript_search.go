@@ -10,13 +10,14 @@ import (
 
 	"goc/gou/messagerow"
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 func (m *model) clearTranscriptSearchState() {
-	m.transcriptSearchOpen = false
-	m.transcriptSearchQuery = ""
-	m.transcriptSearchHits = nil
-	m.transcriptSearchCursor = 0
+	m.Screen.SearchOpen = false
+	m.Screen.SearchQuery = ""
+	m.Screen.SearchHits = nil
+	m.Screen.SearchCursor = 0
 }
 
 // plainMessageSearchText builds a lowercased haystack for transcript substring search (TS transcript / search).
@@ -128,10 +129,10 @@ func highlightSearchPlain(s, needle string, hl lipgloss.Style) string {
 }
 
 func (m *model) transcriptSearchHighlightNeedle() string {
-	if m.uiScreen != gouDemoScreenTranscript || m.transcriptDumpMode {
+	if m.Screen.Mode != state.ScreenTranscript || m.Screen.DumpMode {
 		return ""
 	}
-	q := strings.TrimSpace(m.transcriptSearchQuery)
+	q := strings.TrimSpace(m.Screen.SearchQuery)
 	if q == "" {
 		return ""
 	}
@@ -142,10 +143,10 @@ func (m *model) rebuildTranscriptSearchMatches() {
 	msgView := m.messagesForScroll()
 	st := m.transcriptStreamingToolsForView()
 	rowN := len(msgView) + len(st)
-	q := strings.TrimSpace(m.transcriptSearchQuery)
+	q := strings.TrimSpace(m.Screen.SearchQuery)
 	if q == "" {
-		m.transcriptSearchHits = nil
-		m.transcriptSearchCursor = 0
+		m.Screen.SearchHits = nil
+		m.Screen.SearchCursor = 0
 		m.rebuildHeightCache()
 		return
 	}
@@ -162,17 +163,17 @@ func (m *model) rebuildTranscriptSearchMatches() {
 			hits = append(hits, i)
 		}
 	}
-	m.transcriptSearchHits = hits
+	m.Screen.SearchHits = hits
 	if len(hits) == 0 {
-		m.transcriptSearchCursor = 0
+		m.Screen.SearchCursor = 0
 		m.rebuildHeightCache()
 		return
 	}
-	if m.transcriptSearchCursor >= len(hits) {
-		m.transcriptSearchCursor = 0
+	if m.Screen.SearchCursor >= len(hits) {
+		m.Screen.SearchCursor = 0
 	}
 	m.rebuildHeightCache()
-	m.scrollTranscriptToMessageIndex(hits[m.transcriptSearchCursor])
+	m.scrollTranscriptToMessageIndex(hits[m.Screen.SearchCursor])
 }
 
 func (m *model) scrollTranscriptToMessageIndex(msgIdx int) {
@@ -182,23 +183,23 @@ func (m *model) scrollTranscriptToMessageIndex(msgIdx int) {
 	}
 	off := 0
 	for i := 0; i < msgIdx; i++ {
-		off += m.heightCache[keys[i]]
+		off += m.Scroll.HeightCache[keys[i]]
 	}
-	m.scrollTop = off
-	m.sticky = false
+	m.Scroll.Top = off
+	m.Scroll.Sticky = false
 }
 
 func (m *model) transcriptSearchStep(delta int) {
-	h := m.transcriptSearchHits
+	h := m.Screen.SearchHits
 	if len(h) == 0 {
 		return
 	}
-	m.transcriptSearchCursor = (m.transcriptSearchCursor + delta + len(h)) % len(h)
-	m.scrollTranscriptToMessageIndex(h[m.transcriptSearchCursor])
+	m.Screen.SearchCursor = (m.Screen.SearchCursor + delta + len(h)) % len(h)
+	m.scrollTranscriptToMessageIndex(h[m.Screen.SearchCursor])
 }
 
 func (m *model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
-	if !m.transcriptSearchOpen {
+	if !m.Screen.SearchOpen {
 		return false
 	}
 	s := msg.String()
@@ -208,20 +209,20 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
 		m.rebuildHeightCache()
 		return true
 	case "enter":
-		m.transcriptSearchOpen = false
+		m.Screen.SearchOpen = false
 		return true
 	case "backspace", "ctrl+h":
-		if m.transcriptSearchQuery != "" {
-			r := []rune(m.transcriptSearchQuery)
+		if m.Screen.SearchQuery != "" {
+			r := []rune(m.Screen.SearchQuery)
 			if len(r) > 0 {
-				m.transcriptSearchQuery = string(r[:len(r)-1])
+				m.Screen.SearchQuery = string(r[:len(r)-1])
 				m.rebuildTranscriptSearchMatches()
 			}
 		}
 		return true
 	}
 	if msg.Key().Text != "" {
-		m.transcriptSearchQuery += msg.Key().Text
+		m.Screen.SearchQuery += msg.Key().Text
 		m.rebuildTranscriptSearchMatches()
 		return true
 	}
@@ -230,20 +231,20 @@ func (m *model) handleTranscriptSearchBarKey(msg tea.KeyPressMsg) bool {
 
 // handleTranscriptKey returns (handled, cmd). cmd may be non-nil when bracket dump prints to scrollback (TS).
 func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
-	if m.uiScreen != gouDemoScreenTranscript {
+	if m.Screen.Mode != state.ScreenTranscript {
 		return false, nil
 	}
 	if m.handleTranscriptSearchBarKey(msg) {
 		return true, nil
 	}
-	if !m.transcriptSearchOpen && !m.transcriptDumpMode {
+	if !m.Screen.SearchOpen && !m.Screen.DumpMode {
 		if msg.String() == "/" {
-			m.transcriptSearchOpen = true
-			m.transcriptSearchQuery = ""
+			m.Screen.SearchOpen = true
+			m.Screen.SearchQuery = ""
 			m.rebuildTranscriptSearchMatches()
 			return true, nil
 		}
-		if strings.TrimSpace(m.transcriptSearchQuery) != "" {
+		if strings.TrimSpace(m.Screen.SearchQuery) != "" {
 			switch msg.String() {
 			case "n":
 				m.transcriptSearchStep(1)
@@ -254,17 +255,17 @@ func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			}
 		}
 	}
-	if !m.transcriptSearchOpen && !m.transcriptDumpMode {
+	if !m.Screen.SearchOpen && !m.Screen.DumpMode {
 		if m.transcriptScrollByKeyType(msg) {
 			return true, nil
 		}
 	}
 	s := msg.String()
 	if msg.String() == "ctrl+e" {
-		if m.transcriptDumpMode {
+		if m.Screen.DumpMode {
 			return true, nil
 		}
-		m.transcriptShowAll = !m.transcriptShowAll
+		m.Screen.ShowAll = !m.Screen.ShowAll
 		m.rebuildHeightCache()
 		return true, nil
 	}
@@ -276,121 +277,121 @@ func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "esc", "q", "ctrl+c":
 		return true, m.exitTranscriptScreenWithPostCmd()
 	case "[":
-		if m.transcriptDumpMode || m.transcriptSearchOpen {
+		if m.Screen.DumpMode || m.Screen.SearchOpen {
 			return true, nil
 		}
-		m.transcriptDumpMode = true
-		m.transcriptShowAll = true
+		m.Screen.DumpMode = true
+		m.Screen.ShowAll = true
 		m.rebuildHeightCache()
 		plain := transcriptExportPlain(m, exportTranscriptWidth(m))
-		m.suspendAltScreenForScrollbackDump = gouDemoAltScreenEnabled()
+		m.Screen.SuspendAltScreenForScrollbackDump = gouDemoAltScreenEnabled()
 		return true, transcriptBracketDumpScrollbackCmd(plain)
 	case "v":
-		if m.transcriptSearchOpen {
+		if m.Screen.SearchOpen {
 			return true, nil
 		}
-		if m.transcriptEditorBusy {
+		if m.Screen.EditorBusy {
 			return true, nil
 		}
-		gen := m.transcriptEditorGen
-		m.transcriptEditorBusy = true
-		m.transcriptEditorStatus = fmt.Sprintf("rendering %d messages…", m.transcriptEffectiveN())
+		gen := m.Screen.EditorGen
+		m.Screen.EditorBusy = true
+		m.Screen.EditorStatus = fmt.Sprintf("rendering %d messages…", m.transcriptEffectiveN())
 		return true, m.transcriptEditorPrepCmd(gen)
 	}
-	if m.transcriptDumpMode {
+	if m.Screen.DumpMode {
 		return true, nil
 	}
 	// TS ScrollKeybindingHandler: isActive && isModal with isModal={!searchOpen} in REPL transcript.
 	// Pager keys (arrows, space, j/k, …) do not run while the search bar is open.
-	if !m.transcriptSearchOpen {
+	if !m.Screen.SearchOpen {
 		switch s {
 		case "up":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-1)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-1)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "down":
-			m.sticky = false
-			m.scrollTop += 1
+			m.Scroll.Sticky = false
+			m.Scroll.Top += 1
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "pgup":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m)/2)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "pgdown":
-			m.sticky = false
-			m.scrollTop += listViewportH(m) / 2
+			m.Scroll.Sticky = false
+			m.Scroll.Top += listViewportH(m) / 2
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "home", "ctrl+home":
-			m.sticky = false
-			m.scrollTop = 0
+			m.Scroll.Sticky = false
+			m.Scroll.Top = 0
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "end", "ctrl+end":
-			m.sticky = true
-			m.scrollTop = 1 << 30
+			m.Scroll.Sticky = true
+			m.Scroll.Top = 1 << 30
 			return true, nil
 		// TS modalPagerAction (ScrollKeybindingHandler.tsx): j/k/g/G, ctrl+u/d/b/f, bare b, space, ctrl+n/p.
 		case "j":
-			m.sticky = false
-			m.scrollTop += 1
+			m.Scroll.Sticky = false
+			m.Scroll.Top += 1
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "k":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-1)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-1)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "g":
-			m.sticky = false
-			m.scrollTop = 0
+			m.Scroll.Sticky = false
+			m.Scroll.Top = 0
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "G", "shift+g":
-			m.sticky = true
-			m.scrollTop = 1 << 30
+			m.Scroll.Sticky = true
+			m.Scroll.Top = 1 << 30
 			return true, nil
 		case "ctrl+u":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m)/2)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+d":
-			m.sticky = false
-			m.scrollTop += listViewportH(m) / 2
+			m.Scroll.Sticky = false
+			m.Scroll.Top += listViewportH(m) / 2
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+b":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m))
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+f":
-			m.sticky = false
-			m.scrollTop += listViewportH(m)
+			m.Scroll.Sticky = false
+			m.Scroll.Top += listViewportH(m)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "b":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-listViewportH(m))
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m))
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "space":
-			m.sticky = false
-			m.scrollTop += listViewportH(m)
+			m.Scroll.Sticky = false
+			m.Scroll.Top += listViewportH(m)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+n":
-			m.sticky = false
-			m.scrollTop += 1
+			m.Scroll.Sticky = false
+			m.Scroll.Top += 1
 			m.transcriptAfterManualScroll()
 			return true, nil
 		case "ctrl+p":
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-1)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-1)
 			m.transcriptAfterManualScroll()
 			return true, nil
 		default:
@@ -404,10 +405,10 @@ func (m *model) handleTranscriptKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 // stays valid. We only clamp when scrollTop is still in the huge range: without heightCache (e.g. tests),
 // full clamp can pin to 0 and break small scrollTop values; the next View also clamps when !sticky.
 func (m *model) transcriptAfterManualScroll() {
-	if m.sticky {
+	if m.Scroll.Sticky {
 		return
 	}
-	if m.scrollTop < 1<<20 {
+	if m.Scroll.Top < 1<<20 {
 		return
 	}
 	m.clampScrollTopForVirtualList()
@@ -417,33 +418,33 @@ func (m *model) transcriptAfterManualScroll() {
 func (m *model) transcriptScrollByKeyType(msg tea.KeyPressMsg) bool {
 	switch msg.Key().Code {
 	case tea.KeyUp:
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-1)
+		m.Scroll.Sticky = false
+		m.Scroll.Top = max(0, m.Scroll.Top-1)
 		m.transcriptAfterManualScroll()
 		return true
 	case tea.KeyDown:
-		m.sticky = false
-		m.scrollTop += 1
+		m.Scroll.Sticky = false
+		m.Scroll.Top += 1
 		m.transcriptAfterManualScroll()
 		return true
 	case tea.KeyPgUp:
-		m.sticky = false
-		m.scrollTop = max(0, m.scrollTop-listViewportH(m)/2)
+		m.Scroll.Sticky = false
+		m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m)/2)
 		m.transcriptAfterManualScroll()
 		return true
 	case tea.KeyPgDown:
-		m.sticky = false
-		m.scrollTop += listViewportH(m) / 2
+		m.Scroll.Sticky = false
+		m.Scroll.Top += listViewportH(m) / 2
 		m.transcriptAfterManualScroll()
 		return true
 	case tea.KeyHome:
-		m.sticky = false
-		m.scrollTop = 0
+		m.Scroll.Sticky = false
+		m.Scroll.Top = 0
 		m.transcriptAfterManualScroll()
 		return true
 	case tea.KeyEnd:
-		m.sticky = true
-		m.scrollTop = 1 << 30
+		m.Scroll.Sticky = true
+		m.Scroll.Top = 1 << 30
 		return true
 	default:
 		return false
@@ -451,18 +452,18 @@ func (m *model) transcriptScrollByKeyType(msg tea.KeyPressMsg) bool {
 }
 
 func transcriptSearchStatusLines(m *model) []string {
-	if m.uiScreen != gouDemoScreenTranscript {
+	if m.Screen.Mode != state.ScreenTranscript {
 		return nil
 	}
-	if m.transcriptSearchOpen {
-		q := m.transcriptSearchQuery
+	if m.Screen.SearchOpen {
+		q := m.Screen.SearchQuery
 		if len(q) > 60 {
 			q = q[:57] + "…"
 		}
 		return []string{fmt.Sprintf("Search: %s  (Enter close · Esc clear)", q)}
 	}
-	if strings.TrimSpace(m.transcriptSearchQuery) != "" {
-		return []string{fmt.Sprintf("Search active: %q · %d match(es) · n/N · / reopen", m.transcriptSearchQuery, len(m.transcriptSearchHits))}
+	if strings.TrimSpace(m.Screen.SearchQuery) != "" {
+		return []string{fmt.Sprintf("Search active: %q · %d match(es) · n/N · / reopen", m.Screen.SearchQuery, len(m.Screen.SearchHits))}
 	}
 	return nil
 }

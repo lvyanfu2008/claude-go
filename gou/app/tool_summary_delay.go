@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 // gouDemoToolUseSummaryDelay returns how long to show full Grep/Glob/Read chrome before merged summary lines (prompt only).
@@ -28,15 +29,15 @@ func gouDemoToolUseSummaryDelay() time.Duration {
 }
 
 func (m *model) syncMsgFirstShownAt() {
-	if m.msgFirstShownAt == nil {
-		m.msgFirstShownAt = make(map[string]time.Time)
+	if m.MessageTracking.FirstShownAt == nil {
+		m.MessageTracking.FirstShownAt = make(map[string]time.Time)
 	}
-	if m.msgLastAssistantContentLen == nil {
-		m.msgLastAssistantContentLen = make(map[string]int)
+	if m.MessageTracking.LastAssistantContentLen == nil {
+		m.MessageTracking.LastAssistantContentLen = make(map[string]int)
 	}
 	seen := make(map[string]struct{})
-	for i := range m.store.Messages {
-		msg := m.store.Messages[i]
+	for i := range m.Conversation.Store.Messages {
+		msg := m.Conversation.Store.Messages[i]
 		id := strings.TrimSpace(msg.UUID)
 		if id == "" {
 			continue
@@ -44,24 +45,24 @@ func (m *model) syncMsgFirstShownAt() {
 		seen[id] = struct{}{}
 		if msg.Type == types.MessageTypeAssistant {
 			n := len(msg.Content)
-			prev := m.msgLastAssistantContentLen[id]
+			prev := m.MessageTracking.LastAssistantContentLen[id]
 			if n > prev {
-				m.msgFirstShownAt[id] = time.Now()
-				m.msgLastAssistantContentLen[id] = n
-			} else if _, ok := m.msgFirstShownAt[id]; !ok {
-				m.msgFirstShownAt[id] = time.Now()
-				m.msgLastAssistantContentLen[id] = n
+				m.MessageTracking.FirstShownAt[id] = time.Now()
+				m.MessageTracking.LastAssistantContentLen[id] = n
+			} else if _, ok := m.MessageTracking.FirstShownAt[id]; !ok {
+				m.MessageTracking.FirstShownAt[id] = time.Now()
+				m.MessageTracking.LastAssistantContentLen[id] = n
 			}
 		} else {
-			if _, ok := m.msgFirstShownAt[id]; !ok {
-				m.msgFirstShownAt[id] = time.Now()
+			if _, ok := m.MessageTracking.FirstShownAt[id]; !ok {
+				m.MessageTracking.FirstShownAt[id] = time.Now()
 			}
 		}
 	}
-	for k := range m.msgFirstShownAt {
+	for k := range m.MessageTracking.FirstShownAt {
 		if _, ok := seen[k]; !ok {
-			delete(m.msgFirstShownAt, k)
-			delete(m.msgLastAssistantContentLen, k)
+			delete(m.MessageTracking.FirstShownAt, k)
+			delete(m.MessageTracking.LastAssistantContentLen, k)
 		}
 	}
 }
@@ -75,7 +76,7 @@ func (m *model) suppressToolUseSummaryLine(msg types.Message) bool {
 		return false
 	}
 	id := strings.TrimSpace(msg.UUID)
-	t0, ok := m.msgFirstShownAt[id]
+	t0, ok := m.MessageTracking.FirstShownAt[id]
 	if !ok {
 		return false
 	}
@@ -84,17 +85,17 @@ func (m *model) suppressToolUseSummaryLine(msg types.Message) bool {
 
 func (m *model) anyToolSummaryDelayPending() bool {
 	d := gouDemoToolUseSummaryDelay()
-	if d <= 0 || m.uiScreen != gouDemoScreenPrompt {
+	if d <= 0 || m.Screen.Mode != state.ScreenPrompt {
 		return false
 	}
 	now := time.Now()
-	for i := range m.store.Messages {
-		msg := m.store.Messages[i]
+	for i := range m.Conversation.Store.Messages {
+		msg := m.Conversation.Store.Messages[i]
 		if msg.Type != types.MessageTypeAssistant {
 			continue
 		}
 		id := strings.TrimSpace(msg.UUID)
-		t0, ok := m.msgFirstShownAt[id]
+		t0, ok := m.MessageTracking.FirstShownAt[id]
 		if !ok {
 			continue
 		}
@@ -110,7 +111,7 @@ func (m *model) handleUpdateToolSummaryDelayTick(_ gouToolSummaryDelayTickMsg) (
 	if d <= 0 {
 		return m, nil
 	}
-	if m.uiScreen == gouDemoScreenPrompt && m.anyToolSummaryDelayPending() {
+	if m.Screen.Mode == state.ScreenPrompt && m.anyToolSummaryDelayPending() {
 		m.rebuildHeightCache()
 	}
 

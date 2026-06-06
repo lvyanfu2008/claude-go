@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "charm.land/bubbletea/v2"
+	state "goc/gou/app/state"
 )
 
 func absInt(n int) int {
@@ -14,11 +15,11 @@ func absInt(n int) int {
 // mouseYInMessageListPane reports whether screen row y falls in the virtual message list
 // (title row(s) above, stream strip / prompt below). Coords are 0-based from top of terminal.
 func (m *model) mouseYInMessageListPane(y int) bool {
-	if m.height <= 0 {
+	if m.Layout.Height <= 0 {
 		return false
 	}
 	vp := listViewportH(m)
-	top := m.titleH
+	top := m.Layout.TitleH
 	bot := top + vp
 	return y >= top && y < bot
 }
@@ -27,7 +28,7 @@ func (m *model) mouseYInMessageListPane(y int) bool {
 // After sticky-bottom (scrollTop sentinel ~1<<30), the first manual scroll leaves a huge scrollTop; without
 // clamping, the new renderer's ComputeVisibleRange cannot scroll back toward the tail.
 func (m *model) clampScrollTopForVirtualList() {
-	if m.sticky {
+	if m.Scroll.Sticky {
 		return
 	}
 	vpH := listViewportH(m)
@@ -36,8 +37,8 @@ func (m *model) clampScrollTopForVirtualList() {
 	}
 	m.integrateMessageRenderer()
 	messagesPtr := m.messagePtrSliceForNewRenderer()
-	isTranscript := m.uiScreen == gouDemoScreenTranscript
-	verbose := m.transcriptShowAll || (m.uiScreen == gouDemoScreenTranscript && m.transcriptSearchOpen)
+	isTranscript := m.Screen.Mode == state.ScreenTranscript
+	verbose := m.Screen.ShowAll || (m.Screen.Mode == state.ScreenTranscript && m.Screen.SearchOpen)
 	width := m.messageBodyColsForLayout()
 
 	totalHeight := m.msgRenderer.ComputeTotalHeight(messagesPtr, isTranscript, verbose, width)
@@ -45,11 +46,11 @@ func (m *model) clampScrollTopForVirtualList() {
 	if maxTop < 0 {
 		maxTop = 0
 	}
-	if m.scrollTop < 0 {
-		m.scrollTop = 0
+	if m.Scroll.Top < 0 {
+		m.Scroll.Top = 0
 	}
-	if m.scrollTop > maxTop {
-		m.scrollTop = maxTop
+	if m.Scroll.Top > maxTop {
+		m.Scroll.Top = maxTop
 	}
 }
 
@@ -61,10 +62,10 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 	if gouDemoEnvTruthy("GOU_DEMO_DISABLE_MOUSE_SCROLL") {
 		return false, nil
 	}
-	if m.permAsk != nil || m.slashListVisible() {
+	if m.Modal.Permission != nil || m.slashListVisible() {
 		return false, nil
 	}
-	if m.uiScreen == gouDemoScreenTranscript && (m.transcriptSearchOpen || m.transcriptDumpMode) {
+	if m.Screen.Mode == state.ScreenTranscript && (m.Screen.SearchOpen || m.Screen.DumpMode) {
 		return false, nil
 	}
 
@@ -74,12 +75,12 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 			return false, nil
 		}
 		if m.msgViewportWanted() && gouDemoMsgHistoryBrowseReleaseEnabled() && gouDemoMouseCellMotionEnabled() &&
-			msg.Button == tea.MouseWheelUp && !msg.Mod.Contains(tea.ModShift) && m.msgViewport.AtTop() {
-			m.msgHistoryBrowseMouseOff = true
+			msg.Button == tea.MouseWheelUp && !msg.Mod.Contains(tea.ModShift) && m.Viewport.Model.AtTop() {
+			m.Viewport.HistoryBrowseMouseOff = true
 			return true, tea.Println("\n📜 History browse: mouse wheel uses host buffer; press any key to return…")
 		}
 		if m.msgViewportWanted() {
-			//diaglog.Line("[mouse] tryHandleMessageListMouse: using viewport, button=%v, viewport height=%d", msg.Button, m.msgViewport.Height())
+			//diaglog.Line("[mouse] tryHandleMessageListMouse: using viewport, button=%v, viewport height=%d", msg.Button, m.Viewport.Model.Height())
 			switch msg.Button {
 			case tea.MouseWheelUp:
 				m.handleMsgViewportMouseWheel(1)
@@ -87,35 +88,35 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 				m.handleMsgViewportMouseWheel(-1)
 			case tea.MouseWheelLeft:
 				for range max(1, listViewportH(m)/24) {
-					m.msgViewport.HalfPageUp()
+					m.Viewport.Model.HalfPageUp()
 				}
 			case tea.MouseWheelRight:
 				for range max(1, listViewportH(m)/24) {
-					m.msgViewport.HalfPageDown()
+					m.Viewport.Model.HalfPageDown()
 				}
 			default:
 				return false, nil
 			}
-			//diaglog.Line("[mouse] tryHandleMessageListMouse: viewport scrolled, yOffset=%d, totalLines=%d", m.msgViewport.YOffset(), m.msgViewport.TotalLineCount())
+			//diaglog.Line("[mouse] tryHandleMessageListMouse: viewport scrolled, yOffset=%d, totalLines=%d", m.Viewport.Model.YOffset(), m.Viewport.Model.TotalLineCount())
 			return true, nil
 		}
 		step := messageListMouseWheelStep(listViewportH(m))
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-step)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-step)
 		case tea.MouseWheelDown:
-			m.scrollTop += step
+			m.Scroll.Top += step
 		case tea.MouseWheelLeft:
-			m.sticky = false
-			m.scrollTop = max(0, m.scrollTop-listViewportH(m)/4)
+			m.Scroll.Sticky = false
+			m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m)/4)
 		case tea.MouseWheelRight:
-			m.scrollTop += listViewportH(m) / 4
+			m.Scroll.Top += listViewportH(m) / 4
 		default:
 			return false, nil
 		}
 		// Clamp scrollTop if it's too large (e.g., from sticky-bottom sentinel 1<<30)
-		if !m.sticky && m.scrollTop >= 1<<20 {
+		if !m.Scroll.Sticky && m.Scroll.Top >= 1<<20 {
 			m.clampScrollTopForVirtualList()
 		}
 		return true, nil
@@ -123,41 +124,41 @@ func (m *model) tryHandleMessageListMouse(msg tea.Msg) (bool, tea.Cmd) {
 	case tea.MouseClickMsg:
 		if msg.Button == tea.MouseLeft && !msg.Mod.Contains(tea.ModShift) {
 			if m.mouseYInMessageListPane(msg.Y) {
-				m.msgListMouseDragging = true
-				m.msgListMouseLastY = msg.Y
+				m.Mouse.Dragging = true
+				m.Mouse.LastY = msg.Y
 				return true, nil
 			}
-			m.msgListMouseDragging = false
+			m.Mouse.Dragging = false
 		}
 		return false, nil
 
 	case tea.MouseMotionMsg:
-		if m.msgListMouseDragging && msg.Button == tea.MouseLeft && !msg.Mod.Contains(tea.ModShift) {
-			dy := msg.Y - m.msgListMouseLastY
+		if m.Mouse.Dragging && msg.Button == tea.MouseLeft && !msg.Mod.Contains(tea.ModShift) {
+			dy := msg.Y - m.Mouse.LastY
 			if dy != 0 {
 				if m.msgViewportWanted() {
 					n := min(4, max(1, absInt(dy)))
 					if dy > 0 {
-						m.msgViewport.ScrollUp(n)
+						m.Viewport.Model.ScrollUp(n)
 					} else {
-						m.msgViewport.ScrollDown(n)
+						m.Viewport.Model.ScrollDown(n)
 					}
-					if !m.msgViewport.AtBottom() {
-						m.sticky = false
+					if !m.Viewport.Model.AtBottom() {
+						m.Scroll.Sticky = false
 					}
 				} else {
-					m.sticky = false
-					m.scrollTop = max(0, m.scrollTop-dy)
+					m.Scroll.Sticky = false
+					m.Scroll.Top = max(0, m.Scroll.Top-dy)
 				}
-				m.msgListMouseLastY = msg.Y
+				m.Mouse.LastY = msg.Y
 			}
 			return true, nil
 		}
 		return false, nil
 
 	case tea.MouseReleaseMsg:
-		if m.msgListMouseDragging {
-			m.msgListMouseDragging = false
+		if m.Mouse.Dragging {
+			m.Mouse.Dragging = false
 			return true, nil
 		}
 		return false, nil

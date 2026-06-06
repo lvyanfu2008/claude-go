@@ -10,6 +10,7 @@ import (
 	"goc/gou/conversation"
 	"goc/gou/messagesview"
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 // gouDemoScreen mirrors TS Screen in src/screens/REPL.tsx ('prompt' | 'transcript').
@@ -42,33 +43,33 @@ func clampTranscriptFreeze(freezeN, nMsgs int) int {
 }
 
 func (m *model) transcriptEffectiveN() int {
-	if m.uiScreen != gouDemoScreenTranscript {
-		return len(m.store.Messages)
+	if m.Screen.Mode != state.ScreenTranscript {
+		return len(m.Conversation.Store.Messages)
 	}
-	if m.transcriptFrozen == nil {
-		return len(m.store.Messages)
+	if m.Screen.Frozen == nil {
+		return len(m.Conversation.Store.Messages)
 	}
-	return clampTranscriptFreeze(m.transcriptFrozen.MessagesLen, len(m.store.Messages))
+	return clampTranscriptFreeze(m.Screen.Frozen.(*frozenTranscriptSnapshot).MessagesLen, len(m.Conversation.Store.Messages))
 }
 
 // messagesForScroll returns UI-ordered messages (TS Messages.tsx pre-VirtualMessageList pipeline) for virtual scroll and transcript export.
 func (m *model) messagesForScroll() []types.Message {
 	var raw []types.Message
-	if m.uiScreen == gouDemoScreenTranscript {
+	if m.Screen.Mode == state.ScreenTranscript {
 		n := m.transcriptEffectiveN()
 		if n <= 0 {
 			return nil
 		}
-		raw = slices.Clone(m.store.Messages[:n])
+		raw = slices.Clone(m.Conversation.Store.Messages[:n])
 	} else {
-		if len(m.store.Messages) == 0 {
+		if len(m.Conversation.Store.Messages) == 0 {
 			return nil
 		}
-		raw = slices.Clone(m.store.Messages)
+		raw = slices.Clone(m.Conversation.Store.Messages)
 	}
 	return messagesview.MessagesForScrollList(raw, messagesview.ScrollListOpts{
-		TranscriptMode:       m.uiScreen == gouDemoScreenTranscript,
-		ShowAllInTranscript:  m.transcriptShowAll || m.transcriptDumpMode,
+		TranscriptMode:       m.Screen.Mode == state.ScreenTranscript,
+		ShowAllInTranscript:  m.Screen.ShowAll || m.Screen.DumpMode,
 		VirtualScrollEnabled: !gouDemoVirtualScrollDisabled(),
 	})
 }
@@ -140,14 +141,14 @@ func groupStreamingTools(uses []conversation.StreamingToolUse) []GroupedStreamin
 
 // transcriptStreamingToolsForView returns grouped streaming tools while in transcript (REPL.tsx).
 func (m *model) transcriptStreamingToolsForView() []GroupedStreamingTool {
-	if m.uiScreen != gouDemoScreenTranscript || m.transcriptFrozen == nil {
+	if m.Screen.Mode != state.ScreenTranscript || m.Screen.Frozen == nil {
 		return nil
 	}
-	capN := m.transcriptFrozen.StreamingToolUsesLen
+	capN := m.Screen.Frozen.(*frozenTranscriptSnapshot).StreamingToolUsesLen
 	if capN <= 0 {
 		return nil
 	}
-	u := m.store.StreamingToolUses
+	u := m.Conversation.Store.StreamingToolUses
 	if len(u) > capN {
 		u = u[:capN]
 	}
@@ -158,7 +159,7 @@ func (m *model) scrollItemKeys() []string {
 	msgView := m.messagesForScroll()
 	keys := make([]string, 0, len(msgView)+len(m.transcriptStreamingToolsForView()))
 	for i := range msgView {
-		keys = append(keys, conversation.ItemKey(msgView[i], m.store.ConversationID))
+		keys = append(keys, conversation.ItemKey(msgView[i], m.Conversation.Store.ConversationID))
 	}
 	keys = append(keys, m.transcriptStreamingToolScrollKeys()...)
 	return keys
@@ -168,7 +169,7 @@ func (m *model) transcriptStreamingToolScrollKeys() []string {
 	tools := m.transcriptStreamingToolsForView()
 	out := make([]string, len(tools))
 	for i := range tools {
-		out[i] = transcriptStreamToolScrollKey(m.store.ConversationID, i)
+		out[i] = transcriptStreamToolScrollKey(m.Conversation.Store.ConversationID, i)
 	}
 	return out
 }
@@ -176,43 +177,43 @@ func (m *model) transcriptStreamingToolScrollKeys() []string {
 func (m *model) enterTranscriptScreen() tea.Cmd {
 	m.clearSlashResultPanel()
 	m.clearTranscriptSearchState()
-	m.promptSavedScrollTop = m.scrollTop
-	m.promptSavedSticky = m.sticky
+	m.Screen.PromptSavedScrollTop = m.Scroll.Top
+	m.Screen.PromptSavedSticky = m.Scroll.Sticky
 	// TS: handleEnterTranscript sets frozen lengths; toggle handler also setShowAllInTranscript(false).
-	m.transcriptFrozen = &frozenTranscriptSnapshot{
-		MessagesLen:          len(m.store.Messages),
-		StreamingToolUsesLen: len(m.store.StreamingToolUses),
+	m.Screen.Frozen = &frozenTranscriptSnapshot{
+		MessagesLen:          len(m.Conversation.Store.Messages),
+		StreamingToolUsesLen: len(m.Conversation.Store.StreamingToolUses),
 	}
-	m.transcriptShowAll = false
-	m.transcriptDumpMode = false
-	m.uiScreen = gouDemoScreenTranscript
-	m.sticky = true
-	m.scrollTop = 1 << 30
-	m.pendingDelta = 0
-	m.heightCache = nil
+	m.Screen.ShowAll = false
+	m.Screen.DumpMode = false
+	m.Screen.Mode = state.ScreenTranscript
+	m.Scroll.Sticky = true
+	m.Scroll.Top = 1 << 30
+	m.Scroll.PendingDelta = 0
+	m.Scroll.HeightCache = nil
 	m.rebuildHeightCache()
 	return m.maybeTeaResetHistoryBrowseMouse()
 }
 
 func (m *model) exitTranscriptScreen() {
 	m.clearTranscriptSearchState()
-	m.suspendAltScreenForScrollbackDump = false
-	m.uiScreen = gouDemoScreenPrompt
-	m.scrollTop = m.promptSavedScrollTop
-	m.sticky = m.promptSavedSticky
+	m.Screen.SuspendAltScreenForScrollbackDump = false
+	m.Screen.Mode = state.ScreenPrompt
+	m.Scroll.Top = m.Screen.PromptSavedScrollTop
+	m.Scroll.Sticky = m.Screen.PromptSavedSticky
 	// TS: handleExitTranscript / toggle clears frozenTranscriptState; exit also setShowAllInTranscript(false).
-	m.transcriptFrozen = nil
-	m.transcriptShowAll = false
-	m.transcriptDumpMode = false
-	m.transcriptEditorGen++
-	m.transcriptEditorBusy = false
-	m.transcriptEditorStatus = ""
-	m.heightCache = nil
-	m.pendingDelta = 0
+	m.Screen.Frozen = nil
+	m.Screen.ShowAll = false
+	m.Screen.DumpMode = false
+	m.Screen.EditorGen++
+	m.Screen.EditorBusy = false
+	m.Screen.EditorStatus = ""
+	m.Scroll.HeightCache = nil
+	m.Scroll.PendingDelta = 0
 	m.rebuildHeightCache()
-	if m.useMsgViewport {
-		m.lastVpContentSig = ""
-		m.vpNeedResizeContent = true
+	if m.Viewport.Enabled {
+		m.Viewport.LastContentSig = ""
+		m.Viewport.NeedResizeContent = true
 	}
 }
 
@@ -243,11 +244,11 @@ func transcriptFooterLines(narrow, showAll, dumpMode bool) []string {
 }
 
 func transcriptChromeFootLines(m *model, narrow bool) []string {
-	lines := transcriptFooterLines(narrow, m.transcriptShowAll, m.transcriptDumpMode)
+	lines := transcriptFooterLines(narrow, m.Screen.ShowAll, m.Screen.DumpMode)
 	if extra := transcriptSearchStatusLines(m); len(extra) > 0 {
 		lines = append(lines, extra...)
 	}
-	if s := strings.TrimSpace(m.transcriptEditorStatus); s != "" {
+	if s := strings.TrimSpace(m.Screen.EditorStatus); s != "" {
 		lines = append(lines, s)
 	}
 	return lines

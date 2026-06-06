@@ -7,6 +7,7 @@ import (
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
 	"goc/gou/pui"
+	state "goc/gou/app/state"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -16,12 +17,12 @@ import (
 func (m *model) handleUpdateGouQueryYield(msg gouQueryYieldMsg) (tea.Model, tea.Cmd) {
 	// Clear streaming text when a complete message arrives (mirrors TS handleMessageFromStream:
 	// onStreamingText(() => null) for all non-stream_event message types).
-	m.store.ClearStreaming()
-	m.store.AppendMessage(msg.Message)
+	m.Conversation.Store.ClearStreaming()
+	m.Conversation.Store.AppendMessage(msg.Message)
 	m.rebuildHeightCache()
-	if m.uiScreen != gouDemoScreenTranscript {
-		m.sticky = true
-		m.scrollTop = 1 << 30
+	if m.Screen.Mode != state.ScreenTranscript {
+		m.Scroll.Sticky = true
+		m.Scroll.Top = 1 << 30
 	}
 	return m, nil
 }
@@ -43,27 +44,27 @@ func (m *model) handleUpdateGouStreamEvent(msg gouStreamEventMsg) (tea.Model, te
 	switch wrap.Delta.Type {
 	case "text_delta":
 		if wrap.Delta.Text != "" {
-			m.store.AppendStreamingChunk(wrap.Delta.Text)
+			m.Conversation.Store.AppendStreamingChunk(wrap.Delta.Text)
 		}
 	case "thinking_delta":
 		if wrap.Delta.Thinking != "" {
-			m.store.AppendStreamingThinkingChunk(wrap.Delta.Thinking)
+			m.Conversation.Store.AppendStreamingThinkingChunk(wrap.Delta.Thinking)
 		}
 	}
-	if (wrap.Delta.Text != "" || wrap.Delta.Thinking != "") && m.uiScreen != gouDemoScreenTranscript {
-		m.sticky = true
-		m.scrollTop = 1 << 30
+	if (wrap.Delta.Text != "" || wrap.Delta.Thinking != "") && m.Screen.Mode != state.ScreenTranscript {
+		m.Scroll.Sticky = true
+		m.Scroll.Top = 1 << 30
 	}
 	return m, nil
 }
 
 func (m *model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (tea.Model, tea.Cmd) {
 	if msg.Uses == nil {
-		m.store.ClearStreamingToolUses()
+		m.Conversation.Store.ClearStreamingToolUses()
 	} else {
-		m.store.ClearStreamingToolUses()
+		m.Conversation.Store.ClearStreamingToolUses()
 		for _, u := range msg.Uses {
-			m.store.AppendStreamingToolUse(conversation.StreamingToolUse{
+			m.Conversation.Store.AppendStreamingToolUse(conversation.StreamingToolUse{
 				Index:         u.Index,
 				ToolUseID:     u.ToolUseID,
 				Name:          u.Name,
@@ -71,54 +72,54 @@ func (m *model) handleUpdateGouStreamingToolUses(msg gouStreamingToolUsesMsg) (t
 			})
 		}
 	}
-	if m.uiScreen == gouDemoScreenTranscript {
+	if m.Screen.Mode == state.ScreenTranscript {
 		m.rebuildHeightCache()
 	}
-	if m.uiScreen != gouDemoScreenTranscript {
-		m.sticky = true
-		m.scrollTop = 1 << 30
+	if m.Screen.Mode != state.ScreenTranscript {
+		m.Scroll.Sticky = true
+		m.Scroll.Top = 1 << 30
 	}
 
 	return m, nil
 }
 
 func (m *model) handleUpdateGouSpinnerTick(_ gouSpinnerTickMsg) (tea.Model, tea.Cmd) {
-	if !m.queryBusy {
+	if !m.Query.Busy {
 		return m, nil
 	}
-	m.spinnerFrame++
+	m.Query.SpinnerFrame++
 	return m, spinnerTickCmd()
 }
 
 func (m *model) handleUpdateGouMemoryAppend(msg gouMemoryAppendMsg) (tea.Model, tea.Cmd) {
-	m.store.AppendMessage(msg.Msg)
+	m.Conversation.Store.AppendMessage(msg.Msg)
 	m.rebuildHeightCache()
-	if m.uiScreen != gouDemoScreenTranscript {
-		m.sticky = true
-		m.scrollTop = 1 << 30
+	if m.Screen.Mode != state.ScreenTranscript {
+		m.Scroll.Sticky = true
+		m.Scroll.Top = 1 << 30
 	}
 	return m, nil
 }
 
 func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cmd) {
-	m.queryBusy = false
-	m.queryCancel = nil
-	m.ctrlCPending = false
+	m.Query.Busy = false
+	m.Query.Cancel = nil
+	m.Query.CtrlCPending = false
 	m.endQuerySpinner()
-	m.store.ClearStreamingToolUses()
+	m.Conversation.Store.ClearStreamingToolUses()
 	if msg.Err != nil {
-		m.store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
+		m.Conversation.Store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: query streaming: %v", msg.Err)))
 		m.rebuildHeightCache()
 	} else if gouDemoEnvTruthy("GOU_DEMO_BELL") {
 		fmt.Print("\a")
 	}
-	if m.transcript != nil {
+	if m.Conversation.Transcript != nil {
 		m.maybeRecordTranscript()
 	}
 	m.rebuildHeightCache()
-	if m.uiScreen != gouDemoScreenTranscript {
-		m.sticky = true
-		m.scrollTop = 1 << 30
+	if m.Screen.Mode != state.ScreenTranscript {
+		m.Scroll.Sticky = true
+		m.Scroll.Top = 1 << 30
 	}
 	return m, nil
 }
@@ -126,12 +127,12 @@ func (m *model) handleUpdateGouQueryDone(msg gouQueryDoneMsg) (tea.Model, tea.Cm
 func (m *model) handleUpdateCompactPhase(msg compactPhaseMsg) (tea.Model, tea.Cmd) {
 	switch msg.Phase {
 	case "started":
-		m.preCompactVerb = m.spinnerVerb
-		m.spinnerVerb = "Compacting"
+		m.Query.PreCompactVerb = m.Query.SpinnerVerb
+		m.Query.SpinnerVerb = "Compacting"
 	case "done":
-		if m.preCompactVerb != "" {
-			m.spinnerVerb = m.preCompactVerb
-			m.preCompactVerb = ""
+		if m.Query.PreCompactVerb != "" {
+			m.Query.SpinnerVerb = m.Query.PreCompactVerb
+			m.Query.PreCompactVerb = ""
 		}
 	}
 	return m, nil
@@ -147,18 +148,18 @@ func (m *model) handleUpdateCCBStream(msg ccbstream.Msg) (tea.Model, tea.Cmd) {
 	default:
 		gouDemoTracef("ui ccbstream.Msg type=%s", ev.Type)
 	}
-	ccbstream.Apply(m.store, ev)
+	ccbstream.Apply(m.Conversation.Store, ev)
 	if ccbStreamEventNeedsFullHeightRebuild(ev) {
 		m.rebuildHeightCache()
 	}
-	if m.transcript != nil && (ev.Type == "turn_complete" || ev.Type == "response_end") {
+	if m.Conversation.Transcript != nil && (ev.Type == "turn_complete" || ev.Type == "response_end") {
 		m.maybeRecordTranscript()
 	}
-	if m.uiScreen != gouDemoScreenTranscript {
+	if m.Screen.Mode != state.ScreenTranscript {
 		switch ev.Type {
 		case "assistant_delta", "tool_use", "tool_result", "turn_complete", "error":
-			m.sticky = true
-			m.scrollTop = 1 << 30
+			m.Scroll.Sticky = true
+			m.Scroll.Top = 1 << 30
 		}
 	}
 	return m, nil

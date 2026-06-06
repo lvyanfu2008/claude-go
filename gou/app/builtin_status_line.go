@@ -13,6 +13,7 @@ import (
 	"goc/compactservice"
 	goccontext "goc/context"
 	"goc/modelenv"
+	state "goc/gou/app/state"
 )
 
 func gouDemoBuiltinStatusLineDisabled() bool {
@@ -62,10 +63,10 @@ type tokenWarningInfo struct {
 }
 
 func (m *model) tokenWarningDisplayInfo() tokenWarningInfo {
-	if len(m.store.Messages) == 0 {
+	if len(m.Conversation.Store.Messages) == 0 {
 		return tokenWarningInfo{}
 	}
-	msgs := compactservice.GetMessagesAfterCompactBoundary(m.store.Messages)
+	msgs := compactservice.GetMessagesAfterCompactBoundary(m.Conversation.Store.Messages)
 	tokenUsage := compactservice.TokenCountFromLastAPIResponse(msgs)
 	if tokenUsage == 0 {
 		tokenUsage = compactservice.TokenCountWithEstimation(msgs)
@@ -89,20 +90,20 @@ func (m *model) tokenWarningDisplayInfo() tokenWarningInfo {
 }
 
 func (m *model) builtinStatusLineView() string {
-	if gouDemoBuiltinStatusLineDisabled() || m.uiScreen == gouDemoScreenTranscript {
+	if gouDemoBuiltinStatusLineDisabled() || m.Screen.Mode == state.ScreenTranscript {
 		return ""
 	}
 	modelName := modelenv.EffectiveMainLoopModel()
 	sep := lipgloss.NewStyle().Faint(true).Render(" │ ")
 	var b strings.Builder
 
-	if m.queryBusy {
-		verb := strings.TrimSpace(m.spinnerVerb)
+	if m.Query.Busy {
+		verb := strings.TrimSpace(m.Query.SpinnerVerb)
 		if verb == "" {
 			verb = "Flowing"
 		}
 		frames := []string{"…", ".", "..", "..."}
-		sfx := frames[m.spinnerFrame%len(frames)]
+		sfx := frames[m.Query.SpinnerFrame%len(frames)]
 		spinner := lipgloss.NewStyle().Bold(true).Render(teardropAsterisk + " " + verb + sfx)
 		b.WriteString(spinner)
 		b.WriteByte('\n')
@@ -134,5 +135,5 @@ func (m *model) builtinStatusLineView() string {
 		b.WriteString(sep)
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("Debug mode"))
 	}
-	return lipgloss.NewStyle().MaxWidth(m.cols).Render(b.String())
+	return lipgloss.NewStyle().MaxWidth(m.Layout.Cols).Render(b.String())
 }

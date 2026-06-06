@@ -14,10 +14,10 @@ import (
 
 // messageBodyColsForLayout returns wrap width for message rows (excludes TUI scrollbar column when active).
 func (m *model) messageBodyColsForLayout() int {
-	if m.msgBodyCols > 0 {
-		return m.msgBodyCols
+	if m.Layout.MsgBodyCols > 0 {
+		return m.Layout.MsgBodyCols
 	}
-	c := m.cols
+	c := m.Layout.Cols
 	if c < 1 {
 		return 40
 	}
@@ -39,7 +39,7 @@ func (m *model) messageScrollContentHeight() int {
 	if len(keys) == 0 {
 		return 0
 	}
-	off := virtualscroll.BuildOffsets(keys, m.heightCache, virtualscroll.DefaultEstimate)
+	off := virtualscroll.BuildOffsets(keys, m.Scroll.HeightCache, virtualscroll.DefaultEstimate)
 	return off[len(keys)]
 }
 
@@ -104,18 +104,18 @@ func joinMessagePaneLinesWithScrollbar(lines []string, bodyCols, vpH, totalH, sc
 
 // fillMessageHeightCache fills heightCache for all scroll keys at the given wrap width (hl = search needle).
 func (m *model) fillMessageHeightCache(cols int, hl string) {
-	if m.heightCache == nil {
-		m.heightCache = make(map[string]int)
+	if m.Scroll.HeightCache == nil {
+		m.Scroll.HeightCache = make(map[string]int)
 	}
-	m.resolvedToolIDs = messagerow.CollectResolvedToolUseIDs(m.store.Messages)
+	m.Conversation.ResolvedToolIDs = messagerow.CollectResolvedToolUseIDs(m.Conversation.Store.Messages)
 	allKeys := m.scrollItemKeys()
-	virtualscroll.PruneHeightCache(m.heightCache, allKeys)
+	virtualscroll.PruneHeightCache(m.Scroll.HeightCache, allKeys)
 	if cols < 1 {
 		cols = 40
 	}
 	msgView := m.messagesForScroll()
 	for i := range msgView {
-		k := conversation.ItemKey(msgView[i], m.store.ConversationID)
+		k := conversation.ItemKey(msgView[i], m.Conversation.Store.ConversationID)
 		h := m.measureMessageRows(msgView[i], cols, hl)
 		if i > 0 && userAssistantPairBlankLine(msgView[i-1], msgView[i]) {
 			h++
@@ -123,7 +123,7 @@ func (m *model) fillMessageHeightCache(cols int, hl string) {
 		if i > 0 && transcriptAssistantPairBlankLine(m, msgView[i-1], msgView[i]) {
 			h++
 		}
-		m.heightCache[k] = h
+		m.Scroll.HeightCache[k] = h
 	}
 	streamKeys := m.transcriptStreamingToolScrollKeys()
 	st := m.transcriptStreamingToolsForView()
@@ -133,7 +133,7 @@ func (m *model) fillMessageHeightCache(cols int, hl string) {
 			if i == 0 && len(msgView) > 0 && msgView[len(msgView)-1].Type == types.MessageTypeUser {
 				h++
 			}
-			m.heightCache[sk] = h
+			m.Scroll.HeightCache[sk] = h
 		}
 	}
 }

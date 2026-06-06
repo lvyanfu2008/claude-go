@@ -13,7 +13,7 @@ import (
 )
 
 // gouDemoBubblesViewport defaults on (bubbles/viewport for the prompt message pane, same scrolling style as go-tui).
-// Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no to render the new renderer's visible slice directly on top of m.scrollTop instead of a full-document viewport.
+// Disable with GOU_DEMO_BUBBLES_VIEWPORT=0|false|off|no to render the new renderer's visible slice directly on top of m.Scroll.Top instead of a full-document viewport.
 func gouDemoBubblesViewport() bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("GOU_DEMO_BUBBLES_VIEWPORT")))
 	if v == "0" || v == "false" || v == "off" || v == "no" {
@@ -24,16 +24,16 @@ func gouDemoBubblesViewport() bool {
 
 // msgViewportWanted is true when the bubbles/viewport message pane is available (new renderer drives both prompt and transcript).
 func (m *model) msgViewportWanted() bool {
-	result := m.useMsgViewport && !m.msgViewportFallback
-	//diaglog.Line("[viewport] msgViewportWanted: useMsgViewport=%v, msgViewportFallback=%v, returning %v", m.useMsgViewport, m.msgViewportFallback, result)
+	result := m.Viewport.Enabled && !m.Viewport.Fallback
+	//diaglog.Line("[viewport] msgViewportWanted: useMsgViewport=%v, msgViewportFallback=%v, returning %v", m.Viewport.Enabled, m.Viewport.Fallback, result)
 	return result
 }
 
 // messagePaneContentSig changes when the message list body should be rebuilt for the viewport pane.
 // msgFoldRev bumps on ctrl+y so fold toggles always rebuild even if other fields unchanged.
 func (m *model) messagePaneContentSig() string {
-	chunk := (len(m.store.StreamingText) + len(m.store.StreamingThinkingText)) / 32
-	return fmt.Sprintf("%d|%d|%d|%v|%d", len(m.store.Messages), len(m.store.StreamingToolUses), chunk, m.msgFoldAll, m.msgFoldRev)
+	chunk := (len(m.Conversation.Store.StreamingText) + len(m.Conversation.Store.StreamingThinkingText)) / 32
+	return fmt.Sprintf("%d|%d|%d|%v|%d", len(m.Conversation.Store.Messages), len(m.Conversation.Store.StreamingToolUses), chunk, m.Viewport.FoldAll, m.Viewport.FoldRev)
 }
 
 // gouDemoMsgViewportKeyMap aligns bubbles/viewport keybindings with handleMsgViewportScrollKey (pager keys, not h/l).
@@ -83,21 +83,21 @@ func (m *model) msgViewportSyncGeometry() {
 		h = 3
 	}
 	sig := fmt.Sprintf("%d,%d", w, h)
-	//diaglog.Line("[viewport] msgViewportSyncGeometry: w=%d, h=%d, sig=%s, lastVpGeom=%s", w, h, sig, m.lastVpGeom)
-	if sig != m.lastVpGeom {
-		if m.msgViewport.Width() == 0 || m.msgViewport.Height() == 0 {
+	//diaglog.Line("[viewport] msgViewportSyncGeometry: w=%d, h=%d, sig=%s, lastVpGeom=%s", w, h, sig, m.Viewport.LastGeom)
+	if sig != m.Viewport.LastGeom {
+		if m.Viewport.Model.Width() == 0 || m.Viewport.Model.Height() == 0 {
 			diaglog.Line("[viewport] msgViewportSyncGeometry: creating new viewport")
-			m.msgViewport = viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
+			m.Viewport.Model = viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
 		} else {
 			diaglog.Line("[viewport] msgViewportSyncGeometry: resizing existing viewport")
-			m.msgViewport.SetWidth(w)
-			m.msgViewport.SetHeight(h)
+			m.Viewport.Model.SetWidth(w)
+			m.Viewport.Model.SetHeight(h)
 		}
-		m.msgViewport.KeyMap = gouDemoMsgViewportKeyMap()
-		m.msgViewport.MouseWheelEnabled = true
-		m.lastVpGeom = sig
-		m.vpNeedResizeContent = true
-		diaglog.Line("[viewport] msgViewportSyncGeometry: viewport created/resized, width=%d, height=%d, listViewportH=%d", m.msgViewport.Width(), m.msgViewport.Height(), h)
+		m.Viewport.Model.KeyMap = gouDemoMsgViewportKeyMap()
+		m.Viewport.Model.MouseWheelEnabled = true
+		m.Viewport.LastGeom = sig
+		m.Viewport.NeedResizeContent = true
+		diaglog.Line("[viewport] msgViewportSyncGeometry: viewport created/resized, width=%d, height=%d, listViewportH=%d", m.Viewport.Model.Width(), m.Viewport.Model.Height(), h)
 	}
 }
 
@@ -114,10 +114,10 @@ func (m *model) applyMsgViewportContentFromView() {
 
 	// 计算内容签名，与上次对比判断是否需要重建
 	sig := m.messagePaneContentSig()
-	if sig == m.lastVpContentSig && !m.vpNeedResizeContent {
+	if sig == m.Viewport.LastContentSig && !m.Viewport.NeedResizeContent {
 		// 内容未变化：仅 sticky 模式下滚动到底部保持跟随
-		if m.sticky {
-			m.msgViewport.GotoBottom()
+		if m.Scroll.Sticky {
+			m.Viewport.Model.GotoBottom()
 		}
 		//diaglog.Line("[viewport] applyMsgViewportContentFromView: content unchanged, sig=%s", sig)
 		return
@@ -128,52 +128,52 @@ func (m *model) applyMsgViewportContentFromView() {
 	if !ok {
 		// 新渲染器失败：切回 fallback 模式，清除签名以便下次完整重建
 		diaglog.Line("[viewport] applyMsgViewportContentFromView: build failed, setting fallback")
-		m.msgViewportFallback = true
-		m.lastVpContentSig = ""
-		m.vpNeedResizeContent = false
+		m.Viewport.Fallback = true
+		m.Viewport.LastContentSig = ""
+		m.Viewport.NeedResizeContent = false
 		return
 	}
 
 	// 将构建好的内容设置到 viewport 中，更新签名标记
-	m.msgViewport.SetContent(s)
-	m.lastVpContentSig = sig
-	m.vpNeedResizeContent = false
+	m.Viewport.Model.SetContent(s)
+	m.Viewport.LastContentSig = sig
+	m.Viewport.NeedResizeContent = false
 
 	// sticky 模式下自动滚动到底部
-	if m.sticky {
-		m.msgViewport.GotoBottom()
+	if m.Scroll.Sticky {
+		m.Viewport.Model.GotoBottom()
 	}
 }
 
 // maybeTeaResetHistoryBrowseMouse clears go-tui/test.go history-browse mode and re-enables SGR mouse if needed.
 func (m *model) maybeTeaResetHistoryBrowseMouse() tea.Cmd {
-	if !m.msgHistoryBrowseMouseOff {
+	if !m.Viewport.HistoryBrowseMouseOff {
 		return nil
 	}
-	m.msgHistoryBrowseMouseOff = false
+	m.Viewport.HistoryBrowseMouseOff = false
 	return nil
 }
 
 // handleMsgViewportScrollKey forwards list keys through bubbles/viewport.Update (go-tui/main pattern) plus
 // GotoTop/GotoBottom bindings not in the default viewport keymap.
 func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
-	diaglog.Line("[viewport] handleMsgViewportScrollKey: key=%s, viewport width=%d, height=%d", msg.String(), m.msgViewport.Width(), m.msgViewport.Height())
+	diaglog.Line("[viewport] handleMsgViewportScrollKey: key=%s, viewport width=%d, height=%d", msg.String(), m.Viewport.Model.Width(), m.Viewport.Model.Height())
 	var cmd tea.Cmd
-	m.msgViewport, cmd = m.msgViewport.Update(msg)
+	m.Viewport.Model, cmd = m.Viewport.Model.Update(msg)
 	diaglog.Line("[viewport] handleMsgViewportScrollKey: after Update, yOffset=%d, totalLines=%d, AtTop=%v, AtBottom=%v",
-		m.msgViewport.YOffset(), m.msgViewport.TotalLineCount(), m.msgViewport.AtTop(), m.msgViewport.AtBottom())
+		m.Viewport.Model.YOffset(), m.Viewport.Model.TotalLineCount(), m.Viewport.Model.AtTop(), m.Viewport.Model.AtBottom())
 	switch msg.String() {
 	case "end", "G", "shift+g", "ctrl+end":
-		m.sticky = true
-		m.msgViewport.GotoBottom()
+		m.Scroll.Sticky = true
+		m.Viewport.Model.GotoBottom()
 		return cmd
 	case "home", "ctrl+home":
-		m.msgViewport.GotoTop()
-		m.sticky = false
+		m.Viewport.Model.GotoTop()
+		m.Scroll.Sticky = false
 		return cmd
 	}
-	if !m.msgViewport.AtBottom() {
-		m.sticky = false
+	if !m.Viewport.Model.AtBottom() {
+		m.Scroll.Sticky = false
 	}
 	return cmd
 }
@@ -181,7 +181,7 @@ func (m *model) handleMsgViewportScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 // messagePaneViewportBlock renders the message list using bubbles/viewport.
 // Caller must run msgViewportSyncGeometry + applyMsgViewportContentFromView first.
 func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
-	msgArea := m.msgViewport.View()
+	msgArea := m.Viewport.Model.View()
 	lines := strings.Split(msgArea, "\n")
 	for len(lines) < vpH {
 		lines = append(lines, "")
@@ -189,11 +189,11 @@ func (m *model) messagePaneViewportBlock(vpH, bodyCols int) string {
 	if len(lines) > vpH {
 		lines = lines[:vpH]
 	}
-	totalH := m.msgViewport.TotalLineCount()
+	totalH := m.Viewport.Model.TotalLineCount()
 	if totalH < vpH {
 		totalH = vpH
 	}
-	return joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.msgViewport.YOffset(), m.msgScrollbarW)
+	return joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalH, m.Viewport.Model.YOffset(), m.Layout.MsgScrollbarW)
 }
 
 func (m *model) handleMsgViewportMouseWheel(delta int) {
@@ -202,11 +202,11 @@ func (m *model) handleMsgViewportMouseWheel(delta int) {
 	}
 	n := messageListMouseWheelStep(listViewportH(m))
 	if delta < 0 {
-		m.msgViewport.ScrollDown(n)
+		m.Viewport.Model.ScrollDown(n)
 	} else {
-		m.msgViewport.ScrollUp(n)
+		m.Viewport.Model.ScrollUp(n)
 	}
-	if !m.msgViewport.AtBottom() {
-		m.sticky = false
+	if !m.Viewport.Model.AtBottom() {
+		m.Scroll.Sticky = false
 	}
 }

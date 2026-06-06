@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"goc/types"
+	state "goc/gou/app/state"
 )
 
 // midSlashInfo mirrors commandSuggestions.ts findMidInputSlashCommand (rune-based).
@@ -189,8 +190,8 @@ func hasAliasPrefix(c *types.Command, qLower string) bool {
 // start-of-line slash (as opposed to mid-input). For F2-only with an empty line,
 // query is "" and startMode is true.
 func (m *model) currentSlashQuery() (query string, startMode bool) {
-	v := m.pr.Value()
-	cur := m.pr.CursorRuneIndex()
+	v := m.Input.PR.Value()
+	cur := m.Input.PR.CursorRuneIndex()
 	if m.slashListUser {
 		// F2: treat as browse-all, unless mid-input is active
 		if mid := findMidInputSlashCommand(v, cur); mid != nil {
@@ -210,11 +211,11 @@ func (m *model) currentSlashQuery() (query string, startMode bool) {
 func (m *model) visibleSlashList() []string {
 	m.loadSlashCommandsOnce()
 	q, _ := m.currentSlashQuery()
-	return rankedSlashForQuery(m.slashCommands, q)
+	return rankedSlashForQuery(m.Input.SlashCommands, q)
 }
 
 func (m *model) applySlashTab() {
-	if m.uiScreen != gouDemoScreenPrompt {
+	if m.Screen.Mode != state.ScreenPrompt {
 		return
 	}
 	vis := m.visibleSlashList()
@@ -225,19 +226,19 @@ func (m *model) applySlashTab() {
 		m.slashListSel = 0
 	}
 	pick := vis[m.slashListSel]
-	v := m.pr.Value()
-	cur := m.pr.CursorRuneIndex()
+	v := m.Input.PR.Value()
+	cur := m.Input.PR.CursorRuneIndex()
 	if mid := findMidInputSlashCommand(v, cur); mid != nil {
 		m.replaceValueRunes(pick, mid)
 	} else {
-		m.pr.SetValue(strings.TrimSpace(pick) + " ")
+		m.Input.PR.SetValue(strings.TrimSpace(pick) + " ")
 	}
 }
 
 // replaceValueRunes replaces the mid-input slash token with pick + a trailing space, preserving
 // the rest of the buffer. pick is a display name like "/compact".
 func (m *model) replaceValueRunes(pick string, mid *midSlashInfo) {
-	v := m.pr.Value()
+	v := m.Input.PR.Value()
 	rs := []rune(v)
 	if mid.startRune+mid.tokenLen > len(rs) {
 		return
@@ -247,5 +248,5 @@ func (m *model) replaceValueRunes(pick string, mid *midSlashInfo) {
 	b.WriteString(string(rs[:mid.startRune]))
 	b.WriteString(string(ins))
 	b.WriteString(string(rs[mid.startRune+mid.tokenLen:]))
-	m.pr.SetValue(b.String())
+	m.Input.PR.SetValue(b.String())
 }

@@ -1,12 +1,19 @@
 package state
 
-import "context"
+import (
+	"context"
+
+	"goc/conversation-runtime/query"
+	"goc/services/autodream"
+	"goc/services/extractmemories"
+	"goc/services/sessionmemory"
+)
 
 type Memory struct {
-	AutoDream     interface{}
-	ExtractMem    interface{}
-	SessionMem    interface{}
-	SessionHook   func(ctx context.Context, params interface{})
+	AutoDream   *autodream.State
+	ExtractMem  *extractmemories.State
+	SessionMem  *sessionmemory.State
+	SessionHook func(ctx context.Context, params query.QueryCompleteParams)
 	LastGuidance  string
 	LastUserCtx   map[string]string
 	LastSystemCtx map[string]string
