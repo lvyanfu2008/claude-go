@@ -38,6 +38,3 @@ func effectiveSpinnerTip(elapsed time.Duration, tipsEnabled bool) string {
 	}
 	return spinnerTipPromptQueue
 }
-
-// gouSpinnerTickMsg drives spinner punctuation animation while queryBusy (TS SpinnerAnimationRow ~50ms).
-type gouSpinnerTickMsg struct{}

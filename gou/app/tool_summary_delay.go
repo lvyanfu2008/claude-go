@@ -13,9 +13,6 @@ import (
 	"goc/types"
 )
 
-// gouToolSummaryDelayTickMsg drives periodic height rebuild while any assistant row is still in the "detail" phase.
-type gouToolSummaryDelayTickMsg struct{}
-
 // gouDemoToolUseSummaryDelay returns how long to show full Grep/Glob/Read chrome before merged summary lines (prompt only).
 // Empty/unset env defaults to 2s; 0 disables. Negative or invalid values are treated as 0.
 func gouDemoToolUseSummaryDelay() time.Duration {

@@ -391,7 +391,7 @@ func Run(config_ config.Config) error {
 	mcpCmdPath := strings.TrimSpace(config_.MCPCommandsJSONPath)
 	mcpToolPath := strings.TrimSpace(config_.MCPToolsJSONPath)
 	m := newModel(st, mcpCmdPath, mcpToolPath, nil)
-		m.taskList.setAgentTasks(m.agentTasks)
+	m.taskList.setAgentTasks(m.agentTasks)
 
 	opts := []tea.ProgramOption{}
 	if config_.StreamStdin {
@@ -2604,6 +2604,8 @@ type gouQueryYieldMsg = config.QueryYieldMsg
 type gouStreamEventMsg = config.StreamEventMsg
 type gouStreamingToolUsesMsg = config.StreamingToolUsesMsg
 type gouQueryDoneMsg = config.QueryDoneMsg
+type gouSpinnerTickMsg = config.SpinnerTickMsg
+type gouToolSummaryDelayTickMsg = config.ToolSummaryDelayTickMsg
 type gouMemoryAppendMsg = config.MemoryAppendMsg
 type compactPhaseMsg = config.CompactPhaseMsg
 
