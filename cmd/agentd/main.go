@@ -3,12 +3,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"encoding/json"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"goc/claudeinit"
 	"goc/engine"
 	"goc/gou/conversation"
 	"goc/sessiontranscript"
@@ -16,6 +18,11 @@ import (
 )
 
 func main() {
+	// Load settings (API keys, etc.) from settings.go.json
+	if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
+		fmt.Fprintf(os.Stderr, "agentd: claudeinit: %v\n", err)
+		os.Exit(1)
+	}
 	reader := bufio.NewReader(os.Stdin)
 	writer := os.Stdout
 	enc := json.NewEncoder(writer)
