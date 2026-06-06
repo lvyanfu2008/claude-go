@@ -204,6 +204,22 @@ func canUseToolFn(b engine.PermissionBridge) toolexecution.QueryCanUseToolFn {
 	}
 }
 
+func askResolverFn(b engine.PermissionBridge) func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {
+	if b == nil {
+		return nil
+	}
+	return func(ctx context.Context, toolName string, _ string, input json.RawMessage, _ string) (toolexecution.PermissionDecision, error) {
+		pd, err := b.AskPermission(ctx, toolName, input)
+		if err != nil {
+			return toolexecution.DenyDecision(err.Error()), err
+		}
+		if pd.Allow {
+			return toolexecution.AllowDecision(), nil
+		}
+		return toolexecution.DenyDecision(pd.Reason), nil
+	}
+}
+
 func recordAgentdTranscript(store *conversation.Store, sessionID, cwd string) {
 	tr := &sessiontranscript.Store{
 		SessionID:   sessionID,
