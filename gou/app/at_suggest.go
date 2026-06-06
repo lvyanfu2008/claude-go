@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
+	"goc/gou/app/components/input"
 	state "goc/gou/app/state"
 	"goc/gou/suggestions"
 	"goc/types"
@@ -135,61 +135,9 @@ func extractCompletionTokenForApply(value string, cursor int) (string, suggestio
 	return token, suggestions.CompletionRange{Start: atIdx, End: cursor}
 }
 
-// renderAtSuggestions renders the suggestion list above the prompt input (footer area).
+// renderAtSuggestions delegates to input.RenderSuggestions.
 func (m *model) renderAtSuggestions() string {
-	if !m.Input.SuggVisible || len(m.Input.Suggestions) == 0 || m.Screen.Mode != state.ScreenPrompt {
-		return ""
-	}
-	width := m.Layout.Cols
-	if width < 40 {
-		width = 40
-	}
-	maxVisible := 6
-	if len(m.Input.Suggestions) < maxVisible {
-		maxVisible = len(m.Input.Suggestions)
-	}
-	// Center the visible window on selectedSuggIdx
-	start := m.Input.SelectedSuggIdx - maxVisible/2
-	if start < 0 {
-		start = 0
-	}
-	if start+maxVisible > len(m.Input.Suggestions) {
-		start = len(m.Input.Suggestions) - maxVisible
-	}
-	if start < 0 {
-		start = 0
-	}
-
-	var b strings.Builder
-	// Title line
-	title := lipgloss.NewStyle().Bold(true).Render("Suggestions  ") +
-		lipgloss.NewStyle().Faint(true).Render("Tab/Enter accept  Esc dismiss")
-	b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(title))
-	b.WriteByte('\n')
-
-	for i := start; i < len(m.Input.Suggestions) && i < start+maxVisible; i++ {
-		item := m.Input.Suggestions[i]
-		icon := item.Icon
-		if icon == "" {
-			switch item.Type {
-			case suggestions.SuggestionTypeFile:
-				icon = "F"
-			case suggestions.SuggestionTypeDirectory:
-				icon = "D"
-			case suggestions.SuggestionTypeAgent:
-				icon = "*"
-			case suggestions.SuggestionTypeMcpResource:
-				icon = "◇"
-			}
-		}
-		line := "  " + icon + " " + item.Label
-		if i == m.Input.SelectedSuggIdx {
-			line = lipgloss.NewStyle().Reverse(true).Render("  " + icon + " " + item.Label)
-		}
-		b.WriteString(lipgloss.NewStyle().Width(width).MaxWidth(width).Render(line))
-		b.WriteByte('\n')
-	}
-	return b.String()
+	return input.RenderSuggestions(inputDeps{m})
 }
 
 // refreshAgentSuggestions updates the suggestion engine's agent list from the loaded slash commands.

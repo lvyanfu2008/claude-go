@@ -55,7 +55,9 @@ import (
 	"goc/compactservice"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
+	"goc/gou/app/components/input"
 	"goc/gou/app/components/messages"
+	"goc/gou/app/components/tasks"
 	config "goc/gou/app/config"
 	state "goc/gou/app/state"
 	"goc/gou/ccbhydrate"
@@ -406,27 +408,7 @@ func teaGlobalRedrawCmd() tea.Cmd {
 }
 
 func (m *model) inputAreaHeight() int {
-	h := m.Input.PR.LineCount()
-	if m.Input.SuggVisible && len(m.Input.Suggestions) > 0 {
-		visibleRows := min(6, len(m.Input.Suggestions))
-		h += 1 + visibleRows // title line + suggestion rows
-	}
-	if m.Screen.Mode != state.ScreenTranscript {
-		h++ // horizontal rule above input
-	}
-	if m.Screen.Mode != state.ScreenTranscript && !gouDemoBuiltinStatusLineDisabled() {
-		s := m.builtinStatusLineView()
-		if s != "" {
-			h += strings.Count(s, "\n") + 1
-		}
-	}
-	if h < 2 {
-		h = 2
-	}
-	if h > 16 {
-		h = 16
-	}
-	return h
+	return input.InputAreaHeight(inputDeps{m})
 }
 
 // promptAboveInputRuleLine is a faint full-width line between the context row and the multiline prompt.
@@ -776,10 +758,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // taskListViewMaxDisplay matches the line budget for [model.View] (task list after stream rows); keep in sync with that block.
 func (m *model) taskListViewMaxDisplay() int {
-	if m.Layout.Height <= 10 {
-		return 0
-	}
-	return min(10, max(3, m.Layout.Height-14))
+	return tasks.TaskListViewMaxDisplay(tasksDeps{m})
 }
 
 // taskListViewReservedRows is the vertical space between the message pane and the status line
@@ -787,18 +766,7 @@ func (m *model) taskListViewMaxDisplay() int {
 // (title + messages + stream strip + task block + status + input) does not exceed [model.height]
 // and the input area stays visible.
 func (m *model) taskListViewReservedRows() int {
-	if m.Screen.Mode == state.ScreenTranscript {
-		return 0
-	}
-	if m.Agent.TaskList == nil || !m.Agent.TaskList.(*taskListModel).isVisible() {
-		return 0
-	}
-	// Upper bound: standalone header (1) + at most N task lines + at most one hidden-summary line.
-	md := m.taskListViewMaxDisplay()
-	if md == 0 {
-		return 2 // header + " … +…" (task_list.view maxDisplay=0)
-	}
-	return 2 + md
+	return tasks.TaskListViewReservedRows(tasksDeps{m})
 }
 
 func listViewportH(m *model) int {
@@ -1309,25 +1277,14 @@ func (m *model) skipFoldedToolResultStubInPrompt(msg types.Message) bool {
 	return false
 }
 
-// userPromptPrefixStyled renders bright "> " for user rows (matches user message body emphasis).
+// userPromptPrefixStyled delegates to input.UserPromptPrefixStyled.
 func userPromptPrefixStyled(userMsgRowBg bool) string {
-	st := lipgloss.NewStyle().Foreground(theme.UserMessageText()).Bold(true)
-	if userMsgRowBg {
-		st = st.Background(theme.UserMessageBackground())
-	}
-	return st.Render(UserPromptPointerGlyph() + " ")
+	return input.UserPromptPrefixStyled(userMsgRowBg)
 }
 
-// userInputViewWithPromptPrefix prepends the same dim "> " as user rows on the first line of the bottom input.
+// userInputViewWithPromptPrefix delegates to input.UserInputViewWithPromptPrefix.
 func userInputViewWithPromptPrefix(m *model) string {
-	v := m.Input.PR.View()
-	prefix := userPromptPrefixStyled(false)
-	lines := strings.Split(v, "\n")
-	if len(lines) == 0 {
-		return prefix
-	}
-	lines[0] = prefix + lines[0]
-	return strings.Join(lines, "\n")
+	return input.UserInputViewWithPromptPrefix(inputDeps{m})
 }
 
 // withUserPromptPointerIfNeeded prepends dim "> " before the first body line of user messages (same line as text).
