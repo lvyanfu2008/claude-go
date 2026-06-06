@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"goc/engine"
+	"goc/gou/conversation"
+	"goc/sessiontranscript"
 	"goc/tools/toolexecution"
 	"goc/types"
 )
@@ -118,4 +120,35 @@ func (b *bubbleTeaPermissionBridge) AskPermission(ctx context.Context, toolName 
 	case <-ctx.Done():
 		return engine.PermissionDecision{Allow: false, Reason: "cancelled"}, ctx.Err()
 	}
+}
+
+// newBubbleTeaSubmitFn 创建 Bubble Tea 模式的 SubmitFunc。
+// 当前为简化版本，用于验证 Orchestrator 集成。
+// TODO: 覆盖完整的 gouSubmitFromPromptText 逻辑（ProcessUserInput → ApplyBaseResult → Query）。
+func newBubbleTeaSubmitFn(m *Model) engine.SubmitFunc {
+	return func(ctx context.Context, text string, store *conversation.Store, events engine.EventHandler, perms engine.PermissionBridge) error {
+		msg := types.Message{
+			Type:    types.MessageTypeUser,
+			UUID:    sessiontranscript.NewUUID(),
+		}
+		content, _ := json.Marshal([]map[string]string{{"type": "text", "text": text}})
+		msg.Content = content
+		store.AppendMessage(msg)
+		events.OnStateSnapshot(store.Messages, engine.StateMetadata{})
+
+		assistantContent, _ := json.Marshal([]map[string]string{{"type": "text", "text": "Orchestrator received: " + text}})
+		assistantMsg := types.Message{
+			Type:    types.MessageTypeAssistant,
+			Content: assistantContent,
+		}
+		events.OnAssistantMessage(assistantMsg)
+		events.OnTurnDone("completed")
+		return nil
+	}
+}
+
+// mustMarshalJSON 是 JSON 序列化辅助函数，忽略错误。
+func mustMarshalJSON(v any) json.RawMessage {
+	b, _ := json.Marshal(v)
+	return b
 }

@@ -536,6 +536,13 @@ func (m *Model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 func (m *Model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea.Cmd) {
+	// HERMES_MODE env gate: route through engine.Orchestrator for async submit.
+	if m.orc != nil {
+		m.beginQuerySpinner()
+		m.queryBusy = true
+		go m.orc.SubmitInput(context.Background(), line)
+		return m, nil
+	}
 	var cmd tea.Cmd
 	gouDemoTracef("enter input=%q", previewForTrace(line, 120))
 	cwd, _ := os.Getwd()

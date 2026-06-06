@@ -52,6 +52,7 @@ import (
 	"goc/ccb-engine/settingsfile"
 	"goc/claudeinit"
 	"goc/commands"
+	"goc/engine"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbstream"
@@ -610,6 +611,14 @@ func Run(config_ Config) error {
 	}
 	if config_.StreamStdin {
 		ccbstream.Feed(os.Stdin, p)
+	}
+	if os.Getenv("HERMES_MODE") == "1" {
+		btBridge := newBubbleTeaEventHandler(p, m)
+		pmBridge := newBubbleTeaPermissionBridge(m)
+		submitFn := newBubbleTeaSubmitFn(m)
+		orc := engine.NewOrchestrator(m.store, m.transcript, btBridge, submitFn, pmBridge)
+		m.orc = orc
+		gouDemoTracef("hermes: Orchestrator enabled")
 	}
 	res, runErr := p.Run()
 	if runErr != nil {

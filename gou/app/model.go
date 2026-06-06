@@ -34,6 +34,7 @@ package app
 
 import (
 	"goc/appstate"
+	"goc/engine"
 	"goc/gou/app/iface"
 	"context"
 	"os"
@@ -223,6 +224,9 @@ type Model struct {
 	// toolResultState tracks tool-result persistence decisions across turns.
 	// Shared between the write path (per-tool persist) and read path (per-message budget enforcement).
 	toolResultState *toolresultpersist.ContentReplacementState
+
+// orc is the engine Orchestrator, set when HERMES_MODE=1 for async submit flow.
+	orc *engine.Orchestrator
 }
 
 func NewModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath string, tsBridge *tscontext.Snapshot) *Model {
@@ -250,6 +254,7 @@ func NewModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 
 	sessionMemState := sessionmemory.NewState()
 	var toolResultState *toolresultpersist.ContentReplacementState
+
 	if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
 		toolResultState = toolresultpersist.NewContentReplacementState()
 	}
