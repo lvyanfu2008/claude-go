@@ -183,7 +183,16 @@
       "Bash(GOFLAGS=-mod=mod go test *)",
       "Bash(awk *)",
       "Bash(Bash check *)",
-      "Bash(Bash verify *)"
+      "Bash(Bash verify *)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go build ./gou/app/...)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go vet ./gou/app/...)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go test -c -o /dev/null ./gou/app/...)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go test -c -o /dev/null ./gou/app)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go build ./gou/app/state/...)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go vet ./gou/app/state/...)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go vet ./gou/...)",
+      "Bash(GONOSUMDB=* GOFLAGS=-mod=mod go test ./gou/app/)",
+      "Bash(GOFLAGS=-mod=mod go vet *)"
     ]
   }
 }

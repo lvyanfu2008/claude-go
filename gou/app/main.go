@@ -55,7 +55,9 @@ import (
 	"goc/compactservice"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
+	"goc/gou/app/components/messages"
 	config "goc/gou/app/config"
+	state "goc/gou/app/state"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
@@ -66,7 +68,6 @@ import (
 	"goc/gou/prompt"
 	"goc/gou/pui"
 	"goc/gou/segdiff"
-	state "goc/gou/app/state"
 	"goc/gou/suggestions"
 	"goc/gou/textutil"
 	"goc/gou/theme"
@@ -83,9 +84,9 @@ import (
 	"goc/tools"
 	"goc/tools/localtools"
 	"goc/tools/skilltools"
-	"goc/tools/toolsearchwire"
 	"goc/tools/toolexecution"
 	"goc/tools/toolresultpersist"
+	"goc/tools/toolsearchwire"
 	"goc/tscontext"
 	"goc/types"
 )
@@ -140,7 +141,6 @@ type AgentTaskTickMsg struct{}
 func setupGouDemoTrace() (cleanup func()) {
 	return config.SetupTrace()
 }
-
 
 func (m *model) beginQuerySpinner() {
 	m.Query.BusyStartedAt = time.Now()
@@ -360,7 +360,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		},
 		ManualRender: &state.ManualRender{},
 		Mouse:        &state.Mouse{},
-	}}
+	}
+}
 
 func (m *model) maybeRecordTranscript() {
 	if m.Conversation.Transcript == nil {
@@ -1236,38 +1237,18 @@ func (m *model) showToolUseCtrlOExpandHint() bool {
 	return m.Screen.Mode == state.ScreenPrompt && !m.Screen.DumpMode
 }
 
-// userAssistantPairBlankLine is true when the UI inserts one empty line between adjacent
-// user and assistant scroll rows (either order).
+// userAssistantPairBlankLine delegates to messages.UserAssistantPairBlankLine.
 func userAssistantPairBlankLine(a, b types.Message) bool {
-	u, aType := types.MessageTypeUser, types.MessageTypeAssistant
-	c := types.MessageTypeCollapsedReadSearch
-	return a.Type == u && b.Type == aType || a.Type == c && b.Type == aType
+	return messages.UserAssistantPairBlankLine(a, b)
 }
 
-// streamGapAfterUserMessage is true when the StreamingText tail should be separated from the
-// message list by the same blank line as user↔assistant rows (last scroll message is user).
+// streamGapAfterUserMessage delegates to messages.StreamGapAfterUserMessage.
 func streamGapAfterUserMessage(msgView []types.Message) bool {
-	return len(msgView) > 0 && msgView[len(msgView)-1].Type == types.MessageTypeUser
+	return messages.StreamGapAfterUserMessage(msgView)
 }
 
 func userMessageHasPromptText(msg types.Message) bool {
-	if msg.Type != types.MessageTypeUser {
-		return false
-	}
-	msg = messagerow.NormalizeMessageJSON(msg)
-	if len(msg.Content) == 0 {
-		return false
-	}
-	var blocks []types.MessageContentBlock
-	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
-		return false
-	}
-	for _, b := range blocks {
-		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
-			return true
-		}
-	}
-	return false
+	return messages.UserMessageHasPromptText(msg)
 }
 
 // userMessageRendersOnlyFoldedToolStubs is true when this user row would render only folded
@@ -1433,24 +1414,12 @@ func (m *model) renderMessageRow(msg types.Message, cols, maxRows int, searchHL 
 }
 
 func toolRowLeadPrefix(userRow bool) string {
-	glyph := "\u25cf " // ● — TS figures.BLACK_CIRCLE non-darwin
-	if runtime.GOOS == "darwin" {
-		glyph = "\u23fa " // ⏺ — TS figures.BLACK_CIRCLE on darwin
-	}
-	return baseMsgStyle(userRow).Foreground(theme.DimMuted()).Render(glyph)
+	return messages.ToolRowLeadPrefix(userRow)
 }
 
 // prefixToolGlyphFirstLine prepends the dim tool lead (⏺ / ●) to the first line of rendered assistant text.
 func prefixToolGlyphFirstLine(body string) string {
-	if body == "" {
-		return toolRowLeadPrefix(false)
-	}
-	p := toolRowLeadPrefix(false)
-	i := strings.IndexByte(body, '\n')
-	if i < 0 {
-		return p + body
-	}
-	return p + body[:i] + body[i:]
+	return messages.PrefixToolGlyphFirstLine(body)
 }
 
 func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
@@ -1461,75 +1430,35 @@ func toolUseResolved(resolved map[string]struct{}, toolUseID string) bool {
 	return ok
 }
 
-// toolUseResolvedForDisplay treats a tool as resolved if it is in the resolved map, or (when detail is on)
-// if tool_result payload exists for that id — avoids stale resolved maps skipping ⏺+⎿ stats.
+// toolUseResolvedForDisplay delegates to messages.ToolUseResolvedForDisplay.
 func toolUseResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, toolUseID string, allowResultPayloadAsResolved bool) bool {
-	if toolUseID == "" {
-		return false
-	}
-	if resolved != nil {
-		if _, ok := resolved[toolUseID]; ok {
-			return true
-		}
-	}
-	if allowResultPayloadAsResolved && toolResultByID != nil {
-		raw, ok := toolResultByID[toolUseID]
-		if ok && len(raw) > 0 {
-			return true
-		}
-	}
-	return false
+	return messages.ToolUseResolvedForDisplay(resolved, toolResultByID, toolUseID, allowResultPayloadAsResolved)
 }
 
-// toolUseSummaryLineResolvedForDisplay is true when every merged tool_use id in a SegToolUseSummaryLine has a result (or resolved map entry).
+// toolUseSummaryLineResolvedForDisplay delegates to messages.ToolUseSummaryLineResolvedForDisplay.
 func toolUseSummaryLineResolvedForDisplay(resolved map[string]struct{}, toolResultByID map[string]json.RawMessage, seg messagerow.Segment, allowResultPayloadAsResolved bool) bool {
-	ids := seg.ToolUseIDs
-	if len(ids) == 0 {
-		return toolUseResolvedForDisplay(resolved, toolResultByID, seg.ToolUseID, allowResultPayloadAsResolved)
-	}
-	for _, id := range ids {
-		if !toolUseResolvedForDisplay(resolved, toolResultByID, id, allowResultPayloadAsResolved) {
-			return false
-		}
-	}
-	return true
+	return messages.ToolUseSummaryLineResolvedForDisplay(resolved, toolResultByID, seg.ToolUseIDs, seg.ToolUseID, allowResultPayloadAsResolved)
 }
 
-// segmentJoinSeparator inserts an extra blank line after assistant prose before a merged Grep/Glob/Read summary line.
+// segmentJoinSeparator delegates to messages.SegmentJoinSeparator.
 func segmentJoinSeparator(prev, cur messagerow.Segment) string {
-	if prev.Kind == messagerow.SegTextMarkdown && strings.TrimSpace(prev.Text) != "" && cur.Kind == messagerow.SegToolUseSummaryLine {
-		return "\n\n"
-	}
-	return "\n"
+	return messages.SegmentJoinSeparator(prev, cur)
 }
 
-// transcriptAssistantPairBlankLine is true when the UI inserts one empty line between consecutive
-// assistant rows in transcript (breathing room before the next ⏺ block).
+// transcriptAssistantPairBlankLine delegates to messages.TranscriptAssistantPairBlankLine.
 func transcriptAssistantPairBlankLine(m *model, a, b types.Message) bool {
-	if m == nil || m.Screen.Mode != state.ScreenTranscript {
-		return false
-	}
-	return a.Type == types.MessageTypeAssistant && b.Type == types.MessageTypeAssistant
+	isTranscript := m != nil && m.Screen.Mode == state.ScreenTranscript
+	return messages.TranscriptAssistantPairBlankLine(isTranscript, a, b)
 }
 
-// priorNonEmptyAssistantText reports whether any earlier segment is non-empty assistant markdown.
-// One ⏺/● marks the start of the assistant "paragraph"; tool title lines after that omit the lead glyph.
+// priorNonEmptyAssistantText delegates to messages.PriorNonEmptyAssistantText.
 func priorNonEmptyAssistantText(segs []messagerow.Segment, idx int) bool {
-	for j := 0; j < idx && j < len(segs); j++ {
-		if segs[j].Kind == messagerow.SegTextMarkdown && strings.TrimSpace(segs[j].Text) != "" {
-			return true
-		}
-	}
-	return false
+	return messages.PriorNonEmptyAssistantText(segs, idx)
 }
 
-// baseMsgStyle adds the user-message row background so nested lipgloss.Render calls do not reset ANSI and punch holes in the gray bar.
+// baseMsgStyle is a thin wrapper over messages.BaseMsgStyle for backward compatibility.
 func baseMsgStyle(userRow bool) lipgloss.Style {
-	s := lipgloss.NewStyle()
-	if userRow {
-		s = s.Background(theme.UserMessageBackground())
-	}
-	return s
+	return messages.BaseMsgStyle(userRow)
 }
 
 func logg(kind string, r string) {
@@ -1725,165 +1654,22 @@ func formatMessageSegments(segs []messagerow.Segment, cols int, toolUseCtrlOHint
 // styleMarkdownInlineSegments renders paragraph/list_item runs with TS-style inline `code` color
 // and strong/emphasis (terminal lipgloss).
 func styleMarkdownInlineSegments(segs []markdown.InlineSegment, linePrefix string, userRow bool) string {
-	if len(segs) == 0 {
-		return ""
-	}
-	stCode := baseMsgStyle(userRow).Foreground(theme.MarkdownInlineCode())
-	var stPlain, stBold, stItalic, stBoldItalic lipgloss.Style
-	if userRow {
-		ut := theme.UserMessageText()
-		stPlain = baseMsgStyle(userRow).Foreground(ut).Bold(true)
-		stBold = baseMsgStyle(userRow).Foreground(ut).Bold(true)
-		stItalic = baseMsgStyle(userRow).Foreground(ut).Italic(true)
-		stBoldItalic = baseMsgStyle(userRow).Foreground(ut).Bold(true).Italic(true)
-	} else {
-		stPlain = baseMsgStyle(userRow)
-		stBold = baseMsgStyle(userRow).Bold(true)
-		stItalic = baseMsgStyle(userRow).Italic(true)
-		stBoldItalic = baseMsgStyle(userRow).Bold(true).Italic(true)
-	}
-	var b strings.Builder
-	for i, seg := range segs {
-		txt := seg.Text
-		if i == 0 && linePrefix != "" {
-			txt = linePrefix + txt
-		}
-		if seg.Code {
-			b.WriteString(stCode.Render(txt))
-			continue
-		}
-		var st lipgloss.Style
-		switch {
-		case seg.Bold && seg.Italic:
-			st = stBoldItalic
-		case seg.Bold:
-			st = stBold
-		case seg.Italic:
-			st = stItalic
-		default:
-			st = stPlain
-		}
-		b.WriteString(st.Render(txt))
-	}
-	return b.String()
+	return messages.StyleMarkdownInlineSegments(segs, linePrefix, userRow)
 }
+
+// headingMarkdownStyle
 
 // headingMarkdownStyle is bold + heading color; level spacing is leading spaces only (no # in output).
 func headingMarkdownStyle(userRow bool) lipgloss.Style {
-	return baseMsgStyle(userRow).Bold(true).Foreground(theme.MarkdownHeading())
+	return messages.HeadingMarkdownStyle(userRow)
 }
 
 // styleMarkdownTokens applies lipgloss to block tokens (mirrors Markdown.tsx roles, terminal-only).
 func styleMarkdownTokens(toks []markdown.Token, cols int, userRow bool) string {
-	if len(toks) == 0 {
-		return ""
-	}
-	var parts []string
-	for _, t := range toks {
-		switch t.Type {
-		case "heading":
-			lv := min(max(t.Level, 1), 6)
-			levelPad := strings.Repeat(" ", (lv-1)*2)
-			hst := headingMarkdownStyle(userRow)
-			if len(t.Segments) > 0 {
-				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
-				rendered := hst.Render(inner)
-				parts = append(parts, wrapHeadingForMessagePane(rendered, levelPad, cols))
-			} else {
-				plain := strings.TrimSpace(t.Text)
-				wrapped := wrapHeadingForMessagePane(plain, levelPad, cols)
-				lines := strings.Split(wrapped, "\n")
-				var hb strings.Builder
-				for i, ln := range lines {
-					if i > 0 {
-						hb.WriteByte('\n')
-					}
-					hb.WriteString(hst.Render(ln))
-				}
-				parts = append(parts, hb.String())
-			}
-		case "code":
-			// Apply syntax highlighting if highlighter is available
-			var highlightedCode string
-			if markdownHighlighter != nil {
-				highlighted, err := markdownHighlighter.HighlightCode(t.Text, t.Lang)
-				if err == nil && highlighted != "" {
-					highlightedCode = highlighted
-				}
-			}
-
-			// If highlighting failed or highlighter is disabled, use plain code
-			if highlightedCode == "" {
-				cb := "```" + t.Lang + "\n" + t.Text
-				if t.Text != "" && !strings.HasSuffix(t.Text, "\n") {
-					cb += "\n"
-				}
-				cb += "```"
-				parts = append(parts, baseMsgStyle(userRow).Faint(true).Render(cb))
-			} else {
-				// For highlighted code, just show the highlighted content without backticks
-				parts = append(parts, baseMsgStyle(userRow).Render(highlightedCode))
-			}
-		case "list_item":
-			indent := strings.Repeat(" ", t.ListIndent)
-			var prefix string
-			if t.ListContinuation {
-				prefix = indent + "   "
-			} else if t.ListOrdered && t.ListIndex > 0 {
-				prefix = indent + fmt.Sprintf("%d. ", t.ListIndex)
-			} else {
-				prefix = indent + "- "
-			}
-			if len(t.Segments) > 0 {
-				parts = append(parts, styleMarkdownInlineSegments(t.Segments, prefix, userRow))
-			} else if userRow {
-				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(prefix+t.Text))
-			} else {
-				parts = append(parts, baseMsgStyle(userRow).Render(prefix+t.Text))
-			}
-		case "blockquote":
-			if len(t.Segments) > 0 {
-				inner := styleMarkdownInlineSegments(t.Segments, "", userRow)
-				pref := "> " + strings.ReplaceAll(inner, "\n", "\n> ")
-				parts = append(parts, pref)
-			} else if userRow {
-				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Italic(true).Bold(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
-			} else {
-				parts = append(parts, baseMsgStyle(userRow).Italic(true).Render("> "+strings.ReplaceAll(t.Text, "\n", "\n> ")))
-			}
-		case "hr":
-			parts = append(parts, baseMsgStyle(userRow).Faint(true).Render("---"))
-		case "paragraph":
-			if len(t.Segments) > 0 {
-				parts = append(parts, styleMarkdownInlineSegments(t.Segments, "", userRow))
-			} else {
-				if userRow {
-					parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(t.Text))
-				} else {
-					parts = append(parts, t.Text)
-				}
-			}
-		default:
-			if userRow {
-				parts = append(parts, baseMsgStyle(userRow).Foreground(theme.UserMessageText()).Bold(true).Render(t.Text))
-			} else {
-				parts = append(parts, t.Text)
-			}
-		}
-	}
-	var b strings.Builder
-	for i, part := range parts {
-		if i > 0 {
-			if toks[i-1].Type == "list_item" {
-				b.WriteByte('\n')
-			} else {
-				b.WriteString("\n\n")
-			}
-		}
-		b.WriteString(part)
-	}
-	return strings.TrimSpace(b.String())
+	return messages.StyleMarkdownTokens(markdownHighlighter, toks, cols, userRow)
 }
+
+// handleTraditionalScrollKey
 
 // handleTraditionalScrollKey handles scroll keys when not using viewport (traditional virtual scrolling).
 func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -2307,10 +2093,10 @@ func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea
 							}
 						}
 						qdeps := query.ProductionDeps(trySMCompact, func(phase string) {
-					if send := m.Query.CCBSend; send != nil {
-						send(compactPhaseMsg{Phase: phase})
-					}
-				})
+							if send := m.Query.CCBSend; send != nil {
+								send(compactPhaseMsg{Phase: phase})
+							}
+						})
 						te := toolexecution.ExecutionDeps{
 							InvokeTool:              runner.Run,
 							MainLoopModel:           mainLoopModel,
@@ -2493,19 +2279,31 @@ type compactPhaseMsg = config.CompactPhaseMsg
 // Const alias (var, since Go does not support const aliases).
 var teardropAsterisk = config.TeardropAsterisk
 
-func gouDemoEnvTruthy(k string) bool                                         { return config.EnvTruthy(k) }
-func gouDemoEnvFalsy(k string) bool                                          { return config.EnvFalsy(k) }
-func gouDemoStatusLineEnabled() bool                                         { return config.StatusLineEnabled() }
-func gouDemoTracef(f string, a ...any)                                       { config.Tracef(f, a...) }
-func gouDemoLogToolUseContext(rc *types.ProcessUserInputContextData)          { config.LogToolUseContext(rc) }
-func gouDemoWarnApilogExpectations(ccbInline bool)                           { config.WarnAPILogExpectations(ccbInline) }
-func gouDemoPreferQueryStreamingParity() bool                                { return config.PreferQueryStreamingParity() }
-func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string { return config.QueryMainLoopModel(params) }
-func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string   { return config.UserContextMapForQuery(uc) }
-func resolveToolProjectRoot(cwd string) string                               { return config.ResolveToolProjectRoot(cwd) }
-func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) { return config.MergedSystemLocale() }
-func previewForTrace(s string, max int) string                               { return config.PreviewForTrace(s, max) }
-func applyMessagePaneGutter(block string, cols int) string                   { return config.ApplyMessagePaneGutter(block, cols) }
-func messagePaneGutterRowCount(block string, cols int) int                   { return config.MessagePaneGutterRowCount(block, cols) }
-func wrapHeadingForMessagePane(content string, levelPad string, cols int) string { return config.WrapHeadingForMessagePane(content, levelPad, cols) }
-func spinnerTickCmd() tea.Cmd                                                { return config.SpinnerTickCmd() }
+func gouDemoEnvTruthy(k string) bool                                 { return config.EnvTruthy(k) }
+func gouDemoEnvFalsy(k string) bool                                  { return config.EnvFalsy(k) }
+func gouDemoStatusLineEnabled() bool                                 { return config.StatusLineEnabled() }
+func gouDemoTracef(f string, a ...any)                               { config.Tracef(f, a...) }
+func gouDemoLogToolUseContext(rc *types.ProcessUserInputContextData) { config.LogToolUseContext(rc) }
+func gouDemoWarnApilogExpectations(ccbInline bool)                   { config.WarnAPILogExpectations(ccbInline) }
+func gouDemoPreferQueryStreamingParity() bool                        { return config.PreferQueryStreamingParity() }
+func gouDemoQueryMainLoopModel(params *processuserinput.ProcessUserInputParams) string {
+	return config.QueryMainLoopModel(params)
+}
+func gouDemoUserContextMapForQuery(uc map[string]string) map[string]string {
+	return config.UserContextMapForQuery(uc)
+}
+func resolveToolProjectRoot(cwd string) string { return config.ResolveToolProjectRoot(cwd) }
+func gouDemoMergedSystemLocale() (lang, outputStyleName, outputStylePrompt string) {
+	return config.MergedSystemLocale()
+}
+func previewForTrace(s string, max int) string { return config.PreviewForTrace(s, max) }
+func applyMessagePaneGutter(block string, cols int) string {
+	return config.ApplyMessagePaneGutter(block, cols)
+}
+func messagePaneGutterRowCount(block string, cols int) int {
+	return config.MessagePaneGutterRowCount(block, cols)
+}
+func wrapHeadingForMessagePane(content string, levelPad string, cols int) string {
+	return config.WrapHeadingForMessagePane(content, levelPad, cols)
+}
+func spinnerTickCmd() tea.Cmd { return config.SpinnerTickCmd() }
