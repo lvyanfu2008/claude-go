@@ -53,7 +53,7 @@ func main() {
 	perms := &stdioPermissionBridge{responseCh: permRespCh}
 
 	// 创建 Orchestrator 的 SubmitFunc
-	submitFn := newAgentdSubmitFunc(cwd, sessionID, events, perms)
+	submitFn := agentdSubmitFn(cwd, sessionID, perms)
 
 	orc := engine.NewOrchestrator(store, tr, events, submitFn, perms)
 
