@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/gou/app/submit"
 	"goc/gou/conversation"
@@ -22,6 +24,7 @@ type submitDeps struct {
 	m *model
 }
 
+func (d submitDeps) Model() tea.Model                               { return d.m }
 func (d submitDeps) ConversationStore() *conversation.Store         { return d.m.Conversation.Store }
 func (d submitDeps) ConversationTSBridge() *tscontext.Snapshot      { return d.m.Conversation.TSBridge }
 func (d submitDeps) ConversationReadFileState() *localtools.ReadFileState {

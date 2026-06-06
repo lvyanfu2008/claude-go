@@ -18,6 +18,7 @@ import (
 	"goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/gou/app"
+	appconfig "goc/gou/app/config"
 	"goc/hookexec"
 	_ "goc/plugins"
 	"goc/sessiontranscript"
@@ -443,7 +444,7 @@ func runInteractive(args []string) error {
 		pm = string(types.PermissionDefault)
 	}
 
-	cfg := app.Config{
+	cfg := appconfig.Config{
 		SessionID:      sessionID,
 		PermissionMode: types.PermissionMode(pm),
 		CWD:            cwd,

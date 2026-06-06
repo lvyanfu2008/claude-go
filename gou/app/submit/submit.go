@@ -42,6 +42,7 @@ import (
 
 // Deps defines model dependencies for the submit flow.
 type Deps interface {
+	Model() tea.Model
 	ConversationStore() *conversation.Store
 	ConversationTSBridge() *tscontext.Snapshot
 	ConversationReadFileState() *localtools.ReadFileState
@@ -129,7 +130,7 @@ func (s *Submitter) Submit(fullPrompt string) (tea.Model, tea.Cmd) {
 		d.RebuildHeightCache()
 		d.ScrollSetSticky(true)
 		d.ScrollSetTop(1 << 30)
-		return nil, cmd
+		return d.Model(), cmd
 	}
 	if params.RuntimeContext != nil {
 		_ = params.RuntimeContext
@@ -154,7 +155,7 @@ func (s *Submitter) Submit(fullPrompt string) (tea.Model, tea.Cmd) {
 		d.RebuildHeightCache()
 		d.ScrollSetSticky(true)
 		d.ScrollSetTop(1 << 30)
-		return nil, cmd
+		return d.Model(), cmd
 	}
 
 	rStore := r
@@ -547,9 +548,9 @@ func (s *Submitter) Submit(fullPrompt string) (tea.Model, tea.Cmd) {
 			}
 			if usedCCB {
 				if cmd != nil {
-					return nil, tea.Batch(cmd, tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return nil }))
+					return d.Model(), tea.Batch(cmd, tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return nil }))
 				}
-				return nil, tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return nil })
+				return d.Model(), tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return nil })
 			}
 			if !d.CCBInline() {
 				d.ConversationStore().AppendMessage(pui.SystemNotice(
@@ -560,15 +561,15 @@ func (s *Submitter) Submit(fullPrompt string) (tea.Model, tea.Cmd) {
 				d.ScrollSetTop(1 << 30)
 			}
 			if cmd != nil {
-				return nil, cmd
+				return d.Model(), cmd
 			}
-			return nil, nil
+			return d.Model(), nil
 		}
 	}
 	if cmd != nil {
-		return nil, cmd
+		return d.Model(), cmd
 	}
-	return nil, nil
+	return d.Model(), nil
 }
 
 func extractSlashLocalPanelText(r *processuserinput.ProcessUserInputBaseResult) string {
