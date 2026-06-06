@@ -33,14 +33,12 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"goc/ccb-engine/diaglog"
 	"log"
 	"os"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -51,18 +49,16 @@ import (
 	"charm.land/lipgloss/v2"
 	"goc/ccb-engine/apilog"
 	"goc/claudeinit"
-	"goc/commands"
-	"goc/compactservice"
 	processuserinput "goc/conversation-runtime/process-user-input"
-	"goc/conversation-runtime/query"
 	"goc/gou/app/components/input"
 	"goc/gou/app/components/messages"
 	"goc/gou/app/components/tasks"
 	config "goc/gou/app/config"
 	"goc/gou/app/keybindings"
+	"goc/gou/app/screen"
+	"goc/gou/app/submit"
 	"goc/gou/app/update"
 	state "goc/gou/app/state"
-	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
 	"goc/gou/conversation"
 	"goc/gou/layout"
@@ -70,27 +66,18 @@ import (
 	goumsg "goc/gou/message"
 	"goc/gou/messagerow"
 	"goc/gou/prompt"
-	"goc/gou/pui"
 	"goc/gou/segdiff"
 	"goc/gou/suggestions"
 	"goc/gou/textutil"
 	"goc/gou/theme"
 	"goc/gou/transcript"
-	"goc/growthbook"
-	"goc/hookexec"
-	"goc/messagesapi"
 	"goc/modelenv"
-	"goc/querycontext"
 	"goc/services/autodream"
 	"goc/services/extractmemories"
 	"goc/services/sessionmemory"
 	"goc/sessiontranscript"
-	"goc/tools"
 	"goc/tools/localtools"
-	"goc/tools/skilltools"
-	"goc/tools/toolexecution"
 	"goc/tools/toolresultpersist"
-	"goc/tools/toolsearchwire"
 	"goc/tscontext"
 	"goc/types"
 )
@@ -201,6 +188,9 @@ type model struct {
 	slashListSel  int
 
 	msgRenderer *MessageRendererIntegration
+
+	viewAssembler *screen.ViewAssembler
+	submitter     *submit.Submitter
 }
 
 // Run initializes and runs the TUI application. It blocks until the user exits.
@@ -371,6 +361,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	}
 	m.keyDispatcher = keybindings.NewDispatcher(m)
 	m.updateDispatcher = update.NewDispatcher(m, m.keyDispatcher)
+	m.viewAssembler = screen.New(screenDeps{m})
+	m.submitter = submit.New(submitDeps{m})
 	return m
 }
 
@@ -813,134 +805,7 @@ func (m *model) renderTranscriptStreamingToolRow(group GroupedStreamingTool, col
 }
 
 func (m *model) View() tea.View {
-	// When the interactive question UI is active, render it instead of the normal view.
-	if m.Modal.Question != nil {
-		return m.wrapRootView(m.Modal.Question.(*questionModel).View().Content)
-	}
-
-	if m.Layout.Width == 0 {
-		return m.wrapRootView("Loading…")
-	}
-
-	vpH := listViewportH(m)
-	bodyCols := m.messageBodyColsForLayout()
-	useVp := m.msgViewportWanted()
-	if useVp {
-		m.msgViewportSyncGeometry()
-		m.applyMsgViewportContentFromView()
-		if m.Viewport.Fallback {
-			useVp = false
-		}
-	}
-
-	var b strings.Builder
-	narrow := m.Layout.Cols > 0 && m.Layout.Cols < 80
-	plainTitle := replChromeComposeTerminalTitle(m.Conversation.Store.ConversationID, m.Query.Busy, m.Conversation.Store.HasStreaming())
-	if !gouDemoTerminalTitleDisabled() && plainTitle != m.Chrome.LastEmittedTitlePlain {
-		m.Chrome.LastEmittedTitlePlain = plainTitle
-		if osc := oscSetWindowTitle(plainTitle); osc != "" {
-			b.WriteString(osc)
-		}
-	}
-	topBar := replChromeTopBar(narrow)
-	if m.Screen.Mode == state.ScreenTranscript {
-		topBar = replChromeTranscriptTopBar(narrow)
-	}
-	title := lipgloss.NewStyle().Bold(true).Render(topBar)
-	b.WriteString(title)
-	b.WriteByte('\n')
-
-	if useVp {
-		// Bubbles viewport + new renderer (applyMsgViewportContentFromView populates the full document).
-		b.WriteString(m.messagePaneViewportBlock(vpH, bodyCols))
-		b.WriteByte('\n')
-	} else {
-		// New renderer without bubbles viewport: virtual slice uses m.Scroll.Top; scrollbar reflects renderer totals.
-		msgPaneContent := m.renderMessagePaneWithNewRenderer()
-		lines := strings.Split(msgPaneContent, "\n")
-		if len(lines) > vpH {
-			lines = lines[:vpH]
-		}
-		for len(lines) < vpH {
-			lines = append(lines, "")
-		}
-		m.integrateMessageRenderer()
-		messagesPtr := m.messagePtrSliceForNewRenderer()
-		isTranscript := m.Screen.Mode == state.ScreenTranscript
-		verbose := m.Screen.ShowAll || (m.Screen.Mode == state.ScreenTranscript && m.Screen.SearchOpen)
-		_, _, totalHeight := m.msgRenderer.ComputeVisibleRange(
-			messagesPtr,
-			0,
-			1,
-			isTranscript,
-			verbose,
-			bodyCols,
-		)
-		b.WriteString(joinMessagePaneLinesWithScrollbar(lines, bodyCols, vpH, totalHeight, m.Scroll.Top, m.Layout.MsgScrollbarW))
-		b.WriteByte('\n')
-	}
-
-	if m.Screen.Mode != state.ScreenTranscript {
-		streamRows := m.promptBottomStreamRows()
-		if len(streamRows) > 0 {
-			b.WriteString(strings.Join(streamRows, "\n"))
-			b.WriteByte('\n')
-		}
-		// Task list (inline, after stream rows)
-		if m.Agent.TaskList != nil && m.Agent.TaskList.(*taskListModel).isVisible() {
-			maxDisplay := m.taskListViewMaxDisplay()
-			if tl := m.Agent.TaskList.(*taskListModel).view(maxDisplay, m.Layout.Cols); tl != "" {
-				indented := applyMessagePaneGutter(tl, m.Layout.Width)
-				b.WriteString(indented)
-				b.WriteByte('\n')
-			}
-		}
-		// Agent coordinator panel (below task list, above status line)
-		if cv := m.agentCoordinatorView(); cv != "" {
-			indented := applyMessagePaneGutter(cv, m.Layout.Width)
-			b.WriteString(indented)
-			b.WriteByte('\n')
-		}
-	}
-	if s := m.statusLineString(); s != "" {
-		b.WriteString(s)
-		b.WriteByte('\n')
-	}
-
-	if m.Screen.Mode == state.ScreenTranscript {
-		foot := joinFooterLines(transcriptChromeFootLines(m, narrow), m.Layout.Cols)
-		b.WriteString(lipgloss.NewStyle().Faint(true).Width(m.Layout.Cols).Render(foot))
-	} else {
-		// @-mention autocomplete suggestions (above input footer area)
-		if s := m.renderAtSuggestions(); s != "" {
-			b.WriteString(s)
-			b.WriteByte('\n')
-		}
-		if s := m.builtinStatusLineView(); s != "" {
-			b.WriteString(s)
-			b.WriteByte('\n')
-		}
-		b.WriteString(promptAboveInputRuleLine(m.Layout.Cols))
-		b.WriteByte('\n')
-		promptView := userInputViewWithPromptPrefix(m)
-		b.WriteString(promptView)
-		if blk := m.slashResultPanelViewBlock(); blk != "" {
-			b.WriteByte('\n')
-			b.WriteString(blk)
-		}
-		if m.slashListVisible() {
-			if sp := m.renderSlashPicker(m.Layout.Cols, m.Layout.Height); sp != "" {
-				b.WriteByte('\n')
-				b.WriteString(sp)
-			}
-		}
-	}
-	out := lipgloss.NewStyle().MaxWidth(m.Layout.Width).Render(b.String())
-	if m.Modal.Permission != nil {
-		mod := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(m.renderPermissionModal(m.Layout.Width))
-		out = lipgloss.JoinVertical(lipgloss.Left, out, mod)
-	}
-	return m.wrapRootView(out)
+	return m.viewAssembler.Assemble()
 }
 
 func (m *model) wrapRootView(content string) tea.View {
@@ -1438,540 +1303,7 @@ func (m *model) handleTraditionalScrollKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 func (m *model) gouSubmitFromPromptText(fullPrompt, line string) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	gouDemoTracef("enter input=%q", previewForTrace(line, 120))
-	cwd, _ := os.Getwd()
-	toolProjectRoot := resolveToolProjectRoot(cwd)
-	mergedLang, mergedOutName, mergedOutPrompt := gouDemoMergedSystemLocale()
-	preExp := fullPrompt
-	demoCfg := pui.DemoConfig{
-		SessionID:           m.Conversation.Store.ConversationID,
-		Language:            mergedLang,
-		MCPCommandsJSONPath: m.Tool.MCPCommandsJSONPath,
-		MCPToolsJSONPath:    m.Tool.MCPToolsJSONPath,
-		PreExpansionInput:   &preExp,
-		PermissionMode:      &m.Chrome.PermissionMode,
-	}
-	if m.Conversation.TSBridge != nil {
-		demoCfg.TSContextBridge = m.Conversation.TSBridge
-	}
-	params, err := pui.BuildDemoParams(line, m.Conversation.Store, demoCfg)
-	if err != nil {
-		gouDemoTracef("BuildDemoParams error: %v", err)
-		m.Conversation.Store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: build params: %v", err)))
-		m.rebuildHeightCache()
-		m.Scroll.Sticky = true
-		m.Scroll.Top = 1 << 30
-		return m, cmd
-	}
-	if params.RuntimeContext != nil {
-		gouDemoLogToolUseContext(params.RuntimeContext)
-	}
-	params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
-		SessionID:        m.Conversation.Store.ConversationID,
-		Store:            m.Conversation.Store,
-		ReadFileState:    m.Conversation.ReadFileState,
-		Cwd:              cwd,
-		SessionMemState:  m.Memory.SessionMem,
-		GuidancePtr:      &m.Memory.LastGuidance,
-		UserContextPtr:   &m.Memory.LastUserCtx,
-		SystemContextPtr: &m.Memory.LastSystemCtx,
-	})
-	gouDemoTracef("ProcessUserInput start priorMsgs=%d", len(m.Conversation.Store.Messages))
-	r, err := processuserinput.ProcessUserInput(context.Background(), params)
-	gouDemoTracef("ProcessUserInput end err=%v", err)
-	if err != nil {
-		m.Conversation.Store.AppendMessage(pui.SystemNotice(fmt.Sprintf("processUserInput: %v", err)))
-		m.rebuildHeightCache()
-		m.Scroll.Sticky = true
-		m.Scroll.Top = 1 << 30
-		return m, cmd
-	}
-	rStore := r
-	if r != nil && strings.HasPrefix(line, "/") && r.Execution == nil && !r.ShouldQuery &&
-		extractSlashLocalPanelText(r) != "" {
-		rStore = slashResultForStoreOmittingPanelDupes(r)
-	}
-	out := pui.ApplyBaseResult(m.Conversation.Store, rStore, &m.Query.Handoff)
-	gouDemoTracef("after ApplyBaseResult shouldQuery=%v effectiveShouldQuery=%v hadExecutionRequest=%v messagesAppended=%d",
-		r != nil && r.ShouldQuery, out.EffectiveShouldQuery, out.HadExecutionRequest, len(rStore.Messages))
-	if out.NextInput != "" {
-		m.Input.PR.SetValue(out.NextInput)
-		m.syncSlashListAfterPrompt()
-	}
-	m.applySlashResultPanelFromSubmit(line, r, out)
-	m.rebuildHeightCache()
-	m.Scroll.Sticky = true
-	m.Scroll.Top = 1 << 30
-	// Flush user (and any other new rows) before OnQueryYield appends streaming assistant/tool lines so JSONL follows conversation time order.
-	m.maybeRecordTranscript()
-	if out.EffectiveShouldQuery && !out.HadExecutionRequest {
-		usedCCB := false
-		var normToolsJSON json.RawMessage
-		if params.RuntimeContext != nil {
-			normToolsJSON = params.RuntimeContext.ToolUseContext.Options.Tools
-		}
-		var normToolDefs []struct {
-			Name string `json:"name"`
-		}
-		_ = json.Unmarshal(normToolsJSON, &normToolDefs)
-		toolSpecs := make([]messagesapi.ToolSpec, 0, len(normToolDefs))
-		for _, t := range normToolDefs {
-			toolSpecs = append(toolSpecs, messagesapi.ToolSpec{Name: t.Name})
-		}
-		normOpts := messagesapi.OptionsFromEnv()
-		if gouDemoEnvTruthy("GOU_DEMO_NON_INTERACTIVE") {
-			normOpts.NonInteractive = true
-		}
-		tryMsgs := func() (json.RawMessage, error) {
-			return ccbhydrate.MessagesJSONNormalized(m.Conversation.Store.Messages, toolSpecs, normOpts)
-		}
-		if m.Query.CCBInline && m.Query.CCBSend != nil {
-			baseMsgs, err := tryMsgs()
-			if err != nil {
-				gouDemoTracef("gou-demo: ccbhydrate.MessagesJSON error: %v", err)
-				m.Conversation.Store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: ccb messages JSON: %v", err)))
-				m.rebuildHeightCache()
-			} else if len(bytes.TrimSpace(baseMsgs)) < 3 || bytes.Equal(bytes.TrimSpace(baseMsgs), []byte("[]")) {
-				gouDemoTracef("gou-demo: empty messages JSON bytes=%d", len(baseMsgs))
-				m.Conversation.Store.AppendMessage(pui.SystemNotice("gou-demo: empty chat transcript (cannot call model)"))
-				m.rebuildHeightCache()
-			} else {
-				var toolsJSON json.RawMessage
-				if params.RuntimeContext != nil {
-					toolsJSON = params.RuntimeContext.ToolUseContext.Options.Tools
-				}
-				var toolDefs []struct {
-					Name string `json:"name"`
-				}
-				_ = json.Unmarshal(toolsJSON, &toolDefs)
-				names := make([]string, 0, len(toolDefs))
-				for _, t := range toolDefs {
-					names = append(names, t.Name)
-				}
-				hasSkillTool := false
-				skillNm := skilltools.SkillToolName()
-				for _, t := range toolDefs {
-					if t.Name == skillNm {
-						hasSkillTool = true
-						break
-					}
-				}
-				skillListing := params.SkillListingCommands
-				if len(skillListing) == 0 {
-					skillListing = commands.SkillToolCommands(params.Commands)
-				}
-				discoverNm := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISCOVER_SKILLS_TOOL_NAME"))
-				mainLoopModel := gouDemoQueryMainLoopModel(params)
-				m.Chrome.LastMainLoopModel = mainLoopModel
-				gouOpts := commands.GouDemoSystemOpts{
-					EnabledToolNames:       commands.EnabledToolNames(names),
-					SkillToolCommands:      skillListing,
-					ModelID:                mainLoopModel,
-					Cwd:                    cwd,
-					Language:               mergedLang,
-					DiscoverSkillsToolName: discoverNm,
-					NonInteractiveSession:  gouDemoEnvTruthy("GOU_DEMO_NON_INTERACTIVE"),
-					OutputStyleName:        mergedOutName,
-					OutputStylePrompt:      mergedOutPrompt,
-				}
-				commands.ApplyGouDemoRuntimeEnv(&gouOpts)
-				var customSys, appendSys string
-				if params.RuntimeContext != nil {
-					if p := params.RuntimeContext.ToolUseContext.Options.CustomSystemPrompt; p != nil {
-						customSys = strings.TrimSpace(*p)
-					}
-					if p := params.RuntimeContext.ToolUseContext.Options.AppendSystemPrompt; p != nil {
-						appendSys = strings.TrimSpace(*p)
-					}
-				}
-				extraRoots := querycontext.ExtraClaudeMdRootsForFetch(params.RuntimeContext)
-				fetchOpts := querycontext.FetchOpts{
-					CustomSystemPrompt:  customSys,
-					Gou:                 gouOpts,
-					ExtraClaudeMdRoots:  extraRoots,
-					SessionStartSource:  "startup",
-					HooksSessionID:      m.Conversation.Store.ConversationID,
-					HooksTranscriptPath: "",
-				}
-				if m.Conversation.TSBridge != nil {
-					fetchOpts.TSSnapshot = m.Conversation.TSBridge
-				}
-				partsRes, errParts := querycontext.FetchSystemPromptParts(context.Background(), fetchOpts)
-				var guidance string
-				var userCtxReminder string
-				if errParts != nil {
-					gouDemoTracef("FetchSystemPromptParts: %v (fallback BuildGouDemoSystemPrompt)", errParts)
-					m.Conversation.Store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: system context: %v (using base prompt only)", errParts)))
-					m.rebuildHeightCache()
-					guidance = commands.BuildGouDemoSystemPrompt(gouOpts)
-				} else {
-					userCtxReminder = querycontext.FormatUserContextReminder(partsRes.UserContext)
-					var base []string
-					if customSys != "" {
-						base = []string{customSys}
-					} else {
-						base = slices.Clone(partsRes.DefaultSystemPrompt)
-					}
-					if appendSys != "" {
-						base = append(base, appendSys)
-					}
-					guidance = strings.Join(base, "\n\n")
-				}
-				m.Memory.LastGuidance = guidance
-
-				listing := ""
-				var listingMeta *ccbhydrate.SkillListingMeta
-				if !gouDemoEnvTruthy("GOU_DEMO_SKIP_SKILL_LISTING") {
-					listingSent := m.Input.SkillListingSent
-					if gouDemoEnvTruthy("GOU_DEMO_SKILL_LISTING_EVERY_TURN") {
-						listingSent = make(map[string]struct{})
-					}
-					if s, n, initial, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, listingSent, nil); ok {
-						listing = s
-						listingMeta = &ccbhydrate.SkillListingMeta{SkillCount: n, IsInitial: initial}
-					}
-				}
-				msgsJSON, errL := ccbhydrate.MessagesJSONWithLeadingMeta(m.Conversation.Store.Messages, userCtxReminder, listing, listingMeta, toolSpecs, normOpts)
-				if errL != nil {
-					gouDemoTracef("gou-demo: MessagesJSONWithLeadingMeta error: %v", errL)
-					m.Conversation.Store.AppendMessage(pui.SystemNotice(fmt.Sprintf("gou-demo: skill listing hydrate: %v", errL)))
-					m.rebuildHeightCache()
-				} else {
-					// When dynamic tool loading is active, prepend <available-deferred-tools>
-					// so the model knows which tools to discover via ToolSearch.
-					msgsBefore := len(msgsJSON)
-					if prep := toolsearchwire.PrepareMessagesForWire(msgsJSON, toolsJSON, mainLoopModel, false, false, m.Conversation.Store.Messages); len(prep) > 0 {
-						msgsJSON = prep
-					}
-					// Persist announcement in store for delta tracking across turns.
-					if len(msgsJSON) > msgsBefore {
-						toolsearchwire.PersistDeferredAnnouncement(m.Conversation.Store, toolsJSON)
-					}
-					reqID := fmt.Sprintf("turn-%d", time.Now().UnixNano())
-					m.Conversation.Store.ClearStreaming()
-					m.Conversation.Store.ClearStreamingToolUses()
-					// TS: skill_listing attachment is pushed to mutableMessages before callModel (QueryEngine attachment case).
-					if strings.TrimSpace(listing) != "" {
-						if att, ok := ccbhydrate.SkillListingStoreMessage(listing, listingMeta); ok {
-							m.Conversation.Store.AppendMessage(att)
-							m.rebuildHeightCache()
-						}
-					}
-					gouDemoTracef("gou-demo model turn start requestID=%s msgsJSONBytes=%d toolsBytes=%d systemBytes=%d",
-						reqID, len(msgsJSON), len(toolsJSON), len(guidance))
-					cwdAbs, errAbs := filepath.Abs(cwd)
-					if errAbs != nil {
-						cwdAbs = cwd
-					}
-					runner := skilltools.ParityToolRunner{
-						DemoToolRunner: skilltools.DemoToolRunner{
-							Commands:  params.Commands,
-							SessionID: m.Conversation.Store.ConversationID,
-						},
-						WorkDir:          cwdAbs,
-						ProjectRoot:      toolProjectRoot,
-						ReadFileState:    m.Conversation.ReadFileState,
-						LocalBashDefault: true,
-						AskAutoFirst:     !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST"),
-						MainLoopModel:    mainLoopModel,
-						Messages:         m.Conversation.Store.Messages,
-						MessagesFunc:     func() []types.Message { return m.Conversation.Store.Messages },
-						SystemPrompt:     []string{guidance},
-						ProgressCallback: func(msg *types.Message) {
-							if msg == nil {
-								return
-							}
-							// Parse agent lifecycle events from progress messages
-							if msg.Type == types.MessageTypeProgress && len(msg.Data) > 0 {
-								var data struct {
-									Type             string `json:"type"`
-									AgentID          string `json:"agentId"`
-									AgentType        string `json:"agentType"`
-									Description      string `json:"description"`
-									Name             string `json:"name"`
-									IsBackground     bool   `json:"isBackground"`
-									ParentToolUseID  string `json:"parentToolUseID"`
-									TokenCount       int    `json:"tokenCount"`
-									ToolUseCount     int    `json:"toolUseCount"`
-									LastActivityDesc string `json:"lastActivityDesc"`
-									Summary          string `json:"summary"`
-									Status           string `json:"status"`
-								}
-								if json.Unmarshal(msg.Data, &data) == nil {
-									switch data.Type {
-									case "agent_registered":
-										evictAfter := time.Now().Add(24 * time.Hour)
-										task := &AgentTaskState{
-											ID:              data.AgentID,
-											AgentType:       data.AgentType,
-											Description:     data.Description,
-											Name:            data.Name,
-											Status:          "running",
-											StartTime:       time.Now(),
-											IsBackground:    data.IsBackground,
-											ParentToolUseID: data.ParentToolUseID,
-											EvictAfter:      &evictAfter,
-										}
-										if send := m.Query.CCBSend; send != nil {
-											send(AgentRegisteredMsg{Task: task})
-										}
-										// Still forward for message pane rendering
-										if send := m.Query.CCBSend; send != nil {
-											send(gouQueryYieldMsg{Message: *msg})
-										}
-										return
-									case "agent_summary":
-										if send := m.Query.CCBSend; send != nil {
-											send(AgentProgressMsg{
-												AgentID: data.AgentID,
-												Progress: &AgentTaskProgress{
-													Summary:          data.Summary,
-													TokenCount:       data.TokenCount,
-													ToolUseCount:     data.ToolUseCount,
-													LastActivityDesc: data.LastActivityDesc,
-												},
-											})
-										}
-										return
-									case "agent_completed":
-										if send := m.Query.CCBSend; send != nil {
-											send(AgentCompletedMsg{AgentID: data.AgentID, Status: "completed"})
-										}
-										return
-									}
-								}
-							}
-							// Default: forward as yield message for the message pane
-							if send := m.Query.CCBSend; send != nil {
-								send(gouQueryYieldMsg{Message: *msg})
-							}
-						},
-						EditDeps: &localtools.EditDeps{
-							OnNotebookEdit: func(absPath, oldString, newString string, replaceAll bool, roots []string, state *localtools.ReadFileState, userModified bool) (string, bool, error) {
-								return tools.NotebookEditFromEdit(absPath, oldString, newString, replaceAll, roots)
-							},
-						},
-					}
-					if params.RuntimeContext != nil && params.RuntimeContext.ToolPermissionContext != nil {
-						runner.ToolPermission = params.RuntimeContext.ToolPermissionContext
-					}
-					if gouDemoPreferQueryStreamingParity() {
-						var userCtx map[string]string
-						var systemCtx map[string]string
-						if errParts == nil {
-							userCtx = gouDemoUserContextMapForQuery(partsRes.UserContext)
-							systemCtx = partsRes.SystemContext
-						}
-						m.Memory.LastUserCtx = userCtx
-						m.Memory.LastSystemCtx = systemCtx
-						tcx := types.ToolUseContext{}
-						if params.RuntimeContext != nil {
-							tcx = params.RuntimeContext.ToolUseContext
-						}
-						tcx.Options.MainLoopModel = mainLoopModel
-						if m.Tool.ResultState != nil {
-							tcx.ContentReplacementState = m.Tool.ResultState.ToJSON()
-						}
-						var trySMCompact compactservice.TrySessionMemoryCompactFn
-						if m.Memory.SessionMem != nil {
-							sessionID := m.Conversation.Store.ConversationID
-							trySMCompact = func(ctx context.Context, messages []types.Message, agentID string, autoCompactThreshold *int) (*compactservice.CompactionResult, error) {
-								return sessionmemory.TrySessionMemoryCompaction(
-									ctx,
-									m.Memory.SessionMem,
-									sessionID,
-									cwd,
-									messages,
-									"", // transcriptPath
-									autoCompactThreshold,
-									func(ctx context.Context, trigger string, model string) ([]types.Message, error) {
-										runner := hookexec.SessionStartHookRunner(toolProjectRoot, cwd, sessionID, "")
-										res, err := runner(ctx, compactservice.SessionStartHookTrigger(trigger),
-											compactservice.SessionStartHookInput{Model: model})
-										if err != nil {
-											return nil, err
-										}
-										msgs := make([]types.Message, len(res))
-										for i, r := range res {
-											msgs[i] = r
-										}
-										return msgs, nil
-									},
-									agentID,
-									mainLoopModel,
-									nil, // planAttachmentProvider
-								)
-							}
-						}
-						qdeps := query.ProductionDeps(trySMCompact, func(phase string) {
-							if send := m.Query.CCBSend; send != nil {
-								send(compactPhaseMsg{Phase: phase})
-							}
-						})
-						te := toolexecution.ExecutionDeps{
-							InvokeTool:              runner.Run,
-							MainLoopModel:           mainLoopModel,
-							ReadToolRoots:           runner.ToolReadMappingRoots(),
-							ReadToolMemCWD:          runner.ToolReadMappingMemCWD(),
-							MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(params.Commands, m.Conversation.Store.ConversationID, nil),
-							QueryCanUseTool: func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
-								if toolName == "AskUserQuestion" {
-									return toolexecution.AskDecision("Answer questions?"), nil
-								}
-								return toolexecution.AllowDecision(), nil
-							},
-						}
-						// Opt-in TS permissions.ts 1b: whole-tool alwaysAsk on Bash skipped when input looks sandboxed (see toolexecution.BashSandboxRule1b).
-						if gouDemoEnvTruthy("GOU_TOOLEXEC_BASH_SANDBOX_1B") {
-							te.SandboxingEnabled = true
-							te.AutoAllowBashWholeToolAskWhenSandboxed = true
-						}
-						// Tool result persistence: enabled by default (mirrors TS), set GOU_DEMO_TOOL_RESULT_PERSIST=0 to disable.
-						// Large tool results are saved to disk and replaced with a preview in the tool_result block.
-						if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
-							te.ToolResultPersistConfig = &toolexecution.ToolResultPersistConfig{
-								SessionInfo: toolresultpersist.SessionInfo{
-									SessionID: m.Conversation.Store.ConversationID,
-									Cwd:       cwd,
-								},
-								ProcessOptions:          toolresultpersist.DefaultProcessOptions(),
-								ContentReplacementState: m.Tool.ResultState,
-							}
-						}
-						m.Modal.AskAutoFirst = !gouDemoEnvTruthy("GOU_DEMO_NO_ASK_AUTO_FIRST")
-						m.installAskResolver(&te, m.Modal.AskAutoFirst)
-						qdeps.ToolexecutionDeps = te
-						// Wire tool result budget enforcement when persistence is enabled.
-						// The closure captures the live Go *ContentReplacementState so mutations
-						// survive across turns (mirrors TS shared ContentReplacementState instance).
-						if m.Tool.ResultState != nil {
-							statePtr := m.Tool.ResultState
-							sessionInfo := te.ToolResultPersistConfig.SessionInfo
-							qdeps.ApplyToolResultBudget = func(ctx context.Context, in *query.ToolResultBudgetInput) ([]types.Message, error) {
-								return toolresultpersist.ApplyToolResultBudget(
-									in.Messages,
-									statePtr,
-									sessionInfo,
-									0,   // use default MaxToolResultsPerMessageChars
-									nil, // skipToolNames
-								), nil
-							}
-						}
-						// Snapshot matches qp.Messages (TS QueryEngine messages at callModel): includes skill_listing row if appended above.
-						msgsForQ := slices.Clone(m.Conversation.Store.Messages)
-						// Prepend SessionStart hook_additional_context attachments (e.g. superpowers using-superpowers skill).
-						// These are ephemeral — not persisted to store, only injected into the current query messages.
-						if partsRes.SessionStartHookMessages != nil {
-							msgsForQ = append(slices.Clone(partsRes.SessionStartHookMessages), msgsForQ...)
-						}
-						if send := m.Query.CCBSend; send != nil {
-							qdeps.OnStreamingToolUses = func(ctx context.Context, uses []query.StreamingToolUseLive) error {
-								send(gouStreamingToolUsesMsg{Uses: uses})
-								return nil
-							}
-						}
-						if m.Conversation.Transcript != nil {
-							tr := m.Conversation.Transcript
-							// Mirror TS recordTranscript(messages): each yield appends to the same turn prefix so
-							// sessiontranscript dedup sees already-recorded user (and prior yields) before new rows.
-							turnPrefix := slices.Clone(msgsForQ)
-							qdeps.OnQueryYield = func(ctx context.Context, y query.QueryYield) error {
-								if y.Message == nil {
-									return nil
-								}
-								turnPrefix = append(turnPrefix, *y.Message)
-								_, err := tr.RecordTranscript(ctx, turnPrefix, sessiontranscript.RecordOpts{AllMessages: turnPrefix})
-								return err
-							}
-						}
-						qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
-							extractmemories.Execute(ctx, m.Memory.ExtractMem, extractmemories.ExtractionParams{
-								Messages:       qcp.Messages,
-								ToolUseContext: qcp.ToolUseContext,
-								SystemPrompt:   qcp.SystemPrompt,
-								UserContext:    qcp.UserContext,
-								SystemContext:  qcp.SystemContext,
-								Cwd:            qcp.Cwd,
-								QuerySource:    qcp.QuerySource,
-								NewUUID:        query.RandomUUID,
-								SkipIndex:      growthbook.IsTenguMothCopse(),
-								AppendSystemMessage: func(msg types.Message) {
-									if send := m.Query.CCBSend; send != nil {
-										send(gouMemoryAppendMsg{Msg: msg})
-									}
-								},
-							})
-							_, dreamErr := autodream.Execute(ctx, m.Memory.AutoDream,
-								qcp.ToolUseContext, qcp.SystemPrompt,
-								qcp.UserContext, qcp.SystemContext,
-								qcp.QuerySource, query.RandomUUID,
-								commands.ClaudeConfigHome(), qcp.Cwd,
-								"", /* memoryDir — let Execute resolve */
-								m.Conversation.Store.ConversationID,
-							)
-							if dreamErr != nil {
-								gouDemoTracef("autodream: %v", dreamErr)
-							}
-							// Session memory extraction (TS sessionMemory post-turn hook).
-							m.Memory.SessionHook(ctx, qcp)
-						}
-						qp := query.QueryParams{
-							Messages:        msgsForQ,
-							SystemPrompt:    query.AsSystemPrompt([]string{guidance}),
-							UserContext:     userCtx,
-							SystemContext:   systemCtx,
-							ToolUseContext:  tcx,
-							QuerySource:     params.QuerySource,
-							StreamingParity: true,
-							Deps:            &qdeps,
-						}
-						if params.RuntimeContext != nil && params.RuntimeContext.ToolPermissionContext != nil {
-							pc := *params.RuntimeContext.ToolPermissionContext
-							types.NormalizeToolPermissionContextData(&pc)
-							qp.ToolPermissionContext = &pc
-						}
-						processuserinput.ApplyQueryHostEnvGates(&qp)
-						processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
-						gouDemoTracef("query streaming parity turn requestID=%s storeMsgs=%d toolsBytes=%d",
-							reqID, len(m.Conversation.Store.Messages), len(toolsJSON))
-						m.beginQuerySpinner()
-						m.Query.Busy = true
-						m.Conversation.Store.ClearStreamingToolUses()
-						ctx, cancel := context.WithCancel(context.Background())
-						m.Query.Cancel = cancel
-						config.RunQueryStreamingParityTurn(ctx, func(msg tea.Msg) { m.Query.CCBSend(msg) }, qp)
-						usedCCB = true
-					} else {
-						m.Conversation.Store.AppendMessage(pui.SystemNotice(
-							"gou-demo: ccb-engine/localturn was removed. For a real model reply, set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) and GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1.",
-						))
-						m.rebuildHeightCache()
-					}
-				}
-			}
-		}
-		if usedCCB {
-			if cmd != nil {
-				return m, tea.Batch(cmd, spinnerTickCmd())
-			}
-			return m, spinnerTickCmd()
-		}
-		if !m.Query.CCBInline {
-			m.Conversation.Store.AppendMessage(pui.SystemNotice(
-				"gou-demo: real HTTP / streaming parity is disabled (GOU_DEMO_CCB_INLINE=0). Unset it and set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) with GOU_QUERY_STREAMING_PARITY=1 or GOU_DEMO_STREAMING_TOOL_EXECUTION=1 for a model reply.",
-			))
-			m.rebuildHeightCache()
-			m.Scroll.Sticky = true
-			m.Scroll.Top = 1 << 30
-		}
-		if cmd != nil {
-			return m, cmd
-		}
-		return m, nil
-	}
-	gouDemoTracef("no query path (effectiveShouldQuery=%v hadExecutionRequest=%v)", out.EffectiveShouldQuery, out.HadExecutionRequest)
-	return m, cmd
+	return m.submitter.Submit(fullPrompt)
 }
 
 // ---------------------------------------------------------------------------
