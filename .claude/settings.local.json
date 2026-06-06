@@ -180,7 +180,10 @@
       "Bash(GOFLAGS=-mod=mod go list *)",
       "Bash(GOFLAGS=-mod=mod go vet ./gou/app/config/...)",
       "Bash(GOFLAGS=-mod=mod go vet ./gou/app/state/...)",
-      "Bash(GOFLAGS=-mod=mod go test *)"
+      "Bash(GOFLAGS=-mod=mod go test *)",
+      "Bash(awk *)",
+      "Bash(Bash check *)",
+      "Bash(Bash verify *)"
     ]
   }
 }

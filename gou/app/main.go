@@ -358,6 +358,8 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 			FirstShownAt:            make(map[string]time.Time),
 			LastAssistantContentLen: make(map[string]int),
 		},
+		ManualRender: &state.ManualRender{},
+		Mouse:        &state.Mouse{},
 	}}
 
 func (m *model) maybeRecordTranscript() {
