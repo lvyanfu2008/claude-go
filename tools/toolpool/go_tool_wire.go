@@ -495,10 +495,8 @@ func nativeEnterPlanModeToolSpec() types.ToolSpec {
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}
-	trueVal := true
 	return types.ToolSpec{
 		Name:            "EnterPlanMode",
-		ShouldDefer:        &trueVal,
 		Description:     getEnterPlanModeDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -532,10 +530,8 @@ func nativeExitPlanModeToolSpec() types.ToolSpec {
 		},
 		"additionalProperties": map[string]any{},
 	}
-	trueVal := true
 	return types.ToolSpec{
 		Name:            "ExitPlanMode",
-		ShouldDefer:        &trueVal,
 		Description:     exitPlanModePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
