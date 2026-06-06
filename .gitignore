@@ -1,2 +1,6 @@
 # Hermes agentd binary (root level)
 /agentd
+.harness
+.claude
+.vscode
+.cursor
