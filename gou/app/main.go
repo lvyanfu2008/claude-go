@@ -59,6 +59,8 @@ import (
 	"goc/gou/app/components/messages"
 	"goc/gou/app/components/tasks"
 	config "goc/gou/app/config"
+	"goc/gou/app/keybindings"
+	"goc/gou/app/update"
 	state "goc/gou/app/state"
 	"goc/gou/ccbhydrate"
 	"goc/gou/ccbstream"
@@ -191,6 +193,10 @@ type model struct {
 	*state.ManualRender
 	*state.Mouse
 
+	keyDispatcher *keybindings.Dispatcher
+
+	updateDispatcher *update.Dispatcher
+
 	slashListUser bool
 	slashListSel  int
 
@@ -318,7 +324,7 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 	if !gouDemoEnvFalsy("GOU_DEMO_TOOL_RESULT_PERSIST") {
 		toolResultState = toolresultpersist.NewContentReplacementState()
 	}
-	return &model{
+	m := &model{
 		Conversation: &state.Conversation{
 			Store:           st,
 			Transcript:      tr,
@@ -363,6 +369,9 @@ func newModel(st *conversation.Store, mcpCommandsJSONPath, mcpToolsJSONPath stri
 		ManualRender: &state.ManualRender{},
 		Mouse:        &state.Mouse{},
 	}
+	m.keyDispatcher = keybindings.NewDispatcher(m)
+	m.updateDispatcher = update.NewDispatcher(m, m.keyDispatcher)
+	return m
 }
 
 func (m *model) maybeRecordTranscript() {
@@ -440,103 +449,8 @@ func (m *model) bottomChromeHeight() int {
 
 // handleKeyMsg is the tea.KeyPressMsg branch; also used when SyntheticTTYKeyFromUnknownMsg maps Kitty CSI to KeyPressMsg.
 func (m *model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.Viewport.HistoryBrowseMouseOff {
-		m.Viewport.HistoryBrowseMouseOff = false
-		m2, cmd := m.handleKeyMsgPreserving(msg)
-		if cmd == nil {
-			return m2, teaGlobalRedrawCmd()
-		}
-		return m2, tea.Sequence(teaGlobalRedrawCmd(), cmd)
-	}
-	return m.handleKeyMsgPreserving(msg)
-}
-
-func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.Modal.Permission != nil && msg.String() == "ctrl+c" {
-		m.finishPermissionAsk(permissionAskReply{dec: toolexecution.DenyDecision("interrupted"), err: nil})
-		if m.Query.Cancel != nil {
-			m.Query.Cancel()
-			m.Query.Cancel = nil
-		}
-		return m, nil
-	}
-	if m.handlePermissionKey(msg) {
-		return m, nil
-	}
-	if msg.String() == "ctrl+l" {
-		return m, teaGlobalRedrawCmd()
-	}
-	if m.msgViewportWanted() && msg.String() == "ctrl+y" {
-		m.Viewport.FoldAll = !m.Viewport.FoldAll
-		m.Viewport.FoldRev++
-		return m, nil
-	}
-	if m.Modal.Permission == nil && m.Screen.Mode == state.ScreenPrompt && msg.String() == "ctrl+o" {
-		m.slashListUser = false
-		return m, m.enterTranscriptScreen()
-	}
-	if m.Modal.Permission == nil && m.Screen.Mode == state.ScreenPrompt {
-		if msg.String() == "f5" {
-			gouDemoTracef("f5 pressed: entering manual render mode (buffering events)")
-			m.ManualRender.Active = true
-			return m, nil
-		}
-		if msg.String() == "f6" {
-			gouDemoTracef("f6 pressed: flushing %d buffered events", len(m.ManualRender.Events))
-			m.ManualRender.Active = false
-			var cmds []tea.Cmd
-			for _, e := range m.ManualRender.Events {
-				_, cmd := m.Update(e)
-				if cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-			}
-			m.ManualRender.Events = nil
-			if len(cmds) > 0 {
-				return m, tea.Batch(cmds...)
-			}
-			return m, nil
-		}
-	}
-
-	if handled, cmd := m.handleTranscriptKey(msg); handled {
-		return m, cmd
-	}
-	// @-mention autocomplete: Tab/Enter/↑/↓/Esc (must run before slash list nav).
-	if m.Screen.Mode == state.ScreenPrompt && m.handleAtSuggestKeys(msg) == 1 {
-		return m, nil
-	}
-
-	// Slash command list: ↑/↓/Tab must win over message-pane scroll (see isListViewportScrollKey).
-	if m.Screen.Mode == state.ScreenPrompt && m.handleSlashListNavKey(msg) {
-		return m, nil
-	}
-	if m.msgViewportWanted() && isListViewportScrollKey(msg.String()) {
-		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=true, key=%s, calling handleMsgViewportScrollKey", msg.String())
-		return m, m.handleMsgViewportScrollKey(msg)
-	} else if isListViewportScrollKey(msg.String()) {
-		diaglog.Line("[key] handleKeyMsgPreserving: msgViewportWanted=false, key=%s, handling with traditional scroll", msg.String())
-		return m, m.handleTraditionalScrollKey(msg)
-	}
-	switch msg.String() {
-	case "ctrl+c":
-		if m.Query.Busy && m.Query.Cancel != nil {
-			m.Query.Cancel()
-			m.Query.Cancel = nil
-			return m, nil
-		}
-		now := time.Now()
-		if now.Sub(m.Query.LastCtrlC) < 800*time.Millisecond && m.Query.CtrlCPending {
-			m.Query.CtrlCPending = false
-			if m.Input.SuggestionEngine != nil {
-				m.Input.SuggestionEngine.FileIndex().Stop()
-			}
-			return m, tea.Quit
-		}
-		m.Query.LastCtrlC = now
-		m.Query.CtrlCPending = true
-		return m, nil
-	case "esc":
+	// Pre-dispatch: esc special cases in prompt mode (before context dispatch).
+	if msg.String() == "esc" && m.Screen.Mode == state.ScreenPrompt {
 		if m.slashListUser {
 			m.slashListUser = false
 			return m, nil
@@ -546,60 +460,32 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			m.rebuildHeightCache()
 			return m, nil
 		}
-		if m.Screen.Mode == state.ScreenTranscript {
-			return m, m.exitTranscriptScreenWithPostCmd()
-		}
-		if m.Input.SuggestionEngine != nil {
-			m.Input.SuggestionEngine.FileIndex().Stop()
-		}
-		return m, tea.Quit
-	case "f2":
-		m.toggleSlashListUser()
-		return m, nil
-	}
-	if m.Screen.Mode == state.ScreenTranscript {
-		switch msg.String() {
-		case "q":
-			return m, m.exitTranscriptScreenWithPostCmd()
-		case "up":
-			m.Scroll.Sticky = false
-			m.Scroll.Top = max(0, m.Scroll.Top-1)
-			return m, nil
-		case "down":
-			m.Scroll.Sticky = false
-			m.Scroll.Top += 1
-			return m, nil
-		case "pgup":
-			m.Scroll.Sticky = false
-			m.Scroll.Top = max(0, m.Scroll.Top-listViewportH(m)/2)
-			return m, nil
-		case "pgdown":
-			m.Scroll.Sticky = false
-			m.Scroll.Top += listViewportH(m) / 2
-			return m, nil
-		case "end":
-			m.Scroll.Sticky = true
-			m.Scroll.Top = 1 << 30
-			return m, nil
-		}
-		return m, nil
 	}
 
-	// Slash list: Enter applies the highlighted command and runs full submit.
-	if m.Screen.Mode == state.ScreenPrompt && m.slashListVisible() && isPromptEnterKey(msg) {
-		if len(m.visibleSlashList()) > 0 {
-			m.applySlashTab()
-			fullPrompt := strings.TrimRight(m.Input.PR.Value(), "\r\n")
-			m.Input.PR.SetValue("")
-			m.slashListUser = false
-			m.syncSlashListAfterPrompt()
-			line := strings.TrimSpace(fullPrompt)
-			if line == "" {
-				return m, nil
+	if m.Viewport.HistoryBrowseMouseOff {
+		m.Viewport.HistoryBrowseMouseOff = false
+		m2, cmd, handled := m.keyDispatcher.Dispatch(msg)
+		if handled {
+			if m2 == nil {
+				m2 = m
 			}
-			return m.gouSubmitFromPromptText(fullPrompt, line)
+			if cmd == nil {
+				return m2, teaGlobalRedrawCmd()
+			}
+			return m2, tea.Sequence(teaGlobalRedrawCmd(), cmd)
 		}
+		return m, teaGlobalRedrawCmd()
 	}
+
+	m2, cmd, handled := m.keyDispatcher.Dispatch(msg)
+	if handled {
+		if m2 == nil {
+			m2 = m
+		}
+		return m2, cmd
+	}
+
+	// Fall through to input editing (no binding matched).
 	m.Input.PR.Update(prompt.NormalizeTTYNewlineKey(msg))
 	m.syncAtSuggestions()
 	m.syncSlashListAfterPrompt()
@@ -622,138 +508,7 @@ func (m *model) handleKeyMsgPreserving(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// When the interactive question UI is active, delegate all updates to it.
-	if m.Modal.Question != nil {
-		qm, _ := m.Modal.Question.(*questionModel).Update(msg)
-		m.Modal.Question = qm.(*questionModel) // questionModel.Update always returns *questionModel, nil cmd
-		if m.Modal.Question.(*questionModel).IsDone() {
-			reply := permissionAskReply{}
-			if m.Modal.Question.(*questionModel).IsCancelled() {
-				reply.dec = toolexecution.DenyDecision("User declined to answer questions")
-			} else {
-				updatedInput := m.Modal.Question.(*questionModel).BuildUpdatedInput(m.Modal.Question.(*questionModel).originalInput)
-				reply.dec = toolexecution.PermissionDecision{
-					Behavior:     toolexecution.PermissionAllow,
-					UpdatedInput: updatedInput,
-				}
-			}
-			// Send reply through the questionUI's own channel (not permAsk).
-			if m.Modal.Question.(*questionModel).replyCh != nil {
-				select {
-				case m.Modal.Question.(*questionModel).replyCh <- reply:
-				default:
-				}
-			}
-			m.Modal.Question = nil
-		}
-		return m, nil
-	}
-
-	if m.ManualRender.Active {
-		switch msg.(type) {
-		case ccbstream.Msg, gouQueryDoneMsg, gouQueryYieldMsg, gouStreamEventMsg, gouSpinnerTickMsg, gouStreamingToolUsesMsg, gouToolSummaryDelayTickMsg, gouMemoryAppendMsg, compactPhaseMsg:
-			m.ManualRender.Events = append(m.ManualRender.Events, msg)
-			return m, nil
-		}
-	}
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		return m.handleUpdateWindowSize(msg)
-
-	case gouPermissionAskMsg:
-		if len(msg.questions) > 0 {
-			// AskUserQuestion: switch to interactive question UI.
-			m.Modal.Question = newQuestionModel(msg.questions, msg.replyCh, m.Layout.Width, m.Layout.Height)
-			// Store the original input for building updatedInput on submit.
-			m.Modal.Question.(*questionModel).originalInput = msg.input
-			return m, nil
-		}
-		m.Modal.Permission = &permissionAskOverlay{
-			toolName:  msg.toolName,
-			toolUseID: msg.toolUseID,
-			input:     msg.input,
-			prompt:    msg.prompt,
-			replyCh:   msg.replyCh,
-		}
-		return m, nil
-
-	case gouTranscriptEditorPrepMsg:
-		return m, m.handleTranscriptEditorChainMsg(msg)
-	case gouTranscriptEditorExecDoneMsg:
-		return m, m.handleTranscriptEditorChainMsg(msg)
-	case gouTranscriptEditorClearStatusMsg:
-		return m, m.handleTranscriptEditorChainMsg(msg)
-
-	case tea.MouseClickMsg, tea.MouseMotionMsg, tea.MouseWheelMsg, tea.MouseReleaseMsg:
-		if m.Viewport.HistoryBrowseMouseOff && m.msgViewportWanted() {
-			return m, nil
-		}
-		if handled, cmd := m.tryHandleMessageListMouse(msg); handled {
-			return m, cmd
-		}
-
-	case tea.KeyPressMsg:
-		return m.handleKeyMsg(msg)
-
-	case gouQueryYieldMsg:
-		return m.handleUpdateGouQueryYield(msg)
-
-	case gouStreamEventMsg:
-		return m.handleUpdateGouStreamEvent(msg)
-
-	case gouStreamingToolUsesMsg:
-		return m.handleUpdateGouStreamingToolUses(msg)
-
-	case gouSpinnerTickMsg: //120ms
-		return m.handleUpdateGouSpinnerTick(msg)
-
-	case gouQueryDoneMsg:
-		return m.handleUpdateGouQueryDone(msg)
-
-	case gouMemoryAppendMsg:
-		return m.handleUpdateGouMemoryAppend(msg)
-
-	case compactPhaseMsg:
-		return m.handleUpdateCompactPhase(msg)
-
-	case gouToolSummaryDelayTickMsg:
-		return m.handleUpdateToolSummaryDelayTick(msg)
-
-	case ccbstream.Msg:
-		return m.handleUpdateCCBStream(msg)
-
-	case AgentRegisteredMsg:
-		m.Agent.Tasks.(*agentTaskStore).Register(msg.Task)
-		return m, func() tea.Msg { return AgentTaskTickMsg{} }
-
-	case AgentProgressMsg:
-		m.Agent.Tasks.(*agentTaskStore).UpdateProgress(msg.AgentID, msg.Progress)
-		return m, nil
-
-	case AgentCompletedMsg:
-		m.Agent.Tasks.(*agentTaskStore).Complete(msg.AgentID, msg.Status)
-		return m, nil
-
-	case AgentTaskTickMsg:
-		m.Agent.Tasks.(*agentTaskStore).EvictExpired(time.Now())
-		if m.Agent.Tasks.(*agentTaskStore).Count() > 0 {
-			return m, taskListTickCmdAgent()
-		}
-		return m, nil
-
-	case taskListTickMsg:
-		m.Agent.TaskList.(*taskListModel).poll()
-		return m, taskListTickCmd(m.Agent.TaskList.(*taskListModel))
-	}
-
-	if syn, ok := prompt.SyntheticTTYKeyFromUnknownMsg(msg); ok {
-		return m.handleKeyMsg(syn)
-	}
-	if m.Screen.Mode != state.ScreenTranscript {
-		m.Input.PR.Update(msg)
-	}
-	return m, nil
+	return m.updateDispatcher.Update(msg)
 }
 
 // taskListViewMaxDisplay matches the line budget for [model.View] (task list after stream rows); keep in sync with that block.
