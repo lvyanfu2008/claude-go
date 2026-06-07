@@ -47,4 +47,7 @@ type EventHandler interface {
 
 	// OnErrorMessage 错误信息输出。
 	OnErrorMessage(errMsg string)
+
+	// OnPermissionAsk 工具权限询问。实现者应展示询问 UI 并等待用户决策。
+	OnPermissionAsk(tool string, toolUseID string, input json.RawMessage)
 }

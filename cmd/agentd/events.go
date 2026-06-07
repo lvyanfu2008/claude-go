@@ -93,6 +93,19 @@ func (h *stdioEventHandler) OnAgentProgress(agentID string, status string, messa
 	})
 }
 
+func (h *stdioEventHandler) OnPermissionAsk(tool string, toolUseID string, input json.RawMessage) {
+	var inputAny any = string(input)
+	var parsed any
+	if json.Unmarshal(input, &parsed) == nil {
+		inputAny = parsed
+	}
+	h.sendEvent(engine.EventTypePermissionAsk, map[string]any{
+		"tool":        tool,
+		"tool_use_id": toolUseID,
+		"input":       inputAny,
+	})
+}
+
 func (h *stdioEventHandler) OnErrorMessage(errMsg string) {
 	h.sendEvent(engine.EventTypeError, map[string]string{"message": errMsg})
 }

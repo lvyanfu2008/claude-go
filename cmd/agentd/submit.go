@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"goc/commands"
@@ -13,6 +14,7 @@ import (
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
 	"goc/gou/conversation"
+	"goc/tools/skilltools"
 	"goc/tools/toolexecution"
 	"goc/gou/pui"
 	"goc/messagesapi"
@@ -126,18 +128,50 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		return fmt.Errorf("fetch system prompt: %w", err)
 	}
 
+	// Build full ParityToolRunner covering all tools: Agent, Task, Skill,
+	// Bash, Read, Write, Edit, Glob, Grep, etc.
+	absWorkDir, _ := filepath.Abs(cwd)
+	var commands []types.Command
+	if params.RuntimeContext != nil {
+		commands = params.RuntimeContext.Options.Commands
+	}
+	runner := &skilltools.ParityToolRunner{
+		DemoToolRunner: skilltools.DemoToolRunner{
+			Commands:  commands,
+			SessionID: store.ConversationID,
+		},
+		WorkDir:          absWorkDir,
+		ProjectRoot:      absWorkDir,
+		LocalBashDefault: true,
+		AskAutoFirst:     true,
+		MainLoopModel:    mainLoopModel,
+		Messages:         store.Messages,
+		MessagesFunc:     func() []types.Message { return store.Messages },
+	}
+
 	qp := query.QueryParams{
 		Messages:        store.Messages,
 		SystemPrompt:    query.SystemPrompt(fetchResult.DefaultSystemPrompt),
-		CanUseTool:       canUseToolFn(permBridge),
+		CanUseTool:       canUseToolFn(permBridge, events),
 		UserContext:     fetchResult.UserContext,
 		SystemContext:   fetchResult.SystemContext,
 		StreamingParity: true,
+		Deps: &query.QueryDeps{
+			ToolexecutionDeps: toolexecution.ExecutionDeps{
+				InvokeTool: runner.Run,
+			},
+		},
+	}
+	if params.RuntimeContext != nil {
+		qp.ToolUseContext = params.RuntimeContext.ToolUseContext
 	}
 
 	for y, err := range query.Query(ctx, qp) {
 		if err != nil {
 			return fmt.Errorf("query: %w", err)
+		}
+		if len(y.StreamEvent) > 0 {
+			handleStreamEvent(events, y.StreamEvent)
 		}
 		if y.Message != nil {
 			handleQueryYieldMessage(store, events, *y.Message)
@@ -150,6 +184,33 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		}
 	}
 	return nil
+}
+
+// handleStreamEvent parses a content_block_delta SSE event and forwards text/thinking
+// deltas to the ink-gateway in real time for token-level streaming.
+func handleStreamEvent(events engine.EventHandler, raw json.RawMessage) {
+	var ev struct {
+		Delta json.RawMessage `json:"delta"`
+	}
+	if json.Unmarshal(raw, &ev) == nil {
+		var d struct {
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			Thinking string `json:"thinking"`
+		}
+		if json.Unmarshal(ev.Delta, &d) == nil {
+			switch d.Type {
+			case "text_delta":
+				if d.Text != "" {
+					events.OnStreamDelta(d.Text)
+				}
+			case "thinking_delta":
+				if d.Thinking != "" {
+					events.OnStreamThinkingDelta(d.Thinking)
+				}
+			}
+		}
+	}
 }
 
 func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandler, msg types.Message) {
@@ -169,14 +230,10 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 		}
 		for _, block := range blocks {
 			switch block.Type {
-			case "text":
-				events.OnStreamDelta(block.Text)
 			case "tool_use":
 				events.OnToolUseStart(block.Name, block.ID, block.Input)
 			case "tool_result":
 				events.OnToolResult(block.ID, block.Content, false)
-			case "thinking":
-				events.OnStreamThinkingDelta(block.Text)
 			}
 		}
 		store.AppendMessage(msg)
@@ -189,11 +246,12 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 }
 
 
-func canUseToolFn(b engine.PermissionBridge) toolexecution.QueryCanUseToolFn {
+func canUseToolFn(b engine.PermissionBridge, events engine.EventHandler) toolexecution.QueryCanUseToolFn {
 	if b == nil {
 		return nil
 	}
 	return func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
+		events.OnPermissionAsk(toolName, toolUseID, input)
 		pd, err := b.AskPermission(ctx, toolName, input)
 		if err != nil {
 			return toolexecution.DenyDecision(err.Error()), err
