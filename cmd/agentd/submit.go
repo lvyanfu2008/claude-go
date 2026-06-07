@@ -127,11 +127,12 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	}
 
 	qp := query.QueryParams{
-		Messages:      store.Messages,
-		SystemPrompt:  query.SystemPrompt(fetchResult.DefaultSystemPrompt),
-		CanUseTool:     canUseToolFn(permBridge),
-		UserContext:   fetchResult.UserContext,
-		SystemContext: fetchResult.SystemContext,
+		Messages:        store.Messages,
+		SystemPrompt:    query.SystemPrompt(fetchResult.DefaultSystemPrompt),
+		CanUseTool:       canUseToolFn(permBridge),
+		UserContext:     fetchResult.UserContext,
+		SystemContext:   fetchResult.SystemContext,
+		StreamingParity: true,
 	}
 
 	for y, err := range query.Query(ctx, qp) {
