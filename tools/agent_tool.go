@@ -275,7 +275,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		forkOpts = opts
 	}
 
-	if in.RunInBackground || selected.Background || toolpool.CoordinatorMergeFilterActive() || commands.ProactiveModeActive() {
+	if selected.Background {
 		outFile, err := writeBackgroundOutput(cfg.TasksDir, s.ID, "Agent started")
 		if err != nil {
 			return "", true, err
