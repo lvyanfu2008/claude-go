@@ -11,9 +11,11 @@ import (
 	"goc/anthropicmessages"
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
+	"goc/internal/anthropic"
 	"goc/messagesapi"
 	"goc/tools/toolexecution"
 	"goc/tools/toolsearchwire"
+	"goc/tools/toolstub"
 	"goc/types"
 )
 
@@ -82,11 +84,7 @@ func runOpenAIStreamingParityModelLoop(
 			if HasChromeTools(in.Tools) {
 				sysPrompts = append(sysPrompts, CHROME_TOOL_SEARCH_INSTRUCTIONS)
 			}
-			openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(sysPrompts), model)
-		if err != nil {
-			return err
-		}
-		toolsForWire := in.Tools
+			toolsForWire := in.Tools
 		if len(in.Tools) > 0 {
 			if wired, errW := toolsearchwire.WireToolsJSON(in.Tools, model, false, true, msgsJSON); errW == nil {
 				toolsForWire = wired
@@ -96,6 +94,10 @@ func runOpenAIStreamingParityModelLoop(
 					msgsJSON = prep
 				}
 			}
+		}
+		openaiMsgs, err := anthropicWireMessagesToOpenAI(msgsJSON, []string(sysPrompts), model)
+		if err != nil {
+			return err
 		}
 		toolsOA, err := anthropicToolsWireToOpenAI(toolsForWire)
 		if err != nil {
@@ -131,6 +133,13 @@ func runOpenAIStreamingParityModelLoop(
 		if depsCopy.Registry == nil && len(in.Tools) > 0 {
 			if reg, err := toolexecution.NewJSONToolRegistry(in.Tools); err == nil {
 				depsCopy.Registry = reg
+			}
+		}
+		// Enrich context with tool definitions for ToolSearch deferred-tool discovery.
+		if len(in.Tools) > 0 {
+			var toolDefs []anthropic.ToolDefinition
+			if json.Unmarshal(in.Tools, &toolDefs) == nil {
+				ctx = toolstub.ContextWithToolTurn(ctx, toolDefs, false, nil)
 			}
 		}
 		runner := RunToolUseToolRunner{ParentCtx: ctx, Deps: depsCopy}

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"goc/claudeinit"
+	"goc/commands"
 	"goc/engine"
 	"goc/gou/conversation"
 	"goc/hookexec"
@@ -72,6 +73,11 @@ func main() {
 		SessionID: sessionID,
 	})
 
+	// 启动时加载并发送命令列表，供 UI slash 补全使用
+	if cmds, err := commands.GetCommandsWithDefaults(context.Background(), cwd); err == nil {
+		events.OnCommandsList(cmds)
+	}
+
 	// 上下文
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -129,7 +135,8 @@ func main() {
 				var p engine.PermissionResponsePayload
 				if err := json.Unmarshal(msg.Payload, &p); err == nil {
 					permRespCh <- engine.PermissionDecision{
-						Allow: p.Decision == "allow",
+						Allow:        p.Decision == "allow",
+						UpdatedInput: p.UpdatedInput,
 					}
 				}
 

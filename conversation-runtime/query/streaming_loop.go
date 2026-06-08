@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"goc/anthropicmessages"
+	"goc/internal/anthropic"
+	"goc/tools/toolstub"
 	"goc/tools/toolsearchwire"
 	"goc/conversation-runtime/streamingtool"
 	"goc/gou/ccbhydrate"
@@ -164,6 +166,13 @@ func runStreamingParityModelLoop(
 		if depsCopy.Registry == nil && len(in.Tools) > 0 {
 			if reg, err := toolexecution.NewJSONToolRegistry(in.Tools); err == nil {
 				depsCopy.Registry = reg
+			}
+		}
+		// Enrich context with tool definitions for ToolSearch deferred-tool discovery.
+		if len(in.Tools) > 0 {
+			var toolDefs []anthropic.ToolDefinition
+			if json.Unmarshal(in.Tools, &toolDefs) == nil {
+				ctx = toolstub.ContextWithToolTurn(ctx, toolDefs, false, nil)
 			}
 		}
 		runner := RunToolUseToolRunner{ParentCtx: ctx, Deps: depsCopy}

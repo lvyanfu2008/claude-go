@@ -285,7 +285,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	qp := query.QueryParams{
 		Messages:        msgsForQ,
 		SystemPrompt:    query.SystemPrompt(fetchResult.DefaultSystemPrompt),
-		CanUseTool:      canUseToolFn(permBridge, events),
+		CanUseTool: nil, // te.QueryCanUseTool handles per-tool permissions (AskDecision for AskUserQuestion)
 		UserContext:     fetchResult.UserContext,
 		SystemContext:   fetchResult.SystemContext,
 		StreamingParity: true,
@@ -431,7 +431,11 @@ func canUseToolFn(b engine.PermissionBridge, events engine.EventHandler) toolexe
 			return toolexecution.DenyDecision(err.Error()), err
 		}
 		if pd.Allow {
-			return toolexecution.AllowDecision(), nil
+			d := toolexecution.AllowDecision()
+			if len(pd.UpdatedInput) > 0 {
+				d.UpdatedInput = pd.UpdatedInput
+			}
+			return d, nil
 		}
 		return toolexecution.DenyDecision(pd.Reason), nil
 	}
@@ -447,7 +451,11 @@ func askResolverFn(b engine.PermissionBridge) func(ctx context.Context, toolName
 			return toolexecution.DenyDecision(err.Error()), err
 		}
 		if pd.Allow {
-			return toolexecution.AllowDecision(), nil
+			d := toolexecution.AllowDecision()
+			if len(pd.UpdatedInput) > 0 {
+				d.UpdatedInput = pd.UpdatedInput
+			}
+			return d, nil
 		}
 		return toolexecution.DenyDecision(pd.Reason), nil
 	}

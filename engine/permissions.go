@@ -7,8 +7,9 @@ import (
 
 // PermissionDecision 是用户对权限询问的回复。
 type PermissionDecision struct {
-	Allow  bool
-	Reason string
+	Allow        bool
+	Reason       string
+	UpdatedInput json.RawMessage `json:"updated_input,omitempty"`
 }
 
 // PermissionBridge 处理工具权限询问。

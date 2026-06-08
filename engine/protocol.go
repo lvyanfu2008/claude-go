@@ -27,8 +27,9 @@ type UserMessagePayload struct {
 
 // PermissionResponsePayload 用户对权限询问的回复。
 type PermissionResponsePayload struct {
-	ToolUseID string `json:"tool_use_id"`
-	Decision  string `json:"decision"` // "allow" | "deny"
+	ToolUseID    string          `json:"tool_use_id"`
+	Decision     string          `json:"decision"` // "allow" | "deny"
+	UpdatedInput json.RawMessage `json:"updated_input,omitempty"`
 }
 
 // ResumePayload 恢复已有会话。
