@@ -13,14 +13,19 @@ import (
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
+	"goc/gou/commandqueue"
 	"goc/gou/conversation"
 	"goc/gou/pui"
+	"goc/growthbook"
 	"goc/messagesapi"
 	"goc/modelenv"
 	"goc/querycontext"
+	"goc/services/autodream"
+	"goc/services/extractmemories"
 	"goc/sessiontranscript"
 	"goc/tools/skilltools"
 	"goc/tools/toolexecution"
+	"goc/tools/toolresultpersist"
 	"goc/types"
 
 	"goc/engine"
@@ -69,6 +74,8 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 			events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: sessionID})
 		}
 
+		//fmt.Fprintf(os.Stderr, "[agentd] ProcessUserInput done: shouldQuery=%v hadExec=%v commands=%d skillListing=%d\n",
+		//	out.EffectiveShouldQuery, out.HadExecutionRequest, len(params.Commands), len(params.SkillListingCommands))
 		if out.EffectiveShouldQuery && !out.HadExecutionRequest {
 			if err := runAgentdQuery(ctx, store, events, permBridge, params); err != nil {
 				events.OnErrorMessage(err.Error())
@@ -112,6 +119,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			break
 		}
 	}
+	//fmt.Fprintf(os.Stderr, "[agentd] skill listing: skillListing=%d hasSkillTool=%v toolSpecs=%d\n", len(skillListing), hasSkillTool, len(toolSpecs))
 
 	normOpts := messagesapi.OptionsFromEnv()
 	var baseMsgs json.RawMessage
@@ -123,6 +131,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			skillListingText = s
 		}
 	}
+	//fmt.Fprintf(os.Stderr, "[agentd] skillListingText=%d chars, will inject=%v\n", len(skillListingText), skillListingText != "")
 	if skillListingText != "" {
 		baseMsgs, err = ccbhydrate.MessagesJSONWithSkillListing(store.Messages, skillListingText, toolSpecs, normOpts)
 	} else {
@@ -163,16 +172,22 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		return fmt.Errorf("fetch system prompt: %w", err)
 	}
 
+	// Inject SessionStart hook messages into conversation (mirrors gou/app/view.go)
+	//fmt.Fprintf(os.Stderr, "[agentd] SessionStartHookMessages=%d\n", len(fetchResult.SessionStartHookMessages))
+	for _, m := range fetchResult.SessionStartHookMessages {
+		store.AppendMessage(m)
+	}
+
 	// Build full ParityToolRunner covering all tools: Agent, Task, Skill,
 	// Bash, Read, Write, Edit, Glob, Grep, etc.
 	absWorkDir, _ := filepath.Abs(cwd)
-	var commands []types.Command
+	var cmds []types.Command
 	if params.RuntimeContext != nil {
-		commands = params.RuntimeContext.Options.Commands
+		cmds = params.RuntimeContext.Options.Commands
 	}
 	runner := &skilltools.ParityToolRunner{
 		DemoToolRunner: skilltools.DemoToolRunner{
-			Commands:  commands,
+			Commands:  cmds,
 			SessionID: store.ConversationID,
 		},
 		WorkDir:          absWorkDir,
@@ -187,11 +202,11 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 				return
 			}
 			var data struct {
-				Type     string `json:"type"`
-				AgentID  string `json:"agentId"`
-				Summary  string `json:"summary"`
-				Status   string `json:"status"`
-				Message  string `json:"message"`
+				Type    string `json:"type"`
+				AgentID string `json:"agentId"`
+				Summary string `json:"summary"`
+				Status  string `json:"status"`
+				Message string `json:"message"`
 			}
 			if json.Unmarshal(msg.Data, &data) == nil {
 				switch data.Type {
@@ -209,6 +224,29 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		},
 	}
 
+	// Build production deps with auto-compact and snip compact (P0-1)
+	qdeps := query.ProductionDeps(nil, nil)
+	// P0-2: complete tool execution deps
+	te := toolexecution.ExecutionDeps{
+		InvokeTool:              runner.Run,
+		MainLoopModel:           mainLoopModel,
+		ReadToolRoots:           runner.ToolReadMappingRoots(),
+		ReadToolMemCWD:          runner.ToolReadMappingMemCWD(),
+		MultiMessageToolHandler: skilltools.NewSkillMultiMessageHandler(cmds, store.ConversationID, nil),
+		QueryCanUseTool: func(ctx context.Context, toolName, toolUseID string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
+			if toolName == "AskUserQuestion" {
+				return toolexecution.AskDecision("Answer questions?"), nil
+			}
+			return toolexecution.AllowDecision(), nil
+		},
+		SandboxingEnabled:                      true,
+		AutoAllowBashWholeToolAskWhenSandboxed: true,
+	}
+	te.AskResolver = func(ctx context.Context, toolName, toolUseID string, input json.RawMessage, prompt string) (toolexecution.PermissionDecision, error) {
+		return canUseToolFn(permBridge, events)(ctx, toolName, toolUseID, input)
+	}
+	qdeps.ToolexecutionDeps = te
+
 	qp := query.QueryParams{
 		Messages:        store.Messages,
 		SystemPrompt:    query.SystemPrompt(fetchResult.DefaultSystemPrompt),
@@ -216,15 +254,51 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		UserContext:     fetchResult.UserContext,
 		SystemContext:   fetchResult.SystemContext,
 		StreamingParity: true,
-		Deps: &query.QueryDeps{
-			ToolexecutionDeps: toolexecution.ExecutionDeps{
-				InvokeTool: runner.Run,
-			},
-		},
+		Deps:            &qdeps,
 	}
 	if params.RuntimeContext != nil {
 		qp.ToolUseContext = params.RuntimeContext.ToolUseContext
 	}
+	// OnQueryComplete: post-turn memory extraction and auto-dream (P1-2)
+	qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
+		extractmemories.Execute(ctx, nil, extractmemories.ExtractionParams{
+			Messages:       qcp.Messages,
+			ToolUseContext: qcp.ToolUseContext,
+			SystemPrompt:   qcp.SystemPrompt,
+			UserContext:    qcp.UserContext,
+			SystemContext:  qcp.SystemContext,
+			Cwd:            qcp.Cwd,
+			QuerySource:    qcp.QuerySource,
+			NewUUID:        query.RandomUUID,
+			SkipIndex:      growthbook.IsTenguMothCopse(),
+		})
+		autodream.Execute(ctx, nil, qcp.ToolUseContext, qcp.SystemPrompt,
+			qcp.UserContext, qcp.SystemContext, qcp.QuerySource, query.RandomUUID,
+			commands.ClaudeConfigHome(), qcp.Cwd, "", store.ConversationID)
+	}
+
+	// ApplyToolResultBudget: enforce tool result size budget
+	qdeps.ApplyToolResultBudget = func(ctx context.Context, in *query.ToolResultBudgetInput) ([]types.Message, error) {
+		return toolresultpersist.ApplyToolResultBudget(
+			in.Messages,
+			nil, // contentReplacementState (nil = no persistent trunction state)
+			toolresultpersist.SessionInfo{SessionID: store.ConversationID, Cwd: cwd},
+			0,   // use default MaxToolResultsPerMessageChars
+			nil, // skipToolNames
+		), nil
+	}
+
+	// DrainCommandQueue: forward background agent notifications
+	qdeps.DrainCommandQueue = func() []string {
+		var result []string
+		for _, cmd := range commandqueue.DrainCommandQueue() {
+			result = append(result, cmd.Value)
+		}
+		return result
+	}
+
+	processuserinput.ApplyQueryHostEnvGates(&qp)
+	processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
 
 	for y, err := range query.Query(ctx, qp) {
 		if err != nil {

@@ -13,9 +13,11 @@ import (
 	"goc/claudeinit"
 	"goc/engine"
 	"goc/gou/conversation"
+	"goc/hookexec"
 	_ "goc/plugins"
 	"goc/sessiontranscript"
 	"goc/types"
+	"time"
 )
 
 func main() {
@@ -73,6 +75,22 @@ func main() {
 	// 上下文
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// SessionEnd hooks — mirrors cmd/claude
+	transcriptPath := sessiontranscript.TranscriptPath(sessionID, cwd, "", sessiontranscript.ConfigHomeDir())
+	mergedHooks, _ := hookexec.MergedHooksForCwd(cwd)
+	sessionEndReason := "error"
+	defer func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), time.Duration(hookexec.SessionEndHookTimeoutMs)*time.Millisecond)
+		defer bgCancel()
+		hookexec.RunSessionEndHooks(bgCtx, mergedHooks, cwd, hookexec.BaseHookInput{
+			SessionID:      sessionID,
+			TranscriptPath: transcriptPath,
+			Cwd:            cwd,
+		}, sessionEndReason, sessionID)
+	}()
+	_ = sessionEndReason
+	_ = transcriptPath
 
 	// 信号处理
 	sigCh := make(chan os.Signal, 1)
