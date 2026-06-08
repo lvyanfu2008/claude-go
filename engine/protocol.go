@@ -51,6 +51,7 @@ const (
 	EventTypeAgentProgress       AgentEventType = "agent_progress"
 	EventTypeAssistantMessage    AgentEventType = "assistant_message"
 	EventTypeError               AgentEventType = "error"
+	EventTypeCommandsList        AgentEventType = "commands_list"
 )
 
 // AgentEvent 是 Agent 发给 Gateway 的事件。

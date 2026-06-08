@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 
 	"goc/commands/handlers"
@@ -60,11 +61,6 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 	isAlreadyProcessing *bool,
 	p *processuserinput.ProcessUserInputParams,
 ) (*processuserinput.ProcessUserInputBaseResult, error) {
-	sid := strings.TrimSpace(opt.SessionID)
-	if sid == "" {
-		sid = "gou-demo"
-	}
-	rfs := opt.ReadFileState
 	cwd := strings.TrimSpace(opt.Cwd)
 
 	return func(
@@ -84,6 +80,10 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 
 		parsed := processuserinput.ParseSlashCommand(inputString)
 		if parsed == nil {
+			// Bare "/" shows available commands list (TS autocomplete equivalent).
+			if strings.TrimSpace(inputString) == "/" {
+				return listAvailableCommands(p.Commands), nil
+			}
 			return &processuserinput.ProcessUserInputBaseResult{
 				Messages:    []types.Message{SystemNotice("Invalid slash command.")},
 				ShouldQuery: false,
@@ -95,7 +95,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				ShouldQuery: false,
 			}, nil
 		}
-		
+
 		cmd := processuserinput.FindCommand(parsed.CommandName, p.Commands)
 		if cmd == nil {
 			// TS processSlashCommand: if looksLikeCommand && !isFilePath → Unknown skill, shouldQuery false.
@@ -105,7 +105,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				if fuzzyName := findBestFuzzyMatch(parsed.CommandName, p.Commands); fuzzyName != "" {
 					if fuzzyCmd := processuserinput.FindCommand(fuzzyName, p.Commands); fuzzyCmd != nil {
 						// Re-dispatch the matched command with original args.
-						return dispatchSlashCommand(fuzzyCmd, parsed.Args, opt, attachmentMessages, uuid, p, rfs, cwd, ctx)
+						return dispatchSlashCommand(fuzzyCmd, parsed.Args, opt, attachmentMessages, uuid, p, opt.ReadFileState, cwd, ctx)
 					}
 				}
 				return unknownSkillSlashResult(parsed, attachmentMessages, suggestAvailableCommands(parsed.CommandName, p.Commands)), nil
@@ -115,7 +115,7 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 				Source:   types.SlashResolveUnknown,
 			}, attachmentMessages, uuid, p), nil
 		}
-		return dispatchSlashCommand(cmd, parsed.Args, opt, attachmentMessages, uuid, p, rfs, cwd, ctx)
+		return dispatchSlashCommand(cmd, parsed.Args, opt, attachmentMessages, uuid, p, opt.ReadFileState, cwd, ctx)
 	}
 }
 
@@ -327,6 +327,68 @@ func todoV2ToolName(commandName string) (canonical string, ok bool) {
 		return "TaskUpdate", true
 	default:
 		return "", false
+	}
+}
+
+// listAvailableCommands returns a result listing all non-hidden commands, grouped by type.
+func listAvailableCommands(commands []types.Command) *processuserinput.ProcessUserInputBaseResult {
+	var lines []string
+	lines = append(lines, "Available commands:")
+	lines = append(lines, "")
+
+	// Separate by type: prompt (skills), local, local-jsx
+	var prompts, locals, jsx []types.Command
+	for _, c := range commands {
+		if c.IsHidden != nil && *c.IsHidden {
+			continue
+		}
+		switch c.Type {
+		case "prompt":
+			prompts = append(prompts, c)
+		case "local":
+			locals = append(locals, c)
+		case "local-jsx":
+			jsx = append(jsx, c)
+		}
+	}
+
+	formatCmd := func(c types.Command) string {
+		desc := strings.TrimSpace(c.Description)
+		if desc != "" {
+			return fmt.Sprintf("  /%-30s %s", c.Name, desc)
+		}
+		return fmt.Sprintf("  /%s", c.Name)
+	}
+
+	if len(prompts) > 0 {
+		lines = append(lines, fmt.Sprintf("Skills (%d):", len(prompts)))
+		sort.Slice(prompts, func(i, j int) bool { return prompts[i].Name < prompts[j].Name })
+		for _, c := range prompts {
+			lines = append(lines, formatCmd(c))
+		}
+		lines = append(lines, "")
+	}
+	if len(locals) > 0 {
+		lines = append(lines, fmt.Sprintf("Commands (%d):", len(locals)))
+		sort.Slice(locals, func(i, j int) bool { return locals[i].Name < locals[j].Name })
+		for _, c := range locals {
+			lines = append(lines, formatCmd(c))
+		}
+		lines = append(lines, "")
+	}
+	if len(jsx) > 0 {
+		lines = append(lines, "Interactive:")
+		sort.Slice(jsx, func(i, j int) bool { return jsx[i].Name < jsx[j].Name })
+		for _, c := range jsx {
+			lines = append(lines, formatCmd(c))
+		}
+		lines = append(lines, "")
+	}
+
+	lines = append(lines, fmt.Sprintf("Total: %d commands. Type /<name> to use, partial names are fuzzy-matched.", len(prompts)+len(locals)+len(jsx)))
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages:    []types.Message{SystemNotice(strings.Join(lines, "\n"))},
+		ShouldQuery: false,
 	}
 }
 

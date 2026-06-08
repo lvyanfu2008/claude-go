@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"goc/commands"
@@ -31,6 +32,12 @@ import (
 	"goc/engine"
 )
 
+var (
+	agentdSessionStarted  bool
+	agentdExtractMemState = extractmemories.NewState()
+	agentdAutoDreamState  = autodream.NewState()
+)
+
 // agentdSubmitFn 返回 agentd 版本的 SubmitFunc，完整实现 ProcessUserInput → ApplyBaseResult → Query 管线。
 func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) engine.SubmitFunc {
 	return func(ctx context.Context, text string, store *conversation.Store, events engine.EventHandler, _ engine.PermissionBridge) error {
@@ -53,6 +60,9 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 			return err
 		}
 
+		// Send commands list to ink-gateway for UI slash autocomplete.
+		events.OnCommandsList(params.Commands)
+
 		// Inject slash command handler so user-typed /commands are resolved in-process
 		// instead of returning a stub ExecutionRequest.
 		params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
@@ -71,11 +81,17 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 		out := pui.ApplyBaseResult(store, r, &handoff)
 
 		if len(r.Messages) > 0 || out.EffectiveShouldQuery {
-			events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: sessionID})
+			// Filter out attachment messages before sending to UI — they are
+			// internal (CLAUDE.md, hooks) and should not be displayed to the user.
+			uiMsgs := make([]types.Message, 0, len(store.Messages))
+			for _, m := range store.Messages {
+				if m.Type != types.MessageTypeAttachment {
+					uiMsgs = append(uiMsgs, m)
+				}
+			}
+			events.OnStateSnapshot(uiMsgs, engine.StateMetadata{SessionID: sessionID})
 		}
 
-		//fmt.Fprintf(os.Stderr, "[agentd] ProcessUserInput done: shouldQuery=%v hadExec=%v commands=%d skillListing=%d\n",
-		//	out.EffectiveShouldQuery, out.HadExecutionRequest, len(params.Commands), len(params.SkillListingCommands))
 		if out.EffectiveShouldQuery && !out.HadExecutionRequest {
 			if err := runAgentdQuery(ctx, store, events, permBridge, params); err != nil {
 				events.OnErrorMessage(err.Error())
@@ -119,7 +135,6 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			break
 		}
 	}
-	//fmt.Fprintf(os.Stderr, "[agentd] skill listing: skillListing=%d hasSkillTool=%v toolSpecs=%d\n", len(skillListing), hasSkillTool, len(toolSpecs))
 
 	normOpts := messagesapi.OptionsFromEnv()
 	var baseMsgs json.RawMessage
@@ -131,7 +146,6 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			skillListingText = s
 		}
 	}
-	//fmt.Fprintf(os.Stderr, "[agentd] skillListingText=%d chars, will inject=%v\n", len(skillListingText), skillListingText != "")
 	if skillListingText != "" {
 		baseMsgs, err = ccbhydrate.MessagesJSONWithSkillListing(store.Messages, skillListingText, toolSpecs, normOpts)
 	} else {
@@ -159,11 +173,16 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		}
 	}
 	extraRoots := querycontext.ExtraClaudeMdRootsForFetch(params.RuntimeContext)
+	ssSource := ""
+	if !agentdSessionStarted {
+		agentdSessionStarted = true
+		ssSource = "startup"
+	}
 	fetchOpts := querycontext.FetchOpts{
 		CustomSystemPrompt: customSys,
 		Gou:                gouOpts,
 		ExtraClaudeMdRoots: extraRoots,
-		SessionStartSource: "startup",
+		SessionStartSource: ssSource,
 		HooksSessionID:     store.ConversationID,
 	}
 
@@ -173,7 +192,6 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	}
 
 	// Inject SessionStart hook messages into conversation (mirrors gou/app/view.go)
-	//fmt.Fprintf(os.Stderr, "[agentd] SessionStartHookMessages=%d\n", len(fetchResult.SessionStartHookMessages))
 	for _, m := range fetchResult.SessionStartHookMessages {
 		store.AppendMessage(m)
 	}
@@ -202,16 +220,26 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 				return
 			}
 			var data struct {
-				Type    string `json:"type"`
-				AgentID string `json:"agentId"`
-				Summary string `json:"summary"`
-				Status  string `json:"status"`
-				Message string `json:"message"`
+				Type        string `json:"type"`
+				AgentID     string `json:"agentId"`
+				AgentType   string `json:"agentType"`
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				Summary     string `json:"summary"`
+				Status      string `json:"status"`
+				Message     string `json:"message"`
 			}
 			if json.Unmarshal(msg.Data, &data) == nil {
 				switch data.Type {
 				case "agent_registered":
-					events.OnAgentProgress(data.AgentID, "running", data.Message)
+					label := data.Description
+					if label == "" {
+						label = data.Name
+					}
+					if label == "" {
+						label = data.AgentType
+					}
+					events.OnAgentProgress(data.AgentID, "running", label)
 				case "agent_summary":
 					events.OnAgentProgress(data.AgentID, "running", data.Summary)
 				case "agent_completed":
@@ -247,8 +275,15 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	}
 	qdeps.ToolexecutionDeps = te
 
+	// Prepend SessionStart hook messages to query messages (ephemeral, not persisted to store).
+	// Mirrors gou/app/view.go msgsForQ prepend.
+	msgsForQ := store.Messages
+	if len(fetchResult.SessionStartHookMessages) > 0 {
+		msgsForQ = append(slices.Clone(fetchResult.SessionStartHookMessages), msgsForQ...)
+	}
+
 	qp := query.QueryParams{
-		Messages:        store.Messages,
+		Messages:        msgsForQ,
 		SystemPrompt:    query.SystemPrompt(fetchResult.DefaultSystemPrompt),
 		CanUseTool:      canUseToolFn(permBridge, events),
 		UserContext:     fetchResult.UserContext,
@@ -261,7 +296,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	}
 	// OnQueryComplete: post-turn memory extraction and auto-dream (P1-2)
 	qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
-		extractmemories.Execute(ctx, nil, extractmemories.ExtractionParams{
+		extractmemories.Execute(ctx, agentdExtractMemState, extractmemories.ExtractionParams{
 			Messages:       qcp.Messages,
 			ToolUseContext: qcp.ToolUseContext,
 			SystemPrompt:   qcp.SystemPrompt,
@@ -272,7 +307,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			NewUUID:        query.RandomUUID,
 			SkipIndex:      growthbook.IsTenguMothCopse(),
 		})
-		autodream.Execute(ctx, nil, qcp.ToolUseContext, qcp.SystemPrompt,
+		autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
 			qcp.UserContext, qcp.SystemContext, qcp.QuerySource, query.RandomUUID,
 			commands.ClaudeConfigHome(), qcp.Cwd, "", store.ConversationID)
 	}
@@ -375,7 +410,13 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 
 	case types.MessageTypeUser:
 		store.AppendMessage(msg)
-		events.OnStateSnapshot(store.Messages, engine.StateMetadata{})
+		uiMsgs := make([]types.Message, 0, len(store.Messages))
+		for _, m := range store.Messages {
+			if m.Type != types.MessageTypeAttachment {
+				uiMsgs = append(uiMsgs, m)
+			}
+		}
+		events.OnStateSnapshot(uiMsgs, engine.StateMetadata{})
 	}
 }
 

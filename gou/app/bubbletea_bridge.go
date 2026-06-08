@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"goc/types"
 
 	"goc/engine"
 	"goc/gou/conversation"
@@ -91,6 +92,10 @@ func (h *bubbleTeaEventHandler) OnAssistantMessage(msg types.Message) {
 
 func (h *bubbleTeaEventHandler) OnErrorMessage(errMsg string) {
 	h.sendTyped(gouQueryDoneMsg{Err: fmt.Errorf("%s", errMsg)})
+}
+
+func (h *bubbleTeaEventHandler) OnCommandsList(commands []types.Command) {
+	// No-op: Bubble Tea TUI loads commands via its own slash picker.
 }
 
 // bubbleTeaPermissionBridge 将 engine.PermissionBridge 接入 Bubble Tea 的弹窗机制。

@@ -50,4 +50,8 @@ type EventHandler interface {
 
 	// OnPermissionAsk 工具权限询问。实现者应展示询问 UI 并等待用户决策。
 	OnPermissionAsk(tool string, toolUseID string, input json.RawMessage)
+
+	// OnCommandsList sends the loaded slash commands (skills + builtins) to the gateway
+	// for UI-side autocomplete / suggestions.
+	OnCommandsList(commands []types.Command)
 }

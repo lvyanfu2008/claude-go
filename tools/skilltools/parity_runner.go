@@ -9,6 +9,7 @@ import (
 
 	"goc/appstate"
 	"goc/ccb-engine/bashzog"
+	"goc/commands"
 	"goc/tools/bashtool"
 	"goc/tools/localtools"
 	"goc/tools"
@@ -89,6 +90,44 @@ func (r *ParityToolRunner) roots() []string {
 		}
 	}
 	return out
+}
+
+// discoverSkillsAfterFileOp extracts the file path from tool input and triggers
+// dynamic skill directory discovery + conditional skill activation in the background.
+// Mirrors TS FileWriteTool/FileReadTool/FileEditTool fire-and-forget addSkillDirectories.
+func (r *ParityToolRunner) discoverSkillsAfterFileOp(input json.RawMessage, toolName string) {
+	filePath := extractFilePath(input)
+	if filePath == "" {
+		return
+	}
+	cwd := strings.TrimSpace(r.WorkDir)
+	if cwd == "" {
+		roots := r.roots()
+		if len(roots) > 0 {
+			cwd = roots[0]
+		}
+	}
+	if cwd == "" {
+		return
+	}
+	// Fire-and-forget matching TS behavior: don't block the tool result on skill loading.
+	go func() {
+		_ = commands.ProcessFilePathsForDynamicSkills(
+			[]string{filePath}, cwd,
+			commands.DefaultLoadOptions(), nil,
+		)
+	}()
+}
+
+// extractFilePath pulls the file_path field from tool input JSON (Read/Write/Edit).
+func extractFilePath(input json.RawMessage) string {
+	var in struct {
+		FilePath string `json:"file_path"`
+	}
+	if json.Unmarshal(input, &in) == nil {
+		return strings.TrimSpace(in.FilePath)
+	}
+	return ""
 }
 
 // Run implements [toolstub.ToolRunner].

@@ -110,6 +110,12 @@ func (h *stdioEventHandler) OnErrorMessage(errMsg string) {
 	h.sendEvent(engine.EventTypeError, map[string]string{"message": errMsg})
 }
 
+func (h *stdioEventHandler) OnCommandsList(commands []types.Command) {
+	h.sendEvent(engine.EventTypeCommandsList, map[string]any{
+		"commands": commands,
+	})
+}
+
 // stdioPermissionBridge 通过 stdin reader goroutine 的 channel 实现非阻塞权限询问。
 type stdioPermissionBridge struct {
 	responseCh chan engine.PermissionDecision
