@@ -28,8 +28,10 @@ type Palette struct {
 	// UserMessageText is the primary foreground for user-authored prose (bright; Bold applied in gou-demo).
 	UserMessageText color.Color
 	// DiffAdd / DiffDel color unified-diff + / − lines (git-like) in tool_result previews.
-	DiffAdd color.Color
-	DiffDel color.Color
+	DiffAdd   color.Color
+	DiffDel   color.Color
+	DiffAddBg color.Color
+	DiffDelBg color.Color
 }
 
 var (
@@ -55,6 +57,8 @@ func defaultPalette() Palette {
 		UserMessageText:       lipgloss.Color("255"),
 		DiffAdd:               lipgloss.Color("42"),
 		DiffDel:               lipgloss.Color("203"),
+		DiffAddBg:             lipgloss.Color("22"),
+		DiffDelBg:             lipgloss.Color("52"),
 	}
 }
 
@@ -77,6 +81,8 @@ func lightPalette() Palette {
 		UserMessageText:       lipgloss.Color("24"),
 		DiffAdd:               lipgloss.Color("28"),
 		DiffDel:               lipgloss.Color("124"),
+		DiffAddBg:             lipgloss.Color("194"),
+		DiffDelBg:             lipgloss.Color("224"),
 	}
 }
 

@@ -13,7 +13,6 @@ import (
 	"goc/gou/conversation"
 	"goc/sessiontranscript"
 	"goc/tools/toolexecution"
-	"goc/types"
 )
 
 // bubbleTeaEventHandler 将 engine.EventHandler 调用转为 tea.Msg 发送到程序队列。
@@ -82,6 +81,14 @@ func (h *bubbleTeaEventHandler) OnAgentProgress(agentID string, status string, m
 			LastActivityDesc: message,
 			Summary:          status,
 		},
+	})
+}
+
+func (h *bubbleTeaEventHandler) OnPermissionAsk(tool string, toolUseID string, input json.RawMessage) {
+	h.sendTyped(gouPermissionAskMsg{
+		toolName:  tool,
+		toolUseID: toolUseID,
+		input:     input,
 	})
 }
 
