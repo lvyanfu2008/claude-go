@@ -101,81 +101,103 @@ func NewSlashResolveProcessSlashCommand(opt SlashResolveHandlerOptions) func(
 			// TS processSlashCommand: if looksLikeCommand && !isFilePath → Unknown skill, shouldQuery false.
 			if processuserinput.LooksLikeSlashCommandName(parsed.CommandName) &&
 				!rootSlashPathExists(parsed.CommandName) {
-				return unknownSkillSlashResult(parsed, attachmentMessages, suggestAvailableCommands(parsed.CommandName)), nil
+				// Try fuzzy matching before giving up.
+				if fuzzyName := findBestFuzzyMatch(parsed.CommandName, p.Commands); fuzzyName != "" {
+					if fuzzyCmd := processuserinput.FindCommand(fuzzyName, p.Commands); fuzzyCmd != nil {
+						// Re-dispatch the matched command with original args.
+						return dispatchSlashCommand(fuzzyCmd, parsed.Args, opt, attachmentMessages, uuid, p, rfs, cwd, ctx)
+					}
+				}
+				return unknownSkillSlashResult(parsed, attachmentMessages, suggestAvailableCommands(parsed.CommandName, p.Commands)), nil
 			}
 			return slashResultToBase(types.SlashResolveResult{
 				UserText: strings.TrimSpace(inputString),
 				Source:   types.SlashResolveUnknown,
 			}, attachmentMessages, uuid, p), nil
 		}
-		switch cmd.Type {
-		case "local", "local-jsx":
-			return handleLocalCommand(cmd.Name, parsed.Args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd, ctx, opt.SessionID, opt.SessionMemState, opt.GuidancePtr, opt.UserContextPtr, opt.SystemContextPtr, opt.SendMsg)
-		case "prompt":
-			// handled below
-		default:
-			return &processuserinput.ProcessUserInputBaseResult{
-				Messages:    []types.Message{SystemNotice(fmt.Sprintf("Unsupported command type %q for /%s", cmd.Type, cmd.Name))},
-				ShouldQuery: false,
-			}, nil
-		}
+		return dispatchSlashCommand(cmd, parsed.Args, opt, attachmentMessages, uuid, p, rfs, cwd, ctx)
+	}
+}
 
-		// Disk skill: SkillRoot points at directory containing SKILL.md
-		if cmd.SkillRoot != nil && strings.TrimSpace(*cmd.SkillRoot) != "" {
-			res, err := slashresolve.ResolveDiskSkill(*cmd, parsed.Args, sid)
-			if err != nil {
-				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (disk) for /%s: %v", cmd.Name, err))},
-					ShouldQuery: false,
-				}, nil
-			}
-			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
-		}
+// dispatchSlashCommand resolves and dispatches a slash command after it has been found
+// (including via fuzzy matching). Adds a fuzzy-match notice when the original query
+// didn't match the resolved command name exactly.
+func dispatchSlashCommand(
+	cmd *types.Command,
+	args string,
+	opt SlashResolveHandlerOptions,
+	attachmentMessages []types.Message,
+	uuid *string,
+	p *processuserinput.ProcessUserInputParams,
+	rfs *localtools.ReadFileState,
+	cwd string,
+	ctx context.Context,
+) (*processuserinput.ProcessUserInputBaseResult, error) {
+	sid := strings.TrimSpace(opt.SessionID)
+	if sid == "" {
+		sid = "gou-demo"
+	}
 
-		if slashresolve.IsBundledPrompt(*cmd) {
-			cwd, _ := os.Getwd()
-			res, err := slashresolve.ResolveBundledSkill(*cmd, parsed.Args, sid, &slashresolve.BundledResolveOptions{Cwd: cwd})
-			if err != nil {
-				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (bundled) for /%s: %v", cmd.Name, err))},
-					ShouldQuery: false,
-				}, nil
-			}
-			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
-		}
-
-		if slashresolve.IsBuiltinPrompt(*cmd) {
-			res, err := slashresolve.ResolveBuiltinPrompt(*cmd, parsed.Args)
-			if err != nil {
-				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (builtin) for /%s: %v", cmd.Name, err))},
-					ShouldQuery: false,
-				}, nil
-			}
-			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
-		}
-
-		if cmd.LegacyMarkdownPath != nil && strings.TrimSpace(*cmd.LegacyMarkdownPath) != "" {
-			res, err := slashresolve.ResolveLegacyMarkdownCommand(*cmd, parsed.Args, sid)
-			if err != nil {
-				return &processuserinput.ProcessUserInputBaseResult{
-					Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (legacy) for /%s: %v", cmd.Name, err))},
-					ShouldQuery: false,
-				}, nil
-			}
-			return slashPromptResultToBase(*cmd, parsed.Args, res, attachmentMessages, uuid, p), nil
-		}
-
+	switch cmd.Type {
+	case "local", "local-jsx":
+		return handleLocalCommand(cmd.Name, args, cmd, opt.Store, attachmentMessages, uuid, p, rfs, cwd, ctx, opt.SessionID, opt.SessionMemState, opt.GuidancePtr, opt.UserContextPtr, opt.SystemContextPtr, opt.SendMsg)
+	case "prompt":
+		// handled below
+	default:
 		return &processuserinput.ProcessUserInputBaseResult{
-			Messages: []types.Message{SystemNotice(fmt.Sprintf(
-				"gou-demo: /%s could not be resolved (type=%q). "+
-					"Disk skills need SkillRoot pointing at a directory with SKILL.md. "+
-					"Bundled prompts need a Go-side resolver or embedded .md. "+
-					"Add a project skill under .harness/skills/SKILL.md or implement a resolver in slashresolve/.",
-				cmd.Name, cmd.Type))},
+			Messages:    []types.Message{SystemNotice(fmt.Sprintf("Unsupported command type %q for /%s", cmd.Type, cmd.Name))},
 			ShouldQuery: false,
 		}, nil
 	}
+
+	if cmd.SkillRoot != nil && strings.TrimSpace(*cmd.SkillRoot) != "" {
+		res, err := slashresolve.ResolveDiskSkill(*cmd, args, sid)
+		if err != nil {
+			return &processuserinput.ProcessUserInputBaseResult{
+				Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (disk) for /%s: %v", cmd.Name, err))},
+				ShouldQuery: false,
+			}, nil
+		}
+		return slashPromptResultToBase(*cmd, args, res, attachmentMessages, uuid, p), nil
+	}
+	if slashresolve.IsBundledPrompt(*cmd) {
+		res, err := slashresolve.ResolveBundledSkill(*cmd, args, sid, &slashresolve.BundledResolveOptions{Cwd: cwd})
+		if err != nil {
+			return &processuserinput.ProcessUserInputBaseResult{
+				Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (bundled) for /%s: %v", cmd.Name, err))},
+				ShouldQuery: false,
+			}, nil
+		}
+		return slashPromptResultToBase(*cmd, args, res, attachmentMessages, uuid, p), nil
+	}
+	if slashresolve.IsBuiltinPrompt(*cmd) {
+		res, err := slashresolve.ResolveBuiltinPrompt(*cmd, args)
+		if err != nil {
+			return &processuserinput.ProcessUserInputBaseResult{
+				Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (builtin) for /%s: %v", cmd.Name, err))},
+				ShouldQuery: false,
+			}, nil
+		}
+		return slashPromptResultToBase(*cmd, args, res, attachmentMessages, uuid, p), nil
+	}
+	if cmd.LegacyMarkdownPath != nil && strings.TrimSpace(*cmd.LegacyMarkdownPath) != "" {
+		res, err := slashresolve.ResolveLegacyMarkdownCommand(*cmd, args, sid)
+		if err != nil {
+			return &processuserinput.ProcessUserInputBaseResult{
+				Messages:    []types.Message{SystemNotice(fmt.Sprintf("Slash resolve (legacy) for /%s: %v", cmd.Name, err))},
+				ShouldQuery: false,
+			}, nil
+		}
+		return slashPromptResultToBase(*cmd, args, res, attachmentMessages, uuid, p), nil
+	}
+	return &processuserinput.ProcessUserInputBaseResult{
+		Messages: []types.Message{SystemNotice(fmt.Sprintf(
+			"/%s could not be resolved (type=%q). "+
+				"Disk skills need SkillRoot pointing at a directory with SKILL.md. "+
+				"Add a project skill under .harness/skills/SKILL.md or implement a resolver in slashresolve/.",
+			cmd.Name, cmd.Type))},
+		ShouldQuery: false,
+	}, nil
 }
 
 // handleLocalCommand dispatches a local or local-jsx command.
@@ -333,23 +355,97 @@ func unknownSkillSlashResult(parsed *processuserinput.ParsedSlashCommand, attach
 	}
 }
 
-// suggestAvailableCommands returns a fuzzy suggestion for a command name that was not found.
-// It scans the available commands and suggests the closest match or a general tip.
-func suggestAvailableCommands(name string) string {
-	// Check if the name matches any known local command alias.
-	aliases := map[string]string{
-		"new":     "clear",
-		"reset":   "clear",
-		"fork":    "branch",
-		"quit":    "exit",
-		"remote":  "session",
-		"ios":     "mobile",
-		"android": "mobile",
+// suggestAvailableCommands returns a suggestion for a command name that was not found.
+// Uses tiered fuzzy matching (exact → prefix → substring → subsequence) to find the best match.
+func suggestAvailableCommands(query string, commands []types.Command) string {
+	if best := findBestFuzzyMatch(query, commands); best != "" {
+		return fmt.Sprintf("Did you mean /%s?", best)
 	}
-	if canonical, ok := aliases[name]; ok {
+	// Fallback: check hardcoded aliases.
+	aliases := map[string]string{
+		"new": "clear", "reset": "clear", "fork": "branch",
+		"quit": "exit", "remote": "session", "ios": "mobile", "android": "mobile",
+	}
+	if canonical, ok := aliases[query]; ok {
 		return fmt.Sprintf("Did you mean /%s?", canonical)
 	}
 	return ""
+}
+
+// findBestFuzzyMatch returns the best command name for a query using TS-style tiered matching.
+// Returns empty string if no match within tiers 0-4 (exact, prefix, alias-prefix, substring).
+func findBestFuzzyMatch(query string, commands []types.Command) string {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return ""
+	}
+	type candidate struct {
+		name string
+		tier int
+		dist int // tiebreaker: shorter edit distance is better within same tier
+	}
+	var best *candidate
+	for i := range commands {
+		c := &commands[i]
+		if c.IsHidden != nil && *c.IsHidden {
+			continue
+		}
+		name := strings.TrimSpace(c.Name)
+		if name == "" {
+			continue
+		}
+		nl := strings.ToLower(name)
+		tier := 100
+		dist := len(nl)
+		switch {
+		case nl == q:
+			tier = 0
+			dist = 0
+		case hasAliasMatch(c, q):
+			tier = 1
+			dist = 0
+		case strings.HasPrefix(nl, q):
+			tier = 2
+			dist = len(nl) - len(q)
+		case hasAliasPrefixMatch(c, q):
+			tier = 3
+			dist = 0
+		case strings.Contains(nl, q):
+			tier = 4
+			dist = strings.Index(nl, q)
+		case c.Description != "" && strings.Contains(strings.ToLower(c.Description), q):
+			tier = 5
+			dist = 5
+		}
+		if tier > 4 {
+			continue
+		}
+		if best == nil || tier < best.tier || (tier == best.tier && dist < best.dist) {
+			best = &candidate{name: name, tier: tier, dist: dist}
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	return best.name
+}
+
+func hasAliasMatch(c *types.Command, qLower string) bool {
+	for _, a := range c.Aliases {
+		if strings.ToLower(a) == qLower {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAliasPrefixMatch(c *types.Command, qLower string) bool {
+	for _, a := range c.Aliases {
+		if strings.HasPrefix(strings.ToLower(a), qLower) {
+			return true
+		}
+	}
+	return false
 }
 
 func permissionModePtrPI(p *processuserinput.ProcessUserInputParams) *types.PermissionMode {

@@ -137,13 +137,17 @@ func (r *ParityToolRunner) dispatchTool(ctx context.Context, name, toolUseID str
 	st := r.ReadFileState
 	switch name {
 	case "Read":
-		// Return raw tool output JSON (TS tool.call `data`). toolexecution maps to tool_result.content
-		// while embedding this string as structured toolUseResult (see syntheticToolMessageAfterInvoke).
-		return localtools.ReadFromJSON(input, roots, st, nil)
+		s, isErr, err := localtools.ReadFromJSON(input, roots, st, nil)
+		r.discoverSkillsAfterFileOp(input, name)
+		return s, isErr, err
 	case "Write":
-		return localtools.WriteFromJSONDeps(input, roots, st, r.WriteDeps)
+		s, isErr, err := localtools.WriteFromJSONDeps(input, roots, st, r.WriteDeps)
+		r.discoverSkillsAfterFileOp(input, name)
+		return s, isErr, err
 	case "Edit":
-		return localtools.EditFromJSONDeps(input, roots, st, r.UserModified, r.EditDeps)
+		s, isErr, err := localtools.EditFromJSONDeps(input, roots, st, r.UserModified, r.EditDeps)
+		r.discoverSkillsAfterFileOp(input, name)
+		return s, isErr, err
 	case "Glob":
 		return localtools.GlobFromJSON(ctx, input, roots)
 	case "Grep":

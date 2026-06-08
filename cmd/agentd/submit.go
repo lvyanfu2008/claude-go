@@ -14,13 +14,13 @@ import (
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
 	"goc/gou/conversation"
-	"goc/tools/skilltools"
-	"goc/tools/toolexecution"
 	"goc/gou/pui"
 	"goc/messagesapi"
 	"goc/modelenv"
 	"goc/querycontext"
 	"goc/sessiontranscript"
+	"goc/tools/skilltools"
+	"goc/tools/toolexecution"
 	"goc/types"
 
 	"goc/engine"
@@ -47,6 +47,14 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 			events.OnErrorMessage(fmt.Sprintf("build params: %v", err))
 			return err
 		}
+
+		// Inject slash command handler so user-typed /commands are resolved in-process
+		// instead of returning a stub ExecutionRequest.
+		params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
+			SessionID: sessionID,
+			Store:     store,
+			Cwd:       cwd,
+		})
 
 		r, err := processuserinput.ProcessUserInput(ctx, params)
 		if err != nil {
@@ -92,8 +100,34 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		toolSpecs = append(toolSpecs, messagesapi.ToolSpec{Name: t.Name})
 	}
 
+	// Build skill listing from params (mirrors gou/app/view.go skill listing injection)
+	skillListing := params.SkillListingCommands
+	if len(skillListing) == 0 {
+		skillListing = commands.SkillToolCommands(params.Commands)
+	}
+	hasSkillTool := false
+	for _, t := range toolSpecs {
+		if t.Name == skilltools.SkillToolName() {
+			hasSkillTool = true
+			break
+		}
+	}
+
 	normOpts := messagesapi.OptionsFromEnv()
-	baseMsgs, err := ccbhydrate.MessagesJSONNormalized(store.Messages, toolSpecs, normOpts)
+	var baseMsgs json.RawMessage
+	var err error
+	var skillListingText string
+	if len(skillListing) > 0 && hasSkillTool {
+		listingSent := make(map[string]struct{})
+		if s, _, _, ok := commands.AppendSkillListingForAPI(skillListing, hasSkillTool, listingSent, nil); ok {
+			skillListingText = s
+		}
+	}
+	if skillListingText != "" {
+		baseMsgs, err = ccbhydrate.MessagesJSONWithSkillListing(store.Messages, skillListingText, toolSpecs, normOpts)
+	} else {
+		baseMsgs, err = ccbhydrate.MessagesJSONNormalized(store.Messages, toolSpecs, normOpts)
+	}
 	if err != nil {
 		return fmt.Errorf("messages JSON: %w", err)
 	}
@@ -105,6 +139,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		ModelID:               mainLoopModel,
 		Cwd:                   cwd,
 		NonInteractiveSession: true,
+		SkillToolCommands:     skillListing,
 	}
 	commands.ApplyGouDemoRuntimeEnv(&gouOpts)
 
@@ -147,12 +182,37 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		MainLoopModel:    mainLoopModel,
 		Messages:         store.Messages,
 		MessagesFunc:     func() []types.Message { return store.Messages },
+		ProgressCallback: func(msg *types.Message) {
+			if msg == nil || msg.Type != types.MessageTypeProgress || len(msg.Data) == 0 {
+				return
+			}
+			var data struct {
+				Type     string `json:"type"`
+				AgentID  string `json:"agentId"`
+				Summary  string `json:"summary"`
+				Status   string `json:"status"`
+				Message  string `json:"message"`
+			}
+			if json.Unmarshal(msg.Data, &data) == nil {
+				switch data.Type {
+				case "agent_registered":
+					events.OnAgentProgress(data.AgentID, "running", data.Message)
+				case "agent_summary":
+					events.OnAgentProgress(data.AgentID, "running", data.Summary)
+				case "agent_completed":
+					events.OnAgentProgress(data.AgentID, data.Status, data.Message)
+				}
+			}
+		},
+		NotificationCallback: func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
+			events.OnAgentProgress(agentID, status, fmt.Sprintf("%s (%d tool uses, %d tokens)", summary, toolUseCount, tokenCount))
+		},
 	}
 
 	qp := query.QueryParams{
 		Messages:        store.Messages,
 		SystemPrompt:    query.SystemPrompt(fetchResult.DefaultSystemPrompt),
-		CanUseTool:       canUseToolFn(permBridge, events),
+		CanUseTool:      canUseToolFn(permBridge, events),
 		UserContext:     fetchResult.UserContext,
 		SystemContext:   fetchResult.SystemContext,
 		StreamingParity: true,
@@ -244,7 +304,6 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 		events.OnStateSnapshot(store.Messages, engine.StateMetadata{})
 	}
 }
-
 
 func canUseToolFn(b engine.PermissionBridge, events engine.EventHandler) toolexecution.QueryCanUseToolFn {
 	if b == nil {

@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,6 +13,7 @@ import (
 	"goc/claudeinit"
 	"goc/engine"
 	"goc/gou/conversation"
+	_ "goc/plugins"
 	"goc/sessiontranscript"
 	"goc/types"
 )
