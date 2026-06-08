@@ -9,6 +9,7 @@ import (
 
 // Mirrors src/utils/diff.ts CONTEXT_LINES and DIFF_TIMEOUT_MS.
 const patchDiffTimeout = 5 * time.Second
+const patchContextLines = 3
 
 const ampersandToken = "<<:AMPERSAND_TOKEN:>>"
 const dollarToken = "<<:DOLLAR_TOKEN:>>"
@@ -64,7 +65,8 @@ func splitDiffTextLines(text string) []string {
 }
 
 // GetPatchFromContents mirrors src/utils/diff.ts getPatchFromContents.
-// Produces a single hunk covering the full diff (valid unified-style counts); sufficient for tool JSON parity.
+// Uses diffmatchpatch to compute the diff, then trims context to patchContextLines (3) around changes,
+// splitting into multiple hunks when changes are far apart. Matches TS structuredPatch behavior.
 func GetPatchFromContents(filePath, oldContent, newContent string) []StructuredPatchHunk {
 	_ = filePath
 	oldE := escapeForDiff(ConvertLeadingTabsToSpaces(oldContent))
@@ -79,35 +81,113 @@ func GetPatchFromContents(filePath, oldContent, newContent string) []StructuredP
 	diffs = dmp.DiffCharsToLines(diffs, lineArr)
 	diffs = dmp.DiffCleanupSemantic(diffs)
 
-	var hlines []string
-	oldLines, newLines := 0, 0
+	// Build flat line list with markers
+	type dline struct {
+		text  string
+		kind  byte // ' ', '-', '+'
+		oldNo int  // 1-based, 0 if not in old
+		newNo int  // 1-based, 0 if not in new
+	}
+	var lines []dline
+	oi, ni := 1, 1
 	for _, d := range diffs {
 		for _, ln := range splitDiffTextLines(d.Text) {
+			dl := dline{text: unescapeFromDiff(ln)}
 			switch d.Type {
 			case diffmatchpatch.DiffEqual:
-				hlines = append(hlines, " "+ln)
-				oldLines++
-				newLines++
+				dl.kind = ' '
+				dl.oldNo = oi
+				dl.newNo = ni
+				oi++
+				ni++
 			case diffmatchpatch.DiffDelete:
-				hlines = append(hlines, "-"+ln)
-				oldLines++
+				dl.kind = '-'
+				dl.oldNo = oi
+				oi++
 			case diffmatchpatch.DiffInsert:
-				hlines = append(hlines, "+"+ln)
-				newLines++
+				dl.kind = '+'
+				dl.newNo = ni
+				ni++
 			}
+			lines = append(lines, dl)
 		}
 	}
-	if len(hlines) == 0 {
+	if len(lines) == 0 {
 		return nil
 	}
-	for i := range hlines {
-		hlines[i] = unescapeFromDiff(hlines[i])
+
+	// Find changed line indices
+	changed := make([]bool, len(lines))
+	for i, l := range lines {
+		if l.kind != ' ' {
+			changed[i] = true
+		}
 	}
-	return []StructuredPatchHunk{{
-		OldStart: 1,
-		OldLines: oldLines,
-		NewStart: 1,
-		NewLines: newLines,
-		Lines:    hlines,
-	}}
+
+	// Build context windows: expand each changed line by patchContextLines
+	inWindow := make([]bool, len(lines))
+	for i := range lines {
+		if !changed[i] {
+			continue
+		}
+		start := i - patchContextLines
+		if start < 0 {
+			start = 0
+		}
+		end := i + patchContextLines
+		if end >= len(lines) {
+			end = len(lines) - 1
+		}
+		for j := start; j <= end; j++ {
+			inWindow[j] = true
+		}
+	}
+
+	// Split into hunks at gaps in the window
+	var hunks []StructuredPatchHunk
+	start := 0
+	for start < len(lines) {
+		if !inWindow[start] {
+			start++
+			continue
+		}
+		end := start
+		for end+1 < len(lines) && inWindow[end+1] {
+			end++
+		}
+		// Extract hunk lines
+		hunkLines := lines[start : end+1]
+		var hlines []string
+		oldCount, newCount := 0, 0
+		oldStart := 0
+		newStart := 0
+		for _, l := range hunkLines {
+			prefix := string(l.kind)
+			hlines = append(hlines, prefix+l.text)
+			if l.kind == ' ' || l.kind == '-' {
+				if oldStart == 0 {
+					oldStart = l.oldNo
+				}
+				oldCount++
+			}
+			if l.kind == ' ' || l.kind == '+' {
+				if newStart == 0 {
+					newStart = l.newNo
+				}
+				newCount++
+			}
+		}
+		hunks = append(hunks, StructuredPatchHunk{
+			OldStart: oldStart,
+			OldLines: oldCount,
+			NewStart: newStart,
+			NewLines: newCount,
+			Lines:    hlines,
+		})
+		start = end + 1
+	}
+	if len(hunks) == 0 {
+		return nil
+	}
+	return hunks
 }

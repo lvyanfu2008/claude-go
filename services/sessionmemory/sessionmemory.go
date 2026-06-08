@@ -288,9 +288,11 @@ func buildSessionMemoryExecutionDeps(memoryPath string, readFileState *localtool
 				return "", true, fmt.Errorf("tool %q not allowed in session memory subagent", name)
 			}
 
-			// Only Edit is allowed — dispatches through localtools.
-			if name == fileEditToolName {
+			switch name {
+			case fileEditToolName:
 				return localtools.EditFromJSONDeps(input, nil, readFileState, false, nil)
+			case fileReadToolName:
+				return localtools.ReadFromJSON(input, nil, readFileState, nil)
 			}
 
 			return "", true, fmt.Errorf("tool %q not allowed in session memory subagent", name)

@@ -8,14 +8,20 @@ import (
 	"goc/tools/toolexecution"
 )
 
-const fileEditToolName = "Edit"
+const (
+	fileEditToolName = "Edit"
+	fileReadToolName = "Read"
+)
 
-// CreateMemoryFileCanUseTool returns a QueryCanUseToolFn that only allows
-// the Edit tool on the exact memoryPath. All other tools and paths are denied.
-// Mirrors TS createMemoryFileCanUseTool.
+// CreateMemoryFileCanUseTool returns a QueryCanUseToolFn that allows
+// Read (any path) and Edit (only the exact memoryPath). All other tools are denied.
+// Mirrors TS createMemoryFileCanUseTool, extended with Read for non-Anthropic models.
 func CreateMemoryFileCanUseTool(memoryPath string) toolexecution.QueryCanUseToolFn {
 	return func(ctx context.Context, toolName, _ string, input json.RawMessage) (toolexecution.PermissionDecision, error) {
-		if toolName == fileEditToolName {
+		switch toolName {
+		case fileReadToolName:
+			return toolexecution.AllowDecision(), nil
+		case fileEditToolName:
 			var v struct {
 				FilePath string `json:"file_path"`
 			}
@@ -23,6 +29,6 @@ func CreateMemoryFileCanUseTool(memoryPath string) toolexecution.QueryCanUseTool
 				return toolexecution.AllowDecision(), nil
 			}
 		}
-		return toolexecution.DenyDecision(fmt.Sprintf("only Edit on %s is allowed", memoryPath)), nil
+		return toolexecution.DenyDecision(fmt.Sprintf("only Read or Edit on %s is allowed", memoryPath)), nil
 	}
 }
