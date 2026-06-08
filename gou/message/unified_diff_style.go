@@ -44,10 +44,10 @@ func FormatUnifiedDiffLineForDisplay(line string, toolResultIsError bool, p *the
 		return render(lipgloss.NewStyle().Foreground(theme.ToolWarning()).Faint(true))
 	}
 	if strings.HasPrefix(logical, "+") && !strings.HasPrefix(logical, "+++") {
-		return render(lipgloss.NewStyle().Foreground(p.DiffAdd).Background(p.DiffAddBg))
+		return render(lipgloss.NewStyle().Foreground(p.DiffAdd))
 	}
 	if strings.HasPrefix(logical, "-") && !strings.HasPrefix(logical, "---") {
-		return render(lipgloss.NewStyle().Foreground(p.DiffDel).Background(p.DiffDelBg))
+		return render(lipgloss.NewStyle().Foreground(p.DiffDel))
 	}
 	if strings.Contains(logical, "unchanged lines") && strings.Contains(logical, "⋯") {
 		return render(lipgloss.NewStyle().Foreground(p.ToolMuted).Faint(true))
