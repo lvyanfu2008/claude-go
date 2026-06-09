@@ -265,7 +265,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			if toolName == "AskUserQuestion" {
 				return toolexecution.AskDecision("Answer questions?"), nil
 			}
-			return toolexecution.AllowDecision(), nil
+			return toolexecution.AskDecision("Allow " + toolName + "?"), nil
 		},
 		SandboxingEnabled:                      true,
 		AutoAllowBashWholeToolAskWhenSandboxed: true,
