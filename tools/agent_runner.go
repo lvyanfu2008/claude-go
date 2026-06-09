@@ -546,6 +546,28 @@ func executeAgentWithOpts(ctx context.Context, cfg AgentRuntimeConfig, s *AgentS
 		stopSummary()
 	}
 
+	// Send agent_completed progress so the frontend updates the spinner → checkmark.
+	if cfg.ProgressCallback != nil && s.ID != "" {
+		summary := s.Summary
+		if summary == "" {
+			summary = strings.Join(assistantChunks, "\n")
+			if len(summary) > 80 {
+				summary = summary[:80] + "..."
+			}
+		}
+		completedPayload, _ := json.Marshal(map[string]any{
+			"type":      "agent_completed",
+			"agentId":   s.ID,
+			"status":    "completed",
+			"message":   summary,
+		})
+		cfg.ProgressCallback(&types.Message{
+			Type: types.MessageTypeProgress,
+			UUID: fmt.Sprintf("completed-%d", time.Now().UTC().UnixNano()),
+			Data: completedPayload,
+		})
+	}
+
 	// Run Stop (or SubagentStop) hooks after the agent query loop completes.
 	// TS parity: executeStopHooks in hooks.ts.
 	runAgentStopHooks(ctx, cfg, s, strings.Join(assistantChunks, "\n"))
