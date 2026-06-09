@@ -82,17 +82,22 @@ func BashFromJSON(ctx context.Context, raw []byte, workDir string, localDefault 
 	ex.Dir = wd
 	ex.Env = os.Environ()
 	out, err := ex.CombinedOutput()
+	code := 0
+	if ex.ProcessState != nil {
+		code = ex.ProcessState.ExitCode()
+	}
 	s := strings.TrimSpace(string(out))
+	prefix := fmt.Sprintf("Exited with code %d\n\n", code)
 	if err != nil {
 		if s != "" {
-			return s, true, nil
+			return prefix + s, true, nil
 		}
-		return "", true, err
+		return prefix, true, err
 	}
 	if s == "" {
-		return "(no output)", false, nil
+		return prefix + "(no output)", false, nil
 	}
-	return s, false, nil
+	return prefix + s, false, nil
 }
 
 func runBashBackground(command, workDir, tasksDir string) (string, bool, error) {
