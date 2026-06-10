@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
@@ -360,8 +361,13 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			}
 		}
 
-		// Drain command queue for notifications that arrived after the loop.
+		// Poll for background agent notifications. The goroutine may
+		// still be running when the query loop returns; wait briefly.
 		drained := commandqueue.DrainCommandQueue()
+		for i := 0; len(drained) == 0 && i < 30; i++ {
+			time.Sleep(100 * time.Millisecond)
+			drained = commandqueue.DrainCommandQueue()
+		}
 		if len(drained) == 0 {
 			return nil
 		}
