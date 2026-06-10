@@ -338,24 +338,56 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	processuserinput.ApplyQueryHostEnvGates(&qp)
 	processuserinput.WireToolexecutionFromProcessUserInput(&qp, params)
 
-	for y, err := range query.Query(ctx, qp) {
-		if err != nil {
-			return fmt.Errorf("query: %w", err)
-		}
-		if len(y.StreamEvent) > 0 {
-			handleStreamEvent(events, y.StreamEvent)
-		}
-		if y.Message != nil {
-			handleQueryYieldMessage(store, events, *y.Message)
-		}
-		if y.Terminal != nil {
-			if y.Terminal.Error != nil {
-				return y.Terminal.Error
+	// Run the query, then drain any background agent notifications that
+	// arrived after the loop finished. Start another turn if needed so
+	// the model sees the agent's output. Mirrors TS print.ts do-while.
+	for {
+		for y, err := range query.Query(ctx, qp) {
+			if err != nil {
+				return fmt.Errorf("query: %w", err)
 			}
+			if len(y.StreamEvent) > 0 {
+				handleStreamEvent(events, y.StreamEvent)
+			}
+			if y.Message != nil {
+				handleQueryYieldMessage(store, events, *y.Message)
+			}
+			if y.Terminal != nil {
+				if y.Terminal.Error != nil {
+					return y.Terminal.Error
+				}
+				break
+			}
+		}
+
+		// Drain command queue for notifications that arrived after the loop.
+		drained := commandqueue.DrainCommandQueue()
+		if len(drained) == 0 {
 			return nil
 		}
+
+		// Build user messages from queued notifications.
+		var notifyTexts []string
+		for _, cmd := range drained {
+			if cmd.Value != "" {
+				notifyTexts = append(notifyTexts, "A background agent completed a task:\n"+cmd.Value)
+			}
+		}
+		if len(notifyTexts) == 0 {
+			return nil
+		}
+
+		content, _ := json.Marshal([]map[string]any{{"type": "text", "text": strings.Join(notifyTexts, "\n\n")}})
+		msg := types.Message{
+			Type:    types.MessageTypeUser,
+			Content: content,
+		}
+		store.AppendMessage(msg)
+		events.OnStateSnapshot(store.Messages, engine.StateMetadata{})
+
+		// Start another turn with the notification injected.
+		qp.Messages = append(append([]types.Message{}, store.Messages...), msg)
 	}
-	return nil
 }
 
 // handleStreamEvent parses a content_block_delta SSE event and forwards text/thinking
