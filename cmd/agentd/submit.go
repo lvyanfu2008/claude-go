@@ -249,6 +249,9 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		},
 		NotificationCallback: func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
 			events.OnAgentProgress(agentID, status, fmt.Sprintf("%s (%d tool uses, %d tokens)", summary, toolUseCount, tokenCount))
+			// Push to command queue so DrainCommandQueue injects the result
+			// as a user message into the next API round (TS parity).
+			commandqueue.EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
 		},
 	}
 
