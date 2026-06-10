@@ -273,7 +273,7 @@ func RunAgentTool(raw []byte, cfg AgentRuntimeConfig) (string, bool, error) {
 		forkOpts = opts
 	}
 
-	if selected.Background {
+	if selected.Background || in.RunInBackground {
 		outFile, err := writeBackgroundOutput(cfg.TasksDir, s.ID, "Agent started")
 		if err != nil {
 			return "", true, err
