@@ -310,6 +310,10 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			QuerySource:    qcp.QuerySource,
 			NewUUID:        query.RandomUUID,
 			SkipIndex:      growthbook.IsTenguMothCopse(),
+			AppendSystemMessage: func(msg types.Message) {
+				store.AppendMessage(msg)
+				events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: store.ConversationID})
+			},
 		})
 		autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
 			qcp.UserContext, qcp.SystemContext, qcp.QuerySource, query.RandomUUID,

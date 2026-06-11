@@ -27,6 +27,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "agentd: claudeinit: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Enable extract-memories by default (mirrors gou/app/main.go:559-561).
+	// GrowthBook tengu_passport_quail gate takes precedence; GOC_EXTRACT_MEMORIES=0
+	// explicitly disables.
+	if os.Getenv("GOC_EXTRACT_MEMORIES") == "" {
+		_ = os.Setenv("GOC_EXTRACT_MEMORIES", "1")
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 	writer := os.Stdout
 	enc := json.NewEncoder(writer)
