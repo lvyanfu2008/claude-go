@@ -209,8 +209,10 @@ func runConsolidationSubagent(
 		Deps:            &qdeps,
 	}
 
+	// Use a fresh context — inherited ctx may be canceled by the parent.
+	subCtx := context.Background()
 	var assistantMessages []types.Message
-	for y, err := range query.Query(ctx, qp) {
+	for y, err := range query.Query(subCtx, qp) {
 		if err != nil {
 			return nil, err
 		}
