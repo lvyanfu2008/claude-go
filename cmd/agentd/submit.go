@@ -162,7 +162,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	gouOpts := commands.GouDemoSystemOpts{
 		ModelID:               mainLoopModel,
 		Cwd:                   cwd,
-		NonInteractiveSession: true,
+		NonInteractiveSession: false,
 		SkillToolCommands:     skillListing,
 	}
 	commands.ApplyGouDemoRuntimeEnv(&gouOpts)
