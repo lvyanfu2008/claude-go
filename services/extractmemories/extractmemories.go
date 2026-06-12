@@ -446,6 +446,9 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 		tc.AgentID = nil
 	}
 	tc.Options.IsNonInteractiveSession = true
+	// Filter tools sent to the model: only Read, Glob, Grep, Bash, Write, Edit.
+	// Otherwise the model sees SendUserMessage etc. and calls disallowed tools.
+	tc.Options.Tools = FilterExtractionTools(tc.Options.Tools)
 
 	// Limit turns for the extraction agent.
 	maxTurns := maxExtractionTurns
@@ -752,6 +755,32 @@ func dispatchREPLTool(ctx context.Context, input json.RawMessage, dispatch func(
 	}
 
 	return strings.Join(blocks, "\n\n"), false, nil
+}
+
+// FilterExtractionTools filters a JSON tool array to only include Read/Glob/Grep/Bash/Write/Edit/REPL.
+// Used by both extractmemories and autodream sub-agents to prevent the model from
+// calling disallowed tools (e.g. SendUserMessage) that would fail at execution time.
+func FilterExtractionTools(toolsJSON json.RawMessage) json.RawMessage {
+	if len(toolsJSON) == 0 {
+		return toolsJSON
+	}
+	var defs []map[string]any
+	if err := json.Unmarshal(toolsJSON, &defs); err != nil {
+		return toolsJSON
+	}
+	allowed := map[string]bool{
+		"Read": true, "Glob": true, "Grep": true,
+		"Bash": true, "Write": true, "Edit": true, "REPL": true,
+	}
+	out := make([]map[string]any, 0, len(defs))
+	for _, d := range defs {
+		name, _ := d["name"].(string)
+		if allowed[name] {
+			out = append(out, d)
+		}
+	}
+	b, _ := json.Marshal(out)
+	return b
 }
 
 // filePathFromInput extracts the file_path from a Write/Edit tool input.

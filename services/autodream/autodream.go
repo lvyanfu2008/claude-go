@@ -17,6 +17,7 @@ import (
 
 	"goc/conversation-runtime/query"
 	"goc/memdir"
+	"goc/services/extractmemories"
 	"goc/tools/localtools"
 	"goc/tools/toolexecution"
 	"goc/types"
@@ -192,6 +193,8 @@ func runConsolidationSubagent(
 	tc := toolUseContext
 	tc.AgentID = nil
 	tc.Options.IsNonInteractiveSession = true
+	// Filter tools sent to the model — same restricted set as extractmemories.
+	tc.Options.Tools = extractmemories.FilterExtractionTools(tc.Options.Tools)
 
 	maxTurns := maxConsolidationTurns
 
