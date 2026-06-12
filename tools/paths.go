@@ -51,6 +51,19 @@ func (c Config) PlanModePath() string {
 	return filepath.Join(pr, ".harness", "gou_plan_mode.json")
 }
 
+// PlanFilePath returns the path to the plan.md file the model writes during plan mode.
+// The model is told to write to "plan.md" (relative path), so it lands in WorkDir.
+func (c Config) PlanFilePath() string {
+	dir := c.WorkDir
+	if dir == "" {
+		dir = trimProjectRoot(c.ProjectRoot)
+	}
+	if dir == "" {
+		dir = "."
+	}
+	return filepath.Join(dir, "plan.md")
+}
+
 func sanitizeFilePart(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {

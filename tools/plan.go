@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -139,6 +140,13 @@ func ExitPlanModeFromJSON(raw []byte, c Config) (string, bool, error) {
 		return prev
 	})
 
+	// Read plan file content
+	planPath := c.PlanFilePath()
+	planContent := ""
+	if data, err := os.ReadFile(planPath); err == nil {
+		planContent = string(data)
+	}
+
 	// Write plan mode file
 	path := c.PlanModePath()
 	rec := map[string]any{
@@ -157,7 +165,13 @@ func ExitPlanModeFromJSON(raw []byte, c Config) (string, bool, error) {
 		return "", true, err
 	}
 
-	out := map[string]any{"data": map[string]any{"message": "Exited plan mode."}}
+	out := map[string]any{
+		"data": map[string]any{
+			"plan":     planContent,
+			"isAgent":  false,
+			"filePath": planPath,
+		},
+	}
 	b, _ := json.Marshal(out)
 	return string(b), false, nil
 }

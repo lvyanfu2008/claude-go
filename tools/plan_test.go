@@ -108,6 +108,12 @@ func TestExitPlanModeFromJSON_Success(t *testing.T) {
 		t.Fatal("enter plan mode failed")
 	}
 
+	// Write a plan file so ExitPlanModeFromJSON can read it
+	planContent := "# Test Plan\n- Step 1\n- Step 2"
+	if err := os.WriteFile(cfg.PlanFilePath(), []byte(planContent), 0o644); err != nil {
+		t.Fatalf("write plan file: %v", err)
+	}
+
 	// Then exit
 	result, isErr, err := ExitPlanModeFromJSON(nil, cfg)
 	if isErr {
@@ -116,12 +122,22 @@ func TestExitPlanModeFromJSON_Success(t *testing.T) {
 
 	var out struct {
 		Data struct {
-			Message string `json:"message"`
+			Plan     string `json:"plan"`
+			IsAgent  bool   `json:"isAgent"`
+			FilePath string `json:"filePath"`
 		} `json:"data"`
 	}
-	_ = json.Unmarshal([]byte(result), &out)
-	if out.Data.Message == "" {
-		t.Error("result should contain a message")
+	if err := json.Unmarshal([]byte(result), &out); err != nil {
+		t.Fatalf("invalid result JSON: %v", err)
+	}
+	if out.Data.Plan != planContent {
+		t.Errorf("plan = %q, want %q", out.Data.Plan, planContent)
+	}
+	if out.Data.IsAgent {
+		t.Error("isAgent should be false for non-agent context")
+	}
+	if out.Data.FilePath != cfg.PlanFilePath() {
+		t.Errorf("filePath = %q, want %q", out.Data.FilePath, cfg.PlanFilePath())
 	}
 
 	// Check state was restored
@@ -137,6 +153,36 @@ func TestExitPlanModeFromJSON_Success(t *testing.T) {
 	}
 	if !state.NeedsPlanModeExitAttachment {
 		t.Error("NeedsPlanModeExitAttachment should be true")
+	}
+}
+
+func TestExitPlanModeFromJSON_NoPlanFile(t *testing.T) {
+	store := appstate.NewStore(appstate.DefaultAppState())
+	cfg := newTestConfig(t, store)
+
+	_, isErr, _ := EnterPlanModeFromJSON(nil, cfg)
+	if isErr {
+		t.Fatal("enter plan mode failed")
+	}
+
+	// Exit without a plan file
+	result, isErr, err := ExitPlanModeFromJSON(nil, cfg)
+	if isErr {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var out struct {
+		Data struct {
+			Plan     string `json:"plan"`
+			IsAgent  bool   `json:"isAgent"`
+			FilePath string `json:"filePath"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result), &out); err != nil {
+		t.Fatalf("invalid result JSON: %v", err)
+	}
+	if out.Data.Plan != "" {
+		t.Errorf("plan should be empty when no plan file exists, got %q", out.Data.Plan)
 	}
 }
 
