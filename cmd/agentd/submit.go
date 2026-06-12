@@ -365,12 +365,19 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			}
 		}
 
-		// Poll for background agent notifications. The goroutine may
-		// still be running when the query loop returns; wait briefly.
+		// Wait for background agent notifications. The goroutine may
+		// still be running after the query loop finishes. Block on the
+		// notification channel with a generous timeout.
 		drained := commandqueue.DrainCommandQueue()
-		for i := 0; len(drained) == 0 && i < 30; i++ {
-			time.Sleep(100 * time.Millisecond)
-			drained = commandqueue.DrainCommandQueue()
+		if len(drained) == 0 {
+			select {
+			case <-commandqueue.NotifyChan():
+				drained = commandqueue.DrainCommandQueue()
+			case <-time.After(60 * time.Second):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 		if len(drained) == 0 {
 			return nil

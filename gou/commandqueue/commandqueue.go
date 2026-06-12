@@ -28,7 +28,18 @@ type QueuedCommand struct {
 var (
 	commandQueue   []QueuedCommand
 	commandQueueMu sync.Mutex
+	notifyCh       = make(chan struct{}, 1) // signaled when a command is enqueued
 )
+
+// NotifyChan returns a channel that receives when a command is enqueued.
+func NotifyChan() <-chan struct{} { return notifyCh }
+
+func signalNotify() {
+	select {
+	case notifyCh <- struct{}{}:
+	default:
+	}
+}
 
 // EnqueuePendingNotification adds a task-notification command at "later" priority.
 func EnqueuePendingNotification(value string) {
@@ -39,6 +50,7 @@ func EnqueuePendingNotification(value string) {
 		Mode:     "task-notification",
 		Priority: PriorityLater,
 	})
+	signalNotify()
 }
 
 // DequeueCommand removes and returns the highest-priority command (FIFO within priority).
