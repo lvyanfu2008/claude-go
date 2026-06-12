@@ -467,10 +467,14 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 		Deps:            &qdeps,
 	}
 
+	// Use a fresh context so the extraction sub-agent isn't canceled
+	// when the parent query's context times out or is canceled.
+	subCtx := context.Background()
+
 	// Collect all yielded messages from the sub-agent query.
 	var assistantMessages []types.Message
 	var hadTerminal bool
-	for y, err := range query.Query(ctx, qp) {
+	for y, err := range query.Query(subCtx, qp) {
 		if err != nil {
 			fileExtractMemoriesLogf("subagent query error: %v", err)
 			return nil, err
