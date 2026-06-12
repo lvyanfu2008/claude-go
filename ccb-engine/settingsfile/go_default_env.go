@@ -54,5 +54,7 @@ func GoProjectSettingsEnvDefaults() map[string]string {
 		"CLAUDE_CODE_BASH_SECURITY":                "0",
 		"GOC_EXTRACT_MEMORIES_RELAX_THRESHOLD":     "0",
 		"CLAUDE_CODE_GO_DEBUG_SYSTEM_PROMPT":       "0",
+		"GOC_EXTRACT_MEMORIES":                    "1",
+		"GOC_AUTO_DREAM":                          "1",
 	}
 }
