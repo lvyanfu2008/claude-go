@@ -142,4 +142,16 @@ func BuildAgentNotification(taskID, toolUseID, outputFile, status, summary, resu
 func EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
 	xml := BuildAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
 	EnqueuePendingNotification(xml)
+	RemovePendingBgAgent()
 }
+
+var pendingBgAgents int
+
+// AddPendingBgAgent increments the pending background agent counter.
+func AddPendingBgAgent() { pendingBgAgents++ }
+
+// RemovePendingBgAgent decrements the pending background agent counter.
+func RemovePendingBgAgent() { if pendingBgAgents > 0 { pendingBgAgents-- } }
+
+// HasPendingBgAgents returns true if background agents are still running.
+func HasPendingBgAgents() bool { return pendingBgAgents > 0 }

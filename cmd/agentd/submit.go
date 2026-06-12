@@ -365,15 +365,15 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			}
 		}
 
-		// Wait for background agent notifications. The goroutine may
-		// still be running after the query loop finishes. Block on the
-		// notification channel with a generous timeout.
+		// If background agents are still running, wait for them to
+		// complete. The NotificationCallback will enqueue a command
+		// and signal the notify channel.
 		drained := commandqueue.DrainCommandQueue()
-		if len(drained) == 0 {
+		if len(drained) == 0 && commandqueue.HasPendingBgAgents() {
 			select {
 			case <-commandqueue.NotifyChan():
 				drained = commandqueue.DrainCommandQueue()
-			case <-time.After(60 * time.Second):
+			case <-time.After(120 * time.Second):
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()
@@ -453,6 +453,16 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 			switch block.Type {
 			case "tool_use":
 				events.OnToolUseStart(block.Name, block.ID, block.Input)
+				// Track background agents: if the LLM requests a
+				// background agent, increment the pending counter.
+				if block.Name == "Agent" || block.Name == "Task" {
+					var in struct {
+						RunInBackground bool `json:"run_in_background"`
+					}
+					if json.Unmarshal(block.Input, &in) == nil && in.RunInBackground {
+						commandqueue.AddPendingBgAgent()
+					}
+				}
 			case "tool_result":
 				events.OnToolResult(block.ID, block.Content, false)
 			}
