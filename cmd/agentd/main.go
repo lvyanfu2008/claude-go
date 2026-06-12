@@ -34,6 +34,9 @@ func main() {
 	if os.Getenv("GOC_EXTRACT_MEMORIES") == "" {
 		_ = os.Setenv("GOC_EXTRACT_MEMORIES", "1")
 	}
+	if os.Getenv("GOC_AUTO_DREAM") == "" {
+		_ = os.Setenv("GOC_AUTO_DREAM", "1")
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 	writer := os.Stdout
