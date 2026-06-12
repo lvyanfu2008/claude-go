@@ -22,8 +22,10 @@ import (
 	"goc/messagesapi"
 	"goc/modelenv"
 	"goc/querycontext"
+	"goc/compactservice"
 	"goc/services/autodream"
 	"goc/services/extractmemories"
+	"goc/services/sessionmemory"
 	"goc/sessiontranscript"
 	"goc/tools/skilltools"
 	"goc/tools/toolexecution"
@@ -35,8 +37,9 @@ import (
 
 var (
 	agentdSessionStarted  bool
-	agentdExtractMemState = extractmemories.NewState()
-	agentdAutoDreamState  = autodream.NewState()
+	agentdExtractMemState  = extractmemories.NewState()
+	agentdAutoDreamState   = autodream.NewState()
+	agentdSessionMemState  = sessionmemory.NewState()
 )
 
 // agentdSubmitFn 返回 agentd 版本的 SubmitFunc，完整实现 ProcessUserInput → ApplyBaseResult → Query 管线。
@@ -256,8 +259,20 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		},
 	}
 
-	// Build production deps with auto-compact and snip compact (P0-1)
-	qdeps := query.ProductionDeps(nil, nil)
+	// Build production deps with auto-compact, snip compact, and session memory compact.
+	smState := agentdSessionMemState
+	var trySMCompact compactservice.TrySessionMemoryCompactFn
+	if smState != nil {
+		trySMCompact = func(ctx context.Context, messages []types.Message, agentID string, autoCompactThreshold *int) (*compactservice.CompactionResult, error) {
+			return sessionmemory.TrySessionMemoryCompaction(
+				ctx, smState, store.ConversationID, cwd, messages,
+				"", autoCompactThreshold,
+				nil, // sessionStartHookRunner
+				agentID, mainLoopModel, nil,
+			)
+		}
+	}
+	qdeps := query.ProductionDeps(trySMCompact, nil)
 	// P0-2: complete tool execution deps
 	te := toolexecution.ExecutionDeps{
 		InvokeTool:              runner.Run,
@@ -318,6 +333,8 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
 			qcp.UserContext, qcp.SystemContext, qcp.QuerySource, query.RandomUUID,
 			commands.ClaudeConfigHome(), qcp.Cwd, "", store.ConversationID)
+		// Session memory compaction (TS sessionMemory post-turn hook).
+		sessionmemory.Hook(agentdSessionMemState, store.ConversationID, cwd)(ctx, qcp)
 	}
 
 	// ApplyToolResultBudget: enforce tool result size budget
