@@ -4,13 +4,20 @@
 // sub-agent when time-gate + session-count-gate + lock-gate all pass.
 package autodream
 
-import "goc/growthbook"
+import (
+	"os"
+
+	"goc/claudebase"
+	"goc/growthbook"
+)
 
 // IsAutoDreamEnabled mirrors isAutoDreamEnabled() in config.ts.
-// Checks the GrowthBook tengu_onyx_plover.enabled field.
-// (The TS check for a user setting autoDreamEnabled is omitted here since
-// Go doesn't have the same settings system.)
+// Checks the GrowthBook tengu_onyx_plover.enabled field, with env fallback
+// for environments without GrowthBook (e.g. agentd).
 func IsAutoDreamEnabled() bool {
+	if v := os.Getenv("GOC_AUTO_DREAM"); v != "" {
+		return claudebase.Truthy(v)
+	}
 	type onyxPloverCfg struct {
 		Enabled bool `json:"enabled"`
 	}
