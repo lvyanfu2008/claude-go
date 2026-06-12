@@ -469,13 +469,32 @@ func runExtractionSubagent(ctx context.Context, p ExtractionParams, memoryDir st
 
 	// Collect all yielded messages from the sub-agent query.
 	var assistantMessages []types.Message
+	var hadTerminal bool
 	for y, err := range query.Query(ctx, qp) {
 		if err != nil {
+			fileExtractMemoriesLogf("subagent query error: %v", err)
 			return nil, err
 		}
-		if y.Message != nil && y.Message.Type == types.MessageTypeAssistant {
-			assistantMessages = append(assistantMessages, *y.Message)
+		if y.Terminal != nil {
+			hadTerminal = true
+			if y.Terminal.Error != nil {
+				fileExtractMemoriesLogf("subagent terminal error reason=%s err=%v", y.Terminal.Reason, y.Terminal.Error)
+			} else {
+				fileExtractMemoriesLogf("subagent terminal reason=%s", y.Terminal.Reason)
+			}
 		}
+		if y.Message != nil {
+			fileExtractMemoriesLogf("subagent yield msg type=%s", y.Message.Type)
+			if y.Message.Type == types.MessageTypeAssistant {
+				assistantMessages = append(assistantMessages, *y.Message)
+			}
+		}
+		if y.StreamEvent != nil {
+			fileExtractMemoriesLogf("subagent yield stream_event")
+		}
+	}
+	if !hadTerminal {
+		fileExtractMemoriesLogf("subagent NO terminal yield (unexpected)")
 	}
 
 	written := extractWrittenPaths(assistantMessages)
