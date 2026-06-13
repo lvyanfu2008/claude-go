@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"goc/appstate"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
@@ -36,10 +37,11 @@ import (
 )
 
 var (
-	agentdSessionStarted  bool
-	agentdExtractMemState  = extractmemories.NewState()
-	agentdAutoDreamState   = autodream.NewState()
-	agentdSessionMemState  = sessionmemory.NewState()
+	agentdSessionStarted    bool
+	agentdExtractMemState   = extractmemories.NewState()
+	agentdAutoDreamState    = autodream.NewState()
+	agentdSessionMemState   = sessionmemory.NewState()
+	agentdAppStateStore     = appstate.NewStore(appstate.DefaultAppState())
 )
 
 // agentdSubmitFn 返回 agentd 版本的 SubmitFunc，完整实现 ProcessUserInput → ApplyBaseResult → Query 管线。
@@ -219,6 +221,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		MainLoopModel:    mainLoopModel,
 		Messages:         store.Messages,
 		MessagesFunc:     func() []types.Message { return store.Messages },
+		AppStateStore:    agentdAppStateStore,
 		ProgressCallback: func(msg *types.Message) {
 			if msg == nil || msg.Type != types.MessageTypeProgress || len(msg.Data) == 0 {
 				return
