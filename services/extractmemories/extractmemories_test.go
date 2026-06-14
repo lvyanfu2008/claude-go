@@ -858,7 +858,7 @@ func TestCountModelVisibleMessages(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// createMemorySavedMessage
+// CreateMemorySavedMessage
 // ---------------------------------------------------------------------------
 
 func TestCreateMemorySavedMessage(t *testing.T) {
@@ -869,7 +869,7 @@ func TestCreateMemorySavedMessage(t *testing.T) {
 	}
 
 	paths := []string{"/mem/a.md", "/mem/b.md"}
-	msg := createMemorySavedMessage(paths, fakeUUID)
+	msg := CreateMemorySavedMessage(paths, fakeUUID)
 
 	if msg.Type != types.MessageTypeSystem {
 		t.Errorf("expected system type, got %s", msg.Type)

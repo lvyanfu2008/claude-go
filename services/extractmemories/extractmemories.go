@@ -575,7 +575,7 @@ func runExtractionCore(ctx context.Context, state *State, p ExtractionParams, is
 		if newUUID == nil {
 			newUUID = query.RandomUUID
 		}
-		msg := createMemorySavedMessage(memoryPaths, newUUID)
+		msg := CreateMemorySavedMessage(memoryPaths, newUUID)
 		p.AppendSystemMessage(msg)
 		fileExtractMemoriesLogf("done memory_saved paths=%q append_callback=true", memoryPaths)
 	} else {
@@ -810,11 +810,12 @@ func countModelVisibleMessages(msgs []types.Message) int {
 // createMemorySavedMessage creates a system message with subtype "memory_saved"
 // carrying the list of written memory file paths.
 // Mirrors TS createMemorySavedMessage in src/utils/messages.ts.
-func createMemorySavedMessage(writtenPaths []string, newUUID func() string) types.Message {
+func CreateMemorySavedMessage(writtenPaths []string, newUUID func() string) types.Message {
 	uuid := newUUID()
 	now := time.Now().Format(time.RFC3339)
 	isMeta := false
 	subtype := types.SubtypeMemorySaved
+	contentJSON, _ := json.Marshal("Saved a memory")
 	return types.Message{
 		Type:         types.MessageTypeSystem,
 		UUID:         uuid,
@@ -822,5 +823,6 @@ func createMemorySavedMessage(writtenPaths []string, newUUID func() string) type
 		WrittenPaths: writtenPaths,
 		Timestamp:    &now,
 		IsMeta:       &isMeta,
+		Content:      json.RawMessage(contentJSON),
 	}
 }

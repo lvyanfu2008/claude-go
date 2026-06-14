@@ -317,6 +317,9 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		qp.ToolUseContext = params.RuntimeContext.ToolUseContext
 	}
 	// OnQueryComplete: post-turn memory extraction and auto-dream (P1-2)
+	// Call Hook once outside the closure so the sequential-gate sync.Mutex
+	// is shared across all OnQueryComplete invocations.
+	smHook := sessionmemory.Hook(agentdSessionMemState, store.ConversationID, cwd)
 	qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
 		extractmemories.Execute(ctx, agentdExtractMemState, extractmemories.ExtractionParams{
 			Messages:       qcp.Messages,
@@ -333,11 +336,16 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 				events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: store.ConversationID})
 			},
 		})
-		autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
+		autoDreamPaths, _ := autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
 			qcp.UserContext, qcp.SystemContext, qcp.QuerySource, query.RandomUUID,
 			commands.ClaudeConfigHome(), qcp.Cwd, "", store.ConversationID)
+		if len(autoDreamPaths) > 0 {
+			msg := extractmemories.CreateMemorySavedMessage(autoDreamPaths, query.RandomUUID)
+			store.AppendMessage(msg)
+			events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: store.ConversationID})
+		}
 		// Session memory compaction (TS sessionMemory post-turn hook).
-		sessionmemory.Hook(agentdSessionMemState, store.ConversationID, cwd)(ctx, qcp)
+		smHook(ctx, qcp)
 	}
 
 	// ApplyToolResultBudget: enforce tool result size budget
