@@ -133,6 +133,13 @@ func queryLoop(ctx context.Context, params QueryParams, consumedCommandUUIDs *[]
 			return Terminal{Reason: TerminalReasonModelError, Error: autoErr}, nil
 		}
 		applyAutocompactSideEffects(&state, autoRes)
+		if autoRes.WasCompacted && len(autoRes.PostMessages) > 0 {
+			// Yield compact boundary marker so UIs can render "Conversation compacted".
+			// PostMessages[0] is always BoundaryMarker (per BuildPostCompactMessages order).
+			if !yield(QueryYield{Message: &autoRes.PostMessages[0]}, nil) {
+				return Terminal{Reason: TerminalReasonAbortedStreaming}, nil
+			}
+		}
 
 		// Snip nudge: inject context_efficiency attachment when conversation is long.
 		if ShouldNudgeForSnips(work) {

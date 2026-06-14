@@ -275,7 +275,21 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			)
 		}
 	}
-	qdeps := query.ProductionDeps(trySMCompact, nil)
+	compactPhase := func(phase string) {
+		var msg string
+		switch phase {
+		case "started":
+			msg = "Compacting context..."
+		case "summarizing":
+			msg = "Generating summary..."
+		case "done":
+			msg = "Context compacted"
+		default:
+			msg = phase
+		}
+		events.OnAgentProgress("_compact", "running", msg)
+	}
+	qdeps := query.ProductionDeps(trySMCompact, compactPhase)
 	// P0-2: complete tool execution deps
 	te := toolexecution.ExecutionDeps{
 		InvokeTool:              runner.Run,
@@ -507,6 +521,19 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 			}
 		}
 		events.OnStateSnapshot(uiMsgs, engine.StateMetadata{})
+
+	case types.MessageTypeSystem:
+		// Forward system messages (compact_boundary, snip_boundary,
+		// memory_saved, etc.) so the UI can render compaction and
+		// memory notifications inline during the query loop.
+		store.AppendMessage(msg)
+		uiMsgs := make([]types.Message, 0, len(store.Messages))
+		for _, m := range store.Messages {
+			if m.Type != types.MessageTypeAttachment {
+				uiMsgs = append(uiMsgs, m)
+			}
+		}
+		events.OnStateSnapshot(uiMsgs, engine.StateMetadata{SessionID: store.ConversationID})
 	}
 }
 
