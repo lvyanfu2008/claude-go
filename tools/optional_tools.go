@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"goc/commands/featuregates"
+	"goc/featuregates"
 	"goc/compactservice"
 	"goc/diagnostics"
 	"goc/growthbook"
@@ -1125,10 +1125,20 @@ func MonitorFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 // WorkflowFromJSON executes a user-defined workflow file from .harness/workflows/.
 // Supports .yml, .yaml, and .md files. YAML workflows define steps with name + run;
 // Markdown workflows extract shell code blocks and numbered task items.
-func WorkflowFromJSON(raw []byte) (string, bool, error) {
+//
+// Creates a local_workflow task, returns the task ID immediately, and executes
+// the workflow steps in a background goroutine. On completion the task status is
+// updated, hooks are fired, and a notification is sent via NotificationCallback.
+func WorkflowFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	var in struct {
-		Workflow string `json:"workflow"`
-		Args     string `json:"args"`
+		Workflow        string `json:"workflow"`
+		Args            string `json:"args"`
+		Script          string `json:"script"`
+		Name            string `json:"name"`
+		Description     string `json:"description"`
+		Title           string `json:"title"`
+		ScriptPath      string `json:"scriptPath"`
+		ResumeFromRunID string `json:"resumeFromRunId"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
@@ -1138,6 +1148,9 @@ func WorkflowFromJSON(raw []byte) (string, bool, error) {
 	}
 
 	cwd, _ := os.Getwd()
+	if strings.TrimSpace(cfg.WorkDir) != "" {
+		cwd = cfg.WorkDir
+	}
 	workflowDir := filepath.Join(cwd, ".harness", "workflows")
 	exts := []string{".yml", ".yaml", ".md"}
 
@@ -1175,19 +1188,90 @@ func WorkflowFromJSON(raw []byte) (string, bool, error) {
 		return string(b), false, nil
 	}
 
+	subject := "Workflow: " + in.Workflow
+	desc := fmt.Sprintf("Execute workflow %q from %s (%d steps)", in.Workflow, workflowPath, len(steps))
+	tid := TaskListID(cfg)
+	taskID, taskErr := v2CreateTask(tid, TaskTypeLocalWorkflow, subject, desc, "Running workflow", nil)
+	if taskErr != nil {
+		// Fall back to synchronous execution if task system unavailable.
+		return runWorkflowSync(in.Workflow, in.Args, workflowPath, cwd, steps)
+	}
+
+	// Fire TaskCreated hooks.
+	runTaskCreatedHook(cfg, taskID, tid, subject, desc)
+	broadcastTaskEvent(taskID, subject, "created")
+
+	// Run workflow steps in background goroutine.
+	go func() {
+		// Mark in_progress.
+		_, _ = v2UpdateTaskFields(tid, taskID, map[string]any{"status": TaskStatusInProgress})
+		broadcastTaskEvent(taskID, subject, "status_change")
+
+		_, sb, failed := runWorkflowSteps(in.Workflow, in.Args, workflowPath, cwd, steps, cfg)
+		output := sb.String()
+
+		if failed {
+			_, _ = v2UpdateTaskFields(tid, taskID, map[string]any{"status": TaskStatusFailed})
+			broadcastTaskEvent(taskID, subject, "failed")
+			if cfg.NotificationCallback != nil {
+				cfg.NotificationCallback("", "", "", "failed", subject, output, 0, 0, 0)
+			}
+		} else {
+			_, _ = v2UpdateTaskFields(tid, taskID, map[string]any{"status": TaskStatusCompleted})
+			runTaskCompletedHook(cfg, taskID, tid, subject, desc)
+			broadcastTaskEvent(taskID, subject, "completed")
+			if cfg.NotificationCallback != nil {
+				cfg.NotificationCallback("", "", "", "completed", subject, output, 0, 0, 0)
+			}
+		}
+	}()
+
+	out := map[string]any{
+		"data": map[string]any{
+			"taskId": taskID,
+			"status": "started",
+		},
+	}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
+}
+
+// runWorkflowSync falls back to synchronous execution when task creation fails.
+func runWorkflowSync(name, args, workflowPath, cwd string, steps []workflowStep) (string, bool, error) {
+	_, sb, _ := runWorkflowSteps(name, args, workflowPath, cwd, steps, Config{})
+	output := sb.String()
+	res := map[string]any{
+		"data": map[string]any{
+			"output": output,
+		},
+	}
+	b, _ := json.Marshal(res)
+	return string(b), false, nil
+}
+
+// runWorkflowSteps executes workflow steps and returns the full output string, a builder, and whether it failed.
+func runWorkflowSteps(name, args, workflowPath, cwd string, steps []workflowStep, cfg Config) (string, strings.Builder, bool) {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Executing workflow %q from %s (%d steps)\n", in.Workflow, workflowPath, len(steps)))
+	sb.WriteString(fmt.Sprintf("Executing workflow %q from %s (%d steps)\n", name, workflowPath, len(steps)))
 	for i, step := range steps {
 		sb.WriteString(fmt.Sprintf("\n[Step %d/%d] %s\n", i+1, len(steps), step.Name))
+		// Progress callback.
+		if cfg.ProgressCallback != nil {
+			prog := &types.Message{
+				Type:    types.MessageTypeProgress,
+				Content: json.RawMessage(fmt.Sprintf(`"Workflow %s: step %d/%d %s"`, name, i+1, len(steps), step.Name)),
+			}
+			cfg.ProgressCallback(prog)
+		}
 		cmd := exec.Command("bash", "-lc", step.Run)
 		cmd.Dir = cwd
-		if in.Args != "" {
-			cmd.Env = append(os.Environ(), "WORKFLOW_ARGS="+in.Args)
+		if args != "" {
+			cmd.Env = append(os.Environ(), "WORKFLOW_ARGS="+args)
 		}
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			sb.WriteString(fmt.Sprintf("ERROR: %v\n%s", err, string(out)))
-			break
+			return "", sb, true
 		}
 		if len(out) > 0 {
 			sb.WriteString(strings.TrimSpace(string(out)))
@@ -1197,14 +1281,7 @@ func WorkflowFromJSON(raw []byte) (string, bool, error) {
 		}
 	}
 	sb.WriteString("\nWorkflow complete.")
-
-	res := map[string]any{
-		"data": map[string]any{
-			"output": sb.String(),
-		},
-	}
-	b, _ := json.Marshal(res)
-	return string(b), false, nil
+	return sb.String(), sb, false
 }
 
 // workflowStep is a single step parsed from a workflow definition.

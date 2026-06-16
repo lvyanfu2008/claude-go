@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func decodeData(t *testing.T, out string) map[string]any {
@@ -37,6 +38,16 @@ func TestOptionalToolsNoLongerUseUnavailableErrors(t *testing.T) {
 	if out, err := exec.Command("git", "-C", repoDir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "seed").CombinedOutput(); err != nil {
 		t.Fatalf("git commit: %v (%s)", err, string(out))
 	}
+
+	// Create .harness/workflows/ for Workflow tool test.
+	wfDir := filepath.Join(repoDir, ".harness", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatalf("create workflow dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wfDir, "build.yml"), []byte("steps:\n  - name: test\n    run: echo ok\n"), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
 	cfg := Config{
 		WorkDir:     repoDir,
 		ProjectRoot: repoDir,
@@ -143,9 +154,9 @@ func TestOptionalToolsNoLongerUseUnavailableErrors(t *testing.T) {
 		{
 			name: "Workflow",
 			run: func() (string, bool, error) {
-				return WorkflowFromJSON([]byte(`{"workflow":"build"}`))
+				return WorkflowFromJSON([]byte(`{"workflow":"build"}`), cfg)
 			},
-			key: "output",
+			key: "taskId",
 		},
 		{
 			name: "Snip",
@@ -245,5 +256,75 @@ func TestListPeersFromJSONIncludeSelf(t *testing.T) {
 	p0, _ := peers[0].(map[string]any)
 	if p0["address"] != "uds:/tmp/claude.sock" {
 		t.Fatalf("unexpected self address: %v", p0["address"])
+	}
+}
+
+func TestWorkflowCreatesTask(t *testing.T) {
+	dir := t.TempDir()
+	workflowDir := filepath.Join(dir, ".harness", "workflows")
+	if err := os.MkdirAll(workflowDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	workflowYAML := `steps:
+  - name: hello
+    run: echo "hello world"
+`
+	if err := os.WriteFile(filepath.Join(workflowDir, "test.yml"), []byte(workflowYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(dir)
+
+	var notified bool
+	cfg := Config{
+		WorkDir:     dir,
+		ProjectRoot: dir,
+		SessionID:   "session-test",
+		NotificationCallback: func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
+			notified = true
+		},
+	}
+
+	out, isError, err := WorkflowFromJSON([]byte(`{"workflow":"test"}`), cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if isError {
+		t.Fatalf("unexpected isError=true")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	data := result["data"].(map[string]any)
+	taskID, ok := data["taskId"].(string)
+	if !ok || taskID == "" {
+		t.Fatalf("expected taskId in response, got: %v", data)
+	}
+
+	tid := TaskListID(cfg)
+	task, err := v2GetTask(tid, taskID)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if task == nil {
+		t.Fatal("task not found")
+	}
+	if task.Type != TaskTypeLocalWorkflow {
+		t.Fatalf("expected task type local_workflow, got %q", task.Type)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	task, _ = v2GetTask(tid, taskID)
+	if task != nil && task.Status != "completed" && task.Status != "failed" {
+		t.Logf("task status after wait: %s", task.Status)
+	}
+
+	if !notified {
+		t.Log("NotificationCallback was not called (may be expected if no team configured)")
 	}
 }

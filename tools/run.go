@@ -139,7 +139,7 @@ func Run(ctx context.Context, name string, raw []byte, cfg Config) (string, bool
 	case "Monitor":
 		return MonitorFromJSON(ctx, raw, cfg)
 	case "workflow":
-		return WorkflowFromJSON(raw)
+		return WorkflowFromJSON(raw, cfg)
 	case "Snip":
 		return SnipFromJSON(raw)
 	case "SendUserFile":
