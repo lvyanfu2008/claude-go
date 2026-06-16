@@ -11,76 +11,52 @@ import (
 // ─── TodoWrite ───────────────────────────────────────────────────────────────
 
 const todoWritePrompt = `Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
-It also helps the user understand the progress of the task and overall progress of their requests.
+	It also helps the user understand the progress of the task and overall progress of their requests.
 
-## When to Use This Tool
-Use this tool proactively in these scenarios:
+	## When to Use This Tool
 
-1. Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
-2. Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
-3. User explicitly requests todo list - When the user directly asks you to use the todo list
-4. User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
-5. After receiving new instructions - Immediately capture user requirements as todos
-6. When you start working on a task - Mark it as in_progress BEFORE beginning work. Ideally you should only have one todo as in_progress at a time
-7. After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
+	Use this tool proactively in these scenarios:
 
-## When NOT to Use This Tool
+	- Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
+	- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
+	- Plan mode - When using plan mode, create a task list to track the work
+	- User explicitly requests todo list - When the user directly asks you to use the todo list
+	- User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
+	- After receiving new instructions - Immediately capture user requirements as tasks
+	- When you start working on a task - Mark it as in_progress BEFORE beginning work
+	- After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
 
-Skip using this tool when:
-1. There is only a single, straightforward task
-2. The task is trivial and tracking it provides no organizational benefit
-3. The task can be completed in less than 3 trivial steps
-4. The task is purely conversational or informational
+	## When NOT to Use This Tool
 
-NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
+	Skip using this tool when:
+	- There is only a single, straightforward task
+	- The task is trivial and tracking it provides no organizational benefit
+	- The task can be completed in less than 3 trivial steps
+	- The task is purely conversational or informational
 
-## Task States and Management
+	NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
 
-1. **Task States**: Use these states to track progress:
-   - pending: Task not yet started
-   - in_progress: Currently working on (limit to ONE task at a time)
-   - completed: Task finished successfully
+	## Task Fields
 
-2. **Task Management**:
-   - Update task status in real-time as you work
-   - Mark tasks complete IMMEDIATELY after finishing (don't batch completions)
-   - Exactly ONE task must be in_progress at any time (not less, not more)
-   - Complete current tasks before starting new ones
-   - Remove tasks that are no longer relevant from the list entirely
+	- **subject**: A brief, actionable title in imperative form (e.g., "Fix authentication bug in login flow")
+	- **description**: What needs to be done
+	- **activeForm** (optional): Present continuous form shown in the spinner when the task is in_progress (e.g., "Fixing authentication bug"). If omitted, the spinner shows the subject instead.
 
-3. **Task Completion Requirements**:
-   - ONLY mark a task as completed when you have FULLY accomplished it
-   - If you encounter errors, blockers, or cannot finish, keep the task as in_progress
-   - When blocked, create a new task describing what needs to be resolved
-   - Never mark a task as completed if:
-     - Tests are failing
-     - Implementation is partial
-     - You encountered unresolved errors
-     - You couldn't find necessary files or dependencies
+	All tasks are created with status ` + "`pending`" + `.
 
-When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.`
+	## Tips
+
+	- Create tasks with clear, specific subjects that describe the outcome
+	- After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
+	- Check TaskList first to avoid creating duplicate tasks`
 
 // ─── WebFetch ─────────────────────────────────────────────────────────────────
 
-const webFetchPrompt = `IMPORTANT: WebFetch WILL FAIL for authenticated or private URLs. Before using this tool, check if the URL points to an authenticated service (e.g. Google Docs, Confluence, Jira, GitHub). If so, look for a specialized MCP tool that provides authenticated access.
+const webFetchPrompt = `Fetches a URL, converts the page to markdown, and answers ` + "`prompt`" + ` against it using a small fast model.
 
-- Fetches content from a specified URL and processes it using an AI model
-- Takes a URL and a prompt as input
-- Fetches the URL content, converts HTML to markdown
-- Processes the content with the prompt using a small, fast model
-- Returns the model's response about the content
-- Use this tool when you need to retrieve and analyze web content
-
-Usage notes:
-  - IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.
-  - The URL must be a fully-formed valid URL
-  - HTTP URLs will be automatically upgraded to HTTPS
-  - The prompt should describe what information you want to extract from the page
-  - This tool is read-only and does not modify any files
-  - Results may be summarized if the content is very large
-  - Includes a self-cleaning 15-minute cache for faster responses when repeatedly accessing the same URL
-  - When a URL redirects to a different host, the tool will inform you and provide the redirect URL in a special format. You should then make a new WebFetch request with the redirect URL to fetch the content.
-  - For GitHub URLs, prefer using the gh CLI via Bash instead (e.g., gh pr view, gh issue view, gh api).`
+- Fails on authenticated/private URLs — use an authenticated MCP tool or ` + "`gh`" + ` for those instead.
+- HTTP is upgraded to HTTPS. Cross-host redirects are returned to you rather than followed; call again with the redirect URL.
+- Responses are cached for 15 minutes per URL.`
 
 // ─── WebSearch ────────────────────────────────────────────────────────────────
 
@@ -88,32 +64,11 @@ Usage notes:
 // current month and year (or CLAUDE_CODE_OVERRIDE_DATE if set).
 func getWebSearchDescription() string {
 	currentMonthYear := getLocalMonthYear()
-	return `
-- Allows Harness Code to search the web and use the results to inform responses
-- Provides up-to-date information for current events and recent data
-- Returns search result information formatted as search result blocks, including links as markdown hyperlinks
-- Use this tool for accessing information beyond the model's knowledge cutoff
-- Searches are performed automatically within a single API call
+	return `Search the web. Returns result blocks with titles and URLs. US-only.
 
-CRITICAL REQUIREMENT - You MUST follow this:
-  - After answering the user's question, you MUST include a "Sources:" section at the end of your response
-  - In the Sources section, list all relevant URLs from the search results as markdown hyperlinks: [Title](URL)
-  - This is MANDATORY - never skip including sources in your response
-  - Example format:
-
-    [Your answer here]
-
-    Sources:
-    - [Source Title 1](https://example.com/1)
-    - [Source Title 2](https://example.com/2)
-
-Usage notes:
-  - Domain filtering is supported to include or block specific websites
-  - Web search is only available in the US
-
-IMPORTANT - Use the correct year in search queries:
-  - The current month is ` + currentMonthYear + `. You MUST use this year when searching for recent information, documentation, or current events.
-  - Example: If the user asks for "latest React docs", search for "React documentation" with the current year, NOT last year
+- The current month is ` + currentMonthYear + ` — use this when searching for recent information.
+- ` + "`allowed_domains`" + ` / ` + "`blocked_domains`" + ` filter results.
+- After answering from results, end with a "Sources:" list of the URLs you used as markdown links.
 `
 }
 
@@ -359,33 +314,39 @@ Ensure your plan is complete and unambiguous:
 
 // ─── EnterWorktree ────────────────────────────────────────────────────────────
 
-const enterWorktreePrompt = `Use this tool ONLY when the user explicitly asks to work in a worktree. This tool creates an isolated git worktree and switches the current session into it.
+const enterWorktreePrompt = `Use this tool ONLY when explicitly instructed to work in a worktree — either by the user directly, or by project instructions (CLAUDE.md / memory). This tool creates an isolated git worktree and switches the current session into it.
 
 ## When to Use
 
 - The user explicitly says "worktree" (e.g., "start a worktree", "work in a worktree", "create a worktree", "use a worktree")
+- CLAUDE.md or memory instructions direct you to work in a worktree for the current task
 
 ## When NOT to Use
 
 - The user asks to create a branch, switch branches, or work on a different branch — use git commands instead
-- The user asks to fix a bug or work on a feature — use normal git workflow unless they specifically mention worktrees
-- Never use this tool unless the user explicitly mentions "worktree"
+- The user asks to fix a bug or work on a feature — use normal git workflow unless worktrees are explicitly requested by the user or project instructions
+- Never use this tool unless "worktree" is explicitly mentioned by the user or in CLAUDE.md / memory instructions
 
 ## Requirements
 
 - Must be in a git repository, OR have WorktreeCreate/WorktreeRemove hooks configured in settings.json
-- Must not already be in a worktree
+- Must not already be in a worktree session when creating a new worktree (` + "`name`" + `); switching into another existing worktree via ` + "`path`" + ` is allowed
 
 ## Behavior
 
-- In a git repository: creates a new git worktree inside ` + "`.harness/worktrees/`" + ` with a new branch based on HEAD
+- In a git repository: creates a new git worktree inside ` + "`.harness/worktrees/`" + ` on a new branch. The base ref is governed by the ` + "`worktree.baseRef`" + ` setting: ` + "`fresh`" + ` (default) branches from origin/<default-branch>; ` + "`head`" + ` branches from your current local HEAD
 - Outside a git repository: delegates to WorktreeCreate/WorktreeRemove hooks for VCS-agnostic isolation
 - Switches the session's working directory to the new worktree
 - Use ExitWorktree to leave the worktree mid-session (keep or remove). On session exit, if still in the worktree, the user will be prompted to keep or remove it
 
+## Entering an existing worktree
+
+Pass ` + "`path`" + ` instead of ` + "`name`" + ` to switch the session into a worktree that already exists (e.g., one you just created with ` + "`git worktree add`" + `). The path must appear in ` + "`git worktree list`" + ` for the current repository — paths that are not registered worktrees of this repo are rejected. ExitWorktree will not remove a worktree entered this way; use ` + "`action: \"keep\"`" + ` to return to the original directory.
+
 ## Parameters
 
-- ` + "`name`" + ` (optional): A name for the worktree. If not provided, a random name is generated.`
+- ` + "`name`" + ` (optional): A name for a new worktree. If neither ` + "`name`" + ` nor ` + "`path`" + ` is provided, a random name is generated.
+- ` + "`path`" + ` (optional): Path to an existing worktree of the current repository to enter instead of creating one. Mutually exclusive with ` + "`name`" + `.`
 
 // ─── ExitWorktree ─────────────────────────────────────────────────────────────
 
@@ -464,7 +425,7 @@ Only use minute 0 or 30 when the user names that exact time and clearly means it
 
 Jobs only fire while the REPL is idle (not mid-query).` + runtimeExtra + ` The scheduler adds a small deterministic jitter on top of whatever you pick: recurring tasks fire up to 10% of their period late (max 15 min); one-shot tasks landing on :00 or :30 fire up to 90 s early. Picking an off-minute is still the bigger lever.
 
-Recurring tasks auto-expire after 30 days — they fire one final time, then are deleted. This bounds session lifetime. Tell the user about the 30-day limit when scheduling recurring jobs.
+Recurring tasks auto-expire after 7 days — they fire one final time, then are deleted. This bounds session lifetime. Tell the user about the 7-day limit when scheduling recurring jobs.
 
 Returns a job ID you can pass to CronDelete.`
 }
@@ -704,68 +665,6 @@ const taskStopPrompt = `
 
 // ─── PowerShell ───────────────────────────────────────────────────────────────
 
-// getPowerShellDescription mirrors PowerShellTool.getPrompt() in TS.
-func getPowerShellDescription() string {
-	edition := getPowerShellEdition()
-	return `Execute a PowerShell command in the local environment.` + `
-Executes a given PowerShell command with optional timeout. Working directory persists between commands; shell state (variables, functions) does not.
-
-IMPORTANT: This tool is for terminal operations via PowerShell: git, npm, docker, and PS cmdlets. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
-
-` + getPowerShellEditionSection(edition) + `
-
-Before executing the command, please follow these steps:
-
-1. Directory Verification:
-   - If the command will create new directories or files, first use ` + "`Get-ChildItem`" + ` (or ` + "`ls`" + `) to verify the parent directory exists and is the correct location
-
-2. Command Execution:
-   - Always quote file paths that contain spaces with double quotes
-   - Capture the output of the command.
-
-PowerShell Syntax Notes:
-   - Variables use $ prefix: $myVar = "value"
-   - Escape character is backtick (` + "`" + `), not backslash
-   - Use Verb-Noun cmdlet naming: Get-ChildItem, Set-Location, New-Item, Remove-Item
-   - Common aliases: ls (Get-ChildItem), cd (Set-Location), cat (Get-Content), rm (Remove-Item)
-   - Pipe operator | works similarly to bash but passes objects, not text
-   - Use Select-Object, Where-Object, ForEach-Object for filtering and transformation
-   - String interpolation: "Hello $name" or "Hello $($obj.Property)"
-   - Registry access uses PSDrive prefixes: ` + "`HKLM:\\SOFTWARE\\...`" + `, ` + "`HKCU:\\...`" + ` — NOT raw ` + "`HKEY_LOCAL_MACHINE\\...`" + `
-   - Environment variables: read with ` + "`$env:NAME`" + `, set with ` + "`$env:NAME = \"value\"`" + ` (NOT ` + "`Set-Variable`" + ` or bash ` + "`export`" + `)
-   - Call native exe with spaces in path via call operator: ` + "`& \"C:\\Program Files\\App\\app.exe\" arg1 arg2`" + `
-
-Interactive and blocking commands (will hang — this tool runs with -NonInteractive):
-   - NEVER use ` + "`Read-Host`" + `, ` + "`Get-Credential`" + `, ` + "`Out-GridView`" + `, ` + "`$Host.UI.PromptForChoice`" + `, or ` + "`pause`" + `
-   - Destructive cmdlets (` + "`Remove-Item`" + `, ` + "`Stop-Process`" + `, ` + "`Clear-Content`" + `, etc.) may prompt for confirmation. Add ` + "`-Confirm:$false`" + ` when you intend the action to proceed. Use ` + "`-Force`" + ` for read-only/hidden items.
-   - Never use ` + "`git rebase -i`" + `, ` + "`git add -i`" + `, or other commands that open an interactive editor
-
-Passing multiline strings (commit messages, file content) to native executables:
-   - Use a single-quoted here-string so PowerShell does not expand ` + "`$`" + ` or backticks inside. The closing ` + "`'@`" + ` MUST be at column 0 (no leading whitespace) on its own line — indenting it is a parse error
-
-Usage notes:
-  - The command argument is required.
-  - You can specify an optional timeout in milliseconds. If not specified, commands will timeout after default.
-  - It is very helpful if you write a clear, concise description of what this command does.
-  - You can use the ` + "`run_in_background`" + ` parameter to run the command in the background. Only use this if you don't need the result immediately and are OK being notified when the command completes later.
-  - Avoid using PowerShell to run commands that have dedicated tools, unless explicitly instructed:
-    - File search: Use GlobTool (NOT Get-ChildItem -Recurse)
-    - Content search: Use GrepTool (NOT Select-String)
-    - Read files: Use Read (NOT Get-Content)
-    - Edit files: Use Edit
-    - Write files: Use Write (NOT Set-Content/Out-File)
-    - Communication: Output text directly (NOT Write-Output/Write-Host)
-  - When issuing multiple commands:
-    - If the commands are independent and can run in parallel, make multiple PowerShell tool calls in a single message.
-    - If the commands depend on each other and must run sequentially, chain them in a single PowerShell call (see edition-specific chaining syntax above).
-    - Use ` + "`;`" + ` only when you need to run commands sequentially but don't care if earlier commands fail.
-    - DO NOT use newlines to separate commands (newlines are ok in quoted strings and here-strings)
-  - Do NOT prefix commands with ` + "`cd`" + ` or ` + "`Set-Location`" + ` -- the working directory is already set to the correct project directory automatically.
-  - For git commands:
-    - Prefer to create a new commit rather than amending an existing commit.
-    - Before running destructive operations (e.g., git reset --hard, git push --force, git checkout --), consider whether there is a safer alternative that achieves the same goal. Only use destructive operations when they are truly the best approach.
-    - Never skip hooks (--no-verify) or bypass signing (--no-gpg-sign, -c commit.gpgsign=false) unless the user has explicitly asked for it. If a hook fails, investigate and fix the underlying issue.`
-}
 
 func getPowerShellEdition() string {
 	return strings.ToLower(strings.TrimSpace(os.Getenv("POWERSHELL_EDITION")))

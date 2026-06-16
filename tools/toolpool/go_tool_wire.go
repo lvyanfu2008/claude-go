@@ -121,7 +121,7 @@ func nativeReadToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Read",
-		Description:     "Reads a file from the local filesystem. You can access any file directly by using this tool.\nAssume this tool is able to read all files on the machine. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.\n\nUsage:\n- The file_path parameter must be an absolute path, not a relative path\n- By default, it reads up to 2000 lines starting from the beginning of the file\n- You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters\n- Results are returned using cat -n format, with line numbers starting at 1\n- This tool allows Harness Code to read images (eg PNG, JPG, etc). When reading an image file the contents are presented visually as Harness Code is a multimodal LLM.\n- This tool can read PDF files (.pdf). For large PDFs (more than 10 pages), you MUST provide the pages parameter to read specific page ranges (e.g., pages: \"1-5\"). Reading a large PDF without the pages parameter will fail. Maximum 20 pages per request.\n- This tool can read Jupyter notebooks (.ipynb files) and returns all cells with their outputs, combining code, text, and visualizations.\n- This tool can only read files, not directories. To read a directory, use an ls command via the Bash tool.\n- You will regularly be asked to read screenshots. If the user provides a path to a screenshot, ALWAYS use this tool to view the file at the path. This tool will work with all temporary file paths.\n- If you read a file that exists but has empty contents you will receive a system reminder warning in place of file contents.",
+		Description:     "Reads a file from the local filesystem.\n\n- `file_path` must be an absolute path.\n- Reads up to 2000 lines by default.\n- You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters\n- Results are returned using cat -n format, with line numbers starting at 1\n- Reads images (PNG, JPG, …) and presents them visually. Reads PDFs via the `pages` parameter (e.g. \"1-5\", max 20 pages/request; required for PDFs over 10 pages). Reads Jupyter notebooks (.ipynb) as cells with outputs.\n- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.\n- Do NOT re-read a file you just edited to verify — Edit/Write would have errored if the change failed, and the harness tracks file state for you.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -145,7 +145,7 @@ func nativeWriteToolSpec() types.ToolSpec {
 	}
 	return types.ToolSpec{
 		Name:            "Write",
-		Description:     "Writes a file to the local filesystem.\n\nUsage:\n- This tool will overwrite the existing file if there is one at the provided path.\n- If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.\n- Prefer the Edit tool for modifying existing files — it only sends the diff. Only use this tool to create new files or for complete rewrites.\n- NEVER create documentation files (*.md) or README files unless explicitly requested by the User.\n- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.",
+		Description:     "Writes a file to the local filesystem, overwriting if one exists.\n\nWhen to use: creating a new file, or fully replacing one you've already Read. Overwriting an existing file you haven't Read will fail. For partial changes, use Edit instead.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -169,13 +169,11 @@ func getEditToolDescription() string {
 		minimalUniquenessHint = "\n- Use the smallest old_string that's clearly unique — usually 2-4 adjacent lines is sufficient. Avoid including 10+ lines of context when less uniquely identifies the target."
 	}
 
-	return fmt.Sprintf(`Performs exact string replacements in files.
+	return fmt.Sprintf(`Performs exact string replacement in a file.
 
-Usage:%s- When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: %s. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
-- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
-- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
-- The edit will FAIL if `+"`old_string`"+` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `+"`replace_all`"+` to change every instance of `+"`old_string`"+`.%s
-- Use `+"`replace_all`"+` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance.`,
+- You must Read the file in this conversation before editing, or the call will fail.%s
+- ` + "`old_string`" + ` must match the file exactly, including indentation, and be unique — the edit fails otherwise. Strip the Read line prefix (%s) before matching.%s
+- ` + "`replace_all: true`" + ` replaces every occurrence instead.`,
 		getPreReadInstruction(),
 		prefixFormat,
 		minimalUniquenessHint)
@@ -775,7 +773,11 @@ func nativeEnterWorktreeToolSpec() types.ToolSpec {
 		"properties": map[string]any{
 			"name": map[string]any{
 				"type":        "string",
-				"description": "Optional name for the worktree. Each \"/\"-separated segment may contain only letters, digits, dots, underscores, and dashes; max 64 chars total. A random name is generated if not provided.",
+				"description": "Optional name for a new worktree. Each \"/\"-separated segment may contain only letters, digits, dots, underscores, and dashes; max 64 chars total. A random name is generated if not provided. Mutually exclusive with `path`.",
+			},
+			"path": map[string]any{
+				"type":        "string",
+				"description": "Path to an existing worktree of the current repository to switch into instead of creating a new one. Must appear in `git worktree list` for the current repo. Mutually exclusive with `name`.",
 			},
 		},
 		"additionalProperties": false,
@@ -847,26 +849,41 @@ func nativeWorkflowToolSpec() types.ToolSpec {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"type":    "object",
 		"properties": map[string]any{
-			"workflow": map[string]any{
+			"script": map[string]any{
 				"type":        "string",
-				"description": "Name of the workflow to execute",
+				"maxLength":   524288,
+				"description": "Self-contained workflow script. Must begin with `export const meta = { name, description, phases }` (pure literal, no computed values) followed by the script body using agent()/parallel()/pipeline()/phase().",
+			},
+			"name": map[string]any{
+				"type":        "string",
+				"description": "Name of a predefined workflow (built-in or from .claude/workflows/). Resolves to a self-contained script.",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "Ignored — set the workflow description in the script's `meta` block.",
+			},
+			"title": map[string]any{
+				"type":        "string",
+				"description": "Ignored — set the workflow title in the script's `meta` block.",
 			},
 			"args": map[string]any{
+				"description": "Optional input value exposed to the script as the global `args`, verbatim. Pass arrays/objects as actual JSON values, NOT as a JSON-encoded string — a stringified list breaks `args.filter`/`args.map` in the script. Use for parameterized named workflows (e.g. a research question).",
+			},
+			"scriptPath": map[string]any{
 				"type":        "string",
-				"description": "Arguments to pass to the workflow",
+				"description": "Path to a workflow script file on disk. Every Workflow invocation persists its script under the session directory and returns the path in the tool result. To iterate, edit that file with Write/Edit and re-invoke Workflow with the same `scriptPath` instead of re-sending the full script. Takes precedence over `script` and `name`.",
+			},
+			"resumeFromRunId": map[string]any{
+				"type":        "string",
+				"pattern":     "^wf_[a-z0-9-]{6,}$",
+				"description": "Run ID of a prior Workflow invocation to resume from. Completed agent() calls with unchanged (prompt, opts) return their cached results instantly; only edited or new calls re-run. Same-session only. Stop the prior run first (TaskStop) before resuming.",
 			},
 		},
-		"required":             []string{"workflow"},
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name: "workflow",
-		Description: `Use the Workflow tool to execute user-defined workflow scripts located in .harness/workflows/. Workflows are YAML or Markdown files that define a sequence of steps for common development tasks.
-
-Guidelines:
-- Specify the workflow name to execute (must match a file in .harness/workflows/)
-- Optionally pass arguments that the workflow can use
-- Workflows run in the context of the current project`,
+		Name:            "Workflow",
+		Description:     getWorkflowDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -950,8 +967,8 @@ func nativeAgentToolSpec() types.ToolSpec {
 		},
 		"model": map[string]any{
 			"type":        "string",
-			"description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.",
-			"enum":        []string{"sonnet", "opus", "haiku", "inherit"},
+			"description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent. Ignored for subagent_type: \"fork\" — forks always inherit the parent model.",
+			"enum":        []string{"sonnet", "opus", "haiku", "fable"},
 		},
 		"name": map[string]any{
 			"type":        "string",
@@ -1820,7 +1837,7 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result.", false), true, nil
 	case "REPL":
 		return nativeREPLToolSpec(), true, nil
-	case "workflow":
+	case "Workflow":
 		return nativeWorkflowToolSpec(), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions.", true), true, nil
@@ -1909,7 +1926,7 @@ var goWireBaseTools = []goWireToolEntry{
 	{Name: "TeamRemoveMember", Required: false, Enabled: commands.AgentSwarmsEnabled},
 	{Name: "VerifyPlanExecution", Required: false, Enabled: func() bool { return commands.IsEnvTruthy("CLAUDE_CODE_VERIFY_PLAN") }},
 	{Name: "REPL", Required: false, Enabled: featuregates.UserTypeAnt},
-	{Name: "workflow", Required: false, Enabled: alwaysEnabled},
+	{Name: "Workflow", Required: false, Enabled: alwaysEnabled},
 	{Name: "Sleep", Required: false, Enabled: alwaysEnabled},
 	{Name: "RemoteTrigger", Required: false, Enabled: func() bool { return featuregates.Feature("AGENT_TRIGGERS_REMOTE") }},
 	{Name: "Monitor", Required: false, Enabled: func() bool { return featuregates.Feature("MONITOR_TOOL") }},

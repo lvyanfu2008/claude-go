@@ -83,13 +83,11 @@ func AgentPromptWithOptions(agentInfos []AgentInfo, opts AgentPromptOptions) str
 	agentListSection := fmt.Sprintf("Available agent types and the tools they have access to:\n%s",
 		strings.Join(agentListLines, "\n"))
 
-	shared := fmt.Sprintf(`Launch a new agent to handle complex, multi-step tasks autonomously.
-
-The %s tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
+	shared := fmt.Sprintf(`Launch a new agent to handle complex, multi-step tasks. Each agent type has specific capabilities and tools available to it.
 
 %s
 
-%s`, AgentToolName, agentListSection, getAgentTypeSelection(opts.IsForkEnabled))
+%s`, agentListSection, getAgentTypeSelection(opts.IsForkEnabled))
 
 	if opts.IsCoordinator {
 		return shared
@@ -101,13 +99,19 @@ The %s tool launches specialized agents (subprocesses) that autonomously handle 
 	writingPrompt := getWritingPromptSection(opts.IsForkEnabled)
 	examples := getExamplesSection(opts.IsForkEnabled)
 
+	whenToUse := `## When to use
+
+Reach for this when the task matches an available agent type, when you have independent work to run in parallel, or when answering would mean reading across several files — delegate it and you keep the conclusion, not the file dumps. For a single-fact lookup where you already know the file, symbol, or value, search directly. Once you've delegated a search, don't also run it yourself — wait for the result.`
+
 	return fmt.Sprintf(`%s
+
+%s
 %s
 
 Usage notes:
 %s%s%s
 
-%s`, shared, whenNotToUse, usageNotes, whenToFork, writingPrompt, examples)
+%s`, shared, whenToUse, whenNotToUse, usageNotes, whenToFork, writingPrompt, examples)
 }
 
 func getAgentTypeSelection(isForkEnabled bool) string {
@@ -142,35 +146,20 @@ When NOT to use the %s tool:
 func getUsageNotesSection(opts AgentPromptOptions) string {
 	var notes []string
 
-	notes = append(notes, "- Always include a short description (3-5 words) summarizing what the agent will do")
+	notes = append(notes, "- The agent's final message is returned to you as the tool result; it is not shown to the user — relay what matters.")
 
-	if opts.IsProUser {
-		notes = append(notes, "- Launch multiple agents concurrently whenever possible, to maximize performance; to do that, use a single message with multiple tool uses")
-	}
-
-	notes = append(notes, "- When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result.")
-
-	if !opts.InProcessTeammate && !opts.IsForkEnabled {
-		notes = append(notes, "- You can optionally run agents in the background using the run_in_background parameter. When an agent runs in the background, you will be automatically notified when it completes — do NOT sleep, poll, or proactively check on its progress. Continue with other work or respond to the user instead.")
-		notes = append(notes, "- **Foreground vs background**: Use foreground (default) when you need the agent's results before you can proceed — e.g., research agents whose findings inform your next steps. Use background when you have genuinely independent work to do in parallel.")
-	}
-
-	continuationNote := fmt.Sprintf("- To continue a previously spawned agent, use %s with the agent's ID or name as the `to` field. The agent resumes with its full context preserved. %s", SendMessageToolName, getAgentInvocationNote(opts.IsForkEnabled))
+	continuationNote := fmt.Sprintf("- Use %s with the agent's ID or name to continue a previously spawned agent with its context intact; a new Agent call starts fresh.", SendMessageToolName)
 	notes = append(notes, continuationNote)
 
-	notes = append(notes, "- The agent's outputs should generally be trusted")
+	notes = append(notes, "- `isolation: \"worktree\"` gives the agent its own git worktree (auto-cleaned if unchanged).")
 
-	clarityNote := "- Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.)"
-	if !opts.IsForkEnabled {
-		clarityNote += ", since it is not aware of the user's intent"
+	if !opts.InProcessTeammate && !opts.IsForkEnabled {
+		notes = append(notes, "- `run_in_background: true` runs the agent asynchronously; you'll be notified when it completes.")
 	}
-	notes = append(notes, clarityNote)
 
-	notes = append(notes, "- If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.")
-
-	notes = append(notes, fmt.Sprintf("- If the user specifies that they want you to run agents \"in parallel\", you MUST send a single message with multiple %s tool use content blocks. For example, if you need to launch both a build-validator agent and a test-runner agent in parallel, send a single message with both tool calls.", AgentToolName))
-
-	notes = append(notes, "- You can optionally set `isolation: \"worktree\"` to run the agent in a temporary git worktree, giving it an isolated copy of the repository. The worktree is automatically cleaned up if the agent makes no changes; if changes are made, the worktree path and branch are returned in the result.")
+	if opts.IsProUser {
+		notes = append(notes, "- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently")
+	}
 
 	if opts.InProcessTeammate {
 		notes = append(notes, "- The run_in_background, name, team_name, and mode parameters are not available in this context. Only synchronous subagents are supported.")
@@ -179,13 +168,6 @@ func getUsageNotesSection(opts AgentPromptOptions) string {
 	}
 
 	return strings.Join(notes, "\n")
-}
-
-func getAgentInvocationNote(isForkEnabled bool) string {
-	if isForkEnabled {
-		return "Each fresh Agent invocation with a subagent_type starts without context — provide a complete task description."
-	}
-	return "Each Agent invocation starts fresh — provide a complete task description."
 }
 
 func getWritingPromptSection(isForkEnabled bool) string {
