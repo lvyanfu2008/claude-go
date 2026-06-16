@@ -1,5 +1,5 @@
 // Mirrors src/constants/prompts.ts exports (constants + string builders).
-package commands
+package sysprompt
 
 import (
 	"fmt"

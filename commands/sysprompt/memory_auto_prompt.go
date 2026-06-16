@@ -1,4 +1,4 @@
-package commands
+package sysprompt
 
 import (
 	"goc/commands/featuregates"

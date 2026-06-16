@@ -1,5 +1,5 @@
 // Gates and optional sections from src/constants/prompts.ts and dependencies (copied verbatim; env mirrors GrowthBook / bootstrap).
-package commands
+package sysprompt
 
 import (
 	"goc/tools/tool"
