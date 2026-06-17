@@ -46,30 +46,51 @@ func validateWorkflowZog(input json.RawMessage) error {
 
 	var dest workflowZogInput
 
-	wRaw, ok := raw["workflow"]
-	if !ok {
-		return fmt.Errorf("workflow: missing required field %q", "workflow")
-	}
-	var wVal any
-	if err := json.Unmarshal(wRaw, &wVal); err != nil {
-		return fmt.Errorf("workflow: workflow: %w", err)
-	}
-	wStr, ok := wVal.(string)
-	if !ok {
-		return fmt.Errorf("workflow: workflow must be a string")
-	}
-	if strings.TrimSpace(wStr) == "" {
-		return fmt.Errorf("workflow: workflow must be non-empty")
-	}
-	dest.Workflow = wStr
+	// At least one of: workflow, script, scriptPath, name must be present.
+	hasWorkflow := false
+	hasScript := false
+	hasName := false
 
-	if err := parseZogStringField(raw, "args", &dest.Args); err != nil {
-		return fmt.Errorf("workflow: %w", err)
+	wRaw, ok := raw["workflow"]
+	if ok {
+		var wVal any
+		if err := json.Unmarshal(wRaw, &wVal); err != nil {
+			return fmt.Errorf("workflow: workflow: %w", err)
+		}
+		wStr, ok := wVal.(string)
+		if !ok {
+			return fmt.Errorf("workflow: workflow must be a string")
+		}
+		if strings.TrimSpace(wStr) != "" {
+			hasWorkflow = true
+			dest.Workflow = wStr
+		}
 	}
+
 	if err := parseZogStringField(raw, "script", &dest.Script); err != nil {
 		return fmt.Errorf("workflow: %w", err)
 	}
+	if dest.Script != nil && strings.TrimSpace(*dest.Script) != "" {
+		hasScript = true
+	}
+	if err := parseZogStringField(raw, "scriptPath", &dest.ScriptPath); err != nil {
+		return fmt.Errorf("workflow: %w", err)
+	}
+	if dest.ScriptPath != nil && strings.TrimSpace(*dest.ScriptPath) != "" {
+		hasScript = true
+	}
 	if err := parseZogStringField(raw, "name", &dest.Name); err != nil {
+		return fmt.Errorf("workflow: %w", err)
+	}
+	if dest.Name != nil && strings.TrimSpace(*dest.Name) != "" {
+		hasName = true
+	}
+
+	if !hasWorkflow && !hasScript && !hasName {
+		return fmt.Errorf("workflow: at least one of 'workflow', 'script', 'scriptPath', or 'name' is required")
+	}
+
+	if err := parseZogStringField(raw, "args", &dest.Args); err != nil {
 		return fmt.Errorf("workflow: %w", err)
 	}
 	if err := parseZogStringField(raw, "description", &dest.Description); err != nil {
@@ -78,15 +99,12 @@ func validateWorkflowZog(input json.RawMessage) error {
 	if err := parseZogStringField(raw, "title", &dest.Title); err != nil {
 		return fmt.Errorf("workflow: %w", err)
 	}
-	if err := parseZogStringField(raw, "scriptPath", &dest.ScriptPath); err != nil {
-		return fmt.Errorf("workflow: %w", err)
-	}
 	if err := parseZogStringField(raw, "resumeFromRunId", &dest.ResumeFromRunID); err != nil {
 		return fmt.Errorf("workflow: %w", err)
 	}
 
 	schema := z.Struct(z.Shape{
-		"workflow":        z.String().Required(),
+		"workflow":        z.String().Optional(),
 		"args":            z.String().Optional(),
 		"script":          z.String().Optional(),
 		"name":            z.String().Optional(),

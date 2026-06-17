@@ -882,7 +882,7 @@ func nativeWorkflowToolSpec() types.ToolSpec {
 		"additionalProperties": false,
 	}
 	return types.ToolSpec{
-		Name:            "Workflow",
+		Name:            "workflow",
 		Description:     getWorkflowDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1837,7 +1837,7 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 		return nativeEmptyObjectSchemaToolSpec("VerifyPlanExecution", "Verify a plan execution result.", false), true, nil
 	case "REPL":
 		return nativeREPLToolSpec(), true, nil
-	case "Workflow":
+	case "workflow":
 		return nativeWorkflowToolSpec(), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions.", true), true, nil
@@ -1926,7 +1926,7 @@ var goWireBaseTools = []goWireToolEntry{
 	{Name: "TeamRemoveMember", Required: false, Enabled: commands.AgentSwarmsEnabled},
 	{Name: "VerifyPlanExecution", Required: false, Enabled: func() bool { return commands.IsEnvTruthy("CLAUDE_CODE_VERIFY_PLAN") }},
 	{Name: "REPL", Required: false, Enabled: featuregates.UserTypeAnt},
-	{Name: "Workflow", Required: false, Enabled: alwaysEnabled},
+	{Name: "workflow", Required: false, Enabled: alwaysEnabled},
 	{Name: "Sleep", Required: false, Enabled: alwaysEnabled},
 	{Name: "RemoteTrigger", Required: false, Enabled: func() bool { return featuregates.Feature("AGENT_TRIGGERS_REMOTE") }},
 	{Name: "Monitor", Required: false, Enabled: func() bool { return featuregates.Feature("MONITOR_TOOL") }},

@@ -44,6 +44,22 @@ var (
 	agentdAppStateStore     = appstate.NewStore(appstate.DefaultAppState())
 )
 
+// filterUIMessages removes internal/meta messages that should not be rendered to the user.
+// Mirrors TS adapter.ts: `if (m.isMeta) continue` + attachment filtering.
+func filterUIMessages(msgs []types.Message) []types.Message {
+	out := make([]types.Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Type == types.MessageTypeAttachment {
+			continue
+		}
+		if m.IsMeta != nil && *m.IsMeta {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // agentdSubmitFn 返回 agentd 版本的 SubmitFunc，完整实现 ProcessUserInput → ApplyBaseResult → Query 管线。
 func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) engine.SubmitFunc {
 	return func(ctx context.Context, text string, store *conversation.Store, events engine.EventHandler, _ engine.PermissionBridge) error {
@@ -89,12 +105,7 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 		if len(r.Messages) > 0 || out.EffectiveShouldQuery {
 			// Filter out attachment messages before sending to UI — they are
 			// internal (CLAUDE.md, hooks) and should not be displayed to the user.
-			uiMsgs := make([]types.Message, 0, len(store.Messages))
-			for _, m := range store.Messages {
-				if m.Type != types.MessageTypeAttachment {
-					uiMsgs = append(uiMsgs, m)
-				}
-			}
+			uiMsgs := filterUIMessages(store.Messages)
 			events.OnStateSnapshot(uiMsgs, engine.StateMetadata{SessionID: sessionID})
 		}
 
@@ -347,7 +358,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			SkipIndex:      growthbook.IsTenguMothCopse(),
 			AppendSystemMessage: func(msg types.Message) {
 				store.AppendMessage(msg)
-				events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: store.ConversationID})
+				events.OnStateSnapshot(filterUIMessages(store.Messages), engine.StateMetadata{SessionID: store.ConversationID})
 			},
 		})
 		autoDreamPaths, _ := autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
@@ -356,7 +367,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		if len(autoDreamPaths) > 0 {
 			msg := extractmemories.CreateMemorySavedMessage(autoDreamPaths, query.RandomUUID)
 			store.AppendMessage(msg)
-			events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: store.ConversationID})
+			events.OnStateSnapshot(filterUIMessages(store.Messages), engine.StateMetadata{SessionID: store.ConversationID})
 		}
 		// Session memory compaction (TS sessionMemory post-turn hook).
 		smHook(ctx, qcp)
@@ -442,7 +453,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			Content: content,
 		}
 		store.AppendMessage(msg)
-		events.OnStateSnapshot(store.Messages, engine.StateMetadata{})
+		events.OnStateSnapshot(filterUIMessages(store.Messages), engine.StateMetadata{})
 
 		// Start another turn with the notification injected.
 		qp.Messages = append(append([]types.Message{}, store.Messages...), msg)
@@ -514,12 +525,7 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 
 	case types.MessageTypeUser:
 		store.AppendMessage(msg)
-		uiMsgs := make([]types.Message, 0, len(store.Messages))
-		for _, m := range store.Messages {
-			if m.Type != types.MessageTypeAttachment {
-				uiMsgs = append(uiMsgs, m)
-			}
-		}
+		uiMsgs := filterUIMessages(store.Messages)
 		events.OnStateSnapshot(uiMsgs, engine.StateMetadata{})
 
 	case types.MessageTypeSystem:
@@ -527,12 +533,7 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 		// memory_saved, etc.) so the UI can render compaction and
 		// memory notifications inline during the query loop.
 		store.AppendMessage(msg)
-		uiMsgs := make([]types.Message, 0, len(store.Messages))
-		for _, m := range store.Messages {
-			if m.Type != types.MessageTypeAttachment {
-				uiMsgs = append(uiMsgs, m)
-			}
-		}
+		uiMsgs := filterUIMessages(store.Messages)
 		events.OnStateSnapshot(uiMsgs, engine.StateMetadata{SessionID: store.ConversationID})
 	}
 }

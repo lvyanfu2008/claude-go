@@ -19,8 +19,40 @@ import (
 	"goc/diagnostics"
 	"goc/growthbook"
 	"goc/tools/procregistry"
+	"goc/tools/workflow"
 	"goc/types"
 )
+
+func init() {
+	// Wire workflow package to the v2 task system (circular-dep safe).
+	workflow.SetTaskFunctions(
+		func(taskListID, subject, description string) (string, error) {
+			id, err := v2CreateTask(taskListID, TaskTypeLocalWorkflow, subject, description, "Running workflow", nil)
+			if err != nil {
+				return "", err
+			}
+			return id, nil
+		},
+		func(taskListID, taskID, status string) error {
+			_, err := v2UpdateTaskFields(taskListID, taskID, map[string]any{"status": status})
+			return err
+		},
+	)
+	// Wire agent runner for workflow scripts.
+	workflow.SetAgentRunner(func(raw []byte, cfg workflow.AgentRunConfig) (string, bool, error) {
+		agentCfg := AgentRuntimeConfig{
+			WorkDir:             cfg.WorkDir,
+			ProjectRoot:         cfg.ProjectRoot,
+			SessionID:           cfg.SessionID,
+			TasksDir:            cfg.TasksDir,
+			AvailableMCPServers: cfg.AvailableMCPServers,
+			SystemPrompt:        cfg.SystemPrompt,
+			MainLoopModel:       cfg.MainLoopModel,
+			ParentToolUseID:     cfg.ParentToolUseID,
+		}
+		return RunAgentTool(raw, agentCfg)
+	})
+}
 
 // TestingPermissionFromJSON matches TS TestingPermissionTool.call output shape.
 func TestingPermissionFromJSON(raw []byte) (string, bool, error) {
@@ -1132,7 +1164,7 @@ func MonitorFromJSON(ctx context.Context, raw []byte, cfg Config) (string, bool,
 func WorkflowFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	var in struct {
 		Workflow        string `json:"workflow"`
-		Args            string `json:"args"`
+		Args            json.RawMessage `json:"args"`
 		Script          string `json:"script"`
 		Name            string `json:"name"`
 		Description     string `json:"description"`
@@ -1143,8 +1175,15 @@ func WorkflowFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return "", true, err
 	}
+
+	// Route to JS workflow engine if script, scriptPath, or 'name' (built-in/saved workflow) is provided.
+	if strings.TrimSpace(in.Script) != "" || strings.TrimSpace(in.ScriptPath) != "" || (strings.TrimSpace(in.Name) != "" && strings.TrimSpace(in.Workflow) == "") {
+		return runJSWorkflow(raw, cfg)
+	}
+
+	// Fall through to legacy YAML/MD workflow file execution.
 	if strings.TrimSpace(in.Workflow) == "" {
-		return "", true, fmt.Errorf("workflow name is required")
+		return "", true, fmt.Errorf("workflow: one of 'workflow', 'script', 'scriptPath', or 'name' is required")
 	}
 
 	cwd, _ := os.Getwd()
@@ -1194,7 +1233,7 @@ func WorkflowFromJSON(raw []byte, cfg Config) (string, bool, error) {
 	taskID, taskErr := v2CreateTask(tid, TaskTypeLocalWorkflow, subject, desc, "Running workflow", nil)
 	if taskErr != nil {
 		// Fall back to synchronous execution if task system unavailable.
-		return runWorkflowSync(in.Workflow, in.Args, workflowPath, cwd, steps)
+		return runWorkflowSync(in.Workflow, string(in.Args), workflowPath, cwd, steps)
 	}
 
 	// Fire TaskCreated hooks.
@@ -1207,7 +1246,7 @@ func WorkflowFromJSON(raw []byte, cfg Config) (string, bool, error) {
 		_, _ = v2UpdateTaskFields(tid, taskID, map[string]any{"status": TaskStatusInProgress})
 		broadcastTaskEvent(taskID, subject, "status_change")
 
-		_, sb, failed := runWorkflowSteps(in.Workflow, in.Args, workflowPath, cwd, steps, cfg)
+		_, sb, failed := runWorkflowSteps(in.Workflow, string(in.Args), workflowPath, cwd, steps, cfg)
 		output := sb.String()
 
 		if failed {
@@ -1396,6 +1435,116 @@ func parseMarkdownWorkflow(content string) []workflowStep {
 		}
 	}
 	return steps
+}
+
+// runJSWorkflow routes a Workflow tool call to the JS workflow engine.
+// It is called when the LLM provides a script, scriptPath, or name (built-in/saved workflow).
+func runJSWorkflow(raw []byte, cfg Config) (string, bool, error) {
+	_, _ = raw, cfg // keep compiler happy — full implementation below
+
+	cwd, _ := os.Getwd()
+	if strings.TrimSpace(cfg.WorkDir) != "" {
+		cwd = cfg.WorkDir
+	}
+
+	// Parse input to get script
+	var in struct {
+		Script          string          `json:"script"`
+		ScriptPath      string          `json:"scriptPath"`
+		Name            string          `json:"name"`
+		Description     string          `json:"description"`
+		Title           string          `json:"title"`
+		Args            json.RawMessage `json:"args"`
+		ResumeFromRunID string          `json:"resumeFromRunId"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return "", true, err
+	}
+
+	// Resolve script content
+	script := strings.TrimSpace(in.Script)
+	if script == "" && strings.TrimSpace(in.ScriptPath) != "" {
+		data, err := os.ReadFile(in.ScriptPath)
+		if err != nil {
+			return "", true, fmt.Errorf("reading scriptPath: %w", err)
+		}
+		script = string(data)
+	}
+	if script == "" {
+		return "", true, fmt.Errorf("workflow: no script content (provide 'script' or 'scriptPath')")
+	}
+
+	// Validate script
+	if err := workflow.ValidateScript(script); err != nil {
+		out := map[string]any{
+			"data": map[string]any{
+				"output": fmt.Sprintf("Error: invalid workflow script: %v", err),
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	// Build engine config
+	engineCfg := workflow.EngineConfig{
+		WorkDir:             cwd,
+		ProjectRoot:         strings.TrimSpace(cfg.ProjectRoot),
+		SessionID:           cfg.SessionID,
+		TasksDir:            cfg.TasksDir(),
+		MainLoopModel:       cfg.MainLoopModel,
+		AvailableMCPServers: availableMCPServersFromEnv(),
+		Messages:            cfg.Messages,
+		SystemPrompt:        cfg.SystemPrompt,
+		Args:                in.Args,
+		ProgressCallback:         cfg.ProgressCallback,
+		WorkflowProgressCallback: cfg.OnAgentProgress,
+		NotificationCallback:     cfg.NotificationCallback,
+		ToolPermission:      cfg.ToolPermission,
+		ToolUseID:           cfg.ToolUseID,
+	}
+
+	// Execute workflow
+	engine := workflow.NewEngine()
+	result, err := engine.Execute(context.Background(), script, engineCfg)
+	if err != nil {
+		out := map[string]any{
+			"data": map[string]any{
+				"output": fmt.Sprintf("Error: %v", err),
+			},
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
+	// Persist script to session directory so the LLM can iterate via scriptPath
+	scriptPath, _ := persistWorkflowScript(cwd, cfg.SessionID, engine.RunID(), script)
+
+	out := map[string]any{
+		"data": map[string]any{
+			"result":     result,
+			"runId":      engine.RunID(),
+			"taskId":     engine.TaskID(),
+			"scriptPath": scriptPath,
+		},
+	}
+	b, _ := json.Marshal(out)
+	return string(b), false, nil
+}
+
+
+// persistWorkflowScript saves the workflow script to a file under the session directory.
+// Returns the absolute path so the LLM can use scriptPath to re-invoke or iterate.
+func persistWorkflowScript(cwd, sessionID, runID, script string) (string, error) {
+	dir := filepath.Join(cwd, ".harness", "workflows", sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	name := runID + ".js"
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(script), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // SnipFromJSON returns snip receipt including message_ids so downstream SnipCompact can match and remove them.
