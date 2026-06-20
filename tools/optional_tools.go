@@ -1495,6 +1495,7 @@ func runJSWorkflow(raw []byte, cfg Config) (string, bool, error) {
 	engineCfg := workflow.EngineConfig{
 		WorkDir:             cwd,
 		ProjectRoot:         strings.TrimSpace(cfg.ProjectRoot),
+		LogDir:              filepath.Join(cwd, ".harness", "workflows", cfg.SessionID),
 		SessionID:           cfg.SessionID,
 		TasksDir:            cfg.TasksDir(),
 		MainLoopModel:       cfg.MainLoopModel,

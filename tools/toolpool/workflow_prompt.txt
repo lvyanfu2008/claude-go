@@ -157,3 +157,31 @@ Use this tool for multi-step orchestration where control flow should be determin
 ## Resume
 
 The tool result includes a runId. To resume after a pause, kill, or script edit, relaunch with Workflow({scriptPath, resumeFromRunId}) — the longest unchanged prefix of agent() calls returns cached results instantly; the first edited/new call and everything after it runs live. Same script + same args → 100% cache hit. Date.now()/Math.random()/new Date() are unavailable in scripts (they would break this) — stamp results after the workflow returns, or pass timestamps via args. Fallback when no journal is available: Read agent-<id>.jsonl files in the transcript directory and hand-author a continuation script.
+
+## Best Practices (IMPORTANT — read before writing workflow scripts)
+
+### 1. Always use schemas for structured data exchange
+When finders produce findings and verifiers consume them, use the {{BACKTICK}}schema{{BACKTICK}} option on agent() to enforce consistent output format. The engine auto-adapts common mismatches (array vs {findings:[...]}, renamed keys like {issues:[...]}), but schemas make it reliable.
+
+### 2. Always filter nulls before accessing properties
+{{BACKTICK}}parallel(){{BACKTICK}} and {{BACKTICK}}pipeline(){{BACKTICK}} already filter top-level nulls from their results. But when you call {{BACKTICK}}flatMap(r => r.findings){{BACKTICK}}, individual entries may still be null if an agent returned unexpected data. Always chain {{BACKTICK}}.filter(Boolean){{BACKTICK}}:
+```
+const results = await pipeline(DIMENSIONS, d => agent(d.prompt, {schema: d.schema}))
+const findings = results.flatMap(r => r?.findings || []).filter(Boolean)
+const verified = findings.map(f => { ... })  // f is now guaranteed non-null
+```
+
+### 3. Pass file content via args, not embedded in script
+If your analysis requires reading many files, pass their paths or content via {{BACKTICK}}args{{BACKTICK}} instead of embedding them in the script string. Embedded file content may contain {{BACKTICK}}${}{{BACKTICK}} sequences that conflict with JS template literals. The engine auto-escapes these in non-template-literal contexts, but using args is cleaner and avoids issues entirely.
+
+### 4. Verify agents should include evidence in their prompt
+When spawning verification agents, include the finding's file path, line number, and description directly in the prompt so the agent can read the file. The engine auto-injects parent conversation context into agent prompts, but explicit file paths in the prompt make verification more reliable.
+
+### 5. Use descriptive labels for debugging
+Each agent() call should have a {{BACKTICK}}label{{BACKTICK}} in opts so you can identify which agent produced which result when debugging:
+```
+const findings = await agent("find security bugs in auth code", {label: "security-scanner", schema: FINDING_SCHEMA})
+```
+
+### 6. Schema naming convention
+When multiple agents exchange data, use the SAME property names across schemas. If finder outputs {{BACKTICK}}{findings: [...]}{{BACKTICK}}, verifier should also output a compatible structure. The engine auto-adapts some mismatches but identical keys prevent data loss.

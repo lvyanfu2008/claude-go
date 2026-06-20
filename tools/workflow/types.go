@@ -56,6 +56,9 @@ type EngineConfig struct {
 	Messages            []types.Message
 	SystemPrompt        []string
 	Args                json.RawMessage // Passed as the `args` global in workflow scripts
+	// LogDir is the directory for per-workflow debug traces (scripts, agent results).
+	// If set, agent stage data is written to agent-traces.log in this directory.
+	LogDir string
 	// ProgressCallback is called for raw progress messages (phase, log).
 	ProgressCallback func(*types.Message)
 	// WorkflowProgressCallback is called to report workflow node/agent progress to the UI.

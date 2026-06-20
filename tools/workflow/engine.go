@@ -3,6 +3,8 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -52,6 +54,13 @@ func (e *WorkflowEngine) Execute(ctx context.Context, script string, cfg EngineC
 	// 3. Create run state with args from engine config
 	state := NewRunState(e.runID, *meta, cfg.Args, cfg.ProgressCallback, cfg.WorkflowProgressCallback)
 
+	// 3.5 Set up per-workflow debug log dir
+	if cfg.LogDir != "" {
+		dir := filepath.Join(cfg.LogDir, e.runID)
+		os.MkdirAll(dir, 0o755)
+		SetWorkflowLogDir(dir)
+	}
+
 	// 4. Set up Goja runtime
 	completionCh := make(chan completion, 100)
 	vm, err := newRuntime(state, cfg, completionCh)
@@ -69,21 +78,26 @@ func (e *WorkflowEngine) Execute(ctx context.Context, script string, cfg EngineC
 	// 7. Execute script in VM; retry with ${} escaping on SyntaxError
 	val, err := vm.RunString(wrapped)
 	if err != nil && strings.Contains(err.Error(), "SyntaxError") && strings.Contains(body, "${") {
-		// Auto-escape ${ conflicts (file content, config values) and retry
-		escaped := strings.ReplaceAll(body, "${", "\\${")
-		wrapped2 := "(async () => {\n" + escaped + "\n})()"
-		val2, err2 := vm.RunString(wrapped2)
-		if err2 == nil {
-			val = val2
-			err = nil
-		} else {
-			errMsg := err2.Error()
-			if strings.Contains(errMsg, "SyntaxError") {
-				errMsg += "\nHint: your script contains '${}' which conflicts with JS template literals. " +
-					"Pass file content via args instead of embedding it in the script."
+		// Only escape ${ outside of template literal backticks (preserve intentional ${} in \`...\`)
+		escaped := escapeDollarBraceOutsideTemplate(body)
+		if escaped != body {
+			wrapped2 := "(async () => {\n" + escaped + "\n})()"
+			val2, err2 := vm.RunString(wrapped2)
+			if err2 == nil {
+				val = val2
+				err = nil
+			} else {
+				errMsg := err2.Error()
+				if strings.Contains(errMsg, "SyntaxError") {
+					errMsg += "\nHint: your script contains '${}' which conflicts with JS template literals. " +
+						"Pass file content via args instead of embedding it in the script."
+				}
+				e.fail(cfg, state, err2)
+				return "", fmt.Errorf("workflow: script: %s", errMsg)
 			}
-			e.fail(cfg, state, err2)
-			return "", fmt.Errorf("workflow: script: %s", errMsg)
+		} else {
+			e.fail(cfg, state, err)
+			return "", fmt.Errorf("workflow: script: %w", err)
 		}
 	}
 	if err != nil {
@@ -213,6 +227,44 @@ func TaskListID(cfg EngineConfig) string {
 		return cfg.SessionID
 	}
 	return "default-session"
+}
+
+// escapeDollarBraceOutsideTemplate escapes ${ → \${ only outside template literal backticks.
+// Preserves intentional ${} inside \`...\` (e.g. \`Hello ${name}\` stays intact).
+func escapeDollarBraceOutsideTemplate(s string) string {
+	var out strings.Builder
+	inTemplate := false
+	inString := false
+	var stringChar byte
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '\\' && i+1 < len(s) {
+			out.WriteByte(ch)
+			i++
+			out.WriteByte(s[i])
+			continue
+		}
+		if ch == '`' && !inString {
+			inTemplate = !inTemplate
+			out.WriteByte(ch)
+			continue
+		}
+		if (ch == '"' || ch == '\'') && !inTemplate {
+			if !inString {
+				inString = true
+				stringChar = ch
+			} else if ch == stringChar {
+				inString = false
+			}
+		}
+		if ch == '$' && i+1 < len(s) && s[i+1] == '{' && !inTemplate {
+			out.WriteString("\\${")
+			i++ // skip '{'
+			continue
+		}
+		out.WriteByte(ch)
+	}
+	return out.String()
 }
 
 // stringifyResult converts a Goja value to a string, using JSON.stringify for objects.

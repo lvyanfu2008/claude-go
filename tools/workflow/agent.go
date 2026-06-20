@@ -3,24 +3,45 @@ package workflow
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/dop251/goja"
 )
 
+// workflowLogDir is set by the engine to persist per-agent traces.
+var workflowLogDir string
+var workflowLogMu sync.Mutex
+
+// SetWorkflowLogDir sets the directory for per-agent debug traces.
+func SetWorkflowLogDir(dir string) { workflowLogDir = dir }
+
+func wfLog(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	if workflowLogDir != "" {
+		workflowLogMu.Lock()
+		defer workflowLogMu.Unlock()
+		path := filepath.Join(workflowLogDir, "agent-traces.log")
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err == nil {
+			f.WriteString(msg)
+			f.Close()
+		}
+	}
+}
+
 // completion carries the result of an agent execution back to the event loop.
-// rawResult is the Go value (not yet converted to goja.Value) because
-// the goroutine must not call vm.ToValue() — Goja is not goroutine-safe.
 type completion struct {
 	resolve   func(interface{}) error
 	reject    func(interface{}) error
-	rawResult interface{} // raw Go value, converted to goja.Value in event loop
+	rawResult interface{}
 	err       error
-	vm        *goja.Runtime // VM reference for conversion in event loop
+	vm        *goja.Runtime
 }
 
 // AgentRunnerFunc is the function signature for spawning a subagent.
-// raw is JSON-encoded AgentToolInput, returns (resultJSON, isError, error).
 type AgentRunnerFunc func(raw []byte, cfg AgentRunConfig) (string, bool, error)
 
 // AgentRunConfig carries the necessary configuration for spawning a subagent.
@@ -39,44 +60,32 @@ type AgentRunConfig struct {
 	ParentToolUseID     string
 }
 
-// agentRunnerFn is set by the tools package during init to avoid circular imports.
 var agentRunnerFn AgentRunnerFunc
 
-// SetAgentRunner wires the agent execution function into the workflow package.
-func SetAgentRunner(fn AgentRunnerFunc) {
-	agentRunnerFn = fn
-}
+func SetAgentRunner(fn AgentRunnerFunc) { agentRunnerFn = fn }
 
-// bindAgent returns a JS-callable function: agent(prompt, opts?).
-// Each call spawns a subagent via RunAgentTool in a goroutine.
-// The function returns a Promise that resolves when the agent completes.
 func bindAgent(vm *goja.Runtime, state *RunState, cfg EngineConfig, completionCh chan<- completion) func(call goja.FunctionCall) goja.Value {
 	return func(call goja.FunctionCall) goja.Value {
-		// Parse prompt (required, first argument)
 		if len(call.Arguments) < 1 || goja.IsUndefined(call.Arguments[0]) {
 			panic(vm.NewTypeError("agent() requires a prompt string as first argument"))
 		}
 		prompt := call.Arguments[0].String()
 
-		// Parse opts (optional, second argument)
 		var opts *AgentOpts
 		if len(call.Arguments) >= 2 && !goja.IsUndefined(call.Arguments[1]) && !goja.IsNull(call.Arguments[1]) {
 			opts = extractAgentOpts(call.Arguments[1])
 		}
 
-		// Check budget before spawning
 		if state.Budget.IsExhausted() {
-			panic(vm.NewGoError(fmt.Errorf("budget exhausted: spent %d of %d tokens", state.Budget.Spent(), state.Budget.Total())))
+			panic(vm.NewGoError(fmt.Errorf("budget exhausted")))
 		}
 
-		// Check abort
 		select {
 		case <-state.abortCh:
 			return goja.Null()
 		default:
 		}
 
-		// Check resume cache
 		callHash := HashAgentCall(prompt, opts)
 		if cached := state.Journal.Lookup(callHash); cached != nil {
 			var result any
@@ -85,15 +94,12 @@ func bindAgent(vm *goja.Runtime, state *RunState, cfg EngineConfig, completionCh
 			}
 		}
 
-		// Acquire concurrency slot (blocks until available or aborted)
 		if !state.AcquireSlot() {
 			return goja.Null()
 		}
 
-		// Create a Goja Promise
 		promise, resolve, reject := vm.NewPromise()
 
-		// Emit agent progress to UI (use unique per-agent ID)
 		agentID := state.newAgentProgressID()
 		label := prompt
 		if opts != nil && opts.Label != "" {
@@ -105,46 +111,50 @@ func bindAgent(vm *goja.Runtime, state *RunState, cfg EngineConfig, completionCh
 			state.WorkflowProgressCallback(agentID, "running", "agent: "+label)
 		}
 
-		// Spawn agent in goroutine
 		state.AgentCount.Add(1)
 		go func() {
 			defer state.ReleaseSlot()
 
-			// Execute agent
 			result, err := executeAgent(prompt, opts, callHash, state, cfg)
 			if err != nil {
-				completionCh <- completion{reject: reject, err: err}
+				if state.WorkflowProgressCallback != nil {
+						state.WorkflowProgressCallback(agentID, "completed", "agent error")
+					}
+					completionCh <- completion{reject: reject, err: err}
 				return
 			}
 
-			// Parse result for JS (no Goja calls — must happen in event loop goroutine)
 			var jsResult any
 			if opts != nil && len(opts.Schema) > 0 {
-				jsResult = adaptToSchema(extractJSON(result), opts.Schema)
+				extracted := extractJSON(result)
+				adapted := adaptToSchema(extracted, opts.Schema)
+				wfLog( "[wf-agent] JSON_STAGES hash=%s rawType=%T extractedType=%T adaptedType=%T\n",
+					callHash[:12], result, extracted, adapted)
+				jsResult = adapted
 			} else {
 				jsResult = result
 			}
 
-			completionCh <- completion{resolve: resolve, rawResult: jsResult, vm: vm}
-		}()
+			if state.WorkflowProgressCallback != nil {
+					state.WorkflowProgressCallback(agentID, "completed", "agent: "+label)
+				}
+				completionCh <- completion{resolve: resolve, rawResult: jsResult, vm: vm}
+			}()
 
 		return vm.ToValue(promise)
 	}
 }
 
-// executeAgent builds AgentRunConfig and calls the injected runner function.
 func executeAgent(prompt string, opts *AgentOpts, callHash string, state *RunState, cfg EngineConfig) (string, error) {
 	if agentRunnerFn == nil {
 		return "", fmt.Errorf("workflow: agent runner not initialized")
 	}
 
-	// Build readable context from parent messages: extract text, tool uses, and tool results.
 	var contextBuilder strings.Builder
 	if len(cfg.Messages) > 0 {
 		contextBuilder.WriteString("<PARENT_CONTEXT>\n")
-		contextBuilder.WriteString("The parent conversation already read these files. Their contents:\n\n")
+		contextBuilder.WriteString("The parent conversation already read these files:\n\n")
 		for _, m := range cfg.Messages {
-			// Parse content blocks (assistant messages have [{"type":"text",...},{"type":"tool_use",...},{"type":"tool_result",...}])
 			var blocks []struct {
 				Type    string          `json:"type"`
 				Text    string          `json:"text,omitempty"`
@@ -153,15 +163,13 @@ func executeAgent(prompt string, opts *AgentOpts, callHash string, state *RunSta
 				Content json.RawMessage `json:"content,omitempty"`
 			}
 			if json.Unmarshal([]byte(m.Content), &blocks) != nil {
-				continue // skip unparseable messages
+				continue
 			}
 			for _, b := range blocks {
 				switch b.Type {
 				case "text":
-					// Skip very long text blocks (likely LLM narration, not useful)
 					if len(b.Text) < 500 {
-						contextBuilder.WriteString(b.Text)
-						contextBuilder.WriteString("\n")
+						contextBuilder.WriteString(b.Text + "\n")
 					}
 				case "tool_use":
 					contextBuilder.WriteString("[Tool: " + b.Name + "]")
@@ -170,11 +178,8 @@ func executeAgent(prompt string, opts *AgentOpts, callHash string, state *RunSta
 					}
 					contextBuilder.WriteString("\n")
 				case "tool_result":
-					// Include file content from Read/Grep/Glob results
 					var contentStr string
-					if json.Unmarshal(b.Content, &contentStr) == nil {
-						// Success: b.Content was a JSON string
-					} else {
+					if json.Unmarshal(b.Content, &contentStr) != nil {
 						contentStr = string(b.Content)
 					}
 					const maxLen = 8000
@@ -182,8 +187,7 @@ func executeAgent(prompt string, opts *AgentOpts, callHash string, state *RunSta
 						contentStr = contentStr[:maxLen] + "\n... [truncated]"
 					}
 					if len(contentStr) > 0 {
-						contextBuilder.WriteString(contentStr)
-						contextBuilder.WriteString("\n")
+						contextBuilder.WriteString(contentStr + "\n")
 					}
 				}
 			}
@@ -193,7 +197,7 @@ func executeAgent(prompt string, opts *AgentOpts, callHash string, state *RunSta
 
 	promptText := contextBuilder.String() + prompt
 	if opts != nil && len(opts.Schema) > 0 {
-		promptText = promptText + `
+		promptText += `
 
 <STRICT_OUTPUT_FORMAT>
 You MUST respond with a single valid JSON object matching this schema:
@@ -204,9 +208,10 @@ RULES:
 2. Start your response with { and end with }.
 3. Do NOT wrap the JSON in ` + "```" + `json blocks.
 4. All fields in the schema are required unless marked optional.
-5. If you cannot find any issues for a field, use an empty array [] or appropriate null/empty value — do NOT omit the field.
+5. If you cannot find any issues for a field, use an empty array [] or appropriate null/empty value.
 </STRICT_OUTPUT_FORMAT>`
 	}
+
 	input := map[string]any{
 		"description":      prompt,
 		"prompt":           promptText,
@@ -230,7 +235,6 @@ RULES:
 		return "", fmt.Errorf("marshal agent input: %w", err)
 	}
 
-	// Marshal parent messages so subagent inherits file read context
 	var msgsJSON json.RawMessage
 	if len(cfg.Messages) > 0 {
 		msgsJSON, _ = json.Marshal(cfg.Messages)
@@ -249,17 +253,19 @@ RULES:
 
 	result, isErr, err := agentRunnerFn(raw, runnerCfg)
 	if err != nil {
+		wfLog( "[wf-agent] RUNNER_ERROR hash=%s err=%v\n", callHash[:12], err)
 		return "", err
 	}
 
-	// Record in journal for resume
 	state.Journal.Record(callHash, json.RawMessage(fmt.Sprintf("%q", result)))
 
+	wfLog("[wf-agent] RAW hash=%s len=%d isErr=%v preview=%.300s\n", callHash[:12], len(result), isErr, result)
+
 	if isErr {
+		wfLog( "[wf-agent] AGENT_ERR hash=%s result=%.500s\n", callHash[:12], result)
 		return "", fmt.Errorf("agent error: %s", result)
 	}
 
-	// Try to extract result from agent tool response: {"data":{"message":"...","output":"..."}}
 	var resp struct {
 		Data struct {
 			Message string `json:"message"`
@@ -267,34 +273,35 @@ RULES:
 		} `json:"data"`
 	}
 	if json.Unmarshal([]byte(result), &resp) == nil {
-		if resp.Data.Message != "" {
-			return resp.Data.Message, nil
+		// Prefer output (actual agent response) over message (status text like "Agent completed")
+		content := resp.Data.Output
+		source := "OUTPUT"
+		if content == "" {
+			content = resp.Data.Message
+			source = "MSG"
 		}
-		if resp.Data.Output != "" {
-			return resp.Data.Output, nil
+		if content != "" {
+			wfLog("[wf-agent] EXTRACT_%s hash=%s len=%d\n", source, callHash[:12], len(content))
+			return content, nil
 		}
+		wfLog("[wf-agent] EMPTY_DATA hash=%s raw=%.200s\n", callHash[:12], result)
+	} else {
+		wfLog( "[wf-agent] NOT_JSON hash=%s\n", callHash[:12])
 	}
 
+	wfLog( "[wf-agent] RAW_RETURN hash=%s result=%.300s\n", callHash[:12], result)
 	return result, nil
 }
 
-
-// extractJSON attempts to extract a JSON object from agent response text.
-// Uses multiple strategies to handle various response formats.
 func extractJSON(text string) any {
 	trimmed := strings.TrimSpace(text)
-
-	// 1. Try direct parse
 	var obj any
 	if json.Unmarshal([]byte(trimmed), &obj) == nil {
 		return obj
 	}
-
-	// 2. Try to find JSON inside markdown code blocks ```json ... ``` or ``` ... ```
 	for _, fence := range []string{"```json", "```"} {
 		if idx := strings.Index(trimmed, fence); idx >= 0 {
 			start := idx + len(fence)
-			// Skip optional language tag newline
 			if rest := trimmed[start:]; len(rest) > 0 && rest[0] == '\n' {
 				start++
 			}
@@ -306,8 +313,6 @@ func extractJSON(text string) any {
 			}
 		}
 	}
-
-	// 3. Find outermost { ... } pair by tracking brace depth
 	if idx := strings.Index(trimmed, "{"); idx >= 0 {
 		depth := 0
 		inString := false
@@ -342,8 +347,6 @@ func extractJSON(text string) any {
 			}
 		}
 	}
-
-	// 4. Try to find first [ ... ] pair
 	if idx := strings.Index(trimmed, "["); idx >= 0 {
 		if end := strings.LastIndex(trimmed, "]"); end > idx {
 			if json.Unmarshal([]byte(trimmed[idx:end+1]), &obj) == nil {
@@ -351,17 +354,13 @@ func extractJSON(text string) any {
 			}
 		}
 	}
-
-	return trimmed // fallback to raw text
+	return trimmed
 }
 
-// adaptToSchema wraps the extracted value to match the schema when possible.
-// Common case: agent returns [...] but schema expects {findings: [...]}.
 func adaptToSchema(val any, schema json.RawMessage) any {
 	if val == nil {
 		return val
 	}
-	// Parse schema to find expected object properties
 	var s struct {
 		Type       string `json:"type"`
 		Properties map[string]struct {
@@ -372,46 +371,45 @@ func adaptToSchema(val any, schema json.RawMessage) any {
 	if json.Unmarshal(schema, &s) != nil || s.Type != "object" || len(s.Properties) == 0 {
 		return val
 	}
-
-	// If val is an array and schema expects {singleArrayProp: [...]}, wrap it
-	if arr, ok := val.([]any); ok {
-		for propName, prop := range s.Properties {
-			if prop.Type == "array" {
-				return map[string]any{propName: arr}
-			}
+	var arrayPropName string
+	for name, prop := range s.Properties {
+		if prop.Type == "array" {
+			arrayPropName = name
+			break
 		}
 	}
-
-	// If val is a map but missing the wrapper key, and there's only one array prop, wrap
+	if arr, ok := val.([]any); ok && arrayPropName != "" {
+		return map[string]any{arrayPropName: arr}
+	}
 	if m, ok := val.(map[string]any); ok {
-		hasWrapperKey := false
-		for key := range s.Properties {
-			if _, ok := m[key]; ok {
-				hasWrapperKey = true
-				break
-			}
+		if _, ok := m[arrayPropName]; ok {
+			return val
 		}
-		if !hasWrapperKey {
-			for propName, prop := range s.Properties {
-				if prop.Type == "array" {
-					if _, ok := m[propName]; !ok {
-						return map[string]any{propName: val}
+		for k, v := range m {
+			if arr, ok := v.([]any); ok && arrayPropName != "" {
+				result := make(map[string]any, len(m))
+				for mk, mv := range m {
+					if mk == k {
+						result[arrayPropName] = arr
+					} else {
+						result[mk] = mv
 					}
 				}
+				return result
 			}
 		}
+		if arrayPropName != "" {
+			return map[string]any{arrayPropName: m}
+		}
 	}
-
 	return val
 }
 
-// extractAgentOpts converts a Goja value to AgentOpts.
 func extractAgentOpts(val goja.Value) *AgentOpts {
 	exported := val.Export()
 	if exported == nil {
 		return nil
 	}
-	// Re-marshal through JSON to get clean struct
 	data, err := json.Marshal(exported)
 	if err != nil {
 		return nil
