@@ -46,6 +46,7 @@ var (
 
 // filterUIMessages removes internal/meta messages that should not be rendered to the user.
 // Mirrors TS adapter.ts: `if (m.isMeta) continue` + attachment filtering.
+// Also filters server-injected <system-reminder> content.
 func filterUIMessages(msgs []types.Message) []types.Message {
 	out := make([]types.Message, 0, len(msgs))
 	for _, m := range msgs {
@@ -54,6 +55,22 @@ func filterUIMessages(msgs []types.Message) []types.Message {
 		}
 		if m.IsMeta != nil && *m.IsMeta {
 			continue
+		}
+		// Strip server-injected <system-reminder> blocks from message content
+		raw := string(m.Content)
+		for {
+			start := strings.Index(raw, "<system-reminder>")
+			if start < 0 {
+				break
+			}
+			end := strings.Index(raw, "</system-reminder>")
+			if end < 0 {
+				break
+			}
+			raw = raw[:start] + raw[end+len("</system-reminder>"):]
+		}
+		if raw != string(m.Content) {
+			m.Content = json.RawMessage(raw)
 		}
 		out = append(out, m)
 	}
@@ -264,6 +281,9 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 					events.OnAgentProgress(data.AgentID, data.Status, data.Message)
 				}
 			}
+		},
+		OnAgentProgress: func(agentID, status, message string) {
+			events.OnAgentProgress(agentID, status, message)
 		},
 		NotificationCallback: func(agentID, toolUseID, outputFile, status, summary, output string, tokenCount, toolUseCount int, durationMs int64) {
 			events.OnAgentProgress(agentID, status, fmt.Sprintf("%s (%d tool uses, %d tokens)", summary, toolUseCount, tokenCount))

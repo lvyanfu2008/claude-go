@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dop251/goja"
@@ -12,8 +13,8 @@ import (
 // It implements an async event loop: the VM runs on a single goroutine,
 // agent() calls spawn goroutines that send results back via a channel.
 type WorkflowEngine struct {
-	runID    string
-	taskID   string
+	runID  string
+	taskID string
 }
 
 // NewEngine creates a new WorkflowEngine.
@@ -65,8 +66,26 @@ func (e *WorkflowEngine) Execute(ctx context.Context, script string, cfg EngineC
 	// 6. Wrap in async IIFE
 	wrapped := "(async () => {\n" + body + "\n})()"
 
-	// 7. Execute script in VM
+	// 7. Execute script in VM; retry with ${} escaping on SyntaxError
 	val, err := vm.RunString(wrapped)
+	if err != nil && strings.Contains(err.Error(), "SyntaxError") && strings.Contains(body, "${") {
+		// Auto-escape ${ conflicts (file content, config values) and retry
+		escaped := strings.ReplaceAll(body, "${", "\\${")
+		wrapped2 := "(async () => {\n" + escaped + "\n})()"
+		val2, err2 := vm.RunString(wrapped2)
+		if err2 == nil {
+			val = val2
+			err = nil
+		} else {
+			errMsg := err2.Error()
+			if strings.Contains(errMsg, "SyntaxError") {
+				errMsg += "\nHint: your script contains '${}' which conflicts with JS template literals. " +
+					"Pass file content via args instead of embedding it in the script."
+			}
+			e.fail(cfg, state, err2)
+			return "", fmt.Errorf("workflow: script: %s", errMsg)
+		}
+	}
 	if err != nil {
 		e.fail(cfg, state, err)
 		return "", fmt.Errorf("workflow: script: %w", err)
@@ -189,12 +208,11 @@ func (e *WorkflowEngine) fail(cfg EngineConfig, state *RunState, err error) {
 }
 
 // TaskListID computes a stable task list identifier from the engine config.
-// Uses the same pattern as tools.TaskListID in optional_tools.go.
 func TaskListID(cfg EngineConfig) string {
-	if cfg.TasksDir != "" {
-		return cfg.TasksDir
+	if cfg.SessionID != "" {
+		return cfg.SessionID
 	}
-	return cfg.SessionID
+	return "default-session"
 }
 
 // stringifyResult converts a Goja value to a string, using JSON.stringify for objects.

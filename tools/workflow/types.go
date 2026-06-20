@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -78,6 +79,8 @@ type RunState struct {
 
 	// AgentCount tracks spawned agent count (atomic).
 	AgentCount atomic.Int32
+	// nextAgentUID provides unique IDs for per-agent progress display.
+	nextAgentUID atomic.Int32
 
 	// ProgressCallback forwards progress to the UI layer.
 	ProgressCallback func(*types.Message)
@@ -114,6 +117,13 @@ func (s *RunState) emitProgress(status, message string) {
 	if s.WorkflowProgressCallback != nil {
 		s.WorkflowProgressCallback(s.RunID, status, message)
 	}
+}
+
+// newAgentProgressID returns a unique agent ID for per-agent progress display.
+// Format: runID + "-a" + counter (e.g. "wf_abc123-a1", "wf_abc123-a2")
+func (s *RunState) newAgentProgressID() string {
+	uid := s.nextAgentUID.Add(1)
+	return s.RunID + "-a" + fmt.Sprintf("%d", uid)
 }
 
 // AcquireSlot blocks until an agent concurrency slot is available.

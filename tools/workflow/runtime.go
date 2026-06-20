@@ -116,12 +116,16 @@ var parallel = (thunks) => {
 		try {
 			promises.push(thunks[i]());
 		} catch(e) {
+			log('parallel thunk ' + i + ' error: ' + (e.message || e));
 			promises.push(null);
 		}
 	}
-	return Promise.all(promises.map(async (p) => {
-		try { return await p; } catch(e) { return null; }
-	}));
+	return Promise.all(promises.map(async (p, i) => {
+		try { return await p; } catch(e) {
+			log('parallel[' + i + '] rejected: ' + (e.message || e));
+			return null;
+		}
+	})).then(results => results.filter(Boolean));
 };
 `
 
@@ -137,11 +141,12 @@ var pipeline = (items, ...stages) => {
 			try {
 				result = await stage(result, item, i);
 			} catch(e) {
+				log('pipeline item ' + i + ' stage failed: ' + (e.message || e));
 				return null;
 			}
 		}
 		return result;
-	})()));
+	})())).then(results => results.filter(Boolean));
 };
 `
 

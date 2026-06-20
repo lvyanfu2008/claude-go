@@ -40,6 +40,11 @@ func init() {
 	)
 	// Wire agent runner for workflow scripts.
 	workflow.SetAgentRunner(func(raw []byte, cfg workflow.AgentRunConfig) (string, bool, error) {
+		// Unmarshal parent messages so subagent inherits file read context
+		var parentMsgs []types.Message
+		if len(cfg.MessagesJSON) > 0 {
+			json.Unmarshal(cfg.MessagesJSON, &parentMsgs)
+		}
 		agentCfg := AgentRuntimeConfig{
 			WorkDir:             cfg.WorkDir,
 			ProjectRoot:         cfg.ProjectRoot,
@@ -47,6 +52,7 @@ func init() {
 			TasksDir:            cfg.TasksDir,
 			AvailableMCPServers: cfg.AvailableMCPServers,
 			SystemPrompt:        cfg.SystemPrompt,
+			Messages:            parentMsgs,
 			MainLoopModel:       cfg.MainLoopModel,
 			ParentToolUseID:     cfg.ParentToolUseID,
 		}
@@ -1503,7 +1509,7 @@ func runJSWorkflow(raw []byte, cfg Config) (string, bool, error) {
 		ToolUseID:           cfg.ToolUseID,
 	}
 
-	// Execute workflow
+		// Execute workflow
 	engine := workflow.NewEngine()
 	result, err := engine.Execute(context.Background(), script, engineCfg)
 	if err != nil {
@@ -1519,9 +1525,18 @@ func runJSWorkflow(raw []byte, cfg Config) (string, bool, error) {
 	// Persist script to session directory so the LLM can iterate via scriptPath
 	scriptPath, _ := persistWorkflowScript(cwd, cfg.SessionID, engine.RunID(), script)
 
+	// Parse result as JSON if it's a JSON string (avoid double-encoding)
+	var resultVal any = result
+	if trimmed := strings.TrimSpace(result); len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+		var parsed any
+		if json.Unmarshal([]byte(trimmed), &parsed) == nil {
+			resultVal = parsed
+		}
+	}
+
 	out := map[string]any{
 		"data": map[string]any{
-			"result":     result,
+			"result":     resultVal,
 			"runId":      engine.RunID(),
 			"taskId":     engine.TaskID(),
 			"scriptPath": scriptPath,

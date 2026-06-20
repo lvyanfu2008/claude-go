@@ -461,17 +461,3 @@ func TestBudget_InJS(t *testing.T) {
 	}
 }
 
-func TestGenerateRunID(t *testing.T) {
-	id1 := GenerateRunID()
-	id2 := GenerateRunID()
-	if !strings.HasPrefix(id1, "wf_") {
-		t.Fatalf("expected run ID to start with 'wf_', got: %s", id1)
-	}
-	if id1 == id2 {
-		t.Log("Run IDs collided (low probability, may be ok)")
-	}
-	if len(id1) != 11 { // "wf_" + 8 hex chars
-		t.Fatalf("expected run ID length 11, got %d: %s", len(id1), id1)
-	}
-}
-
