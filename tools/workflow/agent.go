@@ -32,6 +32,16 @@ func wfLog(format string, args ...interface{}) {
 	}
 }
 
+func saveAgentOutput(callHash, rawResult string) {
+	if workflowLogDir == "" || rawResult == "" {
+		return
+	}
+	workflowLogMu.Lock()
+	defer workflowLogMu.Unlock()
+	path := filepath.Join(workflowLogDir, callHash[:12]+".json")
+	_ = os.WriteFile(path, []byte(rawResult), 0o644)
+}
+
 // completion carries the result of an agent execution back to the event loop.
 type completion struct {
 	resolve   func(interface{}) error
@@ -260,6 +270,7 @@ RULES:
 	state.Journal.Record(callHash, json.RawMessage(fmt.Sprintf("%q", result)))
 
 	wfLog("[wf-agent] RAW hash=%s len=%d isErr=%v preview=%.300s\n", callHash[:12], len(result), isErr, result)
+	saveAgentOutput(callHash, result)
 
 	if isErr {
 		wfLog( "[wf-agent] AGENT_ERR hash=%s result=%.500s\n", callHash[:12], result)
