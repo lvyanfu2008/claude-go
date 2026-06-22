@@ -51,6 +51,8 @@ func GouParityToolsJSON() (json.RawMessage, error) {
 		return nil, err
 	}
 	assembled = toolpool.UniqByName(append(assembled, stubs...))
+	// Ensure native workflow spec is used — replace any other "workflow" tool definition.
+	assembled = ensureNativeWorkflowSpec(assembled)
 	opts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
 	opts.Model = modelenv.ResolveWithFallback("claude-sonnet-4-20250514")
 	return toolpool.MarshalToolsAPIDocumentDefinitionsWithOptions(assembled, opts)
@@ -70,4 +72,16 @@ func toolDefinitionsToSpecs(defs []ToolDefinition) ([]types.ToolSpec, error) {
 		})
 	}
 	return out, nil
+}
+
+// ensureNativeWorkflowSpec replaces any non-native "workflow" tool with NativeWorkflowToolSpec.
+func ensureNativeWorkflowSpec(tools []types.ToolSpec) []types.ToolSpec {
+	native := toolpool.NativeWorkflowToolSpec()
+	for i, t := range tools {
+		if t.Name == "workflow" {
+			tools[i] = native
+			return tools
+		}
+	}
+	return append(tools, native)
 }

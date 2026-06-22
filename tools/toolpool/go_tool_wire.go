@@ -842,9 +842,9 @@ func nativeSkillToolSpec() types.ToolSpec {
 	}
 }
 
-// nativeWorkflowToolSpec mirrors claude-code-best/src/tools/WorkflowTool/WorkflowTool.ts inputSchema
+// NativeWorkflowToolSpec mirrors claude-code-best/src/tools/WorkflowTool/WorkflowTool.ts inputSchema
 // (workflow required, args optional). Used for LLM tool schema parity with the TypeScript Zod shape.
-func nativeWorkflowToolSpec() types.ToolSpec {
+func NativeWorkflowToolSpec() types.ToolSpec {
 	schema := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"type":    "object",
@@ -1838,7 +1838,7 @@ func nativeSpecFromGoProvider(name string) (types.ToolSpec, bool, error) {
 	case "REPL":
 		return nativeREPLToolSpec(), true, nil
 	case "workflow":
-		return nativeWorkflowToolSpec(), true, nil
+		return NativeWorkflowToolSpec(), true, nil
 	case "RemoteTrigger":
 		return nativeEmptyObjectSchemaToolSpec("RemoteTrigger", "Trigger remote agent or workflow actions.", true), true, nil
 	case "Monitor":

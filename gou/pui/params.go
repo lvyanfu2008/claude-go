@@ -194,6 +194,8 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 	if errTools != nil {
 		return nil, errTools
 	}
+	// Always prefer native workflow spec over any other "workflow" tool definition
+	toolsRaw = patchWorkflowToolDef(toolsRaw)
 	rc := &types.ProcessUserInputContextData{
 		ToolUseContext: types.ToolUseContext{
 			Options: types.ToolUseContextOptionsData{
@@ -256,4 +258,37 @@ func BuildDemoParams(line string, store *conversation.Store, cfg DemoConfig) (*p
 	}
 
 	return out, nil
+}
+
+// patchWorkflowToolDef replaces any "workflow" tool definition in the JSON array
+// with NativeWorkflowToolSpec, so the LLM always sees the correct JS engine interface.
+func patchWorkflowToolDef(toolsRaw json.RawMessage) json.RawMessage {
+	native := toolpool.NativeWorkflowToolSpec()
+	opts := toolpool.DefaultToolToAPISchemaOptionsFromEnv()
+	apiDef := toolpool.ToolToAPISchema(native, opts)
+	nativeJSON, err := json.Marshal(apiDef)
+	if err != nil {
+		return toolsRaw
+	}
+	var arr []json.RawMessage
+	if json.Unmarshal(toolsRaw, &arr) != nil {
+		return toolsRaw
+	}
+	replaced := false
+	for i, raw := range arr {
+		var m map[string]any
+		if json.Unmarshal(raw, &m) != nil {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "workflow" {
+			arr[i] = nativeJSON
+			replaced = true
+		}
+	}
+	if !replaced {
+		arr = append(arr, nativeJSON)
+	}
+	out, _ := json.Marshal(arr)
+	return json.RawMessage(out)
 }

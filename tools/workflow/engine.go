@@ -209,6 +209,10 @@ func (e *WorkflowEngine) Execute(ctx context.Context, script string, cfg EngineC
 
 // complete marks the workflow as completed.
 func (e *WorkflowEngine) complete(cfg EngineConfig, state *RunState, result string) {
+	// Mark last phase as completed
+	if state.CurrentPhase != "" && state.WorkflowProgressCallback != nil {
+		state.WorkflowProgressCallback(state.CurrentPhase, "completed", "Phase: "+state.CurrentPhase)
+	}
 	if e.taskID != "" {
 		CompleteTask(TaskListID(cfg), e.taskID, state.Meta.Name, result, cfg.NotificationCallback)
 	}

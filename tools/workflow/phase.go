@@ -9,6 +9,7 @@ import (
 // bindPhase returns a JS-callable function for phase(title).
 func bindPhase(state *RunState, progressFn func(agentID, status, message string)) func(title string) {
 	return func(title string) {
+		prev := state.CurrentPhase
 		state.CurrentPhase = title
 		if state.ProgressCallback != nil {
 			state.ProgressCallback(&types.Message{
@@ -17,7 +18,10 @@ func bindPhase(state *RunState, progressFn func(agentID, status, message string)
 			})
 		}
 		if progressFn != nil {
-			progressFn(state.RunID, "running", "Phase: "+title)
+			if prev != "" {
+				progressFn(prev, "completed", "Phase: "+prev)
+			}
+			progressFn(title, "running", "Phase: "+title)
 		}
 	}
 }
