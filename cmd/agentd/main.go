@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/gorilla/websocket"
 
 	"goc/claudeinit"
 	"goc/commands"
@@ -26,6 +29,13 @@ func main() {
 	if err := claudeinit.Init(context.Background(), claudeinit.Options{NonInteractive: true}); err != nil {
 		fmt.Fprintf(os.Stderr, "agentd: claudeinit: %v\n", err)
 		os.Exit(1)
+	}
+
+	// WS 服务模式: agentd --serve --ws :8765
+	if hasFlag(os.Args, "--serve") {
+		addr := wsListenAddr(os.Args)
+		serveWS(addr)
+		return
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -65,7 +75,8 @@ func main() {
 	perms := &stdioPermissionBridge{responseCh: permRespCh}
 
 	// 创建 Orchestrator 的 SubmitFunc
-	submitFn := agentdSubmitFn(cwd, sessionID, perms)
+	sess := newAgentdSession()
+	submitFn := agentdSubmitFn(sess, cwd, sessionID, perms)
 
 	orc := engine.NewOrchestrator(store, tr, events, submitFn, perms)
 
@@ -180,4 +191,127 @@ func main() {
 func mustMarshal(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+// hasFlag 检查 os.Args 是否包含指定 flag。
+func hasFlag(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// wsListenAddr 解析 --ws 参数,默认 :8765。纯数字自动加 ":"。
+func wsListenAddr(args []string) string {
+	addr := ":8765"
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--ws" && i+1 < len(args) {
+			addr = args[i+1]
+			i++
+			break
+		}
+	}
+	if addr[0] >= '0' && addr[0] <= '9' {
+		addr = ":" + addr
+	}
+	return addr
+}
+
+// serveWS 启动 WebSocket 服务,每连接一个会话。
+func serveWS(addr string) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ws upgrade: %v\n", err)
+			return
+		}
+		go handleWSConnection(conn)
+	})
+	fmt.Fprintf(os.Stderr, "agentd WS server listening on %s\n", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "ws server: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// handleWSConnection 处理单个 WebSocket 连接(一个完整会话)。
+func handleWSConnection(conn *websocket.Conn) {
+	cwd, _ := os.Getwd()
+	sess := newAgentdSession()
+	events := newWsEventHandler(conn)
+	perms := &wsPermissionBridge{responseCh: make(chan engine.PermissionDecision, 1)}
+
+	sessionID := sessiontranscript.NewUUID()
+	store := &conversation.Store{ConversationID: sessionID}
+	submitFn := agentdSubmitFn(sess, cwd, sessionID, perms)
+	orc := engine.NewOrchestrator(store, nil, events, submitFn, perms)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer conn.Close()
+
+	// 初始 state_snapshot + commands_list
+	events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: sessionID})
+	if cmds, err := commands.GetCommandsWithDefaults(ctx, cwd); err == nil {
+		events.OnCommandsList(cmds)
+	}
+
+	type inboxMessage struct {
+		text string
+		mode types.PromptInputMode
+	}
+	inboxCh := make(chan inboxMessage, 16)
+	abortCh := make(chan struct{}, 1)
+
+	// readLoop: 读 WS 帧 → 分发
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		for {
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var msg engine.GatewayMessage
+			if err := json.Unmarshal(message, &msg); err != nil {
+				continue
+			}
+			switch msg.Type {
+			case engine.MsgTypeUserMessage:
+				var p engine.UserMessagePayload
+				if err := json.Unmarshal(msg.Payload, &p); err == nil {
+					inboxCh <- inboxMessage{text: p.Text, mode: types.PromptInputModePrompt}
+				}
+			case engine.MsgTypePermissionResponse:
+				var p engine.PermissionResponsePayload
+				if err := json.Unmarshal(msg.Payload, &p); err == nil {
+					perms.responseCh <- engine.PermissionDecision{
+						Allow:        p.Decision == "allow",
+						UpdatedInput: p.UpdatedInput,
+					}
+				}
+			case engine.MsgTypeAbort:
+				abortCh <- struct{}{}
+			}
+		}
+	}()
+
+	// 主循环(镜像现有 stdio main loop)
+	for {
+		select {
+		case msg := <-inboxCh:
+			orc.SubmitInput(ctx, msg.text)
+		case <-abortCh:
+			orc.Abort(ctx)
+		case <-ctx.Done():
+			return
+		case <-readDone:
+			return
+		}
+	}
 }
