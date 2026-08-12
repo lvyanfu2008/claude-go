@@ -1,7 +1,6 @@
 # Hermes agentd binary (root level)
 /agentd
 .harness
-.claude
 .vscode
 .cursorceb.exe
 claude
