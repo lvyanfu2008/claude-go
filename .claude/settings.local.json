@@ -9,7 +9,17 @@
       "Bash(xxd)",
       "Bash(go run *)",
       "Bash(git status *)",
-      "Bash(go vet *)"
+      "Bash(go vet *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(json.dumps\\(x,indent=2\\)\\) for x in d.get\\('mcpServers',[]\\) if 'codegraph' in str\\(x\\).lower\\(\\)]\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c ' *)",
+      "Bash(codegraph --help)",
+      "Bash(codegraph daemon *)",
+      "Bash(codegraph install *)",
+      "Read(//Users/lvyanfu/.hermes/**)",
+      "Skill(update-config)",
+      "Bash(xxd /Users/lvyanfu/.claude/image-cache/14cc0dd0-a467-4122-9355-44812d27995c/1.png)",
+      "Bash(split *)"
     ]
   }
 }
