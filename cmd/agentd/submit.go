@@ -69,8 +69,10 @@ func filterUIMessages(msgs []types.Message) []types.Message {
 }
 
 // agentdSubmitFn 返回 agentd 版本的 SubmitFunc，完整实现 ProcessUserInput → ApplyBaseResult → Query 管线。
-func agentdSubmitFn(sess *agentdSession, cwd, sessionID string, permBridge engine.PermissionBridge) engine.SubmitFunc {
+// cwd 用函数形式,使 WS 模式下 set_cwd 后每次查询都能读到最新工作目录。
+func agentdSubmitFn(sess *agentdSession, cwd func() string, sessionID string, permBridge engine.PermissionBridge) engine.SubmitFunc {
 	return func(ctx context.Context, text string, store *conversation.Store, events engine.EventHandler, _ engine.PermissionBridge) error {
+		workCwd := cwd()
 		permMode := types.PermissionDefault
 		demoCfg := pui.DemoConfig{
 			SessionID:      sessionID,
@@ -98,7 +100,7 @@ func agentdSubmitFn(sess *agentdSession, cwd, sessionID string, permBridge engin
 		params.ProcessSlashCommand = pui.NewSlashResolveProcessSlashCommand(pui.SlashResolveHandlerOptions{
 			SessionID: sessionID,
 			Store:     store,
-			Cwd:       cwd,
+			Cwd:       workCwd,
 		})
 
 		r, err := processuserinput.ProcessUserInput(ctx, params)
@@ -118,21 +120,21 @@ func agentdSubmitFn(sess *agentdSession, cwd, sessionID string, permBridge engin
 		}
 
 		if out.EffectiveShouldQuery && !out.HadExecutionRequest {
-			if err := runAgentdQuery(sess, ctx, store, events, permBridge, params); err != nil {
+			if err := runAgentdQuery(sess, ctx, store, events, permBridge, params, workCwd); err != nil {
 				events.OnErrorMessage(err.Error())
 				return err
 			}
 		}
 
-		recordAgentdTranscript(store, sessionID, cwd)
+		recordAgentdTranscript(store, sessionID, workCwd)
 		events.OnTurnDone("completed")
 		return nil
 	}
 }
 
 // runAgentdQuery 构建 QueryParams 并迭代 Query。
-func runAgentdQuery(sess *agentdSession, ctx context.Context, store *conversation.Store, events engine.EventHandler, permBridge engine.PermissionBridge, params *processuserinput.ProcessUserInputParams) error {
-	cwd, _ := os.Getwd()
+// cwd 来自调用方(stdio 模式为进程目录,WS 模式为客户端 set_cwd 上报的目录)。
+func runAgentdQuery(sess *agentdSession, ctx context.Context, store *conversation.Store, events engine.EventHandler, permBridge engine.PermissionBridge, params *processuserinput.ProcessUserInputParams, cwd string) error {
 	mainLoopModel := modelenv.EffectiveMainLoopModel()
 
 	var normToolsJSON json.RawMessage

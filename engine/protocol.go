@@ -10,12 +10,20 @@ const (
 	MsgTypePermissionResponse GatewayMessageType = "permission_response"
 	MsgTypeResume             GatewayMessageType = "resume"
 	MsgTypeAbort              GatewayMessageType = "abort"
+	// MsgTypeSetCwd 客户端上报当前工作目录(WS 模式下前端把项目目录发给 agentd,
+	// agentd 用它作为会话工作目录,而不是全局 agentd 进程的启动目录)。
+	MsgTypeSetCwd GatewayMessageType = "set_cwd"
 )
 
 // GatewayMessage 是 Gateway 发给 Agent 的请求。
 type GatewayMessage struct {
 	Type    GatewayMessageType `json:"type"`
 	Payload json.RawMessage    `json:"payload,omitempty"`
+}
+
+// SetCwdPayload 客户端上报的工作目录。
+type SetCwdPayload struct {
+	Cwd string `json:"cwd"`
 }
 
 // UserMessagePayload 用户提交的输入。

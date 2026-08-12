@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/gorilla/websocket"
@@ -76,7 +77,7 @@ func main() {
 
 	// 创建 Orchestrator 的 SubmitFunc
 	sess := newAgentdSession()
-	submitFn := agentdSubmitFn(sess, cwd, sessionID, perms)
+	submitFn := agentdSubmitFn(sess, func() string { return cwd }, sessionID, perms)
 
 	orc := engine.NewOrchestrator(store, tr, events, submitFn, perms)
 
@@ -241,14 +242,22 @@ func serveWS(addr string) {
 
 // handleWSConnection 处理单个 WebSocket 连接(一个完整会话)。
 func handleWSConnection(conn *websocket.Conn) {
+	// cwd 是会话工作目录,初始为 agentd 进程启动目录;客户端可通过 set_cwd 覆盖。
+	// 用闭包让 submitFn 每次调用都读到最新值。
+	var cwdLock sync.Mutex
 	cwd, _ := os.Getwd()
+
 	sess := newAgentdSession()
 	events := newWsEventHandler(conn)
 	perms := &wsPermissionBridge{responseCh: make(chan engine.PermissionDecision, 1)}
 
 	sessionID := sessiontranscript.NewUUID()
 	store := &conversation.Store{ConversationID: sessionID}
-	submitFn := agentdSubmitFn(sess, cwd, sessionID, perms)
+	submitFn := agentdSubmitFn(sess, func() string {
+		cwdLock.Lock()
+		defer cwdLock.Unlock()
+		return cwd
+	}, sessionID, perms)
 	orc := engine.NewOrchestrator(store, nil, events, submitFn, perms)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -257,9 +266,34 @@ func handleWSConnection(conn *websocket.Conn) {
 
 	// 初始 state_snapshot + commands_list
 	events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: sessionID})
-	if cmds, err := commands.GetCommandsWithDefaults(ctx, cwd); err == nil {
+	if cmds, err := commands.GetCommandsWithDefaults(ctx, func() string {
+		cwdLock.Lock()
+		defer cwdLock.Unlock()
+		return cwd
+	}()); err == nil {
 		events.OnCommandsList(cmds)
 	}
+
+	// SessionEnd hooks — mirrors cmd/claude, using the session's current cwd.
+	curCwd := func() string {
+		cwdLock.Lock()
+		defer cwdLock.Unlock()
+		return cwd
+	}
+	transcriptPath := sessiontranscript.TranscriptPath(sessionID, curCwd(), "", sessiontranscript.ConfigHomeDir())
+	mergedHooks, _ := hookexec.MergedHooksForCwd(curCwd())
+	sessionEndReason := "error"
+	defer func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), time.Duration(hookexec.SessionEndHookTimeoutMs)*time.Millisecond)
+		defer bgCancel()
+		hookexec.RunSessionEndHooks(bgCtx, mergedHooks, curCwd(), hookexec.BaseHookInput{
+			SessionID:      sessionID,
+			TranscriptPath: transcriptPath,
+			Cwd:            curCwd(),
+		}, sessionEndReason, sessionID)
+	}()
+	_ = sessionEndReason
+	_ = transcriptPath
 
 	type inboxMessage struct {
 		text string
@@ -286,6 +320,18 @@ func handleWSConnection(conn *websocket.Conn) {
 				var p engine.UserMessagePayload
 				if err := json.Unmarshal(msg.Payload, &p); err == nil {
 					inboxCh <- inboxMessage{text: p.Text, mode: types.PromptInputModePrompt}
+				}
+			case engine.MsgTypeSetCwd:
+				var p engine.SetCwdPayload
+				if err := json.Unmarshal(msg.Payload, &p); err == nil && p.Cwd != "" {
+					cwdLock.Lock()
+					cwd = p.Cwd
+					newCwd := cwd
+					cwdLock.Unlock()
+					// 命令列表随工作目录更新(项目级 slash 命令跟随上报的 cwd)
+					if cmds, err := commands.GetCommandsWithDefaults(ctx, newCwd); err == nil {
+						events.OnCommandsList(cmds)
+					}
 				}
 			case engine.MsgTypePermissionResponse:
 				var p engine.PermissionResponsePayload
