@@ -252,8 +252,8 @@ func handleWSConnection(conn *websocket.Conn) {
 	orc := engine.NewOrchestrator(store, nil, events, submitFn, perms)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	defer conn.Close()
+	defer cancel()
 
 	// 初始 state_snapshot + commands_list
 	events.OnStateSnapshot(store.Messages, engine.StateMetadata{SessionID: sessionID})
