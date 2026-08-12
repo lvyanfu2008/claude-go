@@ -11,12 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"goc/appstate"
 	"goc/commands"
 	processuserinput "goc/conversation-runtime/process-user-input"
 	"goc/conversation-runtime/query"
 	"goc/gou/ccbhydrate"
-	"goc/gou/commandqueue"
 	"goc/gou/conversation"
 	"goc/gou/pui"
 	"goc/growthbook"
@@ -36,13 +34,6 @@ import (
 	"goc/engine"
 )
 
-var (
-	agentdSessionStarted    bool
-	agentdExtractMemState   = extractmemories.NewState()
-	agentdAutoDreamState    = autodream.NewState()
-	agentdSessionMemState   = sessionmemory.NewState()
-	agentdAppStateStore     = appstate.NewStore(appstate.DefaultAppState())
-)
 
 // filterUIMessages removes internal/meta messages that should not be rendered to the user.
 // Mirrors TS adapter.ts: `if (m.isMeta) continue` + attachment filtering.
@@ -78,7 +69,7 @@ func filterUIMessages(msgs []types.Message) []types.Message {
 }
 
 // agentdSubmitFn 返回 agentd 版本的 SubmitFunc，完整实现 ProcessUserInput → ApplyBaseResult → Query 管线。
-func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) engine.SubmitFunc {
+func agentdSubmitFn(sess *agentdSession, cwd, sessionID string, permBridge engine.PermissionBridge) engine.SubmitFunc {
 	return func(ctx context.Context, text string, store *conversation.Store, events engine.EventHandler, _ engine.PermissionBridge) error {
 		permMode := types.PermissionDefault
 		demoCfg := pui.DemoConfig{
@@ -127,7 +118,7 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 		}
 
 		if out.EffectiveShouldQuery && !out.HadExecutionRequest {
-			if err := runAgentdQuery(ctx, store, events, permBridge, params); err != nil {
+			if err := runAgentdQuery(sess, ctx, store, events, permBridge, params); err != nil {
 				events.OnErrorMessage(err.Error())
 				return err
 			}
@@ -140,7 +131,7 @@ func agentdSubmitFn(cwd, sessionID string, permBridge engine.PermissionBridge) e
 }
 
 // runAgentdQuery 构建 QueryParams 并迭代 Query。
-func runAgentdQuery(ctx context.Context, store *conversation.Store, events engine.EventHandler, permBridge engine.PermissionBridge, params *processuserinput.ProcessUserInputParams) error {
+func runAgentdQuery(sess *agentdSession, ctx context.Context, store *conversation.Store, events engine.EventHandler, permBridge engine.PermissionBridge, params *processuserinput.ProcessUserInputParams) error {
 	cwd, _ := os.Getwd()
 	mainLoopModel := modelenv.EffectiveMainLoopModel()
 
@@ -208,8 +199,8 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	}
 	extraRoots := querycontext.ExtraClaudeMdRootsForFetch(params.RuntimeContext)
 	ssSource := ""
-	if !agentdSessionStarted {
-		agentdSessionStarted = true
+	if !sess.sessionStarted {
+		sess.sessionStarted = true
 		ssSource = "startup"
 	}
 	fetchOpts := querycontext.FetchOpts{
@@ -249,7 +240,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		MainLoopModel:    mainLoopModel,
 		Messages:         store.Messages,
 		MessagesFunc:     func() []types.Message { return store.Messages },
-		AppStateStore:    agentdAppStateStore,
+		AppStateStore:    sess.appStateStore,
 		ProgressCallback: func(msg *types.Message) {
 			if msg == nil || msg.Type != types.MessageTypeProgress || len(msg.Data) == 0 {
 				return
@@ -289,12 +280,12 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 			events.OnAgentProgress(agentID, status, fmt.Sprintf("%s (%d tool uses, %d tokens)", summary, toolUseCount, tokenCount))
 			// Push to command queue so DrainCommandQueue injects the result
 			// as a user message into the next API round (TS parity).
-			commandqueue.EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
+			sess.cmdQueue.EnqueueAgentNotification(agentID, toolUseID, outputFile, status, summary, output, tokenCount, toolUseCount, durationMs)
 		},
 	}
 
 	// Build production deps with auto-compact, snip compact, and session memory compact.
-	smState := agentdSessionMemState
+	smState := sess.sessionMemState
 	var trySMCompact compactservice.TrySessionMemoryCompactFn
 	if smState != nil {
 		trySMCompact = func(ctx context.Context, messages []types.Message, agentID string, autoCompactThreshold *int) (*compactservice.CompactionResult, error) {
@@ -364,9 +355,9 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	// OnQueryComplete: post-turn memory extraction and auto-dream (P1-2)
 	// Call Hook once outside the closure so the sequential-gate sync.Mutex
 	// is shared across all OnQueryComplete invocations.
-	smHook := sessionmemory.Hook(agentdSessionMemState, store.ConversationID, cwd)
+	smHook := sessionmemory.Hook(sess.sessionMemState, store.ConversationID, cwd)
 	qdeps.OnQueryComplete = func(ctx context.Context, qcp query.QueryCompleteParams) {
-		extractmemories.Execute(ctx, agentdExtractMemState, extractmemories.ExtractionParams{
+		extractmemories.Execute(ctx, sess.extractMemState, extractmemories.ExtractionParams{
 			Messages:       qcp.Messages,
 			ToolUseContext: qcp.ToolUseContext,
 			SystemPrompt:   qcp.SystemPrompt,
@@ -381,7 +372,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 				events.OnStateSnapshot(filterUIMessages(store.Messages), engine.StateMetadata{SessionID: store.ConversationID})
 			},
 		})
-		autoDreamPaths, _ := autodream.Execute(ctx, agentdAutoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
+		autoDreamPaths, _ := autodream.Execute(ctx, sess.autoDreamState, qcp.ToolUseContext, qcp.SystemPrompt,
 			qcp.UserContext, qcp.SystemContext, qcp.QuerySource, query.RandomUUID,
 			commands.ClaudeConfigHome(), qcp.Cwd, "", store.ConversationID)
 		if len(autoDreamPaths) > 0 {
@@ -407,7 +398,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 	// DrainCommandQueue: forward background agent notifications
 	qdeps.DrainCommandQueue = func() []string {
 		var result []string
-		for _, cmd := range commandqueue.DrainCommandQueue() {
+		for _, cmd := range sess.cmdQueue.DrainCommandQueue() {
 			result = append(result, cmd.Value)
 		}
 		return result
@@ -428,7 +419,7 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 				handleStreamEvent(events, y.StreamEvent)
 			}
 			if y.Message != nil {
-				handleQueryYieldMessage(store, events, *y.Message)
+				handleQueryYieldMessage(sess, store, events, *y.Message)
 			}
 			if y.Terminal != nil {
 				if y.Terminal.Error != nil {
@@ -441,11 +432,11 @@ func runAgentdQuery(ctx context.Context, store *conversation.Store, events engin
 		// If background agents are still running, wait for them to
 		// complete. The NotificationCallback will enqueue a command
 		// and signal the notify channel.
-		drained := commandqueue.DrainCommandQueue()
-		if len(drained) == 0 && commandqueue.HasPendingBgAgents() {
+		drained := sess.cmdQueue.DrainCommandQueue()
+		if len(drained) == 0 && sess.cmdQueue.HasPendingBgAgents() {
 			select {
-			case <-commandqueue.NotifyChan():
-				drained = commandqueue.DrainCommandQueue()
+			case <-sess.cmdQueue.NotifyChan():
+				drained = sess.cmdQueue.DrainCommandQueue()
 			case <-time.After(120 * time.Second):
 				return nil
 			case <-ctx.Done():
@@ -507,7 +498,7 @@ func handleStreamEvent(events engine.EventHandler, raw json.RawMessage) {
 	}
 }
 
-func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandler, msg types.Message) {
+func handleQueryYieldMessage(sess *agentdSession, store *conversation.Store, events engine.EventHandler, msg types.Message) {
 	switch msg.Type {
 	case types.MessageTypeAssistant:
 		var blocks []struct {
@@ -533,7 +524,7 @@ func handleQueryYieldMessage(store *conversation.Store, events engine.EventHandl
 						RunInBackground bool `json:"run_in_background"`
 					}
 					if json.Unmarshal(block.Input, &in) == nil && in.RunInBackground {
-						commandqueue.AddPendingBgAgent()
+						sess.cmdQueue.AddPendingBgAgent()
 					}
 				}
 			case "tool_result":
