@@ -42,7 +42,9 @@ func NewQueue() *Queue {
 var defaultQueue = NewQueue()
 
 // NotifyChan returns a channel that receives when a command is enqueued.
-func NotifyChan() <-chan struct{} { return defaultQueue.notifyCh }
+func (q *Queue) NotifyChan() <-chan struct{} { return q.notifyCh }
+
+func NotifyChan() <-chan struct{} { return defaultQueue.NotifyChan() }
 
 func (q *Queue) signalNotify() {
 	select {
