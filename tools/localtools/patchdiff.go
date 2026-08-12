@@ -59,6 +59,11 @@ func splitDiffTextLines(text string) []string {
 	}
 	s := strings.TrimSuffix(text, "\n")
 	if s == "" {
+		// Inserted/removed blank line(s) — a lone "\n" means one empty content line.
+		// Preserve it so blank-line edits produce a "+"/"-" row instead of vanishing.
+		if text == "\n" {
+			return []string{""}
+		}
 		return nil
 	}
 	return strings.Split(s, "\n")

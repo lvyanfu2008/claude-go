@@ -85,6 +85,11 @@ func GetContextWindowForModel(model string, betas []string) int {
 		return 1_000_000
 	}
 
+	// 支持 1M 上下文的模型默认按 1M 窗口处理（对齐 TS getModelCapability().max_input_tokens 路径）
+	if ModelSupports1M(model) {
+		return 1_000_000
+	}
+
 	// 默认返回100k
 	return ModelContextWindowDefault
 }
