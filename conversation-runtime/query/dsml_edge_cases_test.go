@@ -390,3 +390,45 @@ func splitChunksSmall(s string, n int) []string {
 	}
 	return out
 }
+
+func TestDSMLProseMentionsDSMLWithoutBlock(t *testing.T) {
+	// Ordinary text that merely MENTIONS "DSML" (no actual markers) must still
+	// flow through as text — the strong signal is the "<DSML" token, not the
+	// bare word.
+	chunks := []string{
+		"DSML is a tool-call markup format used by DeepSeek.",
+		"这里提到 DSML 但没有真实标记。",
+	}
+	_, names, _, text := collectDSMLEvents(t, chunks)
+	if len(names) != 0 {
+		t.Fatalf("mention without markers must not parse tool_use, got %v", names)
+	}
+	if !strings.Contains(text, "DSML is a tool-call") {
+		t.Fatalf("mention must be emitted as text, got %q", text)
+	}
+}
+
+func TestDSMLProseCrossChunkFragment(t *testing.T) {
+	// Subagent outputs prose, then a start tag SPLIT across chunks ("tool_call"
+	// then "s>"), then the invoke. The split tag must not leak as text and the
+	// prose must still be emitted.
+	chunks := []string{
+		"        Let me use bash to read the files:\n\n        < | DSML | tool_call",
+		"s>\n        < | DSML | invoke name=\"Bash\">\n",
+		"        < | DSML | parameter name=\"command\" string=\"true\">cat x.txt</ | DSML | parameter>\n",
+		"        </ | DSML | invoke>\n        </ | DSML | tool_calls>",
+	}
+	_, names, inputs, text := collectDSMLEvents(t, chunks)
+	if len(names) != 1 || names[0] != "Bash" {
+		t.Fatalf("expected tool_use Bash, got %v", names)
+	}
+	if len(inputs) != 1 || !strings.Contains(inputs[0], "cat x.txt") {
+		t.Fatalf("expected command arg, got %v", inputs)
+	}
+	if !strings.Contains(text, "Let me use bash to read the files:") {
+		t.Fatalf("prose must be emitted as text, got %q", text)
+	}
+	if strings.Contains(text, "DSML") {
+		t.Fatalf("split start tag must not leak, got %q", text)
+	}
+}

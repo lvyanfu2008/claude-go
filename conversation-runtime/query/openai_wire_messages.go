@@ -3,8 +3,21 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 )
+
+// reasoningKeyPref returns the primary OpenAI reasoning key for echo/write.
+// Default is "reasoning_content"; OPENAI_REASONING_KEY=1 (or true) switches to
+// "reasoning". Applies to both write (anthropicWireMessagesToOpenAI) and the
+// read-side fallback in the stream adapter.
+func reasoningKeyPref() string {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("OPENAI_REASONING_KEY")))
+	if v == "1" || v == "true" {
+		return "reasoning"
+	}
+	return "reasoning_content"
+}
 
 // anthropicWireMessagesToOpenAI mirrors src/api-client/openai/convertMessages.ts
 // anthropicMessagesToOpenAI for wire JSON from [ccbhydrate.MessagesJSONNormalized].
@@ -37,8 +50,9 @@ func anthropicWireMessagesToOpenAI(msgsJSON json.RawMessage, systemPrompt []stri
 			}
 			out = append(out, part...)
 		case "assistant":
-			pr := IsOpenAIThinkingEnabled(model) || wireAssistantContentHasThinking(m.Content)
-			part, err := wireAssistantToOpenAI(m.Content, pr)
+			thinkingMode := IsOpenAIThinkingEnabled(model)
+			pr := thinkingMode || wireAssistantContentHasThinking(m.Content)
+			part, err := wireAssistantToOpenAI(m.Content, pr, thinkingMode)
 			if err != nil {
 				return nil, err
 			}
@@ -154,7 +168,7 @@ func wireAssistantContentHasThinking(content json.RawMessage) bool {
 	return false
 }
 
-func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]map[string]any, error) {
+func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool, thinkingMode bool) ([]map[string]any, error) {
 	if len(content) == 0 || string(content) == "null" {
 		return []map[string]any{{"role": "assistant", "content": ""}}, nil
 	}
@@ -220,8 +234,15 @@ func wireAssistantToOpenAI(content json.RawMessage, preserveReasoning bool) ([]m
 	} else {
 		msg["content"] = nil
 	}
-	if len(reasoningParts) > 0 {
-		msg["reasoning_content"] = strings.Join(reasoningParts, "\n")
+	// Echo reasoning under the configured key (default reasoning_content, or
+	// "reasoning" when OPENAI_REASONING_KEY=1). In thinking mode the assistant
+	// turn ALWAYS carries the key — empty string when there was no thinking
+	// block — because thinking-mode models require reasoning in history.
+	hasReasoning := len(reasoningParts) > 0
+	if hasReasoning {
+		msg[reasoningKeyPref()] = strings.Join(reasoningParts, "\n")
+	} else if thinkingMode {
+		msg[reasoningKeyPref()] = ""
 	}
 	if len(toolCalls) > 0 {
 		msg["tool_calls"] = toolCalls

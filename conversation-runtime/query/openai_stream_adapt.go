@@ -16,33 +16,11 @@ import (
 // DSML tool-call grammar (DeepSeek V3.2/V4). Real-world output is heavily
 // mangled: tags span lines, values span lines, delimiter bars are dropped or
 // doubled, attributes glue together (parametername=), and markers split across
-// stream chunks. We therefore NORMALIZE the buffered text first (strip bars,
-// collapse whitespace) and match the simplified structure on the normalized
-// text. Collapsing whitespace inside string values is acceptable: shell
-// commands treat newlines as spaces, and this only affects already-mangled
-// output.
-var dsmlWSRe = regexp.MustCompile(`\s+`)
-
-func normalizeDSML(s string) string {
-	s = strings.ReplaceAll(s, "｜", " ")
-	s = strings.ReplaceAll(s, "|", " ")
-	return dsmlWSRe.ReplaceAllString(s, " ")
-}
-
-// These match NORMALIZED text (see normalizeDSML), used ONLY for start-tag
-// detection and the hold-back prefix check. Extraction operates on RAW text via
-// the dsmlRaw* regexes below so parameter VALUES keep their pipes and other
-// shell syntax intact.
-var (
-	// \A-anchored on normalized text: a block only takes over when the buffered
-	// text BEGINS with the tag, so an ordinary prose prefix can never be misread
-	// as a block.
-	dsmlBlockStartRe = regexp.MustCompile(`\A<\s*DSML\s*tool_calls\s*>`)
-)
-
-// Raw-tolerant regexes: bars (| or ｜) are optional between segments and any
-// stray whitespace around them is skipped, so real mangled output like
-// "< | DSML |invoke" or "<｜DSML｜parameter>" still parses.
+// stream chunks.
+//
+// Detection runs on RAW buffered text via the dsmlRaw* / dsmlMarkerStartRe
+// regexes; extraction uses RAW text too, so parameter VALUES keep their pipes
+// and other shell syntax intact.
 var (
 	dsmlRawStartRe  = regexp.MustCompile(`<\s*[|｜]?\s*DSML\s*[|｜]?\s*tool_calls\s*[|｜]?\s*>`)
 	dsmlRawEndRe    = regexp.MustCompile(`(?s)</\s*[|｜]?\s*DSML\s*[|｜]?\s*tool_calls\s*[|｜]?\s*>`)
@@ -52,15 +30,12 @@ var (
 	dsmlRawParamRe = regexp.MustCompile(`(?is)<\s*[|｜]?\s*DSML\s*[|｜]?\s*parameter\s*[|｜]?\s*name="([^"]*)"\s*[|｜]?\s*(?:string="(true|false)"\s*[|｜]?\s*)?>(.*?)</\s*[|｜]?\s*DSML\s*[|｜]?\s*parameter\s*[|｜]?\s*>`)
 	// Matches the end of a raw invoke (through its close tag), for buffer trimming.
 	dsmlRawInvokeEndRe = regexp.MustCompile(`(?s).*?</\s*[|｜]?\s*DSML\s*[|｜]?\s*invoke\s*[|｜]?\s*>`)
+	// Strong DSML signal: the "DSML" token of any marker, even when the marker
+	// is split across chunks (e.g. "< | DSML | tool_call" + "s>"). Used to hold
+	// back any buffered text that could be the start of a marker, so a split
+	// tag with prose before it never leaks as text.
+	dsmlMarkerStartRe = regexp.MustCompile(`</?\s*[|｜]?\s*DSML`)
 )
-
-// Canonical normalized form of the start tag; the hold-back check keeps text
-// that is a PREFIX of it (a start tag split across chunks must not leak).
-const dsmlStartTagNorm = "< DSML tool_calls>"
-
-func isDSMLStartPrefix(norm string) bool {
-	return strings.HasPrefix(dsmlStartTagNorm, norm)
-}
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
 type openAIStreamAdapter struct {
@@ -161,6 +136,17 @@ func emitStreamObj(obj map[string]any, emit func(anthropicmessages.MessageStream
 	return emit(ev)
 }
 
+// reasoningKeyVal returns the reasoning value under the key selected by
+// OPENAI_REASONING_KEY (default "reasoning_content", or "reasoning" when set
+// to 1). No cross-key fallback: whichever key the config selects is the only
+// one read.
+func reasoningKeyVal(content *string, reasoning *string) *string {
+	if reasoningKeyPref() == "reasoning" {
+		return reasoning
+	}
+	return content
+}
+
 func mapFinishReason(reason string) string {
 	switch reason {
 	case "stop":
@@ -207,6 +193,7 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 			Delta   json.RawMessage `json:"delta"`
 			Message *struct {
 				ReasoningContent *string `json:"reasoning_content"`
+				Reasoning        *string `json:"reasoning"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
@@ -245,6 +232,7 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	var delta struct {
 		Content          *string         `json:"content"`
 		ReasoningContent *string         `json:"reasoning_content"`
+		Reasoning        *string         `json:"reasoning"`
 		ToolCalls        json.RawMessage `json:"tool_calls"`
 	}
 	if len(chunk.Choices) == 0 {
@@ -254,11 +242,14 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	if len(ch0.Delta) > 0 && string(ch0.Delta) != "null" {
 		_ = json.Unmarshal(ch0.Delta, &delta)
 	}
-	// Some gateways only attach chain-of-thought to choices[0].message (same as non-stream),
-	// with an empty or omitted delta. Mirror src/services/api/openai/streamAdapter.ts.
-	if (delta.ReasoningContent == nil || *delta.ReasoningContent == "") && ch0.Message != nil && ch0.Message.ReasoningContent != nil {
-		c := *ch0.Message.ReasoningContent
-		delta.ReasoningContent = &c
+	// Read the reasoning fragment strictly under the configured key
+	// (OPENAI_REASONING_KEY). No cross-key fallback. When the delta carries no
+	// reasoning under that key, fall back to choices[0].message (same as
+	// non-stream). An explicitly-empty value is kept as a valid DeepSeek signal
+	// (see reasoning_content → thinking below).
+	delta.ReasoningContent = reasoningKeyVal(delta.ReasoningContent, delta.Reasoning)
+	if delta.ReasoningContent == nil && ch0.Message != nil {
+		delta.ReasoningContent = reasoningKeyVal(ch0.Message.ReasoningContent, ch0.Message.Reasoning)
 	}
 
 	// reasoning_content → thinking
@@ -302,38 +293,31 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 		// bars). Detect on the NORMALIZED buffered text so a start tag that
 		// straddles chunks is still caught.
 		pending := a.dsmlBuf.String() + content
-		normPending := normalizeDSML(pending)
-		// Hold when already inside a block, when the buffer looks like the
-		// start of a block (prefix of the canonical start tag, or a start tag
-		// that just landed), or when a complete start tag appears ANYWHERE in
-		// the pending text. The last case covers prose-then-block responses
-		// (non-stream bodies): the whole chunk is buffered and the parser
-		// extracts invokes; prose around the block is dropped once the wrapper
-		// closes, which is the correct DSML semantics.
-		hold := a.dsmlOpen || isDSMLStartPrefix(normPending) ||
-			dsmlBlockStartRe.MatchString(normPending) ||
-			dsmlRawStartRe.MatchString(pending)
+		// Hold when already inside a block, when a complete start tag appears
+		// ANYWHERE in the pending text (prose-then-block responses), or when
+		// the buffer could be the start of a DSML marker — including a marker
+		// split across chunks and prose that landed in the same chunk as the
+		// fragment. A split tag must never leak as text.
+		hold := a.dsmlOpen ||
+			dsmlRawStartRe.MatchString(pending) ||
+			dsmlMarkerStartRe.MatchString(pending)
 		if hold {
-			// Not yet in DSML mode but a complete start tag just appeared after
-			// prose in this same chunk (non-stream bodies). Emit the prose as
-			// text and buffer from the start tag onward. pending == content
-			// here (empty buffer, not open), so prose before the tag is fresh
-			// and must not be dropped.
+			// Not yet in DSML mode. Emit any prose that preceded the marker in
+			// this chunk (fresh text, not yet in the buffer) and buffer from
+			// the marker onward; otherwise hold the whole pending text.
 			if !a.dsmlOpen && a.dsmlBuf.Len() == 0 {
-				if loc := dsmlRawStartRe.FindStringIndex(pending); loc != nil && loc[0] > 0 {
-					if lead := strings.TrimSpace(pending[:loc[0]]); lead != "" {
+				// The marker anchor is "DSML"; keep any leading prose as text.
+				if mi := dsmlMarkerStartRe.FindStringIndex(pending); mi != nil && mi[0] > 0 {
+					if lead := strings.TrimSpace(pending[:mi[0]]); lead != "" {
 						if err := a.emitPlainText(lead, emit); err != nil {
 							return err
 						}
 					}
-					a.dsmlBuf.Reset()
-					a.dsmlBuf.WriteString(pending[loc[0]:])
-				} else {
-					a.dsmlBuf.WriteString(content)
+					pending = pending[mi[0]:]
 				}
-			} else {
-				a.dsmlBuf.WriteString(content)
 			}
+			a.dsmlBuf.Reset()
+			a.dsmlBuf.WriteString(pending)
 			a.dsmlOpen = true
 			// Flush COMPLETE invokes incrementally — never wait for the wrapper
 			// close tag (some models omit it). Each closed </DSML invoke>
@@ -871,6 +855,7 @@ func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(
 		Message struct {
 			Content          json.RawMessage  `json:"content"`
 			ReasoningContent *string          `json:"reasoning_content"`
+			Reasoning        *string          `json:"reasoning"`
 			ToolCalls        []map[string]any `json:"tool_calls"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
@@ -891,19 +876,22 @@ func ReplayOpenAINonStreamChatResponse(respBody []byte, model string, emit func(
 		return err
 	}
 
-	// DeepSeek reasoner (and similar): non-stream body includes message.reasoning_content (chain-of-thought).
-	// Mirror streaming deltas: emit reasoning before visible content (see HandleChunk reasoning_content branch).
-	if ch.Message.ReasoningContent != nil && strings.TrimSpace(*ch.Message.ReasoningContent) != "" {
-		rc, err := json.Marshal(map[string]any{
+	// DeepSeek reasoner (and similar): non-stream body includes reasoning as
+	// chain-of-thought under the configured key (default reasoning_content, or
+	// reasoning when OPENAI_REASONING_KEY=1). Mirror streaming deltas: emit
+	// reasoning before visible content, writing it under the same configured key
+	// so the strict-key read in HandleChunk still picks it up.
+	if rc := reasoningKeyVal(ch.Message.ReasoningContent, ch.Message.Reasoning); rc != nil && strings.TrimSpace(*rc) != "" {
+		payload, err := json.Marshal(map[string]any{
 			"choices": []map[string]any{{
 				"index": 0,
-				"delta": map[string]any{"reasoning_content": *ch.Message.ReasoningContent},
+				"delta": map[string]any{reasoningKeyPref(): *rc},
 			}},
 		})
 		if err != nil {
 			return err
 		}
-		if err := ad.HandleChunk(rc, emit); err != nil {
+		if err := ad.HandleChunk(payload, emit); err != nil {
 			return err
 		}
 	}
