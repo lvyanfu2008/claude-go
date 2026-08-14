@@ -13,15 +13,28 @@ import (
 	"goc/anthropicmessages"
 )
 
-// DSML tool-call grammar (DeepSeek V3.2/V4). The wrapper is usually
-// <｜DSML｜tool_calls> (full-width vertical bars); some endpoints emit
-// <|DSML|tool_calls> (ASCII bars), and some add stray spaces around the
-// markers (e.g. <| DSML |invoke>). All variants are accepted via \s*.
+// DSML tool-call grammar (DeepSeek V3.2/V4). Real-world output is heavily
+// mangled: tags span lines, values span lines, delimiter bars are dropped or
+// doubled, attributes glue together (parametername=), and markers split across
+// stream chunks. We therefore NORMALIZE the buffered text first (strip bars,
+// collapse whitespace) and match the simplified structure on the normalized
+// text. Collapsing whitespace inside string values is acceptable: shell
+// commands treat newlines as spaces, and this only affects already-mangled
+// output.
+var dsmlWSRe = regexp.MustCompile(`\s+`)
+
+func normalizeDSML(s string) string {
+	s = strings.ReplaceAll(s, "｜", " ")
+	s = strings.ReplaceAll(s, "|", " ")
+	return dsmlWSRe.ReplaceAllString(s, " ")
+}
+
+// These match NORMALIZED text (see normalizeDSML).
 var (
-	dsmlBlockStartRe = regexp.MustCompile(`<\s*[｜|]\s*DSML\s*[｜|]\s*tool_calls\s*>`)
-	dsmlBlockEndRe   = regexp.MustCompile(`</\s*[｜|]\s*DSML\s*[｜|]\s*tool_calls\s*>`)
-	dsmlInvokeRe     = regexp.MustCompile(`<\s*[｜|]\s*DSML\s*[｜|]\s*invoke\s+name="([^"]+)"\s*>(.*?)</\s*[｜|]\s*DSML\s*[｜|]\s*invoke\s*>`)
-	dsmlParamRe      = regexp.MustCompile(`<\s*[｜|]\s*DSML\s*[｜|]\s*parameter\s+name="([^"]+)"\s+string="(true|false)"\s*>(.*?)</\s*[｜|]\s*DSML\s*[｜|]\s*parameter\s*>`)
+	dsmlBlockStartRe = regexp.MustCompile(`<\s*DSML\s*tool_calls\s*>`)
+	dsmlBlockEndRe   = regexp.MustCompile(`</\s*DSML\s*tool_calls\s*>`)
+	dsmlInvokeRe     = regexp.MustCompile(`<\s*DSML\s*invoke\s*name="([^"]+)"\s*>(.*?)</\s*DSML\s*invoke\s*>`)
+	dsmlParamRe      = regexp.MustCompile(`<\s*DSML\s*parameter\s*name="([^"]+)"\s*string="(true|false)"\s*>(.*?)</\s*DSML\s*parameter\s*>`)
 )
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
@@ -259,15 +272,16 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	if delta.Content != nil && *delta.Content != "" {
 		content := *delta.Content
 		// DSML tool-call interception: DeepSeek V3.2/V4 models may emit tool
-		// calls as DSML text (e.g. <｜DSML｜tool_calls> / <|DSML|tool_calls>).
-		// Buffer the stream; when the block closes, parse into tool_use events
-		// instead of forwarding the raw tags as text.
-		if a.dsmlOpen || dsmlBlockStartRe.MatchString(a.dsmlBuf.String()+content) || dsmlBlockStartRe.MatchString(content) {
+		// calls as DSML text (e.g. <｜DSML｜tool_calls> / <|DSML|tool_calls>),
+		// often mangled (tags/values spanning lines, glued attributes, dropped
+		// bars). Detect on the NORMALIZED buffered text so a start tag that
+		// straddles chunks is still caught.
+		normBuf := normalizeDSML(a.dsmlBuf.String() + content)
+		if a.dsmlOpen || dsmlBlockStartRe.MatchString(normBuf) {
 			a.dsmlBuf.WriteString(content)
 			a.dsmlOpen = true
-			// If the block is already complete in this chunk, flush now.
-			buf := a.dsmlBuf.String()
-			if dsmlBlockEndRe.MatchString(buf) {
+			// If the block is already complete in the buffer, flush now.
+			if dsmlBlockEndRe.MatchString(normalizeDSML(a.dsmlBuf.String())) {
 				if err := a.flushDSMLBlock(emit); err != nil {
 					return err
 				}
@@ -502,7 +516,10 @@ func (a *openAIStreamAdapter) flushDSMLBlock(emit func(anthropicmessages.Message
 	}
 
 	// Split the block: text before the wrapper, the DSML section, text after.
-	sec := splitDSMLOuter(block)
+	// Parse on NORMALIZED text so multi-line tags/values and glued attributes
+	// (parametername=) are handled. String values lose their internal newlines
+	// (collapsed to spaces), which is safe for shell commands and file paths.
+	sec := splitDSMLOuter(normalizeDSML(block))
 
 	if sec.preText != "" {
 		if err := a.emitPlainText(sec.preText, emit); err != nil {

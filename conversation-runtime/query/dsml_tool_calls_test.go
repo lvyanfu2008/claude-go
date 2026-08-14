@@ -128,6 +128,40 @@ func TestDSMLUnclosedBlockFlushedAsText(t *testing.T) {
 	}
 }
 
+func TestDSMLRealMangledSample(t *testing.T) {
+	// Real-world sample captured from a production subagent: tags span lines,
+	// values span lines, bars are dropped, and attributes glue together.
+	chunks := []string{
+		"查找工程中的X开头的类文件",
+		"< | DSML | tool_calls>",
+		"< | DSML | invoke name=\"Bash\">",
+		"< | DSML | parameter\nname=\"command\" string=\"true\">/usr/bin/find /d/work/www-auth-v6/cdcs-auth-fin -name \"X0180*\" -o -name \"X0885*\"",
+		"-type f 2>/dev/null</ | DSML |",
+		"parameter>",
+		"< | DSML | parameter\nname=\"description\" string=\"true\">搜索X0180 和 X0885 开头的所有文件</ |",
+		"DSML | parameter>",
+		"</ | DSML | invoke>",
+		"</|DSML|tool_calls>",
+	}
+	_, names, inputs := collectDSMLEmission(t, chunks)
+	if len(names) != 1 || names[0] != "Bash" {
+		t.Fatalf("expected tool_use Bash from mangled DSML, got %v", names)
+	}
+	if len(inputs) == 0 {
+		t.Fatal("expected tool arguments")
+	}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(inputs[0]), &args); err != nil {
+		t.Fatalf("bad args JSON: %v", err)
+	}
+	if cmd, _ := args["command"].(string); !strings.Contains(cmd, "/usr/bin/find") {
+		t.Fatalf("command arg should contain the find command, got %q", cmd)
+	}
+	if desc, _ := args["description"].(string); !strings.Contains(desc, "X0180") {
+		t.Fatalf("description arg should contain X0180, got %q", desc)
+	}
+}
+
 func TestDSMLDoesNotBreakPlainText(t *testing.T) {
 	// Ordinary text (no DSML markers) must flow through unchanged.
 	chunks := []string{"你好", "世界"}
