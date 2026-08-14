@@ -6,10 +6,21 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
 	"goc/anthropicmessages"
+)
+
+// DSML tool-call grammar (DeepSeek V3.2/V4). The wrapper is usually
+// <｜DSML｜tool_calls> (full-width vertical bars); some endpoints emit
+// <|DSML|tool_calls> (ASCII bars). We accept both.
+var (
+	dsmlBlockStartRe = regexp.MustCompile(`<[｜|]DSML[｜|]tool_calls>`)
+	dsmlBlockEndRe   = regexp.MustCompile(`</[｜|]DSML[｜|]tool_calls>`)
+	dsmlInvokeRe     = regexp.MustCompile(`<[｜|]DSML[｜|]invoke\s+name="([^"]+)"\s*>(.*?)</[｜|]DSML[｜|]invoke>`)
+	dsmlParamRe      = regexp.MustCompile(`<[｜|]DSML[｜|]parameter\s+name="([^"]+)"\s+string="(true|false)"\s*>(.*?)</[｜|]DSML[｜|]parameter>`)
 )
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
@@ -30,6 +41,13 @@ type openAIStreamAdapter struct {
 	cachedTokens int
 
 	openBlockIndices map[int]struct{}
+
+	// dsmlBuf accumulates content deltas that look like DSML tool calls
+	// (DeepSeek V3.2/V4 grammar, e.g. <｜DSML｜tool_calls>...</｜DSML｜tool_calls>).
+	// When a complete DSML block arrives it is parsed into tool_use events;
+	// the text is NOT forwarded as a text_delta.
+	dsmlBuf strings.Builder
+	dsmlOpen bool
 }
 
 type openAIToolBlockState struct {
@@ -238,6 +256,24 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 	}
 
 	if delta.Content != nil && *delta.Content != "" {
+		content := *delta.Content
+		// DSML tool-call interception: DeepSeek V3.2/V4 models may emit tool
+		// calls as DSML text (e.g. <｜DSML｜tool_calls> / <|DSML|tool_calls>).
+		// Buffer the stream; when the block closes, parse into tool_use events
+		// instead of forwarding the raw tags as text.
+		if a.dsmlOpen || dsmlBlockStartRe.MatchString(a.dsmlBuf.String()+content) || dsmlBlockStartRe.MatchString(content) {
+			a.dsmlBuf.WriteString(content)
+			a.dsmlOpen = true
+			// If the block is already complete in this chunk, flush now.
+			buf := a.dsmlBuf.String()
+			if dsmlBlockEndRe.MatchString(buf) {
+				if err := a.flushDSMLBlock(emit); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		// Normal text path (unchanged).
 		if a.thinkingBlockOpen {
 			if err := emitStreamObj(map[string]any{
 				"type": "content_block_stop", "index": a.currentContentIndex,
@@ -265,7 +301,7 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 			"type":  "content_block_delta",
 			"index": a.currentContentIndex,
 			"delta": map[string]any{
-				"type": "text_delta", "text": *delta.Content,
+				"type": "text_delta", "text": content,
 			},
 		}, emit); err != nil {
 			return err
@@ -421,7 +457,191 @@ func (a *openAIStreamAdapter) FlushOpenBlocks(emit func(anthropicmessages.Messag
 		}
 	}
 	a.openBlockIndices = make(map[int]struct{})
+
+	// DSML tail safety: if a DSML block started but never closed (stream ended
+	// mid-block), forward the buffered text as plain text instead of dropping it.
+	if a.dsmlOpen && a.dsmlBuf.Len() > 0 {
+		tail := a.dsmlBuf.String()
+		a.dsmlBuf.Reset()
+		a.dsmlOpen = false
+		if err := a.emitPlainText(tail, emit); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// flushDSMLBlock parses the buffered DSML tool-call block and emits tool_use
+// events (content_block_start → input_json_delta → content_block_stop) matching
+// the standard OpenAI tool_calls path. Any text before/after the DSML wrapper
+// is forwarded as normal text deltas. Resets the DSML buffer state.
+func (a *openAIStreamAdapter) flushDSMLBlock(emit func(anthropicmessages.MessageStreamEvent) error) error {
+	block := a.dsmlBuf.String()
+	a.dsmlBuf.Reset()
+	a.dsmlOpen = false
+
+	// Close any open thinking/text block before emitting tool_use.
+	if a.thinkingBlockOpen {
+		if err := emitStreamObj(map[string]any{
+			"type": "content_block_stop", "index": a.currentContentIndex,
+		}, emit); err != nil {
+			return err
+		}
+		a.markClosed(a.currentContentIndex)
+		a.thinkingBlockOpen = false
+	}
+	if a.textBlockOpen {
+		if err := emitStreamObj(map[string]any{
+			"type": "content_block_stop", "index": a.currentContentIndex,
+		}, emit); err != nil {
+			return err
+		}
+		a.markClosed(a.currentContentIndex)
+		a.textBlockOpen = false
+	}
+
+	// Split the block: text before the wrapper, the DSML section, text after.
+	sec := splitDSMLOuter(block)
+
+	if sec.preText != "" {
+		if err := a.emitPlainText(sec.preText, emit); err != nil {
+			return err
+		}
+	}
+
+	invokes := dsmlInvokeRe.FindAllStringSubmatch(sec.dsml, -1)
+	for _, m := range invokes {
+		if len(m) < 3 {
+			continue
+		}
+		toolName := m[1]
+		paramsBody := m[2]
+		args := map[string]any{}
+		for _, pm := range dsmlParamRe.FindAllStringSubmatch(paramsBody, -1) {
+			if len(pm) < 4 {
+				continue
+			}
+			name := pm[1]
+			isString := pm[2] == "true"
+			val := pm[3]
+			if isString {
+				args[name] = val
+			} else {
+				// Coerce loosely: try JSON (numbers/bools/objects/arrays); fall back to string.
+				var jv any
+				if err := json.Unmarshal([]byte(val), &jv); err == nil {
+					args[name] = jv
+				} else {
+					args[name] = val
+				}
+			}
+		}
+		a.currentContentIndex++
+		toolID := openAIToolPlaceholderID()
+		a.toolBlocks[a.currentContentIndex] = &openAIToolBlockState{
+			contentIndex: a.currentContentIndex,
+			id:           toolID,
+			name:         toolName,
+		}
+		a.markOpen(a.currentContentIndex)
+		if err := emitStreamObj(map[string]any{
+			"type":  "content_block_start",
+			"index": a.currentContentIndex,
+			"content_block": map[string]any{
+				"type": "tool_use", "id": toolID, "name": toolName, "input": map[string]any{},
+			},
+		}, emit); err != nil {
+			return err
+		}
+		argsJSON, _ := json.Marshal(args)
+		if len(argsJSON) > 0 && string(argsJSON) != "{}" {
+			if err := emitStreamObj(map[string]any{
+				"type":  "content_block_delta",
+				"index": a.currentContentIndex,
+				"delta": map[string]any{
+					"type": "input_json_delta", "partial_json": string(argsJSON),
+				},
+			}, emit); err != nil {
+				return err
+			}
+		}
+		if err := emitStreamObj(map[string]any{
+			"type": "content_block_stop", "index": a.currentContentIndex,
+		}, emit); err != nil {
+			return err
+		}
+		a.markClosed(a.currentContentIndex)
+	}
+
+	if sec.postText != "" {
+		return a.emitPlainText(sec.postText, emit)
+	}
+	return nil
+}
+
+// emitPlainText forwards a plain-text delta, opening a text block if needed.
+func (a *openAIStreamAdapter) emitPlainText(text string, emit func(anthropicmessages.MessageStreamEvent) error) error {
+	if text == "" {
+		return nil
+	}
+	if a.thinkingBlockOpen {
+		if err := emitStreamObj(map[string]any{
+			"type": "content_block_stop", "index": a.currentContentIndex,
+		}, emit); err != nil {
+			return err
+		}
+		a.markClosed(a.currentContentIndex)
+		a.thinkingBlockOpen = false
+	}
+	if !a.textBlockOpen {
+		a.currentContentIndex++
+		a.textBlockOpen = true
+		a.markOpen(a.currentContentIndex)
+		if err := emitStreamObj(map[string]any{
+			"type":  "content_block_start",
+			"index": a.currentContentIndex,
+			"content_block": map[string]any{
+				"type": "text", "text": "",
+			},
+		}, emit); err != nil {
+			return err
+		}
+	}
+	return emitStreamObj(map[string]any{
+		"type":  "content_block_delta",
+		"index": a.currentContentIndex,
+		"delta": map[string]any{
+			"type": "text_delta", "text": text,
+		},
+	}, emit)
+}
+
+// dsmlSection splits a buffered block into (preText, dsmlCore, postText) around
+// the <｜DSML｜tool_calls> ... </｜DSML｜tool_calls> wrapper (accepting ASCII bars too).
+type dsmlSection struct {
+	preText string
+	dsml    string
+	postText string
+}
+
+func splitDSMLOuter(block string) dsmlSection {
+	startMatch := dsmlBlockStartRe.FindStringIndex(block)
+	if startMatch == nil {
+		// No wrapper: treat the whole thing as text.
+		return dsmlSection{preText: block}
+	}
+	endMatch := dsmlBlockEndRe.FindStringIndex(block[startMatch[1]:])
+	if endMatch == nil {
+		// Unclosed wrapper: treat everything as pre-text to avoid data loss.
+		return dsmlSection{preText: block}
+	}
+	endAbs := startMatch[1] + endMatch[0]
+	endAbsEnd := startMatch[1] + endMatch[1]
+	return dsmlSection{
+		preText:  block[:startMatch[0]],
+		dsml:     block[startMatch[1]:endAbs],
+		postText: block[endAbsEnd:],
+	}
 }
 
 // ReplayOpenAIStreamChatResponse feeds a recorded OpenAI chat/completions SSE body (stream:true)
