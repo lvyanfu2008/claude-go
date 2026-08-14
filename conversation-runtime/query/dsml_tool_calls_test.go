@@ -139,3 +139,22 @@ func TestDSMLDoesNotBreakPlainText(t *testing.T) {
 		t.Fatalf("plain text should emit text_delta, got %q", types)
 	}
 }
+
+func TestDSMLStraySpacesAroundMarkers(t *testing.T) {
+	// Some models emit stray spaces around DSML markers, e.g.
+	// "<| DSML |invoke name=...>" — these must still parse as tool calls.
+	chunks := []string{
+		"<| DSML |tool_calls>",
+		"<| DSML |invoke name=\"Glob\">",
+		"<| DSML |parameter name=\"pattern\" string=\"true\">**/x*.go</| DSML |parameter>",
+		"</| DSML |invoke>",
+		"</| DSML |tool_calls>",
+	}
+	_, names, inputs := collectDSMLEmission(t, chunks)
+	if len(names) != 1 || names[0] != "Glob" {
+		t.Fatalf("expected tool_use Glob despite stray spaces, got %v", names)
+	}
+	if len(inputs) == 0 || !strings.Contains(inputs[0], "**/x*.go") {
+		t.Fatalf("expected pattern arg, got %v", inputs)
+	}
+}

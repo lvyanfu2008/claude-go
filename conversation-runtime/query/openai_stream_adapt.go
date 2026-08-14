@@ -15,12 +15,13 @@ import (
 
 // DSML tool-call grammar (DeepSeek V3.2/V4). The wrapper is usually
 // <｜DSML｜tool_calls> (full-width vertical bars); some endpoints emit
-// <|DSML|tool_calls> (ASCII bars). We accept both.
+// <|DSML|tool_calls> (ASCII bars), and some add stray spaces around the
+// markers (e.g. <| DSML |invoke>). All variants are accepted via \s*.
 var (
-	dsmlBlockStartRe = regexp.MustCompile(`<[｜|]DSML[｜|]tool_calls>`)
-	dsmlBlockEndRe   = regexp.MustCompile(`</[｜|]DSML[｜|]tool_calls>`)
-	dsmlInvokeRe     = regexp.MustCompile(`<[｜|]DSML[｜|]invoke\s+name="([^"]+)"\s*>(.*?)</[｜|]DSML[｜|]invoke>`)
-	dsmlParamRe      = regexp.MustCompile(`<[｜|]DSML[｜|]parameter\s+name="([^"]+)"\s+string="(true|false)"\s*>(.*?)</[｜|]DSML[｜|]parameter>`)
+	dsmlBlockStartRe = regexp.MustCompile(`<\s*[｜|]\s*DSML\s*[｜|]\s*tool_calls\s*>`)
+	dsmlBlockEndRe   = regexp.MustCompile(`</\s*[｜|]\s*DSML\s*[｜|]\s*tool_calls\s*>`)
+	dsmlInvokeRe     = regexp.MustCompile(`<\s*[｜|]\s*DSML\s*[｜|]\s*invoke\s+name="([^"]+)"\s*>(.*?)</\s*[｜|]\s*DSML\s*[｜|]\s*invoke\s*>`)
+	dsmlParamRe      = regexp.MustCompile(`<\s*[｜|]\s*DSML\s*[｜|]\s*parameter\s+name="([^"]+)"\s+string="(true|false)"\s*>(.*?)</\s*[｜|]\s*DSML\s*[｜|]\s*parameter\s*>`)
 )
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
