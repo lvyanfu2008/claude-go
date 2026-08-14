@@ -15,9 +15,9 @@ func collectDSMLEmission(t *testing.T, chunks []string) (types []string, toolNam
 	ad := newOpenAIStreamAdapter("deepseek-v4-flash")
 	record := func(ev anthropicmessages.MessageStreamEvent) error {
 		var m struct {
-			Type     string         `json:"type"`
-			Block    map[string]any `json:"content_block"`
-			Delta    map[string]any `json:"delta"`
+			Type  string         `json:"type"`
+			Block map[string]any `json:"content_block"`
+			Delta map[string]any `json:"delta"`
 		}
 		_ = json.Unmarshal(ev.Raw, &m)
 		types = append(types, m.Type)

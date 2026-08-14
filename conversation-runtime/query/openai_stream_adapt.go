@@ -29,15 +29,38 @@ func normalizeDSML(s string) string {
 	return dsmlWSRe.ReplaceAllString(s, " ")
 }
 
-// These match NORMALIZED text (see normalizeDSML).
+// These match NORMALIZED text (see normalizeDSML), used ONLY for start-tag
+// detection and the hold-back prefix check. Extraction operates on RAW text via
+// the dsmlRaw* regexes below so parameter VALUES keep their pipes and other
+// shell syntax intact.
 var (
-	dsmlBlockStartRe = regexp.MustCompile(`<\s*DSML\s*tool_calls\s*>`)
-	dsmlBlockEndRe   = regexp.MustCompile(`</\s*DSML\s*tool_calls\s*>`)
-	// (?s) so invoke/parameter bodies spanning multiple lines still match.
-	dsmlInvokeRe = regexp.MustCompile(`(?s)<\s*DSML\s*invoke\s*name="([^"]+)"\s*>(.*?)</\s*DSML\s*invoke\s*>`)
-	// name is required; string="..." is optional (defaults to "true").
-	dsmlParamRe = regexp.MustCompile(`(?s)<\s*DSML\s*parameter\s*name="([^"]+)"\s*(?:string="(true|false)"\s*)?>(.*?)</\s*DSML\s*parameter\s*>`)
+	// \A-anchored on normalized text: a block only takes over when the buffered
+	// text BEGINS with the tag, so an ordinary prose prefix can never be misread
+	// as a block.
+	dsmlBlockStartRe = regexp.MustCompile(`\A<\s*DSML\s*tool_calls\s*>`)
 )
+
+// Raw-tolerant regexes: bars (| or ｜) are optional between segments and any
+// stray whitespace around them is skipped, so real mangled output like
+// "< | DSML |invoke" or "<｜DSML｜parameter>" still parses.
+var (
+	dsmlRawStartRe  = regexp.MustCompile(`<\s*[|｜]?\s*DSML\s*[|｜]?\s*tool_calls\s*[|｜]?\s*>`)
+	dsmlRawEndRe    = regexp.MustCompile(`(?s)</\s*[|｜]?\s*DSML\s*[|｜]?\s*tool_calls\s*[|｜]?\s*>`)
+	dsmlRawInvokeRe = regexp.MustCompile(`(?s)<\s*[|｜]?\s*DSML\s*[|｜]?\s*invoke\s*[|｜]?\s*name="([^"]*)"\s*[|｜]?\s*>(.*?)</\s*[|｜]?\s*DSML\s*[|｜]?\s*invoke\s*[|｜]?\s*>`)
+	// name is required; string="..." is optional (defaults to "true"); the
+	// value is case-insensitive.
+	dsmlRawParamRe = regexp.MustCompile(`(?is)<\s*[|｜]?\s*DSML\s*[|｜]?\s*parameter\s*[|｜]?\s*name="([^"]*)"\s*[|｜]?\s*(?:string="(true|false)"\s*[|｜]?\s*)?>(.*?)</\s*[|｜]?\s*DSML\s*[|｜]?\s*parameter\s*[|｜]?\s*>`)
+	// Matches the end of a raw invoke (through its close tag), for buffer trimming.
+	dsmlRawInvokeEndRe = regexp.MustCompile(`(?s).*?</\s*[|｜]?\s*DSML\s*[|｜]?\s*invoke\s*[|｜]?\s*>`)
+)
+
+// Canonical normalized form of the start tag; the hold-back check keeps text
+// that is a PREFIX of it (a start tag split across chunks must not leak).
+const dsmlStartTagNorm = "< DSML tool_calls>"
+
+func isDSMLStartPrefix(norm string) bool {
+	return strings.HasPrefix(dsmlStartTagNorm, norm)
+}
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
 type openAIStreamAdapter struct {
@@ -62,7 +85,7 @@ type openAIStreamAdapter struct {
 	// (DeepSeek V3.2/V4 grammar, e.g. <｜DSML｜tool_calls>...</｜DSML｜tool_calls>).
 	// When a complete DSML block arrives it is parsed into tool_use events;
 	// the text is NOT forwarded as a text_delta.
-	dsmlBuf strings.Builder
+	dsmlBuf  strings.Builder
 	dsmlOpen bool
 }
 
@@ -181,8 +204,8 @@ func (a *openAIStreamAdapter) applyUsageFromChunk(raw json.RawMessage) {
 func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicmessages.MessageStreamEvent) error) error {
 	var chunk struct {
 		Choices []struct {
-			Delta        json.RawMessage `json:"delta"`
-			Message      *struct {
+			Delta   json.RawMessage `json:"delta"`
+			Message *struct {
 				ReasoningContent *string `json:"reasoning_content"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
@@ -278,25 +301,50 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 		// often mangled (tags/values spanning lines, glued attributes, dropped
 		// bars). Detect on the NORMALIZED buffered text so a start tag that
 		// straddles chunks is still caught.
-		normBuf := normalizeDSML(a.dsmlBuf.String() + content)
-		if a.dsmlOpen || dsmlBlockStartRe.MatchString(normBuf) {
-			a.dsmlBuf.WriteString(content)
+		pending := a.dsmlBuf.String() + content
+		normPending := normalizeDSML(pending)
+		// Hold when already inside a block, when the buffer looks like the
+		// start of a block (prefix of the canonical start tag, or a start tag
+		// that just landed), or when a complete start tag appears ANYWHERE in
+		// the pending text. The last case covers prose-then-block responses
+		// (non-stream bodies): the whole chunk is buffered and the parser
+		// extracts invokes; prose around the block is dropped once the wrapper
+		// closes, which is the correct DSML semantics.
+		hold := a.dsmlOpen || isDSMLStartPrefix(normPending) ||
+			dsmlBlockStartRe.MatchString(normPending) ||
+			dsmlRawStartRe.MatchString(pending)
+		if hold {
+			// Not yet in DSML mode but a complete start tag just appeared after
+			// prose in this same chunk (non-stream bodies). Emit the prose as
+			// text and buffer from the start tag onward. pending == content
+			// here (empty buffer, not open), so prose before the tag is fresh
+			// and must not be dropped.
+			if !a.dsmlOpen && a.dsmlBuf.Len() == 0 {
+				if loc := dsmlRawStartRe.FindStringIndex(pending); loc != nil && loc[0] > 0 {
+					if lead := strings.TrimSpace(pending[:loc[0]]); lead != "" {
+						if err := a.emitPlainText(lead, emit); err != nil {
+							return err
+						}
+					}
+					a.dsmlBuf.Reset()
+					a.dsmlBuf.WriteString(pending[loc[0]:])
+				} else {
+					a.dsmlBuf.WriteString(content)
+				}
+			} else {
+				a.dsmlBuf.WriteString(content)
+			}
 			a.dsmlOpen = true
 			// Flush COMPLETE invokes incrementally — never wait for the wrapper
 			// close tag (some models omit it). Each closed </DSML invoke>
 			// becomes a tool_use immediately.
 			for a.flushOneInvoke(emit) {
 			}
-			// Once the wrapper itself closed and the buffer is consumed,
-			// reset the DSML state for the next potential block.
-			if dsmlBlockEndRe.MatchString(normalizeDSML(a.dsmlBuf.String())) {
-				// Buffer may still hold trailing text; leave it for the
-				// tail-flush path in FlushOpenBlocks if unclosed, or clear if
-				// only whitespace remains.
-				if strings.TrimSpace(a.dsmlBuf.String()) == "" {
-					a.dsmlBuf.Reset()
-					a.dsmlOpen = false
-				}
+			// Once the wrapper itself closed, clear the buffer so a trailing
+			// </DSML tool_calls> (or prose after it) is not leaked as text.
+			if dsmlRawEndRe.MatchString(a.dsmlBuf.String()) {
+				a.dsmlBuf.Reset()
+				a.dsmlOpen = false
 			}
 			return nil
 		}
@@ -498,36 +546,33 @@ func (a *openAIStreamAdapter) FlushOpenBlocks(emit func(anthropicmessages.Messag
 	return nil
 }
 
-
 // flushOneInvoke extracts the first complete </DSML invoke> from the DSML
 // buffer and emits it as a tool_use. Returns true when one was flushed; the
 // caller loops until false. The DSML wrapper close tag is NOT required — some
-// models stop after the last invoke. Values are parsed from NORMALIZED text
-// (internal newlines collapse to spaces, safe for shell commands).
+// models stop after the last invoke. Extraction uses RAW text (not the
+// whitespace-collapsed normalization) so parameter values keep their pipes and
+// other shell syntax; values are lightly cleaned (entity decode + newline
+// folding).
 func (a *openAIStreamAdapter) flushOneInvoke(emit func(anthropicmessages.MessageStreamEvent) error) bool {
-	norm := normalizeDSML(a.dsmlBuf.String())
-	loc := dsmlInvokeRe.FindStringIndex(norm)
-	if loc == nil {
+	raw := a.dsmlBuf.String()
+	m := dsmlRawInvokeRe.FindStringSubmatch(raw)
+	if m == nil || len(m) < 3 {
 		return false
 	}
-	invokeStr := norm[loc[0]:loc[1]]
-	m := dsmlInvokeRe.FindStringSubmatch(invokeStr)
-	if len(m) < 3 {
-		return false
-	}
-	toolName := m[1]
+	toolName := strings.TrimSpace(m[1])
 	paramsBody := m[2]
 	args := map[string]any{}
-	for _, pm := range dsmlParamRe.FindAllStringSubmatch(paramsBody, -1) {
+	for _, pm := range dsmlRawParamRe.FindAllStringSubmatch(paramsBody, -1) {
 		if len(pm) < 4 {
 			continue
 		}
-		name := pm[1]
-		// string attr optional: absent or "true" → keep string.
-		isString := pm[2] == "" || pm[2] == "true"
-		val := pm[3]
+		name := strings.TrimSpace(pm[1])
+		// string attr optional: absent, "true", or "TRUE" → keep string.
+		// Only "false"/"FALSE" coerces the value away from string.
+		isString := strings.ToLower(pm[2]) != "false"
+		val := cleanDSMLValue(pm[3])
 		if isString {
-			args[name] = strings.TrimSpace(val)
+			args[name] = val
 		} else {
 			// Coerce loosely: try JSON (numbers/bools/objects/arrays); fall back to string.
 			var jv any
@@ -541,40 +586,28 @@ func (a *openAIStreamAdapter) flushOneInvoke(emit func(anthropicmessages.Message
 	if err := a.emitOneInvoke(toolName, args, emit); err != nil {
 		return false
 	}
-	// Remove the flushed invoke from the raw buffer. Normalized-to-raw
-	// position mapping is complex (whitespace collapsed); remove by matching
-	// the raw invoke via its own normalized form:
-	raw := a.dsmlBuf.String()
-	// Find the raw span whose normalized form equals invokeStr.
-	// Simplest robust approach: drop everything up to and including the
-	// first raw </DSML invoke> close tag (normalized).
-	endRe := regexp.MustCompile(`(?s)^(.*?</\s*DSML\s*invoke\s*>)`)
-	rm := endRe.FindStringSubmatch(normalizeDSML(raw))
-	if rm == nil {
+	// Remove the flushed invoke from the buffer: drop everything up to and
+	// including the first raw </DSML invoke> close tag.
+	end := dsmlRawInvokeEndRe.FindStringIndex(raw)
+	if end == nil {
 		a.dsmlBuf.Reset()
 		return true
 	}
-	// raw buffer: delete the prefix whose normalized form matches rm[1].
-	// Approximation: repeatedly strip from raw until its normalized prefix
-	// equals the normalized consumed prefix.
-	consumed := rm[1]
-	var idx int
-	for idx <= len(raw) {
-		if normalizeDSML(raw[:idx]) == consumed {
-			break
-		}
-		idx++
-	}
-	if idx > len(raw) {
-		// Fallback: clear everything.
-		a.dsmlBuf.Reset()
-		return true
-	}
-	remaining := raw[idx:]
-	// Trim a trailing wrapper close tag if present (the loop re-scans).
 	a.dsmlBuf.Reset()
-	a.dsmlBuf.WriteString(remaining)
+	a.dsmlBuf.WriteString(raw[end[1]:])
 	return true
+}
+
+// cleanDSMLValue decodes XML entities and folds internal newlines to single
+// spaces (a value spanning lines still round-trips; shell treats newlines as
+// spaces). Internal pipes are untouched.
+func cleanDSMLValue(v string) string {
+	v = strings.ReplaceAll(v, "&amp;", "&")
+	v = strings.ReplaceAll(v, "&lt;", "<")
+	v = strings.ReplaceAll(v, "&gt;", ">")
+	v = strings.ReplaceAll(v, "&quot;", `"`)
+	v = strings.ReplaceAll(v, "&apos;", "'")
+	return strings.TrimSpace(v)
 }
 
 // emitOneInvoke emits a single tool_use event sequence
