@@ -172,8 +172,8 @@ func getEditToolDescription() string {
 	return fmt.Sprintf(`Performs exact string replacement in a file.
 
 - You must Read the file in this conversation before editing, or the call will fail.%s
-- ` + "`old_string`" + ` must match the file exactly, including indentation, and be unique — the edit fails otherwise. Strip the Read line prefix (%s) before matching.%s
-- ` + "`replace_all: true`" + ` replaces every occurrence instead.`,
+- `+"`old_string`"+` must match the file exactly, including indentation, and be unique — the edit fails otherwise. Strip the Read line prefix (%s) before matching.%s
+- `+"`replace_all: true`"+` replaces every occurrence instead.`,
 		getPreReadInstruction(),
 		prefixFormat,
 		minimalUniquenessHint)
@@ -350,7 +350,7 @@ func nativeNotebookEditToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "NotebookEdit",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     notebookEditPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -375,7 +375,7 @@ func nativeTaskStopToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "TaskStop",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     taskStopPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -416,7 +416,7 @@ func nativeTodoWriteToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "TodoWrite",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     todoWritePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -443,7 +443,7 @@ func nativeWebFetchToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "WebFetch",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     webFetchPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -480,7 +480,7 @@ func nativeWebSearchToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "WebSearch",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     getWebSearchDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -563,7 +563,7 @@ func nativeCronCreateToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "CronCreate",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     getCronCreateDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -585,7 +585,7 @@ func nativeCronDeleteToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "CronDelete",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     getCronDeleteDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -601,7 +601,7 @@ func nativeCronListToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "CronList",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     getCronListDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -760,7 +760,7 @@ func nativeAskUserQuestionToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "AskUserQuestion",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     getAskUserQuestionDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -785,7 +785,7 @@ func nativeEnterWorktreeToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "EnterWorktree",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     enterWorktreePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -812,7 +812,7 @@ func nativeExitWorktreeToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "ExitWorktree",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     exitWorktreePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -856,7 +856,7 @@ func NativeWorkflowToolSpec() types.ToolSpec {
 			},
 			"name": map[string]any{
 				"type":        "string",
-				"description": "Name of a predefined workflow (built-in or from .claude/workflows/). Resolves to a self-contained script.",
+				"description": "Name of a predefined workflow (built-in or from .harness/workflows/). Resolves to a self-contained script.",
 			},
 			"description": map[string]any{
 				"type":        "string",
@@ -916,7 +916,7 @@ func nativeTaskOutputToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "TaskOutput",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     taskOutputPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1049,9 +1049,9 @@ func nativeEmptyObjectSchemaToolSpec(name, fallbackDescription string, deferLoad
 
 func nativeTeamAddMemberToolSpec() types.ToolSpec {
 	schema := map[string]any{
-		"$schema":              "https://json-schema.org/draft/2020-12/schema",
-		"type":                 "object",
-		"properties":           map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
 			"team_name": map[string]any{"type": "string", "description": "Team name to add member to"},
 			"agent_id":  map[string]any{"type": "string", "description": "Agent ID to add"},
 			"name":      map[string]any{"type": "string", "description": "Display name for the member"},
@@ -1068,9 +1068,9 @@ func nativeTeamAddMemberToolSpec() types.ToolSpec {
 
 func nativeTeamRemoveMemberToolSpec() types.ToolSpec {
 	schema := map[string]any{
-		"$schema":              "https://json-schema.org/draft/2020-12/schema",
-		"type":                 "object",
-		"properties":           map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
 			"team_name": map[string]any{"type": "string", "description": "Team name to remove member from"},
 			"agent_id":  map[string]any{"type": "string", "description": "Agent ID to remove"},
 		},
@@ -1098,7 +1098,7 @@ func nativeSendMessageToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "SendMessage",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     getSendMessageDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1121,11 +1121,11 @@ func nativeSendUserMessageToolSpec() types.ToolSpec {
 	}
 	trueVal := true
 	return types.ToolSpec{
-		Name:            "SendUserMessage",
-		Aliases:         []string{"Brief"},
-		Description:     "Send a message to the user",
-		SearchHint:      "send a message to the user — your primary visible output channel",
-		InputJSONSchema:    mustMarshalJSONRaw(schema),
+		Name:              "SendUserMessage",
+		Aliases:           []string{"Brief"},
+		Description:       "Send a message to the user",
+		SearchHint:        "send a message to the user — your primary visible output channel",
+		InputJSONSchema:   mustMarshalJSONRaw(schema),
 		IsConcurrencySafe: &trueVal,
 		IsReadOnly:        &trueVal,
 	}
@@ -1189,9 +1189,9 @@ func nativeTaskCreateToolSpec() types.ToolSpec {
 	}
 	trueVal := true
 	return types.ToolSpec{
-		Name:        "TaskCreate",
-		ShouldDefer:        &trueVal,
-		Description: getTaskCreateDescription(),
+		Name:            "TaskCreate",
+		ShouldDefer:     &trueVal,
+		Description:     getTaskCreateDescription(),
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1206,9 +1206,9 @@ func nativeTaskGetToolSpec() types.ToolSpec {
 	}
 	trueVal := true
 	return types.ToolSpec{
-		Name:        "TaskGet",
-		ShouldDefer:        &trueVal,
-		Description: taskGetPrompt,
+		Name:            "TaskGet",
+		ShouldDefer:     &trueVal,
+		Description:     taskGetPrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1237,9 +1237,9 @@ func nativeTaskUpdateToolSpec() types.ToolSpec {
 	}
 	trueVal := true
 	return types.ToolSpec{
-		Name:        "TaskUpdate",
-		ShouldDefer:        &trueVal,
-		Description: taskUpdatePrompt,
+		Name:            "TaskUpdate",
+		ShouldDefer:     &trueVal,
+		Description:     taskUpdatePrompt,
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
 }
@@ -1288,7 +1288,7 @@ func nativeConfigToolSpec() types.ToolSpec {
 	trueVal := true
 	return types.ToolSpec{
 		Name:            "Config",
-		ShouldDefer:        &trueVal,
+		ShouldDefer:     &trueVal,
 		Description:     "Get or set configuration settings. Use this to read or write tool settings and preferences.",
 		InputJSONSchema: mustMarshalJSONRaw(schema),
 	}
@@ -1648,9 +1648,9 @@ func nativePushNotificationToolSpec() types.ToolSpec {
 	}
 	trueVal := true
 	return types.ToolSpec{
-		Name:        "PushNotification",
-		Description: "Send a push notification to the user's mobile device",
-		SearchHint:  "push notification mobile alert notify user",
+		Name:               "PushNotification",
+		Description:        "Send a push notification to the user's mobile device",
+		SearchHint:         "push notification mobile alert notify user",
 		InputJSONSchema:    mustMarshalJSONRaw(schema),
 		MaxResultSizeChars: 1000,
 		Strict:             &trueVal,
