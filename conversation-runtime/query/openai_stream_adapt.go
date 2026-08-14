@@ -33,8 +33,9 @@ func normalizeDSML(s string) string {
 var (
 	dsmlBlockStartRe = regexp.MustCompile(`<\s*DSML\s*tool_calls\s*>`)
 	dsmlBlockEndRe   = regexp.MustCompile(`</\s*DSML\s*tool_calls\s*>`)
-	dsmlInvokeRe     = regexp.MustCompile(`<\s*DSML\s*invoke\s*name="([^"]+)"\s*>(.*?)</\s*DSML\s*invoke\s*>`)
-	dsmlParamRe      = regexp.MustCompile(`<\s*DSML\s*parameter\s*name="([^"]+)"\s*string="(true|false)"\s*>(.*?)</\s*DSML\s*parameter\s*>`)
+	// (?s) so invoke/parameter bodies spanning multiple lines still match.
+	dsmlInvokeRe = regexp.MustCompile(`(?s)<\s*DSML\s*invoke\s*name="([^"]+)"\s*>(.*?)</\s*DSML\s*invoke\s*>`)
+	dsmlParamRe  = regexp.MustCompile(`(?s)<\s*DSML\s*parameter\s*name="([^"]+)"\s*string="(true|false)"\s*>(.*?)</\s*DSML\s*parameter\s*>`)
 )
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
@@ -280,10 +281,20 @@ func (a *openAIStreamAdapter) HandleChunk(chunkJSON []byte, emit func(anthropicm
 		if a.dsmlOpen || dsmlBlockStartRe.MatchString(normBuf) {
 			a.dsmlBuf.WriteString(content)
 			a.dsmlOpen = true
-			// If the block is already complete in the buffer, flush now.
+			// Flush COMPLETE invokes incrementally — never wait for the wrapper
+			// close tag (some models omit it). Each closed </DSML invoke>
+			// becomes a tool_use immediately.
+			for a.flushOneInvoke(emit) {
+			}
+			// Once the wrapper itself closed and the buffer is consumed,
+			// reset the DSML state for the next potential block.
 			if dsmlBlockEndRe.MatchString(normalizeDSML(a.dsmlBuf.String())) {
-				if err := a.flushDSMLBlock(emit); err != nil {
-					return err
+				// Buffer may still hold trailing text; leave it for the
+				// tail-flush path in FlushOpenBlocks if unclosed, or clear if
+				// only whitespace remains.
+				if strings.TrimSpace(a.dsmlBuf.String()) == "" {
+					a.dsmlBuf.Reset()
+					a.dsmlOpen = false
 				}
 			}
 			return nil
@@ -486,15 +497,87 @@ func (a *openAIStreamAdapter) FlushOpenBlocks(emit func(anthropicmessages.Messag
 	return nil
 }
 
-// flushDSMLBlock parses the buffered DSML tool-call block and emits tool_use
-// events (content_block_start → input_json_delta → content_block_stop) matching
-// the standard OpenAI tool_calls path. Any text before/after the DSML wrapper
-// is forwarded as normal text deltas. Resets the DSML buffer state.
-func (a *openAIStreamAdapter) flushDSMLBlock(emit func(anthropicmessages.MessageStreamEvent) error) error {
-	block := a.dsmlBuf.String()
-	a.dsmlBuf.Reset()
-	a.dsmlOpen = false
 
+// flushOneInvoke extracts the first complete </DSML invoke> from the DSML
+// buffer and emits it as a tool_use. Returns true when one was flushed; the
+// caller loops until false. The DSML wrapper close tag is NOT required — some
+// models stop after the last invoke. Values are parsed from NORMALIZED text
+// (internal newlines collapse to spaces, safe for shell commands).
+func (a *openAIStreamAdapter) flushOneInvoke(emit func(anthropicmessages.MessageStreamEvent) error) bool {
+	norm := normalizeDSML(a.dsmlBuf.String())
+	loc := dsmlInvokeRe.FindStringIndex(norm)
+	if loc == nil {
+		return false
+	}
+	invokeStr := norm[loc[0]:loc[1]]
+	m := dsmlInvokeRe.FindStringSubmatch(invokeStr)
+	if len(m) < 3 {
+		return false
+	}
+	toolName := m[1]
+	paramsBody := m[2]
+	args := map[string]any{}
+	for _, pm := range dsmlParamRe.FindAllStringSubmatch(paramsBody, -1) {
+		if len(pm) < 4 {
+			continue
+		}
+		name := pm[1]
+		isString := pm[2] == "true"
+		val := pm[3]
+		if isString {
+			args[name] = strings.TrimSpace(val)
+		} else {
+			// Coerce loosely: try JSON (numbers/bools/objects/arrays); fall back to string.
+			var jv any
+			if err := json.Unmarshal([]byte(val), &jv); err == nil {
+				args[name] = jv
+			} else {
+				args[name] = val
+			}
+		}
+	}
+	if err := a.emitOneInvoke(toolName, args, emit); err != nil {
+		return false
+	}
+	// Remove the flushed invoke from the raw buffer. Normalized-to-raw
+	// position mapping is complex (whitespace collapsed); remove by matching
+	// the raw invoke via its own normalized form:
+	raw := a.dsmlBuf.String()
+	// Find the raw span whose normalized form equals invokeStr.
+	// Simplest robust approach: drop everything up to and including the
+	// first raw </DSML invoke> close tag (normalized).
+	endRe := regexp.MustCompile(`(?s)^(.*?</\s*DSML\s*invoke\s*>)`)
+	rm := endRe.FindStringSubmatch(normalizeDSML(raw))
+	if rm == nil {
+		a.dsmlBuf.Reset()
+		return true
+	}
+	// raw buffer: delete the prefix whose normalized form matches rm[1].
+	// Approximation: repeatedly strip from raw until its normalized prefix
+	// equals the normalized consumed prefix.
+	consumed := rm[1]
+	var idx int
+	for idx <= len(raw) {
+		if normalizeDSML(raw[:idx]) == consumed {
+			break
+		}
+		idx++
+	}
+	if idx > len(raw) {
+		// Fallback: clear everything.
+		a.dsmlBuf.Reset()
+		return true
+	}
+	remaining := raw[idx:]
+	// Trim a trailing wrapper close tag if present (the loop re-scans).
+	a.dsmlBuf.Reset()
+	a.dsmlBuf.WriteString(remaining)
+	return true
+}
+
+// emitOneInvoke emits a single tool_use event sequence
+// (content_block_start → input_json_delta → content_block_stop).
+func (a *openAIStreamAdapter) emitOneInvoke(toolName string, args map[string]any, emit func(anthropicmessages.MessageStreamEvent) error) error {
 	// Close any open thinking/text block before emitting tool_use.
 	if a.thinkingBlockOpen {
 		if err := emitStreamObj(map[string]any{
@@ -515,85 +598,41 @@ func (a *openAIStreamAdapter) flushDSMLBlock(emit func(anthropicmessages.Message
 		a.textBlockOpen = false
 	}
 
-	// Split the block: text before the wrapper, the DSML section, text after.
-	// Parse on NORMALIZED text so multi-line tags/values and glued attributes
-	// (parametername=) are handled. String values lose their internal newlines
-	// (collapsed to spaces), which is safe for shell commands and file paths.
-	sec := splitDSMLOuter(normalizeDSML(block))
-
-	if sec.preText != "" {
-		if err := a.emitPlainText(sec.preText, emit); err != nil {
-			return err
-		}
+	a.currentContentIndex++
+	toolID := openAIToolPlaceholderID()
+	a.toolBlocks[a.currentContentIndex] = &openAIToolBlockState{
+		contentIndex: a.currentContentIndex,
+		id:           toolID,
+		name:         toolName,
 	}
-
-	invokes := dsmlInvokeRe.FindAllStringSubmatch(sec.dsml, -1)
-	for _, m := range invokes {
-		if len(m) < 3 {
-			continue
-		}
-		toolName := m[1]
-		paramsBody := m[2]
-		args := map[string]any{}
-		for _, pm := range dsmlParamRe.FindAllStringSubmatch(paramsBody, -1) {
-			if len(pm) < 4 {
-				continue
-			}
-			name := pm[1]
-			isString := pm[2] == "true"
-			val := pm[3]
-			if isString {
-				args[name] = val
-			} else {
-				// Coerce loosely: try JSON (numbers/bools/objects/arrays); fall back to string.
-				var jv any
-				if err := json.Unmarshal([]byte(val), &jv); err == nil {
-					args[name] = jv
-				} else {
-					args[name] = val
-				}
-			}
-		}
-		a.currentContentIndex++
-		toolID := openAIToolPlaceholderID()
-		a.toolBlocks[a.currentContentIndex] = &openAIToolBlockState{
-			contentIndex: a.currentContentIndex,
-			id:           toolID,
-			name:         toolName,
-		}
-		a.markOpen(a.currentContentIndex)
+	a.markOpen(a.currentContentIndex)
+	if err := emitStreamObj(map[string]any{
+		"type":  "content_block_start",
+		"index": a.currentContentIndex,
+		"content_block": map[string]any{
+			"type": "tool_use", "id": toolID, "name": toolName, "input": map[string]any{},
+		},
+	}, emit); err != nil {
+		return err
+	}
+	argsJSON, _ := json.Marshal(args)
+	if len(argsJSON) > 0 && string(argsJSON) != "{}" {
 		if err := emitStreamObj(map[string]any{
-			"type":  "content_block_start",
+			"type":  "content_block_delta",
 			"index": a.currentContentIndex,
-			"content_block": map[string]any{
-				"type": "tool_use", "id": toolID, "name": toolName, "input": map[string]any{},
+			"delta": map[string]any{
+				"type": "input_json_delta", "partial_json": string(argsJSON),
 			},
 		}, emit); err != nil {
 			return err
 		}
-		argsJSON, _ := json.Marshal(args)
-		if len(argsJSON) > 0 && string(argsJSON) != "{}" {
-			if err := emitStreamObj(map[string]any{
-				"type":  "content_block_delta",
-				"index": a.currentContentIndex,
-				"delta": map[string]any{
-					"type": "input_json_delta", "partial_json": string(argsJSON),
-				},
-			}, emit); err != nil {
-				return err
-			}
-		}
-		if err := emitStreamObj(map[string]any{
-			"type": "content_block_stop", "index": a.currentContentIndex,
-		}, emit); err != nil {
-			return err
-		}
-		a.markClosed(a.currentContentIndex)
 	}
-
-	if sec.postText != "" {
-		return a.emitPlainText(sec.postText, emit)
+	if err := emitStreamObj(map[string]any{
+		"type": "content_block_stop", "index": a.currentContentIndex,
+	}, emit); err != nil {
+		return err
 	}
+	a.markClosed(a.currentContentIndex)
 	return nil
 }
 
@@ -634,38 +673,6 @@ func (a *openAIStreamAdapter) emitPlainText(text string, emit func(anthropicmess
 	}, emit)
 }
 
-// dsmlSection splits a buffered block into (preText, dsmlCore, postText) around
-// the <｜DSML｜tool_calls> ... </｜DSML｜tool_calls> wrapper (accepting ASCII bars too).
-type dsmlSection struct {
-	preText string
-	dsml    string
-	postText string
-}
-
-func splitDSMLOuter(block string) dsmlSection {
-	startMatch := dsmlBlockStartRe.FindStringIndex(block)
-	if startMatch == nil {
-		// No wrapper: treat the whole thing as text.
-		return dsmlSection{preText: block}
-	}
-	endMatch := dsmlBlockEndRe.FindStringIndex(block[startMatch[1]:])
-	if endMatch == nil {
-		// Unclosed wrapper: treat everything as pre-text to avoid data loss.
-		return dsmlSection{preText: block}
-	}
-	endAbs := startMatch[1] + endMatch[0]
-	endAbsEnd := startMatch[1] + endMatch[1]
-	return dsmlSection{
-		preText:  block[:startMatch[0]],
-		dsml:     block[startMatch[1]:endAbs],
-		postText: block[endAbsEnd:],
-	}
-}
-
-// ReplayOpenAIStreamChatResponse feeds a recorded OpenAI chat/completions SSE body (stream:true)
-// through [openAIStreamAdapter] the same way [PostOpenAIChatStream] does, then [FlushOpenBlocks].
-// Each concatenated `data:` payload is passed to [openAIStreamAdapter.HandleChunk], including
-// delta.reasoning_content (e.g. DeepSeek reasoner) and delta.content.
 func ReplayOpenAIStreamChatResponse(sseBody []byte, model string, emit func(anthropicmessages.MessageStreamEvent) error) error {
 	ad := newOpenAIStreamAdapter(model)
 	if err := anthropicmessages.ReadSSE(bytes.NewReader(sseBody), func(data []byte) error {

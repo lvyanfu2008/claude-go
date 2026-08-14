@@ -129,36 +129,44 @@ func TestDSMLUnclosedBlockFlushedAsText(t *testing.T) {
 }
 
 func TestDSMLRealMangledSample(t *testing.T) {
-	// Real-world sample captured from a production subagent: tags span lines,
-	// values span lines, bars are dropped, and attributes glue together.
+	// Real-world sample captured from a production subagent: two Bash invokes
+	// with spaces around markers, and a proper wrapper close tag.
 	chunks := []string{
 		"查找工程中的X开头的类文件",
 		"< | DSML | tool_calls>",
 		"< | DSML | invoke name=\"Bash\">",
-		"< | DSML | parameter\nname=\"command\" string=\"true\">/usr/bin/find /d/work/www-auth-v6/cdcs-auth-fin -name \"X0180*\" -o -name \"X0885*\"",
-		"-type f 2>/dev/null</ | DSML |",
-		"parameter>",
-		"< | DSML | parameter\nname=\"description\" string=\"true\">搜索X0180 和 X0885 开头的所有文件</ |",
-		"DSML | parameter>",
+		"< | DSML | parameter name=\"command\" string=\"true\">/usr/bin/find /d/work/www-auth-v6/cdcs-auth-fin -name \"X0180*\" -o -name \"X0885*\" -type f 2>/dev/null</ | DSML |parameter>",
+		"< | DSML | parameter name=\"description\" string=\"true\">搜索 X0180 和 X0885 开头的所有文件</ | DSML | parameter>",
 		"</ | DSML | invoke>",
-		"</|DSML|tool_calls>",
+		"< | DSML | invoke name=\"Bash\">",
+		"< | DSML | parameter name=\"command\" string=\"true\">ls -d /d/work/www-auth-v6/cdcs-auth-fin/*/src/main/java/com/cebbank/*/</ | DSML | parameter>",
+		"< | DSML | parameter name=\"description\" string=\"true\">列出所有模块下的包结构</ | DSML | parameter>",
+		"</ | DSML | invoke>",
+		"</ | DSML | tool_calls>",
 	}
 	_, names, inputs := collectDSMLEmission(t, chunks)
-	if len(names) != 1 || names[0] != "Bash" {
-		t.Fatalf("expected tool_use Bash from mangled DSML, got %v", names)
+	if len(names) != 2 || names[0] != "Bash" || names[1] != "Bash" {
+		t.Fatalf("expected two Bash tool_use, got %v", names)
 	}
-	if len(inputs) == 0 {
-		t.Fatal("expected tool arguments")
+	if len(inputs) != 2 {
+		t.Fatalf("expected two input_json_delta, got %d", len(inputs))
 	}
-	var args map[string]any
-	if err := json.Unmarshal([]byte(inputs[0]), &args); err != nil {
+	var args1 map[string]any
+	if err := json.Unmarshal([]byte(inputs[0]), &args1); err != nil {
 		t.Fatalf("bad args JSON: %v", err)
 	}
-	if cmd, _ := args["command"].(string); !strings.Contains(cmd, "/usr/bin/find") {
+	if cmd, _ := args1["command"].(string); !strings.Contains(cmd, "/usr/bin/find") {
 		t.Fatalf("command arg should contain the find command, got %q", cmd)
 	}
-	if desc, _ := args["description"].(string); !strings.Contains(desc, "X0180") {
+	if desc, _ := args1["description"].(string); !strings.Contains(desc, "X0180") {
 		t.Fatalf("description arg should contain X0180, got %q", desc)
+	}
+	var args2 map[string]any
+	if err := json.Unmarshal([]byte(inputs[1]), &args2); err != nil {
+		t.Fatalf("bad args2 JSON: %v", err)
+	}
+	if cmd, _ := args2["command"].(string); !strings.Contains(cmd, "ls -d") {
+		t.Fatalf("second command arg should be ls -d, got %q", cmd)
 	}
 }
 
