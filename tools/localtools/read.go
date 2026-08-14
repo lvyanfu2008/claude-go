@@ -1,8 +1,10 @@
 package localtools
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -295,6 +297,37 @@ func ReadFromJSON(raw []byte, roots []string, state *ReadFileState, limits *File
 		return string(b), false, nil
 	}
 
+	// --- DOCX: extract text from word/document.xml (zip-backed) ---
+	if ext == "docx" {
+		docText, err := readDocxText(abs, maxBytes)
+		if err != nil {
+			return "", true, err
+		}
+		if err := validateReadOutputTokens(docText, maxTok); err != nil {
+			return "", true, err
+		}
+		lines := strings.Split(docText, "\n")
+		var out ReadTextOutput
+		out.Type = "text"
+		out.File.FilePath = in.FilePath
+		out.File.Content = docText
+		out.File.NumLines = len(lines)
+		out.File.StartLine = 1
+		out.File.TotalLines = len(lines)
+		if state != nil {
+			if st, serr := os.Stat(abs); serr == nil {
+				state.Set(abs, &ReadFileEntry{
+					Content:   docText,
+					Timestamp: st.ModTime().UnixMilli(),
+					Offset:    ptrInt(1),
+					Limit:     nil,
+				})
+			}
+		}
+		b, _ := json.Marshal(out)
+		return string(b), false, nil
+	}
+
 	// --- PDF: poppler-backed page extraction + full document block ---
 	if ext == "pdf" {
 		pages := strings.TrimSpace(in.Pages)
@@ -413,6 +446,121 @@ func isLikelyBinaryExt(ext string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// readDocxText extracts the text content of a .docx file.
+// A .docx is a zip archive; the body text lives in word/document.xml as
+// <w:p> (paragraph) → <w:t> (text run) elements.
+func readDocxText(path string, maxBytes int) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	if st.Size() > int64(maxBytes) {
+		return "", fmt.Errorf("File is too large to read as DOCX (max %d bytes).", maxBytes)
+	}
+
+	zr, err := zip.NewReader(f, st.Size())
+	if err != nil {
+		return "", fmt.Errorf("Not a valid DOCX file: %v", err)
+	}
+
+	var docXML []byte
+	for _, zf := range zr.File {
+		if zf.Name == "word/document.xml" {
+			rc, err := zf.Open()
+			if err != nil {
+				return "", err
+			}
+			docXML, err = readAllLimited(rc, maxBytes)
+			rc.Close()
+			if err != nil {
+				return "", err
+			}
+			break
+		}
+	}
+	if len(docXML) == 0 {
+		return "", fmt.Errorf("DOCX file is missing word/document.xml (not a valid document).")
+	}
+
+	return docxXMLToText(docXML), nil
+}
+
+// docxXMLToText walks word/document.xml and joins <w:p> paragraphs (newline-separated),
+// concatenating the text of every <w:t> element inside each paragraph.
+func docxXMLToText(xmlData []byte) string {
+	var sb strings.Builder
+	text := string(xmlData)
+	for len(text) > 0 {
+		lt := strings.IndexByte(text, '<')
+		if lt < 0 {
+			break
+		}
+		gt := strings.IndexByte(text[lt:], '>')
+		if gt < 0 {
+			break
+		}
+		tag := text[lt+1 : lt+gt]
+		// Skip XML declaration / comments / processing instructions.
+		if strings.HasPrefix(tag, "?") || strings.HasPrefix(tag, "!") {
+			text = text[lt+gt+1:]
+			continue
+		}
+		// Closing tag: name begins with "/".
+		isClose := strings.HasPrefix(tag, "/")
+		// Tag name is everything before whitespace, "/", or ">" (strip attributes).
+		name := tag
+		if isClose {
+			name = strings.TrimPrefix(tag, "/")
+		}
+		if i := strings.IndexAny(name, " \t\r\n/"); i >= 0 {
+			name = name[:i]
+		}
+		switch name {
+		case "w:p":
+			if isClose {
+				sb.WriteByte('\n')
+			}
+		case "w:t":
+			if !isClose {
+				// Text run content is between this tag and the next '<'.
+				end := strings.IndexByte(text[lt+gt+1:], '<')
+				if end >= 0 {
+					sb.WriteString(text[lt+gt+1 : lt+gt+1+end])
+				}
+			}
+		}
+		text = text[lt+gt+1:]
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// readAllLimited reads up to maxBytes+1 bytes and errors if the content exceeds maxBytes.
+func readAllLimited(r interface{ Read([]byte) (int, error) }, maxBytes int) ([]byte, error) {
+	buf := make([]byte, 0, 4096)
+	tmp := make([]byte, 4096)
+	total := 0
+	for {
+		n, err := r.Read(tmp)
+		total += n
+		if total > maxBytes {
+			return nil, fmt.Errorf("File is too large to read as DOCX (max %d bytes).", maxBytes)
+		}
+		buf = append(buf, tmp[:n]...)
+		if err != nil {
+			if err == io.EOF {
+				return buf, nil
+			}
+			return buf, err
+		}
 	}
 }
 
