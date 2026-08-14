@@ -35,7 +35,8 @@ var (
 	dsmlBlockEndRe   = regexp.MustCompile(`</\s*DSML\s*tool_calls\s*>`)
 	// (?s) so invoke/parameter bodies spanning multiple lines still match.
 	dsmlInvokeRe = regexp.MustCompile(`(?s)<\s*DSML\s*invoke\s*name="([^"]+)"\s*>(.*?)</\s*DSML\s*invoke\s*>`)
-	dsmlParamRe  = regexp.MustCompile(`(?s)<\s*DSML\s*parameter\s*name="([^"]+)"\s*string="(true|false)"\s*>(.*?)</\s*DSML\s*parameter\s*>`)
+	// name is required; string="..." is optional (defaults to "true").
+	dsmlParamRe = regexp.MustCompile(`(?s)<\s*DSML\s*parameter\s*name="([^"]+)"\s*(?:string="(true|false)"\s*)?>(.*?)</\s*DSML\s*parameter\s*>`)
 )
 
 // openAIStreamAdapter mirrors src/api-client/openai/streamAdapter.ts adaptOpenAIStreamToAnthropic.
@@ -522,7 +523,8 @@ func (a *openAIStreamAdapter) flushOneInvoke(emit func(anthropicmessages.Message
 			continue
 		}
 		name := pm[1]
-		isString := pm[2] == "true"
+		// string attr optional: absent or "true" → keep string.
+		isString := pm[2] == "" || pm[2] == "true"
 		val := pm[3]
 		if isString {
 			args[name] = strings.TrimSpace(val)

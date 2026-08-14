@@ -200,3 +200,29 @@ func TestDSMLStraySpacesAroundMarkers(t *testing.T) {
 		t.Fatalf("expected pattern arg, got %v", inputs)
 	}
 }
+
+func TestDSMLParameterWithoutStringAttr(t *testing.T) {
+	// Per ai-dynamo/vLLM, the string attribute may be omitted entirely;
+	// the value is then treated as a string.
+	chunks := []string{
+		"<|DSML|tool_calls>",
+		"<|DSML|invoke name=\"configure\">",
+		"<|DSML|parameter name=\"mode\">quickly</|DSML|parameter>",
+		"</|DSML|invoke>",
+		"</|DSML|tool_calls>",
+	}
+	_, names, inputs := collectDSMLEmission(t, chunks)
+	if len(names) != 1 || names[0] != "configure" {
+		t.Fatalf("expected tool_use configure, got %v", names)
+	}
+	if len(inputs) == 0 {
+		t.Fatal("expected input")
+	}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(inputs[0]), &args); err != nil {
+		t.Fatalf("bad args JSON: %v", err)
+	}
+	if args["mode"] != "quickly" {
+		t.Fatalf("mode should be the string \"quickly\", got %v", args["mode"])
+	}
+}
